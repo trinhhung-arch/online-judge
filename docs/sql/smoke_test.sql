@@ -1,3 +1,17 @@
+-- =============================================================================
+-- 12 ca kiểm chứng schema. Chạy: psql -d ojdb -f docs/sql/smoke_test.sql
+--
+-- ⚠️ BA CA CẦN MIGRATION CỦA MỐC SAU, và file này TỰ BỎ QUA chúng nếu bảng chưa
+--    tồn tại. Không có phần bỏ qua đó thì ở M1 script chết ngay tại TEST 9
+--    (ON_ERROR_STOP đang bật), và TEST 12 — một ca quan trọng — không bao giờ chạy.
+--
+--      TEST 1-8, 12   V1-V3   → chạy được ngay ở M1   (9/12 ca)
+--      TEST 9         V8      → ai_quota_usage        (tuần 14-15)
+--      TEST 10        V7      → jobs                  (M6)
+--      TEST 11        V5      → audit_log             (M4)
+--
+-- Ba ca KỲ VỌNG BÁO LỖI — đó mới là kết quả đúng: TEST 1, TEST 10, TEST 12.
+-- =============================================================================
 \set ON_ERROR_STOP on
 \echo '--- seed ---'
 INSERT INTO users (handle, display_name, role) VALUES ('setter1','Setter',  'SETTER');
@@ -64,6 +78,8 @@ UPDATE submissions SET status='DONE',attempt=2,verdict='WA',score=0,max_score=10
 DELETE FROM judge_queue WHERE submission_id=1 AND attempt=2 RETURNING submission_id;
 SELECT id,status,verdict,attempt FROM submissions WHERE id=1;
 
+SELECT to_regclass('ai_quota_usage') IS NOT NULL AS co_bang \gset
+\if :co_bang
 \echo '--- TEST 9: quota AI 5/ngay -> lan thu 6 phai 0 dong ---'
 DO $$
 DECLARE r INT; i INT;
@@ -77,17 +93,30 @@ BEGIN
     r := NULL;
   END LOOP;
 END $$;
+\else
+\echo '>>> BO QUA — bang ai_quota_usage chua ton tai (can V8)'
+\endif
 
+SELECT to_regclass('jobs') IS NOT NULL AS co_bang \gset
+\if :co_bang
 \echo '--- TEST 10: chi mot job REJUDGE dang song ---'
 INSERT INTO jobs (type,status,params) VALUES ('REJUDGE','RUNNING','{"problemId":1}');
 \set ON_ERROR_STOP off
 INSERT INTO jobs (type,status,params) VALUES ('REJUDGE','PENDING','{"problemId":1}');
 \set ON_ERROR_STOP on
+\else
+\echo '>>> BO QUA — bang jobs chua ton tai (can V7)'
+\endif
 
+SELECT to_regclass('audit_log') IS NOT NULL AS co_bang \gset
+\if :co_bang
 \echo '--- TEST 11: audit_log dinh dung partition thang ---'
 INSERT INTO audit_log (actor_id,actor_role,action,entity_type,entity_id,detail)
 VALUES (1,'SETTER','PROBLEM_TESTDATA_REPLACED','problem',1,'{"from":1,"to":2}');
 SELECT tableoid::regclass AS partition, action FROM audit_log;
+\else
+\echo '>>> BO QUA — bang audit_log chua ton tai (can V5)'
+\endif
 
 \echo '--- TEST 12: khong the danh dau DONE ma khong co verdict (CHECK) ---'
 \set ON_ERROR_STOP off

@@ -123,7 +123,7 @@ public class ClaimJudgeJobUseCase {
                         spec.outputLimitKb())
                 .source(job.sourceContent(), job.sourceSha256())
                 .checker(spec.checkerType(), spec.checkerEpsilon())
-                .scoring(spec.scoringMode())
+                .scoring(spec.scoringMode(), spec.maxScore())
                 .testdata(spec.testdataVersion(), spec.manifestSha256(), spec.testcases())
                 .build();
     }

@@ -29,8 +29,12 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # ArchUnit (12 luật) + test domain + test use-case + WorkerHasNoDataSourceTest.
-      # Bất biến #3 và toàn bộ chiều phụ thuộc module được ép ở đúng bước này.
+      # Surefire (unit) + Failsafe (integration, *IT.java).
+      #
+      # Bộ IT chạy trên Postgres 16 THẬT qua Testcontainers — ubuntu-latest có sẵn Docker.
+      # Đó là nơi bốn chaos test chứng minh R1 ("0 bài mất") và R2 ("0 bài chấm 2 lần"):
+      # những tính chất phụ thuộc FOR UPDATE SKIP LOCKED và hành vi transaction, tức là
+      # những thứ mà không unit test nào với repository giả nhìn thấy được.
       - name: mvnw verify
         run: ./mvnw -B --no-transfer-progress verify
 

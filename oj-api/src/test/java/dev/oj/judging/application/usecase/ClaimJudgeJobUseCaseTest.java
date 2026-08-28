@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 /** Worker xin việc. Kiểm hai thứ: giới hạn được quy đổi đúng, và job hỏng không làm đứng hàng đợi. */
 class ClaimJudgeJobUseCaseTest {
 
-    private static final ClaimRequestDto REQUEST = ClaimRequestDto.single("mac-host", "arm64");
+    private static final ClaimRequestDto REQUEST = ClaimRequestDto.single("mac-m1max-host", "arm64");
 
     private JudgingFakes fakes;
     private JudgeSpec spec;

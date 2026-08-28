@@ -71,9 +71,12 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 
 ---
 
-## 5 · Hai endpoint nội bộ `/internal/judge/*`
+## 5 · Ba endpoint nội bộ `/internal/judge/*`
 
+- `claim` (M1) · `result` (M1) · `progress` (M3, lô 20 test — `JudgeProgressDto`).
 - **Không nằm trong `/api/v1/`** và **không được lộ ra ngoài tunnel**. Chỉ nghe trên mạng nội bộ.
+- Vì thế **không dùng `server.servlet.context-path`**: nó bọc toàn bộ ứng dụng và sẽ kéo cả ba
+  endpoint này vào dưới `/api/v1/`. Mỗi controller công khai tự mang tiền tố đầy đủ.
 - Xác thực bằng shared secret đọc từ env, không phải JWT người dùng.
 - Đây là phần đóng băng của `oj-contract`. **Đổi chữ ký là phải hỏi người** — cả hai phía phải đổi trong cùng một PR.
 - `claim` phải idempotent theo `attempt`. `result` phải có optimistic lock.

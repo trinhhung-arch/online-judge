@@ -32,7 +32,7 @@ class RecordJudgeResultUseCaseTest {
     private JudgeResultDto result(Verdict verdict, int attempt) {
         return new JudgeResultDto(101L, attempt, verdict, verdict.isAccepted() ? 100 : 0, 100,
                 verdict.isAccepted() ? null : 7, 20, 230, 4096, null, null,
-                "mac-host", JudgingFakes.hostFactor(), JudgingFakes.NOW, List.of());
+                "mac-m1max-host", JudgingFakes.hostFactor(), JudgingFakes.NOW, List.of());
     }
 
     @Test
@@ -120,7 +120,7 @@ class RecordJudgeResultUseCaseTest {
         var run = fakes.judgeRuns.inserted;
         assertThat(run.languageId()).isEqualTo(3);
         assertThat(run.testdataVersion()).isEqualTo(5);
-        assertThat(run.hostName()).isEqualTo("mac-host");
+        assertThat(run.hostName()).isEqualTo("mac-m1max-host");
         assertThat(run.finishedAt()).isEqualTo(JudgingFakes.NOW);
         assertThat(run.attempt()).isEqualTo(1);
     }
@@ -133,7 +133,7 @@ class RecordJudgeResultUseCaseTest {
     @Test
     void CE_van_ghi_duoc_verdict_du_worker_gui_kem_so_do() {
         var ce = new JudgeResultDto(101L, 1, Verdict.CE, 0, 100, null, 0, 999, 999,
-                "error: expected ';'", null, "mac-host", JudgingFakes.hostFactor(),
+                "error: expected ';'", null, "mac-m1max-host", JudgingFakes.hostFactor(),
                 JudgingFakes.NOW, List.of());
 
         useCase.record(ce);

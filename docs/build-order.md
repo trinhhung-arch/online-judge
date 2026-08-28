@@ -154,10 +154,20 @@ bất kỳ annotation framework nào · bất kỳ kiểu nào của `oj-api` ha
 
 ### Bước M1-2 · Migration V1 · V2 · V3
 
-Chép nguyên văn từ bộ file đã có vào `oj-api/src/main/resources/db/migration/`, cộng `R__seed_du_lieu_tham_chieu.sql`.
-M1 chỉ cần **V1–V3** (`postgres-design.md` mục 16). Không tạo V4–V9 lúc này.
+Chép nguyên văn vào `oj-api/src/main/resources/db/migration/`: **V1–V3 + `R__seed_du_lieu_tham_chieu.sql`**
+(`postgres-design.md` mục 16). V4–V9 nằm ở `docs/sql/migration-cho-moc-sau/` và **chưa** được chép
+vào — Flyway chạy mọi file nó thấy, nên chép sớm là dựng bảng của tuần 12 vào tuần 2.
 
-Kiểm ngay: `docker compose exec postgres psql -d oj -f smoke_test.sql` — 12 ca, ba ca **kỳ vọng báo lỗi**.
+Kiểm ngay: `docker compose exec postgres psql -U ojuser -d ojdb -f docs/sql/smoke_test.sql`.
+
+> ⚠️ **Ở M1 chỉ 9/12 ca chạy được.** TEST 9 cần `ai_quota_usage` (V8), TEST 10 cần `jobs` (V7),
+> TEST 11 cần `audit_log` (V5). File đã tự bỏ qua ba ca đó bằng `\if :co_bang` — không có phần ấy
+> thì `ON_ERROR_STOP` làm script chết tại TEST 9 và **TEST 12 không bao giờ chạy**, mà TEST 12
+> chính là ca kiểm `CHECK (status <> 'DONE' OR verdict IS NOT NULL)`.
+
+**Ngoài ra M1 cần một seed dev**, nếu không thì không nộp được bài nào:
+`db/dev-seed/R__seed_du_lieu_dev.sql` (user id=1 `dev`, đề `A-PLUS-B`, testdata version 1).
+Thư mục đó **chỉ** được nạp khi profile `dev` bật — xem `application-dev.yml`.
 
 ### Bước M1-3 · `platform` — nền chung, không có nghiệp vụ
 
@@ -171,7 +181,11 @@ dev.oj.platform/
               GlobalExceptionHandler.java @RestControllerAdvice
   trace/      TraceIdFilter.java          sinh/nhận traceId → MDC
   security/   CurrentUserProvider.java    interface (seam)
-              FixedDevUserProvider.java   M1: trả user id 1 đã seed
+              DevSecurityConfig.java      đăng ký bean dưới @ConditionalOnMissingBean
+                                          (annotation đó CHỈ đáng tin trên @Bean, không
+                                          đáng tin trên @Component — xem javadoc)
+              FixedDevUserProvider.java   M1: trả user id 1 từ db/dev-seed; ném lỗi lúc
+                                          boot nếu profile là prod/production/host
               Role.java                   USER · SETTER · ADMIN
   web/        CursorPage.java             record(items, nextCursor) — không có totalCount
 ```
@@ -199,7 +213,12 @@ dev.oj.problems/
                    ProblemResponse.java    DTO — không bao giờ trả entity ra HTTP
 ```
 
-M1 không có tạo/sửa đề qua API — seed một đề `A-PLUS-B` bằng SQL. Tạo đề là M4.
+M1 không có tạo/sửa đề qua API — đề `A-PLUS-B` được seed bằng SQL trong
+`db/dev-seed/R__seed_du_lieu_dev.sql` (kèm `testdata_versions` v1 và 3 testcase, 1 sample).
+Tạo đề qua API là M4.
+
+> Đề phải có `current_testdata_version >= 1`, nếu không `GetProblemUseCase.submittableById`
+> ném `ProblemNotFoundException.noTestdata` và không bài nào nộp được.
 
 > ⚠️ `feedback_level` có mặt trong domain **ngay từ M1** dù chưa dùng. Nó là biện pháp chống
 > rò rỉ testdata, không phải tính năng — thêm sau nghĩa là có một khoảng thời gian hệ thống
@@ -339,12 +358,16 @@ ContractMapper.java                domain ↔ oj-contract
 > mất `RETURNING`, hoặc thêm một `COUNT(*)`. Dùng `JdbcClient` + named parameter, không nối chuỗi.
 
 **Test:** Testcontainers Postgres 16 (**không H2** — H2 không có partial index, `SKIP LOCKED`,
-`ON CONFLICT ... WHERE`). Chuyển 12 ca `smoke_test.sql` thành `SchemaInvariantsIT` chạy trong CI.
+`ON CONFLICT ... WHERE`). Chuyển `smoke_test.sql` thành `SchemaInvariantsIT` chạy trong CI —
+**9 ca ở M1**, ba ca còn lại bật dần cùng V5/V7/V8.
 
 ### Bước M1-8 · `judging.api`
 
 ```
-SubmissionController.java       POST /api/v1/submissions   → 202 {submissionId,"QUEUED"}   FR-SUB-01,02
+SubmissionController.java       @RequestMapping("/api/v1/submissions") — viết ĐẦY ĐỦ tiền tố;
+                                KHÔNG dùng server.servlet.context-path (nó kéo cả
+                                /internal/judge/* vào /api/v1 và lộ ra tunnel)
+                                POST → 202 {submissionId,"QUEUED"}              FR-SUB-01,02
                                 GET  /api/v1/submissions/{id}                          FR-SUB-03,04
                                 GET  /api/v1/submissions?cursor=&limit=  (20, trần 50) FR-SUB-07
 InternalJudgeController.java    POST /internal/judge/claim

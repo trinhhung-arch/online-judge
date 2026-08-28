@@ -53,6 +53,19 @@
 			<artifactId>spring-web</artifactId>
 		</dependency>
 
+		<!--
+			JSON. spring-web cho RestClient nhưng KHÔNG kèm bộ chuyển đổi nào, nên thiếu dòng
+			này thì worker không serialize nổi ClaimRequestDto lẫn JudgeJobDto.
+
+			Đúng artifact mà oj-api đang dùng (Boot 4.1 -> Jackson 3, nhóm tools.jackson).
+			Hai tiến trình phải đọc cùng một hợp đồng bằng cùng một bộ luật serialize; lệch
+			phiên bản giữa chúng là đúng loại lỗi mà oj-contract sinh ra để ngăn.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jackson</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>

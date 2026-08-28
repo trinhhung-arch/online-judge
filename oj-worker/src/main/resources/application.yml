@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: oj-worker
+  main:
+    # Worker KHÔNG phải máy chủ: nó không mở cổng nào và không nhận request nào.
+    # Mở một cổng nghe ở đây là mở một bề mặt tấn công mới trên đúng cái máy sẽ chạy
+    # mã của người lạ (từ M2).
+    web-application-type: none
+
+# =============================================================================
+# ⚠️ KHÔNG có thuộc tính database nào ở đây, và sẽ không bao giờ có (bất biến #3).
+# Worker biết đúng một địa chỉ HTTP và một secret. WorkerHasNoDataSourceTest đọc
+# pom.xml để giữ điều đó ở tầng dependency.
+# =============================================================================
+oj:
+  worker:
+    host-name: ${OJ_WORKER_HOST_NAME:mac-m1max-host}   # khớp judge_hosts.name
+    arch: ${OJ_WORKER_ARCH:arm64}
+    slots: ${OJ_WORKER_SLOTS:6}          # CỐ ĐỊNH theo cấu hình, không theo số core (ADR 008)
+    lease: 120s                          # bản sao của oj.judge.lease phía API, chỉ để cảnh báo
+    idle-poll: 500ms                     # hàng đợi rỗng thì ngủ; M6 đổi sang RabbitMQ push
+    request-timeout: 5s
+    result-retry-min: 1s
+    result-retry-max: 30s
+    host-factor: 1.000                   # M2 (Bước 2.9) đo thật bằng HostBenchmark
+    api-base-url: ${OJ_API_BASE_URL:http://localhost:8080}
+    internal-secret: ${OJ_INTERNAL_SHARED_SECRET}   # không có mặc định, cố ý
+
+logging:
+  level:
+    dev.oj: INFO

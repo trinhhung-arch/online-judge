@@ -92,6 +92,21 @@ public record JudgeSpec(
         return (int) Math.min(1_048_576L, Math.max(16_384L, limit));
     }
 
+    /**
+     * Điểm tối đa của đề — <b>API tính, worker chỉ dùng lại</b>.
+     *
+     * <p>{@code ALL_OR_NOTHING} thì luôn là {@value #ALL_OR_NOTHING_MAX_SCORE}: đúng hoặc sai,
+     * không có ở giữa. M3 (FR-PROB-06) đổi thành tổng điểm các subtask khi
+     * {@code scoringMode == SUBTASK} — và đó chính là lý do con số này phải đi từ đây chứ
+     * không để worker tự nghĩ ra: worker không biết đề có mấy nhóm và mỗi nhóm bao nhiêu điểm.
+     */
+    public int maxScore() {
+        return ALL_OR_NOTHING_MAX_SCORE;
+    }
+
+    /** Thang điểm quy ước cho chế độ đúng-hoặc-sai. */
+    public static final int ALL_OR_NOTHING_MAX_SCORE = 100;
+
     public int testCount() {
         return testcases.size();
     }

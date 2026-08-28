@@ -62,7 +62,7 @@ class JudgingFakes {
         return new AppProperties(
                 new AppProperties.Submission(65_536, Duration.ofSeconds(10)),
                 new AppProperties.Judge(Duration.ofSeconds(120), Duration.ofSeconds(15),
-                        2, 20, "mac-host"),
+                        2, 20, "mac-m1max-host"),
                 new AppProperties.Page(20, 50),
                 new AppProperties.Internal("x".repeat(32)),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));

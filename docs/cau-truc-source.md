@@ -102,10 +102,13 @@ oj-contract/src/main/java/dev/oj/contract/
    truyền nhầm — đây là bất biến #1 ép ở tầng kiểu dữ liệu.
 2. **`sourceContent` nằm trong job** (quyết định B). Worker nhận source qua response của
    `claim` nên vẫn không cần `DataSource`. Testdata thì vẫn chỉ đi bằng `sha256`.
-3. **`JudgeEndpoints.java` đã bị xoá** — hiện ba đường dẫn `/internal/judge/*` chỉ nằm trong
-   javadoc của `package-info.java`, nghĩa là API và worker mỗi bên tự gõ một chuỗi.
-   **Đây là một khoảng hở đang mở**: khôi phục file hằng số là *đổi `oj-contract`*, tức là
-   một PR chạm cả hai vùng và hai người duyệt (`CLAUDE.md` mục 5.1). Cần chốt.
+3. **`JudgeEndpoints.java` giữ ba đường dẫn `/internal/judge/*` và tên header
+   `X-Internal-Secret`.** Trước đó `InternalSecretFilter` và `JudgeApiClient` mỗi bên tự gõ
+   một chuỗi giống nhau — lệch một ký tự thì trình biên dịch im, test hai bên vẫn xanh vì mỗi
+   bên dùng hằng của chính mình, và triệu chứng duy nhất là mọi request từ worker nhận 401.
+4. **`JudgeJobDto.maxScore`** — điểm tối đa do API tính (`JudgeSpec.maxScore()`), worker chỉ
+   dùng lại. Trước đó `JudgeResultDto` bắt buộc có `maxScore` mà job không mang, nên worker
+   phải tự bịa ra 100: luật tính điểm sống ở hai nơi, và ở M3 (subtask) thì bịa không nổi.
 
 **Bốn luật của module này:**
 

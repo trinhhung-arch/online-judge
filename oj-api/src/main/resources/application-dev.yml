@@ -1,0 +1,19 @@
+# Profile dev — chạy trên máy lập trình viên, KHÔNG BAO GIỜ trên host.
+#
+# Bật bằng: SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+#
+# FixedDevUserProvider tự ném lỗi lúc boot nếu profile là prod/production/host,
+# nên hai thứ dưới đây không thể lọt lên máy thật cùng nhau.
+
+spring:
+  flyway:
+    # ★ Thêm db/dev-seed vào locations. Không có dòng này thì không có users.id=1,
+    #   và POST /api/v1/submissions vỡ khoá ngoại ngay lần đầu.
+    locations: classpath:db/migration,classpath:db/dev-seed
+
+logging:
+  level:
+    dev.oj: DEBUG
+    # KHÔNG bật DEBUG cho tầng JDBC, kể cả ở dev: câu INSERT vào source_blobs mang
+    # theo nguyên văn mã nguồn người dùng (bất biến #9).
+    org.springframework.jdbc.core: INFO

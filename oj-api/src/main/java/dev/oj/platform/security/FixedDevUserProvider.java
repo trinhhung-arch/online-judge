@@ -2,9 +2,7 @@ package dev.oj.platform.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,24 +21,35 @@ import java.util.List;
  * <p>Nên class này có <b>hai lớp chặn, và cả hai đều chủ động</b>:
  *
  * <ol>
- *   <li>{@code @ConditionalOnMissingBean} — ngày {@code JwtCurrentUserProvider} ra đời (Bước 4.5),
- *       bean này <b>tự biến mất</b>. Không ai phải nhớ xoá nó, và không có giai đoạn hai bean
- *       cùng tồn tại rồi Spring chọn nhầm.</li>
+ *   <li>Bean được đăng ký qua {@link DevSecurityConfig} với {@code @ConditionalOnMissingBean},
+ *       nên ngày {@code JwtCurrentUserProvider} ra đời (Bước 4.5) thì bean này <b>tự biến mất</b>.
+ *       <b>Chú ý chỗ đặt annotation:</b> {@code @ConditionalOnMissingBean} chỉ đáng tin trên một
+ *       phương thức {@code @Bean}. Đặt nó thẳng lên một class {@code @Component} — như bản đầu
+ *       của file này từng làm — là dựa vào thứ tự quét component, thứ Spring không bảo đảm:
+ *       tới M4 nó có thể im lặng giữ lại cửa hậu, hoặc ném
+ *       {@code NoUniqueBeanDefinitionException}. Cả hai đều tệ, và cái đầu tệ hơn nhiều.</li>
  *   <li>Constructor <b>ném lỗi lúc boot</b> nếu profile là {@code prod}. Cùng tinh thần với
  *       {@code EnvVarStartupCheck}: thà không khởi động được còn hơn khởi động sai. Một cửa hậu
- *       phải làm sập tiến trình, không phải in ra một dòng WARN mà không ai đọc.</li>
+ *       phải làm sập tiến trình, không phải in ra một dòng WARN mà không ai đọc. Đây là lớp
+ *       chặn <b>không</b> phụ thuộc vào thứ tự khởi tạo bean nào cả.</li>
  * </ol>
  *
  * <p>Vai trò trả về là {@link Role#USER}, <b>không phải ADMIN</b> — cố ý. M1 chỉ cần nộp bài,
  * và một cửa hậu ở mức USER thì thiệt hại nếu lọt ra vẫn nhỏ hơn hẳn.
  */
-@Component
-@ConditionalOnMissingBean(CurrentUserProvider.class)
 public class FixedDevUserProvider implements CurrentUserProvider {
 
     private static final Logger log = LoggerFactory.getLogger(FixedDevUserProvider.class);
 
-    /** Khớp với người dùng seed trong {@code R__seed_du_lieu_tham_chieu.sql} / smoke test. */
+    /**
+     * Khớp người dùng seed trong {@code db/dev-seed/R__seed_du_lieu_dev.sql} — thư mục chỉ
+     * được nạp khi profile {@code dev} bật ({@code application-dev.yml}).
+     *
+     * <p><b>Không phải {@code R__seed_du_lieu_tham_chieu.sql}</b>: file đó là dữ liệu tham
+     * chiếu chạy ở mọi môi trường, và một tài khoản không mật khẩu tên 'dev' không có việc gì
+     * ở đó. {@code submissions.user_id} có khoá ngoại, nên thiếu hàng này thì lần nộp bài đầu
+     * tiên vỡ ngay — đó là cách bạn biết seed chưa chạy.
+     */
     private static final CurrentUser DEV_USER = new CurrentUser(1L, "dev", Role.USER);
 
     private static final List<String> FORBIDDEN_PROFILES = List.of("prod", "production", "host");

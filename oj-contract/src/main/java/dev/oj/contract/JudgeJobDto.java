@@ -53,6 +53,10 @@ import java.util.List;
  * @param checkerType            bộ so sánh output
  * @param checkerEpsilon         sai số, bắt buộc có khi và chỉ khi {@code checkerType=FLOAT}
  * @param scoringMode            quyết định worker có được early exit hay không
+ * @param maxScore               điểm tối đa của bài này. <b>API tính, worker chỉ dùng lại</b> —
+ *                               trước đây trường này không có và worker phải tự bịa ra 100,
+ *                               tức là luật tính điểm sống ở hai nơi. Với {@code SUBTASK}
+ *                               (M3) nó là tổng điểm các nhóm, và bịa thì không bịa nổi
  * @param testdataVersion        phiên bản testdata dùng cho lần chấm này; ghi lại vào
  *                               {@code judge_runs} để khi verdict hôm nay khác hôm qua thì
  *                               truy được ngay vì sao (FR-PROB-10)
@@ -77,6 +81,7 @@ public record JudgeJobDto(
         CheckerType checkerType,
         BigDecimal checkerEpsilon,
         ScoringMode scoringMode,
+        int maxScore,
         int testdataVersion,
         String testdataManifestSha256,
         List<TestcaseMetaDto> testcases) {
@@ -118,6 +123,7 @@ public record JudgeJobDto(
         if (scoringMode == null) {
             throw new NullPointerException("scoringMode");
         }
+        ContractChecks.requireAtLeast(maxScore, 1, "maxScore");
         ContractChecks.requireAtLeast(testdataVersion, 1, "testdataVersion");
         ContractChecks.requireSha256(testdataManifestSha256, "testdataManifestSha256");
 
@@ -182,6 +188,7 @@ public record JudgeJobDto(
         private CheckerType checkerType = CheckerType.TOKEN;
         private BigDecimal checkerEpsilon;
         private ScoringMode scoringMode = ScoringMode.ALL_OR_NOTHING;
+        private int maxScore;
         private int testdataVersion;
         private String testdataManifestSha256;
         private List<TestcaseMetaDto> testcases = List.of();
@@ -233,8 +240,10 @@ public record JudgeJobDto(
             return this;
         }
 
-        public Builder scoring(ScoringMode scoringMode) {
+        /** @param maxScore điểm tối đa — do API tính, xem javadoc của record */
+        public Builder scoring(ScoringMode scoringMode, int maxScore) {
             this.scoringMode = scoringMode;
+            this.maxScore = maxScore;
             return this;
         }
 
@@ -249,7 +258,7 @@ public record JudgeJobDto(
             return new JudgeJobDto(submissionId, attempt, traceId, languageCode,
                     compileCommand, runCommand, compileTimeLimitMs, compileMemoryKb,
                     timeLimitMs, memoryLimitKb, outputLimitKb, sourceContent, sourceSha256,
-                    checkerType, checkerEpsilon, scoringMode, testdataVersion,
+                    checkerType, checkerEpsilon, scoringMode, maxScore, testdataVersion,
                     testdataManifestSha256, testcases);
         }
     }

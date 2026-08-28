@@ -9,11 +9,15 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * {@code GET /api/v1/problems/{code}} — FR-PROB-01.
  *
- * <h2>⚠️ Đường dẫn ở đây KHÔNG lặp lại {@code /api/v1}</h2>
- * {@code application.yml} đã đặt {@code server.servlet.context-path: /api/v1}, nên
- * {@code @RequestMapping("/problems")} tạo ra {@code /api/v1/problems}. Viết
- * {@code @RequestMapping("/api/v1/problems")} sẽ thành {@code /api/v1/api/v1/problems} —
- * lỗi mất năm phút để nhìn ra và ai cũng mắc đúng một lần.
+ * <h2>⚠️ Tiền tố {@code /api/v1} viết ĐẦY ĐỦ ở đây, không dùng context-path</h2>
+ * Bản năng là đặt {@code server.servlet.context-path: /api/v1} rồi viết
+ * {@code @RequestMapping("/problems")}. <b>Đừng.</b> {@code context-path} bọc <i>toàn bộ</i>
+ * ứng dụng, nên hai endpoint {@code /internal/judge/*} cũng bị đẩy thành
+ * {@code /api/v1/internal/judge/*} — và lúc đó chúng nằm chung tiền tố với phần công khai,
+ * tức là lộ ra Cloudflare Tunnel cùng nhau. Đó đúng là thứ {@code oj-api/CLAUDE.md} mục 5 cấm.
+ *
+ * <p>Đổi lại, mỗi controller công khai phải tự mang tiền tố đầy đủ. Rẻ, và nhìn vào
+ * {@code @RequestMapping} là biết ngay đường dẫn thật.
  *
  * <h2>Controller mỏng đến mức nhàm chán, và đó là yêu cầu</h2>
  * Nó chỉ làm ba việc: nhận tham số, gọi use-case, đổi domain sang DTO. Nó <b>không</b>:
@@ -30,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  * </ul>
  */
 @RestController
-@RequestMapping("/problems")
+@RequestMapping("/api/v1/problems")
 public class ProblemController {
 
     private final GetProblemUseCase getProblem;

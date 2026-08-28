@@ -17,7 +17,7 @@ class JudgeRunTest {
 
     private static final Instant NOW = Instant.parse("2026-03-01T10:00:00Z");
     private static final BigDecimal HOST_FACTOR = new BigDecimal("1.000");
-    private static final String HOST = "mac-host";
+    private static final String HOST = "mac-m1max-host";
 
     private static JudgeRun run(int attempt, String compileLog) {
         return new JudgeRun(1L, attempt, HOST, HOST_FACTOR, 3, 5,

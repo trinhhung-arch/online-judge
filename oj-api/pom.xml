@@ -30,6 +30,28 @@
 	<properties>
 		<java.version>21</java.version>
 	</properties>
+
+	<!--
+		Spring Boot 4.1 khai báo ${testcontainers.version} (2.0.5) nhưng không quản trực tiếp
+		từng artifact org.testcontainers:* — phải import BOM. Import ở đây để hai artifact dưới
+		không tự ghi số và luôn khớp nhau: lệch version giữa chúng là lỗi chỉ hiện lúc chạy,
+		dưới dạng NoSuchMethodError.
+
+		⚠️ Testcontainers 2.x đổi tên artifact: `testcontainers-postgresql` chứ không phải
+		`postgresql` như bản 1.x mà mọi hướng dẫn trên mạng còn viết.
+	-->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>${testcontainers.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<!--
 			JdbcClient + HikariCP: nền của DataSourceConfig (hai pool) và của mọi
@@ -62,6 +84,36 @@
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
 			<version>1.3.0</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!--
+			Testcontainers — Postgres THẬT cho integration test, KHÔNG H2.
+			H2 không có partial index, FOR UPDATE SKIP LOCKED, hay ON CONFLICT ... WHERE —
+			tức là nó không có đúng ba thứ mà toàn bộ thiết kế hàng đợi dựa vào. Một bộ test
+			xanh trên H2 sẽ nói dối về chính những bất biến quan trọng nhất (postgres-design
+			mục 13, build-order Bước M1-7).
+
+			@ServiceConnection của spring-boot-testcontainers tự nối container vào cấu hình.
+			Cần vì hệ thống có HAI pool (oj.datasource.app / judge) phải trỏ cùng một container;
+			bơm tay bằng @DynamicPropertySource là thêm hai chỗ để sai, và sai kiểu đó thì test
+			vẫn xanh nhưng chạy nhầm pool.
+
+			Phiên bản do BOM của Spring Boot quản — không tự ghi số.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -116,6 +168,33 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+
+			<!--
+				★ BẮT BUỘC, nếu không thì toàn bộ integration test KHÔNG BAO GIỜ CHẠY.
+
+				Surefire chỉ nhận *Test.java; các lớp *IT.java là việc của Failsafe, và nó
+				không tự bật. Thiếu khối này thì `mvn verify` vẫn xanh trong khi bốn chaos
+				test và SchemaInvariantsIT nằm im — tức là R1 và R2 lại quay về được ép bằng
+				lời hứa, đúng thứ chúng sinh ra để thay thế.
+
+				Failsafe chạy ở pha integration-test và `verify` mới báo lỗi, nên một IT đỏ
+				không làm hỏng `mvn install` giữa chừng mà vẫn fail build. Phiên bản do
+				parent của Spring Boot quản.
+
+				⚠️ Cần Docker chạy được trên máy (Testcontainers). CI ubuntu-latest có sẵn.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

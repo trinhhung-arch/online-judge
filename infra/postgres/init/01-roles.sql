@@ -1,6 +1,15 @@
 -- Quyết định D (postgres-design.md mục 9): HAI role, không phải một.
--- Chạy MỘT LẦN duy nhất, lúc volume postgres còn trống. Đổi file này sau đó thì
--- phải `docker compose down -v` mới có tác dụng — nói trước để khỏi mất buổi debug.
+-- Chạy MỘT LẦN duy nhất, lúc volume postgres còn TRỐNG. Nếu volume đã tồn tại từ
+-- trước thì Postgres bỏ qua toàn bộ /docker-entrypoint-initdb.d và hai role không
+-- được tạo — triệu chứng: `SELECT rolname FROM pg_roles WHERE rolname LIKE 'oj%'`
+-- chỉ trả về `ojuser`.
+--
+-- Khôi phục mà KHÔNG mất dữ liệu (file đã được mount sẵn vào container):
+--     docker compose exec -T postgres psql -U ojuser -d ojdb \
+--         -f /docker-entrypoint-initdb.d/01-roles.sql
+--
+-- Đừng dùng `docker compose down -v` chỉ để chạy lại file này: nó xoá sạch mọi
+-- volume, kể cả bài nộp trong DB dev.
 --
 --   oj_migrator  sở hữu schema, chạy Flyway, có DDL
 --   oj_app       chỉ DML; V9 sẽ REVOKE DELETE/TRUNCATE trên submissions và

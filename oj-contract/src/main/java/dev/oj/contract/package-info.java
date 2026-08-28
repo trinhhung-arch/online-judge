@@ -18,12 +18,14 @@
  * tượng, và hai bên gặp nhau đúng ở đây. Đó là lý do nó là Bước đầu tiên của M1
  * ({@code docs/build-order.md} Bước M1-1), không phải bước thứ năm.
  *
- * <h2>Hai endpoint dùng package này</h2>
+ * <h2>Ba endpoint dùng package này</h2>
  * <pre>
  *   POST /internal/judge/claim    ClaimRequestDto  → 200 JudgeJobDto | 204 (không có việc)
  *   POST /internal/judge/result   JudgeResultDto   → 204
  *   POST /internal/judge/progress JudgeProgressDto → 204     (M3, lô 20 test)
  * </pre>
+ * Ba đường dẫn và tên header là hằng số trong {@link dev.oj.contract.JudgeEndpoints} —
+ * hai bên dùng chung, không bên nào tự gõ lại.
  * Cả ba <b>không</b> nằm dưới {@code /api/v1/} và <b>không</b> được lộ ra Cloudflare Tunnel.
  * Xác thực bằng shared secret đọc từ env, không phải JWT người dùng
  * ({@code oj-api/CLAUDE.md} mục 5).
