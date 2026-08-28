@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>4.1.0</version>
+		<relativePath />
+	</parent>
+
+	<groupId>com.oj</groupId>
+	<artifactId>oj-worker</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>oj-worker</name>
+	<description>Nơi duy nhất chạy mã của người lạ.</description>
+
+	<properties>
+		<java.version>21</java.version>
+	</properties>
+
+	<!--
+		★ DANH SÁCH NÀY NGẮN, VÀ ĐÓ LÀ BẤT BIẾN #3.
+
+		Worker biết đúng hai endpoint HTTP: /internal/judge/claim và /internal/judge/result.
+		Nó KHÔNG có DataSource, KHÔNG có Redis, KHÔNG có MinIO client, KHÔNG có Flyway.
+		Muốn vi phạm thì phải sửa đúng file này — mà sửa pom.xml là việc phải hỏi người
+		(CLAUDE.md mục 5.2). Đó chính là cách cấu trúc ép bất biến: biến một vi phạm thành
+		một dòng nhìn thấy được trong diff.
+
+		WorkerHasNoDataSourceTest đọc thẳng file này và fail nếu thấy tên bị cấm.
+	-->
+	<dependencies>
+		<dependency>
+			<groupId>com.oj</groupId>
+			<artifactId>oj-contract</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+
+		<!-- DI, cấu hình, logging. KHÔNG phải starter-web: worker là tiến trình chạy dài,
+		     không phải máy chủ. Mở một cổng nghe ở đây là mở một bề mặt tấn công mới trên
+		     đúng cái máy đang chạy mã người lạ. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+
+		<!-- RestClient cho JudgeApiClient — client, không phải server. -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.assertj</groupId>
+			<artifactId>assertj-core</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Luật ArchUnit 6 và 7 (cau-truc-source.md mục 6) chạy trong module này, không
+		     phải trong oj-api: oj-worker không nằm trên classpath của oj-api. -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>1.3.0</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+</project>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Log có traceId — bất biến #12, và build-order.md Bước 0.9.
+
+    Vì sao file này tồn tại: không có traceId thì không truy được một sự cố đi xuyên
+    API → hàng đợi → worker → kết quả. Đó là lý do CLAUDE.md cấm System.out.println —
+    lệnh đó in ra một dòng không có traceId, và một dòng như thế là một dòng vô dụng
+    lúc 2 giờ sáng giữa contest.
+
+    Khoá "traceId" ở đây trùng đúng TraceIdFilter.MDC_KEY. Đổi một phía là mọi dòng log
+    mất mã truy vết mà không có gì báo lỗi.
+
+    Định dạng JSON có cấu trúc: Spring Boot 4 làm sẵn, KHÔNG cần thêm dependency nào —
+    bật bằng một dòng trong application.yml khi triển khai lên host:
+        logging.structured.format.console: ecs
+    Ở máy dev thì mẫu dưới đây dễ đọc hơn hẳn cho mắt người.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- %X{traceId} là phần quan trọng nhất của dòng này. -->
+    <property name="OJ_PATTERN"
+              value="%d{HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %-40.40logger{39} : %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${OJ_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!--
+        Hai logger dưới mức DEBUG là cố ý.
+
+        KHÔNG BAO GIỜ bật DEBUG cho tầng JDBC ở môi trường thật: câu lệnh INSERT vào
+        source_blobs mang theo NGUYÊN VĂN mã nguồn người dùng, và log là đường rò rỉ dễ
+        quên nhất (bất biến #9, SEC3).
+    -->
+    <logger name="dev.oj" level="DEBUG"/>
+    <logger name="org.springframework.jdbc.core" level="INFO"/>
+</configuration>

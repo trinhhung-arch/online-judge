@@ -2,21 +2,17 @@ spring:
   application:
     name: oj-backend
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/ojdb
-    username: ojuser
-    password: ojpass
-    driver-class-name: org.postgresql.Driver
+  # KHÔNG cấu hình spring.datasource ở đây: DataSourceConfig tự dựng HAI pool
+  # (oj.datasource.app / oj.datasource.judge) và đánh dấu @Primary, nên khối
+  # spring.datasource sẽ bị bỏ qua trong im lặng — đúng loại cấu hình trông như có
+  # tác dụng mà không có. Xem oj.datasource ở cuối file.
+  flyway:
+    # Flyway dùng URL của pool app. Khi V9 (M6) dựng hai role thật thì đổi user ở đây
+    # sang oj_migrator, còn oj.datasource.* giữ oj_app — quyết định D.
+    url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}
+    user: ${OJ_DB_APP_USER:ojuser}
+    password: ${OJ_DB_APP_PASSWORD:ojpass}
 
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-    open-in-view: false
 
   data:
     redis:
@@ -31,8 +27,71 @@ spring:
 
 server:
   port: 8080
+  # KHÔNG đặt servlet.context-path=/api/v1 (build-order.md 0.6 đề nghị thế, và nó SAI):
+  # context-path bọc TOÀN BỘ ứng dụng, nên /internal/judge/* sẽ thành
+  # /api/v1/internal/judge/* — đúng thứ mà oj-api/CLAUDE.md mục 5 cấm, và nó sẽ lọt ra
+  # tunnel cùng với phần công khai. Tiền tố /api/v1 nằm trong @RequestMapping của từng
+  # controller công khai; hai endpoint nội bộ cố ý đứng ngoài.
 
 logging:
   level:
-    org.hibernate.SQL: DEBUG
     org.springframework.security: DEBUG
+
+# =============================================================================
+# Mọi ngưỡng, giới hạn, timeout của hệ thống — CLAUDE.md mục 7: không có số ma
+# thuật rải trong code. Ánh xạ 1-1 sang dev.oj.platform.config.AppProperties,
+# và các compact constructor ở đó đối chiếu ngược với hằng số trong oj-contract
+# rồi CRASH LÚC BOOT nếu lệch.
+#
+# ⚠️ Sáu con số dưới đây ĐỔI LÀ PHẢI HỎI NGƯỜI (CLAUDE.md mục 5.4):
+#    max-source-bytes 64KB · rate-limit 10s · lease 120s · ai.daily-quota 5
+#    · page.max-size 50 · result-batch-size 20
+# =============================================================================
+oj:
+  submission:
+    max-source-bytes: 65536       # FR-SUB-01 · CHECK trên source_blobs · JudgeJobDto
+    rate-limit: 10s               # FR-SUB-08 — hiệu lực từ M4, khai báo sẵn từ M1
+
+  judge:
+    lease: 120s                   # FR-SUB-03 — kẹt JUDGING quá ngần này thì reaper thu hồi
+    reaper-interval: 15s          # PHẢI nhỏ hơn lease, nếu không một bài kẹt chờ hai chu kỳ
+    max-ie-retries: 2             # FR-SUB-12
+    result-batch-size: 20         # = JudgeProgressDto.BATCH_SIZE, dùng từ M3
+    reference-host-name: mac-m1max-host # mọi con số thời gian quy chiếu về máy này (FR-SUB-11)
+
+  page:
+    default-size: 20              # bất biến #8 — mọi danh sách đều có LIMIT
+    max-size: 50                  # xin 1000 thì trả 50, không trả lỗi
+
+  internal:
+    # Không có giá trị mặc định, cố ý: một secret mặc định là một secret công khai.
+    # Thiếu biến môi trường này thì API không khởi động được — đó là hành vi đúng.
+    shared-secret: ${OJ_INTERNAL_SHARED_SECRET}
+
+  ai:
+    daily-quota: 5                # FR-AI-03 — tuần 14-15
+    timeout: 30s                  # cứng, không có ngoại lệ (nfrplan.md 10.5)
+
+  # ---------------------------------------------------------------------------
+  # HAI POOL, KHÔNG PHẢI MỘT — postgres-design.md mục 11.
+  #
+  # 500 người nộp bài cùng lúc có thể vét sạch pool. Nếu worker dùng chung pool đó,
+  # nó không lấy được connection để GHI VERDICT, và bài đang chấm dở bị reaper thu
+  # hồi rồi chấm lại — mọi thứ tệ thêm đúng lúc đang tệ nhất. Số 6 khớp số judge slot.
+  #
+  # Thiếu khối này thì API KHÔNG KHỞI ĐỘNG ĐƯỢC: HikariConfig rỗng ném
+  # "dataSource or dataSourceClassName or jdbcUrl is required".
+  # ---------------------------------------------------------------------------
+  datasource:
+    app:
+      jdbc-url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}
+      username: ${OJ_DB_APP_USER:ojuser}
+      password: ${OJ_DB_APP_PASSWORD:ojpass}
+      maximum-pool-size: 20
+      pool-name: oj-app
+    judge:
+      jdbc-url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}
+      username: ${OJ_DB_APP_USER:ojuser}
+      password: ${OJ_DB_APP_PASSWORD:ojpass}
+      maximum-pool-size: 6
+      pool-name: oj-judge

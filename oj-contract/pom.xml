@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.oj</groupId>
+    <artifactId>oj-contract</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>oj-contract</name>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <!--
+        KHÔNG CÓ <dependencies>, VÀ ĐÓ LÀ CẢ ĐIỂM CỦA MODULE NÀY.
+
+        CLAUDE.md mục 3 luật 4 · build-order.md Bước 0.3 · cau-truc-source.md mục 2 luật 1
+        đều nói cùng một câu, và một trong ba gọi thẳng tên: "không Jackson, không Lombok,
+        không Spring". oj-contract là biên giới giữa hai người và hai tiến trình; serialize
+        là việc của hai bên, không phải của hợp đồng.
+
+        Lưu ý cho người review: luật ArchUnit số 4 KHÔNG bắt được vi phạm ở đây. Nó soi
+        bytecode, nên một dependency `optional` mà chưa file nào import là vô hình với nó.
+        Hàng rào duy nhất của file này là con mắt người đọc diff.
+    -->
+</project>

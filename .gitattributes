@@ -1,2 +1,15 @@
-/mvnw text eol=lf
-*.cmd text eol=crlf
+# Dòng đầu tiên của repo, và nó phải là dòng này (build-order.md Bước 0.1).
+# Hai máy dev chạy Windows/WSL2, host là macOS. Không có dòng dưới đây thì mọi
+# diff về sau đều nhiễu vì CRLF, và `git blame` mất tác dụng.
+* text=auto eol=lf
+
+# Ngoại lệ: script Windows phải giữ CRLF mới chạy được.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Nhị phân — không đụng vào.
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.zip  binary
+*.jar  binary

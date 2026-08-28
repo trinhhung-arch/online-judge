@@ -9,6 +9,14 @@
 	<packaging>pom</packaging>
 
 	<modules>
+		<module>oj-contract</module>
 		<module>oj-api</module>
+		<!--
+			oj-worker PHẢI nằm ở đây. Trước đó nó có 20 file nguồn mà chưa bao giờ được
+			biên dịch, nghĩa là bất biến #3 (worker không có DataSource) và #4 (mọi mã
+			người lạ chạy trong isolate) không có chỗ nào để kiểm bằng máy —
+			cả hai được ép bằng lời hứa. Xem WorkerHasNoDataSourceTest.
+		-->
+		<module>oj-worker</module>
 	</modules>
 </project>

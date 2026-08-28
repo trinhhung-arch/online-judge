@@ -1,0 +1,63 @@
+# build-order.md Bước 0.8 · nfrplan M3 (CI < 10 phút).
+#
+# Trước khi có file này, mọi câu "ép bằng CI, không bằng lời hứa" trong ArchitectureTest
+# và nfrplan 8.2 đều chưa có thật. Đây là chỗ những lời đó thành sự thật.
+name: ci
+
+on:
+  push:
+    branches: [main, 'a/**', 'b/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15          # nfrplan M3: > 15 phút là người ta bắt đầu bỏ qua CI
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # ArchUnit (12 luật) + test domain + test use-case + WorkerHasNoDataSourceTest.
+      # Bất biến #3 và toàn bộ chiều phụ thuộc module được ép ở đúng bước này.
+      - name: mvnw verify
+        run: ./mvnw -B --no-transfer-progress verify
+
+      # Luật 5d của ArchitectureTest — phần mà ArchUnit KHÔNG làm được.
+      # Từ Java 9, `a + b` biên dịch thành invokedynamic nên ArchUnit không thấy nối chuỗi.
+      # Thô, nhưng nó bắt đúng thứ invokedynamic giấu mất (bất biến #5, SEC2).
+      - name: Cấm nối chuỗi trong SQL
+        run: |
+          if grep -rInE '"\s*\+|\+\s*"' --include='*.java' \
+               oj-api/src/main/java/dev/oj/*/infrastructure/ 2>/dev/null; then
+            echo "::error::Phát hiện nối chuỗi trong tầng infrastructure — dùng named parameter của JdbcClient"
+            exit 1
+          fi
+
+      - name: Báo cáo test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/'
+          if-no-files-found: ignore
+
+# -----------------------------------------------------------------------------
+# Hai workflow còn lại của build-order 0.8 CHƯA thêm ở đây, vì thêm bây giờ là CI đỏ
+# ngay từ lần push đầu — và một CI đỏ thường trực là một CI bị bỏ qua:
+#
+#   sandbox-attack.yml   14 test tấn công (SEC1) — bật ở M2, cùng lúc IsolateJudgeRunner
+#                        thay ScriptedJudgeRunner. Trước đó chưa có gì để tấn công.
+#   buildx.yml           image multi-arch amd64 + arm64 (C1) — cần Dockerfile, chưa có.
+# -----------------------------------------------------------------------------
