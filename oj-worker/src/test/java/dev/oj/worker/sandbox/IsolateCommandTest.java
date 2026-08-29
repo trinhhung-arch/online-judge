@@ -87,4 +87,39 @@ class IsolateCommandTest {
         assertThat(IsolateCommand.run(CFG, 0, META, 1000, 2000, 65536, List.of("/box/p")))
                 .contains("--processes=" + CFG.run().processes());
     }
+
+    /**
+     * ★ Bước 3.5 — PCH gắn vào box lúc BIÊN DỊCH, và <b>chỉ</b> lúc đó.
+     *
+     * <p>Đo được trong box: 2.70s → 0.73s, và bộ nhớ biên dịch 233MB → 87MB (GCC không phải
+     * dựng lại toàn bộ cây cú pháp của thư viện chuẩn).
+     *
+     * <p>Bước chạy không được thấy nó. Mã của người lạ không có lý do nào để đọc một
+     * precompiled header, và mỗi thư mục nhìn thấy được là một bề mặt tấn công — cùng nguyên
+     * tắc đã gỡ {@code /proc} và {@code /tmp} khỏi bước chạy.
+     */
+    @Test
+    @DisplayName("★ PCH chỉ gắn vào box lúc biên dịch, không lúc chạy")
+    void pch_chi_o_buoc_bien_dich() {
+        String mount = "--dir=" + IsolateCommand.PCH_DIR + "=" + CFG.compile().pchDir() + ":maybe";
+
+        assertThat(IsolateCommand.compile(CFG, 0, META, 10_000, 262_144, List.of("/usr/bin/g++")))
+                .contains(mount);
+        assertThat(IsolateCommand.run(CFG, 0, META, 1000, 2000, 262_144, List.of("/box/prog")))
+                .as("bước chạy không có lý do nào để thấy PCH")
+                .doesNotContain(mount);
+    }
+
+    /**
+     * Máy chưa chạy {@code scripts/build-pch.sh} vẫn phải chấm được. Cờ {@code :maybe} của
+     * isolate bỏ qua quy tắc khi thư mục không tồn tại; GCC bỏ qua {@code -I} trỏ vào hư
+     * không. Đo được: rc=0, 2.25s — chậm, không sai.
+     */
+    @Test
+    @DisplayName("host chưa dựng PCH thì dùng cờ :maybe, không phải một lỗi khởi động")
+    void thieu_pch_thi_hong_nhe() {
+        assertThat(IsolateCommand.compile(CFG, 0, META, 10_000, 262_144, List.of("/usr/bin/g++")))
+                .anyMatch(arg -> arg.startsWith("--dir=" + IsolateCommand.PCH_DIR + "=")
+                        && arg.endsWith(":maybe"));
+    }
 }

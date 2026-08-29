@@ -79,4 +79,40 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
                 .update();
         return rows == 1;
     }
+
+    /**
+     * {@code verdict = NULL} trong hợp đồng nghĩa là nhóm <b>bị bỏ qua</b>; V4 lưu nó thành
+     * chuỗi {@code 'SKIPPED'} vì cột {@code NOT NULL}.
+     *
+     * <p>Hai trạng thái này phải giữ khác nhau tới tận đây: "bỏ qua" nói với thí sinh rằng
+     * nhóm ấy chưa được thử vì phụ thuộc chưa đạt — sửa nhóm 1 thì nhóm 3 có thể ăn điểm.
+     * Gộp cả hai thành 0 điểm là xoá mất chính thông tin hữu ích nhất của FR-PROB-06.
+     */
+    private static final String INSERT_SUBTASK = """
+            INSERT INTO judge_run_subtasks (submission_id, attempt, subtask_ordinal,
+                                            verdict, score, max_score,
+                                            failed_test_ordinal, time_ms, memory_kb)
+            VALUES (:submissionId, :attempt, :subtaskOrdinal,
+                    :verdict, :score, :maxScore,
+                    :failedTestOrdinal, :timeMs, :memoryKb)
+            ON CONFLICT (submission_id, attempt, subtask_ordinal) DO NOTHING
+            """;
+
+    @Override
+    public void insertSubtaskResults(long submissionId, int attempt,
+                                     java.util.List<dev.oj.contract.SubtaskResultDto> subtasks) {
+        for (dev.oj.contract.SubtaskResultDto subtask : subtasks) {
+            jdbc.sql(INSERT_SUBTASK)
+                    .param("submissionId", submissionId)
+                    .param("attempt", attempt)
+                    .param("subtaskOrdinal", subtask.subtaskOrdinal())
+                    .param("verdict", subtask.isSkipped() ? "SKIPPED" : subtask.verdict().name())
+                    .param("score", subtask.score())
+                    .param("maxScore", subtask.maxScore())
+                    .param("failedTestOrdinal", subtask.failedTestOrdinal())
+                    .param("timeMs", subtask.timeMs())
+                    .param("memoryKb", subtask.memoryKb())
+                    .update();
+        }
+    }
 }

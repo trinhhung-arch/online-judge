@@ -56,6 +56,39 @@ public interface SubmissionRepository {
     Optional<Submission> findForRequester(long id, long requesterId, Role role);
 
     /**
+     * Như trên, nhưng kèm mọi thứ trang chi tiết cần — trong <b>một</b> câu query.
+     *
+     * <p>Đọc riêng {@code judge_runs} và {@code problems} bằng hai câu nữa là N+1 trên trang
+     * mà người ta bấm F5 nhiều nhất trong lúc chờ verdict.
+     *
+     * <p>Lọc theo chủ sở hữu vẫn nằm <b>trong câu SQL</b>, không phải một câu {@code if} sau
+     * khi đã load ({@code oj-api/CLAUDE.md} mục 2) — bài của người khác không tồn tại, chứ
+     * không phải bị từ chối.
+     */
+    Optional<SubmissionDetail> findDetailForRequester(long id, long requesterId, Role role);
+
+    /**
+     * Bài nộp + ngữ cảnh của đề, đủ để dựng một câu giải thích verdict.
+     *
+     * @param feedbackLevel       của đề — quyết định người nộp có được thấy số thứ tự test sai
+     * @param timeLimitMs         giới hạn <b>hiệu lực cho ngôn ngữ này</b>, không phải giới hạn
+     *                            thô của đề: bài Python được nhân hệ số, và hiện giới hạn thô
+     *                            cho họ là nói dối
+     * @param compileLog          output từ mã của chính người nộp — tác giả luôn được xem
+     *                            (ma trận hiển thị), không phụ thuộc {@code feedbackLevel}
+     * @param isolateStatus       CHỈ dành cho ADMIN và cho {@code VerdictExplainer} rút mã tín
+     *                            hiệu. Không bao giờ được trả nguyên văn ra response
+     */
+    record SubmissionDetail(
+            Submission submission,
+            dev.oj.problems.domain.FeedbackLevel feedbackLevel,
+            int timeLimitMs,
+            int memoryLimitKb,
+            String compileLog,
+            String isolateStatus) {
+    }
+
+    /**
      * Lịch sử bài nộp của một người — FR-SUB-07. Cursor-based, {@code WHERE id < :cursor
      * ORDER BY id DESC}, chạy trên {@code ix_submissions_user_recent}.
      *

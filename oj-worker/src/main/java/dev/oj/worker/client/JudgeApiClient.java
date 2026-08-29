@@ -4,6 +4,7 @@ import dev.oj.contract.ClaimRequestDto;
 import dev.oj.contract.HostBenchmarkDto;
 import dev.oj.contract.JudgeEndpoints;
 import dev.oj.contract.JudgeJobDto;
+import dev.oj.contract.JudgeProgressDto;
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.worker.config.WorkerProperties;
 import org.springframework.http.HttpStatusCode;
@@ -84,6 +85,30 @@ public class JudgeApiClient {
      * chối · IE còn lượt) — worker <b>không được</b> coi 204 là "kết quả đã vào DB". Nó chỉ
      * có nghĩa "API đã nhận và tự quyết định", và đó là hành vi đúng.
      */
+    /**
+     * ★ Bước 3.7 — báo tiến độ một lô 20 test. <b>Best-effort: không bao giờ ném ra ngoài.</b>
+     *
+     * <h2>Vì sao phương thức này nuốt lỗi, còn {@link #reportResult} thì không</h2>
+     * Tiến độ là dữ liệu phù du — mất một lô thì thanh phần trăm nhảy từ 40% lên 80%, và
+     * không ai chết. Kết quả thì là sự thật cuối cùng: mất nó là mất một bài nộp, và
+     * {@code ResultBuffer} tồn tại để giữ nó bằng mọi giá.
+     *
+     * <p>Nếu tiến độ cũng ném thì một API đang chập chờn sẽ làm <b>hỏng lượt chấm đang chạy
+     * dở</b> — đổi một tiện nghi hiển thị lấy một lượt chấm. Sai hướng.
+     */
+    public void reportProgress(JudgeProgressDto progress) {
+        try {
+            http.post()
+                    .uri(JudgeEndpoints.PROGRESS)
+                    .body(progress)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.debug("Bỏ qua một lô tiến độ của submission {}: {}",
+                    progress.submissionId(), e.toString());
+        }
+    }
+
     public void reportResult(JudgeResultDto result) {
         try {
             http.post()

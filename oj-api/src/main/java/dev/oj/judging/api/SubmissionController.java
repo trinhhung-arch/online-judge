@@ -78,7 +78,7 @@ public class SubmissionController {
      */
     @GetMapping("/{id}")
     public SubmissionDetailResponse byId(@PathVariable long id) {
-        return SubmissionDetailResponse.from(getSubmission.byId(id));
+        return SubmissionDetailResponse.from(getSubmission.detailById(id));
     }
 
     /**

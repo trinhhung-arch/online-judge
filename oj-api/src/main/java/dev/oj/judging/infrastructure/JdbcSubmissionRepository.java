@@ -1,6 +1,7 @@
 package dev.oj.judging.infrastructure;
 
 import dev.oj.judging.application.port.SubmissionRepository;
+import dev.oj.judging.application.port.SubmissionRepository.SubmissionDetail;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.Submission;
 import dev.oj.platform.security.Role;
@@ -74,6 +75,37 @@ public class JdbcSubmissionRepository implements SubmissionRepository {
              WHERE id = :id
                AND (user_id = :requesterId OR :requesterRole = 'ADMIN')
                AND (hidden_at IS NULL      OR :requesterRole = 'ADMIN')
+            """;
+
+    /**
+     * Trang chi tiết — bài nộp + đề + ngôn ngữ + lần chấm hiện tại, trong MỘT câu.
+     *
+     * <p>{@code LEFT JOIN judge_runs}: bài đang {@code QUEUED} chưa có bản ghi chấm nào, và
+     * đó không phải lỗi. {@code ON r.attempt = s.attempt} chứ không phải "attempt lớn nhất" —
+     * trang phải hiện log của <b>lần chấm hiện tại</b>, không phải của một lần rejudge cũ.
+     *
+     * <p>Hệ số ngôn ngữ trả về THÔ ({@code time_multiplier}, {@code startup_overhead_ms}) chứ
+     * không nhân sẵn trong SQL: công thức đã có một bản duy nhất ở
+     * {@code JudgeSpec.timeLimitOnReferenceHost}, và viết lại nó bằng SQL là dựng bản thứ hai.
+     */
+    private static final String FIND_DETAIL_FOR_REQUESTER = """
+            SELECT s.id, s.user_id, s.problem_id, s.contest_id, s.language_id,
+                   s.source_sha256, s.source_bytes, s.created_at,
+                   s.status, s.attempt, s.testdata_version,
+                   s.verdict, s.score, s.max_score, s.failed_test_ordinal,
+                   s.time_ms, s.memory_kb, s.judged_at, s.hidden_at, s.hidden_by,
+                   p.feedback_level, p.time_limit_ms, p.memory_limit_kb,
+                   l.time_multiplier, l.startup_overhead_ms, l.memory_overhead_kb,
+                   r.compile_log, r.isolate_status
+              FROM submissions s
+              JOIN problems  p ON p.id = s.problem_id
+              JOIN languages l ON l.id = s.language_id
+              LEFT JOIN judge_runs r
+                     ON r.submission_id = s.id
+                    AND r.attempt       = s.attempt
+             WHERE s.id = :id
+               AND (s.user_id  = :requesterId OR :requesterRole = 'ADMIN')
+               AND (s.hidden_at IS NULL       OR :requesterRole = 'ADMIN')
             """;
 
     /**
@@ -195,6 +227,16 @@ public class JdbcSubmissionRepository implements SubmissionRepository {
                 .param("requesterId", requesterId)
                 .param("requesterRole", role.name())
                 .query(SubmissionRowMappers.SUBMISSION)
+                .optional();
+    }
+
+    @Override
+    public Optional<SubmissionDetail> findDetailForRequester(long id, long requesterId, Role role) {
+        return appJdbc.sql(FIND_DETAIL_FOR_REQUESTER)
+                .param("id", id)
+                .param("requesterId", requesterId)
+                .param("requesterRole", role.name())
+                .query(SubmissionRowMappers.DETAIL)
                 .optional();
     }
 

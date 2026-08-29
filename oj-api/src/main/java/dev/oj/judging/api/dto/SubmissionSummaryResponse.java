@@ -37,7 +37,7 @@ public record SubmissionSummaryResponse(
                 item.status().name(),
                 item.verdict() == null ? null : item.verdict().name(),
                 item.score(),
-                SubmissionDetailResponse.roundTo10ms(item.timeMs()),
+                dev.oj.judging.api.RuntimeFormatter.roundMs(item.timeMs()),
                 item.createdAt());
     }
 }

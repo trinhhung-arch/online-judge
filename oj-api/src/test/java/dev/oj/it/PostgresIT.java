@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.util.List;
@@ -47,8 +48,24 @@ public abstract class PostgresIT {
     // Testcontainers 2.x: lớp này KHÔNG còn generic như bản 1.x mà mọi hướng dẫn còn viết.
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
+    /**
+     * ★ Redis THẬT, không phải bản giả trong bộ nhớ.
+     *
+     * <p>Cả đường realtime của M3 nằm trên pub/sub: {@code RecordJudgeResultUseCase} publish
+     * sau commit, {@code RedisMessageListenerContainer} nhận, {@code SseEmitter} đẩy đi. Một
+     * bus giả trong cùng JVM sẽ xanh cho <b>mọi</b> hiện thực — kể cả một hiện thực giữ danh
+     * sách kết nối trong bộ nhớ, tức là đúng thứ ADR 011 nói phải tránh. Chỉ container thật
+     * mới chứng minh được thông điệp đi qua một tiến trình khác rồi quay lại.
+     *
+     * <p>{@code redis:7-alpine} khởi động khoảng một giây, một lần cho cả JVM.
+     */
+    @SuppressWarnings("resource")
+    static final GenericContainer<?> REDIS =
+            new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+
     static {
         POSTGRES.start();
+        REDIS.start();
     }
 
     @DynamicPropertySource
@@ -65,6 +82,8 @@ public abstract class PostgresIT {
         // vỡ khoá ngoại, đúng như trên máy dev.
         registry.add("spring.flyway.locations",
                 () -> "classpath:db/migration,classpath:db/dev-seed");
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("oj.internal.shared-secret", () -> "x".repeat(32));
         // Reaper chạy nền mỗi 15s sẽ chen vào giữa các test đang dựng trạng thái hàng đợi.
         // Đặt sát dưới lease (AppProperties ép reaper-interval < lease) để nó chỉ chạy đúng
@@ -107,6 +126,18 @@ public abstract class PostgresIT {
 
         jdbc.sql("DELETE FROM host_benchmarks").update();
         jdbc.sql("UPDATE judge_hosts SET host_factor = 1.000, last_seen_at = NULL").update();
+
+        // Cùng lý do: SubmissionFeedbackIT đổi feedback_level để kiểm bộ lọc, và một mức
+        // NONE sót lại sẽ làm mọi test sau đó không thấy failed_test_ordinal — hỏng theo
+        // thứ tự chạy, tức là xanh ở máy này đỏ ở máy kia.
+        jdbc.sql("UPDATE problems SET feedback_level = 'TEST_INDEX', "
+                + "scoring_mode = 'ALL_OR_NOTHING'").update();
+
+        // Nhóm test: gỡ tham chiếu từ `testcases` TRƯỚC rồi mới xoá `subtasks` — khoá ngoại
+        // đi theo chiều đó. `judge_run_subtasks` tự biến mất theo `judge_runs` (ON DELETE
+        // CASCADE), nên nó không cần một dòng riêng ở đây.
+        jdbc.sql("UPDATE testcases SET subtask_id = NULL WHERE subtask_id IS NOT NULL").update();
+        jdbc.sql("DELETE FROM subtasks").update();
     }
 
     /** Id của đề {@code A-PLUS-B} trong {@code db/dev-seed}. */

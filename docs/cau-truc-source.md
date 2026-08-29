@@ -243,7 +243,6 @@ dev.oj.judging/
 │   ├── Submission.java             trạng thái QUEUED/JUDGING/DONE, attempt
 │   ├── Verdict.java                (ánh xạ sang contract.Verdict ở tầng api)
 │   ├── JudgeQueueEntry.java
-│   ├── FeedbackPolicy.java         ★ quyết định user được thấy gì (FR-PROB-07)
 │   └── JudgingException.java
 │
 ├── application/
@@ -251,7 +250,8 @@ dev.oj.judging/
 │   │   ├── SubmitSolutionUseCase.java      ★ ĐƯỜNG NÓNG — ngân sách 300ms
 │   │   ├── ClaimJudgeJobUseCase.java       idempotent theo attempt
 │   │   ├── RecordJudgeResultUseCase.java   khoá lạc quan trên judge_queue
-│   │   ├── GetSubmissionUseCase.java       M3 áp thêm FeedbackPolicy
+│   │   ├── GetSubmissionUseCase.java       ★ M3 áp FeedbackPolicy (problems/domain)
+│   │   │                                    detailById() — chỗ DUY NHẤT lọc đường REST
 │   │   ├── ListMySubmissionsUseCase.java   cursor-based, ≤50
 │   │   ├── ReapStaleJobsUseCase.java       mỗi 15s, lease 120s
 │   │   └── RejudgeJobUseCase.java          priority=10, implement platform/jobs (M6)
@@ -285,8 +285,13 @@ dev.oj.judging/
    `grep -r "internal"` ra đúng bề mặt cần bảo vệ. Endpoint này không nghe trên tunnel.
 2. `SubmitSolution` là class **duy nhất** trong repo có comment ghi ngân sách thời gian ở đầu
    file. Ai thêm một lời gọi I/O vào đó sẽ đọc thấy nó trước.
-3. `FeedbackPolicy` nằm ở `domain` — Java thuần, không Spring — nên nó **unit-test được không
-   cần context**, và nó là chỗ duy nhất quyết định `failedTestOrdinal` có được trả ra hay không.
+3. `FeedbackPolicy` nằm ở **`problems/domain`**, không phải `judging/domain` như bản phác đầu
+   tiên của file này. Lý do: `feedback_level` là một cột của `problems` và là quyết định của
+   **đề**, không phải thuộc tính của bài nộp. Đặt nó ở `judging` thì module chấm bài trở thành
+   nơi cất luật hiển thị của module đề — và ngày M4 thêm "nội dung test mẫu khi
+   `SAMPLE_DETAIL`", luật ấy phải nằm ở cả hai chỗ.
+   Nó vẫn là Java thuần, không Spring, nên **unit-test được không cần context**
+   (`FeedbackPolicyTest`), và `judging` import được vì chiều module là `problems → judging`.
 
 ### 3.5 · Job nền nằm ở đâu
 
@@ -478,7 +483,7 @@ phải `result`, `attempt` không phải `retry`. Tên class phải dùng đúng
 | **M0** | `pom.xml` cha · `oj-contract` · `platform/{config,error,observability}` · `ArchitectureTest` |
 | **M1** | `judging/` đủ 4 tầng · `problems/domain` tối giản · V1–V3 |
 | **M2** | `oj-worker/{sandbox,compile,run}` · 14 test tấn công |
-| **M3** | `worker/{testdata,report}` · `judging/domain/FeedbackPolicy` · V4 |
+| **M3** | `worker/{testdata,report,run/SubtaskScorer}` · `problems/domain/FeedbackPolicy` · `judging/{api/SubmissionSseController,infrastructure/RedisSubmissionEventBus}` · V4 |
 | **M4** | `identity/` đủ 4 tầng · `problems/` đầy đủ · `platform/{security,ratelimit,sse}` · V5 |
 | **M5** | `contests/` · `platform/messaging` (Redis pub/sub) · V6 |
 | **M6** | `platform/{jobs,audit,settings}` · các job cụ thể · V7, V9 |

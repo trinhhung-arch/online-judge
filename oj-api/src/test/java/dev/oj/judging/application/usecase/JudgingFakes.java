@@ -8,6 +8,7 @@ import dev.oj.judging.application.port.JudgeRunRepository;
 import dev.oj.judging.application.port.LanguageRepository;
 import dev.oj.judging.application.port.SourceBlobRepository;
 import dev.oj.judging.application.port.SubmissionRepository;
+import dev.oj.judging.application.port.SubmissionRepository.SubmissionDetail;
 import dev.oj.judging.application.port.SubmissionRepository.SubmissionListItem;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
@@ -58,6 +59,27 @@ class JudgingFakes {
     final FakeLanguages languages = new FakeLanguages();
     final PlatformTransactionManager txManager = new RecordingTxManager();
 
+    /**
+     * Bus sự kiện giả — <b>ghi lại</b> thay vì nuốt, để test khẳng định được rằng verdict có
+     * đẩy ra luồng SSE. Một bus không làm gì cả thì test nào cũng xanh, kể cả ngày ai đó xoá
+     * mất dòng publish.
+     */
+    static final class FakeEventBus implements dev.oj.judging.application.port.SubmissionEventBus {
+
+        final java.util.List<SubmissionEvent> published = new java.util.ArrayList<>();
+
+        @Override
+        public void publish(SubmissionEvent event) {
+            published.add(event);
+        }
+
+        @Override
+        public AutoCloseable subscribe(long submissionId, SubmissionEventListener listener) {
+            return () -> {
+            };
+        }
+    }
+
     static AppProperties properties() {
         return new AppProperties(
                 new AppProperties.Submission(65_536, Duration.ofSeconds(10)),
@@ -65,6 +87,7 @@ class JudgingFakes {
                         2, 20, "mac-m1max-host"),
                 new AppProperties.Page(20, 50),
                 new AppProperties.Internal("x".repeat(32)),
+                new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));
     }
 
@@ -117,6 +140,20 @@ class JudgingFakes {
             this.requesterId = requesterId;
             this.requesterRole = role;
             return Optional.ofNullable(found);
+        }
+
+        /** Mức phản hồi của "đề" trong test — đổi nó để kiểm FeedbackPolicy. */
+        dev.oj.problems.domain.FeedbackLevel feedbackLevel =
+                dev.oj.problems.domain.FeedbackLevel.TEST_INDEX;
+
+        @Override
+        public Optional<SubmissionDetail> findDetailForRequester(long id, long requesterId,
+                                                                 Role role) {
+            calls.add("submissions.findDetailForRequester");
+            this.requesterId = requesterId;
+            this.requesterRole = role;
+            return Optional.ofNullable(found).map(submission -> new SubmissionDetail(
+                    submission, feedbackLevel, 2000, 262_144, "log giả", "SG signal=11"));
         }
 
         @Override
@@ -205,11 +242,23 @@ class JudgingFakes {
         JudgeRun inserted;
         boolean accept = true;
 
+        final java.util.List<dev.oj.contract.SubtaskResultDto> subtaskResults =
+                new java.util.ArrayList<>();
+
         @Override
         public boolean insertIfAbsent(JudgeRun run) {
             calls.add("judgeRuns.insertIfAbsent");
             inserted = run;
             return accept;
+        }
+
+        @Override
+        public void insertSubtaskResults(long submissionId, int attempt,
+                                         java.util.List<dev.oj.contract.SubtaskResultDto> subtasks) {
+            if (!subtasks.isEmpty()) {
+                calls.add("judgeRuns.insertSubtaskResults");
+            }
+            subtaskResults.addAll(subtasks);
         }
     }
 

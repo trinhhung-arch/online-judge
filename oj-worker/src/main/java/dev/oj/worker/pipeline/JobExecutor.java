@@ -8,6 +8,8 @@ import dev.oj.contract.Verdict;
 import dev.oj.worker.calibration.HostBenchmark;
 import dev.oj.worker.compile.Compiler;
 import dev.oj.worker.config.WorkerProperties;
+import dev.oj.worker.report.BatchReporter;
+import dev.oj.worker.run.SubtaskScorer;
 import dev.oj.worker.run.TestRunner;
 import dev.oj.worker.run.checker.Checker;
 import dev.oj.worker.run.checker.Checkers;
@@ -48,14 +50,17 @@ public class JobExecutor {
     private final Compiler compiler;
     private final TestRunner testRunner;
     private final HostBenchmark hostBenchmark;
+    private final BatchReporter batchReporter;
 
     public JobExecutor(WorkerProperties properties, SlotPool slots, Compiler compiler,
-                       TestRunner testRunner, HostBenchmark hostBenchmark) {
+                       TestRunner testRunner, HostBenchmark hostBenchmark,
+                       BatchReporter batchReporter) {
         this.properties = properties;
         this.slots = slots;
         this.compiler = compiler;
         this.testRunner = testRunner;
         this.hostBenchmark = hostBenchmark;
+        this.batchReporter = batchReporter;
     }
 
     public JudgeResultDto execute(JudgeJobDto job, String sourceFileName, Instant startedAt)
@@ -84,59 +89,75 @@ public class JobExecutor {
         // (JudgeJobDto javadoc ghi chú 1). Nhân ở phía API nữa là nhân hai lần.
         java.math.BigDecimal hostFactor = hostBenchmark.current();
         Checker checker = Checkers.of(job.checkerType(), job.checkerEpsilon());
-        boolean earlyExitAllowed = job.scoringMode() == ScoringMode.ALL_OR_NOTHING;
 
+        // ★ Bước 3.7 — try-with-resources vì lô cuối gần như không bao giờ đủ 20, và với
+        // early exit thì một lô dở dang là chuyện thường chứ không phải ngoại lệ: bài sai ở
+        // test 3 chỉ có ba phần tử trong lô đầu.
+        try (BatchReporter.Session progress = batchReporter.open(job)) {
+            SubtaskScorer.TestExecutor executor = testcase -> {
+                TestRunner.TestOutcome outcome = testRunner.run(
+                        box, job, compiled.artifact(), testcase, hostFactor, checker);
+                progress.add(testcase.ordinal(), outcome.verdict(),
+                        outcome.cpuTimeMs(), outcome.memoryKb());
+                return outcome;
+            };
+
+            // ★ Bước 3.3 — HAI đường chấm, không phải một vòng lặp có `if` bên trong.
+            //
+            // Chúng khác nhau ở chỗ căn bản chứ không ở chi tiết: chấm cả bài thì DỪNG ở test
+            // sai đầu tiên, còn chấm theo nhóm thì test 3 sai không nói gì về nhóm 2 — dừng
+            // sớm là chấm sai điểm. Nhồi cả hai vào một vòng lặp là mời một ngày nào đó có
+            // người "dọn dẹp" cái `if` và làm hỏng đúng thứ mà FR-PROB-06 sinh ra để đúng.
+            SubtaskScorer.Result scored = job.scoringMode() == ScoringMode.SUBTASK
+                    ? SubtaskScorer.score(job, executor)
+                    : scoreAllOrNothing(job, executor);
+
+            log.debug("submission {} attempt {}: {} — {}/{} điểm sau {}/{} test",
+                    job.submissionId(), job.attempt(), scored.verdict(), scored.score(),
+                    job.maxScore(), scored.testsRun(), job.testcases().size());
+
+            return new JudgeResultDto(job.submissionId(), job.attempt(), scored.verdict(),
+                    scored.score(), job.maxScore(), scored.failedOrdinal(), scored.testsRun(),
+                    (int) scored.maxCpuTimeMs(), (int) scored.maxMemoryKb(),
+                    compiled.compileLog(), null,
+                    properties.hostName(), hostFactor, startedAt, scored.subtasks());
+        }
+    }
+
+    /**
+     * Chấm cả bài: đúng hết thì trọn điểm, sai một test thì 0 — và <b>dừng ngay</b> ở test
+     * sai đầu tiên.
+     *
+     * <p>Early exit cắt khoảng một nửa thời gian chấm trung bình
+     * ({@code oj-worker/CLAUDE.md} mục 4), vì phần lớn bài sai thì sai sớm. Nó đúng ở đây
+     * chính vì điểm chỉ có hai giá trị: khi đã biết không phải trọn điểm thì mọi test còn
+     * lại không đổi được kết quả nữa.
+     */
+    private static SubtaskScorer.Result scoreAllOrNothing(JudgeJobDto job,
+                                                          SubtaskScorer.TestExecutor executor) {
         Verdict verdict = Verdict.AC;
         Integer failedOrdinal = null;
-        String diagnostic = null;
         long maxCpuMs = 0;
         long maxMemoryKb = 0;
         int testsRun = 0;
-        int accepted = 0;
 
         for (TestcaseMetaDto testcase : job.testcases()) {
-            TestRunner.TestOutcome outcome = testRunner.run(
-                    box, job, compiled.artifact(), testcase, hostFactor, checker);
+            TestRunner.TestOutcome outcome = executor.run(testcase);
             testsRun++;
             maxCpuMs = Math.max(maxCpuMs, outcome.cpuTimeMs());
             maxMemoryKb = Math.max(maxMemoryKb, outcome.memoryKb());
-
-            if (outcome.accepted()) {
-                accepted++;
-                continue;
-            }
-            if (failedOrdinal == null) {
+            if (!outcome.accepted()) {
                 // Verdict của cả bài là verdict của test SAI ĐẦU TIÊN, không phải test sai
                 // cuối cùng: đó là test mà thí sinh cần xem tới trước.
                 verdict = outcome.verdict();
                 failedOrdinal = testcase.ordinal();
-                diagnostic = outcome.diagnostic();
-            }
-            if (earlyExitAllowed) {
                 break;
             }
         }
 
-        int score = scoreOf(job, verdict, accepted);
-        log.debug("submission {} attempt {}: {} sau {}/{} test",
-                job.submissionId(), job.attempt(), verdict, testsRun, job.testcases().size());
-
-        return new JudgeResultDto(job.submissionId(), job.attempt(), verdict, score,
-                job.maxScore(), failedOrdinal, testsRun,
-                (int) maxCpuMs, (int) maxMemoryKb,
-                compiled.compileLog(), diagnostic,
-                properties.hostName(), hostFactor, startedAt, List.of());
+        int score = verdict == Verdict.AC ? job.maxScore() : 0;
+        return new SubtaskScorer.Result(score, verdict, failedOrdinal, testsRun,
+                maxCpuMs, maxMemoryKb, java.util.List.of());
     }
 
-    /**
-     * {@code ALL_OR_NOTHING}: đúng hết thì trọn điểm, sai một test thì 0.
-     *
-     * <p>{@code SUBTASK} tính điểm theo nhóm và cần {@code SubtaskResultDto} — <b>đó là
-     * M3</b>. Ở đây nó cố ý dùng chung công thức {@code ALL_OR_NOTHING} thay vì đoán một cách
-     * chia điểm: chia sai điểm trong contest thì bảng xếp hạng sai, và không ai chứng minh
-     * được. {@code JudgeSpec} phía API hiện chỉ phát ra {@code ALL_OR_NOTHING}.
-     */
-    private static int scoreOf(JudgeJobDto job, Verdict verdict, int accepted) {
-        return verdict == Verdict.AC && accepted == job.testcases().size() ? job.maxScore() : 0;
-    }
 }

@@ -1,5 +1,8 @@
 package dev.oj.judging.infrastructure;
 
+import dev.oj.judging.application.port.SubmissionRepository;
+import dev.oj.problems.domain.FeedbackLevel;
+import dev.oj.problems.domain.JudgeSpec;
 import dev.oj.contract.Verdict;
 import dev.oj.judging.application.port.SubmissionRepository.SubmissionListItem;
 import dev.oj.judging.domain.JudgeOutcome;
@@ -26,6 +29,27 @@ import java.time.Instant;
 final class SubmissionRowMappers {
 
     static final RowMapper<Submission> SUBMISSION = SubmissionRowMappers::mapSubmission;
+
+    /**
+     * Trang chi tiết. Dùng lại {@link #mapSubmission} cho phần bài nộp, rồi bọc thêm ngữ cảnh
+     * của đề — nên hai câu query không bao giờ đọc {@code submissions} theo hai cách khác nhau.
+     *
+     * <p>Giới hạn được quy về máy chấm chuẩn bằng <b>đúng công thức mà máy chấm dùng</b>
+     * ({@code JudgeSpec.timeLimitOnReferenceHost}), không phải một bản chép lại.
+     */
+    static final RowMapper<SubmissionRepository.SubmissionDetail> DETAIL = (rs, rowNum) ->
+            new SubmissionRepository.SubmissionDetail(
+                    mapSubmission(rs, rowNum),
+                    FeedbackLevel.fromCode(rs.getString("feedback_level")),
+                    JudgeSpec.timeLimitOnReferenceHost(
+                            rs.getInt("time_limit_ms"),
+                            rs.getBigDecimal("time_multiplier"),
+                            rs.getInt("startup_overhead_ms")),
+                    JudgeSpec.memoryLimitOnReferenceHost(
+                            rs.getInt("memory_limit_kb"),
+                            rs.getInt("memory_overhead_kb")),
+                    rs.getString("compile_log"),
+                    rs.getString("isolate_status"));
 
     static final RowMapper<SubmissionListItem> LIST_ITEM = (rs, rowNum) -> new SubmissionListItem(
             rs.getLong("id"),

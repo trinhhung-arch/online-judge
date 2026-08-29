@@ -106,6 +106,7 @@ class InternalSecretFilterTest {
                         2, 20, "mac-m1max-host"),
                 new AppProperties.Page(20, 50),
                 new AppProperties.Internal(secret),
+                new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));
     }
 }

@@ -2,6 +2,8 @@ package dev.oj.problems.infrastructure;
 
 import dev.oj.contract.CheckerType;
 import dev.oj.contract.ScoringMode;
+import dev.oj.contract.SubtaskScoring;
+import dev.oj.contract.SubtaskSpecDto;
 import dev.oj.contract.TestcaseMetaDto;
 import dev.oj.problems.application.port.JudgeSpecRepository;
 import dev.oj.problems.domain.JudgeSpec;
@@ -49,14 +51,43 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
      * chứa được nội dung test — bất biến #1 được ép ở tầng schema chứ không phải ở câu query
      * này ({@code postgres-design.md} mục 5).
      *
-     * <p>{@code subtask_ordinal} là cột của V4 (M3), nên ở M1 nó luôn {@code null}.
+     * <p>{@code subtask_ordinal} là cột của V4 — {@code null} với đề không chia nhóm, và
+     * chỉ là một SỐ THỨ TỰ với đề có chia. Nó nói test này thuộc nhóm nào, không nói gì về
+     * nội dung test.
      */
     private static final String FIND_TESTCASES = """
-            SELECT ordinal, is_sample, input_sha256, output_sha256
-              FROM testcases
-             WHERE problem_id       = :problemId
-               AND testdata_version = :testdataVersion
-             ORDER BY ordinal
+            SELECT t.ordinal, t.is_sample, t.input_sha256, t.output_sha256,
+                   s.ordinal AS subtask_ordinal
+              FROM testcases t
+              LEFT JOIN subtasks s ON s.id = t.subtask_id
+             WHERE t.problem_id       = :problemId
+               AND t.testdata_version = :testdataVersion
+             ORDER BY t.ordinal
+            """;
+
+    /**
+     * Nhóm test + phụ thuộc, gom trong MỘT câu.
+     *
+     * <p>Hai câu (nhóm, rồi phụ thuộc từng nhóm) là N+1 trên đường claim — đường mà mọi bài
+     * nộp đều đi qua. {@code array_agg} gom phụ thuộc thành một mảng ngay trong Postgres.
+     *
+     * <p>{@code FILTER (WHERE ... IS NOT NULL)} là bắt buộc: {@code LEFT JOIN} không khớp cho
+     * ra một hàng có {@code NULL}, và {@code array_agg} sẽ biến nó thành mảng {@code {NULL}}
+     * — một nhóm không phụ thuộc gì bỗng có một phụ thuộc vào hư không.
+     */
+    private static final String FIND_SUBTASKS = """
+            SELECT s.ordinal, s.points, s.scoring,
+                   COALESCE(
+                       array_agg(dep.ordinal ORDER BY dep.ordinal)
+                           FILTER (WHERE dep.ordinal IS NOT NULL),
+                       '{}') AS depends_on
+              FROM subtasks s
+              LEFT JOIN subtask_dependencies sd ON sd.subtask_id = s.id
+              LEFT JOIN subtasks dep           ON dep.id = sd.depends_on_subtask_id
+             WHERE s.problem_id       = :problemId
+               AND s.testdata_version = :testdataVersion
+             GROUP BY s.ordinal, s.points, s.scoring
+             ORDER BY s.ordinal
             """;
 
     private final JdbcClient jdbc;
@@ -75,7 +106,7 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
                         rs.getBoolean("is_sample"),
                         rs.getString("input_sha256"),
                         rs.getString("output_sha256"),
-                        null))
+                        (Integer) rs.getObject("subtask_ordinal")))
                 .list();
         if (testcases.isEmpty()) {
             // Đề mất testdata ở đúng phiên bản bài nộp đã đóng dấu. Trả rỗng thay vì ném:
@@ -83,6 +114,16 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
             // để một đề hỏng làm đứng cả hàng đợi. Xem javadoc skipBrokenJob().
             return Optional.empty();
         }
+        List<SubtaskSpecDto> subtasks = jdbc.sql(FIND_SUBTASKS)
+                .param("problemId", problemId)
+                .param("testdataVersion", testdataVersion)
+                .query((rs, n) -> new SubtaskSpecDto(
+                        rs.getInt("ordinal"),
+                        rs.getInt("points"),
+                        SubtaskScoring.fromCode(rs.getString("scoring")),
+                        dependsOn(rs.getArray("depends_on"))))
+                .list();
+
         return jdbc.sql(FIND_SPEC)
                 .param("problemId", problemId)
                 .param("testdataVersion", testdataVersion)
@@ -96,8 +137,22 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
                         ScoringMode.valueOf(rs.getString("scoring_mode")),
                         rs.getInt("version"),
                         rs.getString("manifest_sha256"),
+                        subtasks,
                         testcases))
                 .optional();
+    }
+
+    /** {@code smallint[]} của Postgres về Java là {@code Short[]}, không phải {@code Integer[]}. */
+    private static List<Integer> dependsOn(java.sql.Array array) throws java.sql.SQLException {
+        if (array == null) {
+            return List.of();
+        }
+        Object[] values = (Object[]) array.getArray();
+        List<Integer> ordinals = new java.util.ArrayList<>(values.length);
+        for (Object value : values) {
+            ordinals.add(((Number) value).intValue());
+        }
+        return List.copyOf(ordinals);
     }
 
     /** {@code ck_problems_epsilon} bảo đảm nó chỉ khác null khi checker là {@code float}. */

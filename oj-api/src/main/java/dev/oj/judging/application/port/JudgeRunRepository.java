@@ -25,4 +25,16 @@ public interface JudgeRunRepository {
      * @return {@code false} nếu attempt này đã có bản ghi — kết quả trùng, bỏ qua im lặng
      */
     boolean insertIfAbsent(JudgeRun run);
+
+    /**
+     * Lưu điểm từng nhóm test — FR-PROB-06, bảng {@code judge_run_subtasks} của V4.
+     *
+     * <p>Gọi trong <b>cùng transaction</b> với {@code insertIfAbsent}: khoá ngoại của
+     * {@code judge_run_subtasks} trỏ vào {@code judge_runs(submission_id, attempt)}, nên
+     * thứ tự ngược lại là một lần vi phạm khoá ngoại.
+     *
+     * <p>Danh sách rỗng với đề không chia nhóm — không ghi gì, không phải một lỗi.
+     */
+    void insertSubtaskResults(long submissionId, int attempt,
+                              java.util.List<dev.oj.contract.SubtaskResultDto> subtasks);
 }

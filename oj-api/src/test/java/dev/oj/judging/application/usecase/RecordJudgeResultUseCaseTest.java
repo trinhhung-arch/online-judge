@@ -22,11 +22,84 @@ class RecordJudgeResultUseCaseTest {
     private JudgingFakes fakes;
     private RecordJudgeResultUseCase useCase;
 
+    private JudgingFakes.FakeEventBus events;
+
     @BeforeEach
     void setUp() {
         fakes = new JudgingFakes();
+        events = new JudgingFakes.FakeEventBus();
         useCase = new RecordJudgeResultUseCase(fakes.queue, fakes.judgeRuns, fakes.submissions,
-                JudgingFakes.properties(), JudgingFakes.CLOCK);
+                JudgingFakes.properties(), JudgingFakes.CLOCK, events);
+    }
+
+    /**
+     * ★ Bước 3.9 — verdict phải đi ra luồng SSE, nếu không thì trang bài nộp đứng im cho tới
+     * khi người dùng tự F5, và FR-SUB-05 chỉ tồn tại trên giấy.
+     */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("★ ghi verdict xong thì đẩy sự kiện realtime")
+    void ghi_verdict_thi_day_su_kien() {
+        useCase.record(result(Verdict.AC, 1));
+
+        org.assertj.core.api.Assertions.assertThat(events.published).hasSize(1);
+        var event = events.published.get(0);
+        org.assertj.core.api.Assertions.assertThat(event.submissionId()).isEqualTo(101L);
+        org.assertj.core.api.Assertions.assertThat(event.verdict()).isEqualTo("AC");
+        org.assertj.core.api.Assertions.assertThat(event.isTerminal()).isTrue();
+    }
+
+    /**
+     * ★ Bất biến #1 ở tầng sự kiện. Sự kiện SSE đi thẳng ra trình duyệt mà KHÔNG qua bộ lọc
+     * {@code feedback_level} — nên nó không được phép mang bất cứ thứ gì bộ lọc ấy có thể
+     * cấm. Bài này sai ở test 7; con số đó phải ở lại phía sau.
+     */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("★ SEC3 — kiểu sự kiện SSE không có chỗ nào để chứa chi tiết test")
+    void su_kien_khong_co_cho_chua_chi_tiet_test() {
+        var forbidden = java.util.List.of("failed", "test", "ordinal", "compile", "log",
+                "input", "output", "expected", "source");
+        var fields = java.util.Arrays.stream(
+                        dev.oj.judging.application.port.SubmissionEventBus.SubmissionEvent.class
+                                .getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName)
+                .map(name -> name.toLowerCase(java.util.Locale.ROOT))
+                .toList();
+
+        // Hai phép ĐẾM được cho phép tường minh. Chúng nói "đã chạy 40/100", không nói test
+        // nào sai — và một con số đếm thì không có chỗ nào để giấu một chi tiết.
+        // Mọi trường MỚI chứa những chuỗi trên đều phải được thêm vào đây một cách có ý thức,
+        // và lúc thêm thì người sửa buộc phải đọc javadoc của SubmissionEventBus.
+        var explicitlyAllowed = java.util.Set.of("testsdone", "totaltests");
+
+        for (String name : fields) {
+            if (explicitlyAllowed.contains(name)) {
+                continue;
+            }
+            for (String bad : forbidden) {
+                org.assertj.core.api.Assertions.assertThat(name)
+                        .as("trường '%s' của SubmissionEvent đi THẲNG ra trình duyệt, không qua "
+                                + "bộ lọc feedback_level. Chi tiết phải đi qua "
+                                + "GET /submissions/{id} (bất biến #1)", name)
+                        .doesNotContain(bad);
+            }
+        }
+        // testsDone/totalTests là hai phép ĐẾM, không phải danh sách — chúng được phép, và
+        // vòng lặp trên cố ý không cấm chữ "tests" ở dạng số nhiều đếm được.
+        org.assertj.core.api.Assertions.assertThat(fields)
+                .contains("submissionid", "status", "verdict");
+    }
+
+    /** Kết quả bị khoá lạc quan từ chối thì không có gì xảy ra — kể cả một sự kiện. */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("kết quả trùng bị từ chối thì KHÔNG đẩy sự kiện nào")
+    void ket_qua_trung_khong_day_su_kien() {
+        useCase.record(result(Verdict.AC, 1));
+        fakes.queue.lockWins = false;                    // hàng judge_queue đã bị xoá ở lần một
+        useCase.record(result(Verdict.WA, 1));
+
+        org.assertj.core.api.Assertions.assertThat(events.published)
+                .as("sự kiện thứ hai sẽ làm trang hiện WA cho một bài đã AC")
+                .hasSize(1);
     }
 
     private JudgeResultDto result(Verdict verdict, int attempt) {

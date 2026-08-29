@@ -2,6 +2,7 @@ package dev.oj.problems.domain;
 
 import dev.oj.contract.CheckerType;
 import dev.oj.contract.ScoringMode;
+import dev.oj.contract.SubtaskSpecDto;
 import dev.oj.contract.TestcaseMetaDto;
 
 import java.math.BigDecimal;
@@ -38,6 +39,7 @@ public record JudgeSpec(
         ScoringMode scoringMode,
         int testdataVersion,
         String manifestSha256,
+        List<SubtaskSpecDto> subtasks,
         List<TestcaseMetaDto> testcases) {
 
     public JudgeSpec {
@@ -48,6 +50,7 @@ public record JudgeSpec(
             throw new IllegalArgumentException(
                     "testdataVersion phải >= 1 — đề chưa có testdata thì không dựng được job");
         }
+        subtasks = subtasks == null ? List.of() : List.copyOf(subtasks);
         testcases = testcases == null ? List.of() : List.copyOf(testcases);
         if (testcases.isEmpty()) {
             throw new IllegalArgumentException(
@@ -77,10 +80,25 @@ public record JudgeSpec(
      *                           vào giới hạn để bài Java không bị thiệt
      */
     public int timeLimitOnReferenceHost(BigDecimal languageMultiplier, int startupOverheadMs) {
+        return timeLimitOnReferenceHost(timeLimitMs, languageMultiplier, startupOverheadMs);
+    }
+
+    /**
+     * Cùng công thức, dạng tĩnh — <b>và đó là điểm chính</b>.
+     *
+     * <p>Trang chi tiết bài nộp cần đúng con số này để câu giải thích TLE nói được
+     * "2.03s / 2.00s" ({@code VerdictExplainer}), nhưng ở đó không có {@link JudgeSpec} nào
+     * trong tay. Viết lại công thức ở chỗ thứ hai — dù trong Java hay trong một câu SQL — là
+     * tạo ra hai sự thật: ngày ai đó đổi cách cộng {@code startup_overhead_ms}, máy chấm dùng
+     * một con số còn giao diện hiện một con số khác, và người dùng là bên phát hiện ra.
+     */
+    public static int timeLimitOnReferenceHost(int problemTimeLimitMs,
+                                               BigDecimal languageMultiplier,
+                                               int startupOverheadMs) {
         if (languageMultiplier == null || languageMultiplier.signum() <= 0) {
             throw new IllegalArgumentException("languageMultiplier phải dương");
         }
-        long limit = BigDecimal.valueOf(timeLimitMs).multiply(languageMultiplier).longValue()
+        long limit = BigDecimal.valueOf(problemTimeLimitMs).multiply(languageMultiplier).longValue()
                 + startupOverheadMs;
         // Giữ trong khoảng mà JudgeJobDto chấp nhận, nếu không thì lỗi lộ ra ở tận lúc dựng DTO.
         return (int) Math.min(30_000L, Math.max(100L, limit));
@@ -88,7 +106,12 @@ public record JudgeSpec(
 
     /** Bộ nhớ đã cộng phần hao của runtime ({@code languages.memory_overhead_kb}). */
     public int memoryLimitOnReferenceHost(int memoryOverheadKb) {
-        long limit = (long) memoryLimitKb + memoryOverheadKb;
+        return memoryLimitOnReferenceHost(memoryLimitKb, memoryOverheadKb);
+    }
+
+    /** Xem javadoc của {@link #timeLimitOnReferenceHost(int, BigDecimal, int)}. */
+    public static int memoryLimitOnReferenceHost(int problemMemoryLimitKb, int memoryOverheadKb) {
+        long limit = (long) problemMemoryLimitKb + memoryOverheadKb;
         return (int) Math.min(1_048_576L, Math.max(16_384L, limit));
     }
 
@@ -100,8 +123,20 @@ public record JudgeSpec(
      * {@code scoringMode == SUBTASK} — và đó chính là lý do con số này phải đi từ đây chứ
      * không để worker tự nghĩ ra: worker không biết đề có mấy nhóm và mỗi nhóm bao nhiêu điểm.
      */
+    /**
+     * Điểm tối đa của đề. <b>API tính, worker chỉ dùng lại</b> — và với chấm theo nhóm thì
+     * bịa không bịa nổi, nên đây là chỗ duy nhất biết công thức.
+     *
+     * <p>{@code ALL_OR_NOTHING}: 100 theo quy ước. {@code SUBTASK}: tổng điểm các nhóm — số
+     * này phải khớp tuyệt đối, vì {@code JudgeJobDto} từ chối một job có tổng điểm nhóm khác
+     * {@code maxScore}. Lệch thì không phải một verdict sai, mà là <b>cả bảng xếp hạng sai
+     * một cách im lặng</b>.
+     */
     public int maxScore() {
-        return ALL_OR_NOTHING_MAX_SCORE;
+        if (scoringMode != ScoringMode.SUBTASK) {
+            return ALL_OR_NOTHING_MAX_SCORE;
+        }
+        return subtasks.stream().mapToInt(SubtaskSpecDto::points).sum();
     }
 
     /** Thang điểm quy ước cho chế độ đúng-hoặc-sai. */

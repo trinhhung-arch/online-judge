@@ -53,6 +53,10 @@ oj:
         max-file-size: 64MB
         log-limit: 32KB      # = JudgeResultDto.MAX_COMPILE_LOG_BYTES; cắt sớm để 100MB
                              # thông báo lỗi template không vào heap của worker
+        # Bước 3.5 — dựng bằng scripts/build-pch.sh. Chưa dựng thì bỏ trống: bài vẫn chấm
+        # đúng, chỉ mất phần tăng tốc. Cờ biên dịch phải KHỚP CHÍNH XÁC với languages
+        # .compile_command, lệch một cờ là GCC bỏ qua .gch trong im lặng.
+        pch-dir: ${OJ_WORKER_PCH_DIR:/opt/oj/pch}
       run:
         extra-time: 500ms    # ân hạn: báo thời gian THẬT thay vì đúng bằng giới hạn
         processes: 1         # ⚠️ tạm của M2 — Java 21 cần vài chục. M3 phải mang con số

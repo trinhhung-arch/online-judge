@@ -35,7 +35,33 @@ public record AppProperties(
         Judge judge,
         Page page,
         Internal internal,
+        Sse sse,
         Ai ai) {
+
+    /**
+     * Luồng realtime chi tiết bài nộp — Bước 3.9, FR-SUB-05.
+     *
+     * @param timeout   trần thời gian sống của một kết nối SSE. <b>Phải nhỏ hơn trần của
+     *                  Cloudflare Tunnel</b>: nếu tunnel cắt trước thì client thấy một kết
+     *                  nối chết mà không có sự kiện kết thúc nào, còn nếu ta chủ động đóng
+     *                  thì client biết đường mở lại. Chủ động luôn tốt hơn bị động
+     * @param heartbeat nhịp gửi comment giữ kết nối. Proxy và tunnel đóng kết nối im lặng
+     *                  quá lâu, và "im lặng" là trạng thái BÌNH THƯỜNG của trang này —
+     *                  một bài chấm 30 giây thì không có gì để nói suốt 30 giây đó
+     */
+    public record Sse(Duration timeout, Duration heartbeat) {
+
+        public Sse {
+            if (timeout == null || heartbeat == null) {
+                throw new IllegalStateException("oj.sse.timeout và oj.sse.heartbeat bắt buộc");
+            }
+            if (heartbeat.compareTo(timeout) >= 0) {
+                throw new IllegalStateException(
+                        "oj.sse.heartbeat (" + heartbeat + ") phải nhỏ hơn timeout (" + timeout
+                                + ") — nếu không thì không nhịp giữ kết nối nào kịp gửi");
+            }
+        }
+    }
 
     /** Nộp bài — FR-SUB-01, FR-SUB-08. */
     public record Submission(

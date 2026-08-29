@@ -31,9 +31,28 @@ Worker cần `isolate` trên máy Linux. Cài một lần:
 
 ```bash
 sudo ./scripts/build-isolate.sh           # build TỪ NGUỒN, không copy binary giữa hai máy
+sudo ./scripts/build-pch.sh "-std=gnu++20 -O2"   # tuỳ chọn: biên dịch C++ nhanh gấp ~3,7 lần
 sudo ./scripts/mount-box-tmpfs.sh         # tuỳ chọn, chỉ trên máy nhiều RAM
 ./mvnw -pl oj-worker spring-boot:run
 ```
+
+### Precompiled header — tuỳ chọn, nhưng đo được
+
+Gần như mọi bài C++ mở đầu bằng `#include <bits/stdc++.h>`. `scripts/build-pch.sh` biên dịch
+sẵn header đó một lần cho mỗi host; worker gắn nó **read-only vào box lúc biên dịch** (không
+phải lúc chạy). Đo trong box trên WSL x86:
+
+| | thời gian biên dịch | bộ nhớ biên dịch |
+|---|---|---|
+| không PCH | 2,70 s | 233 MB |
+| có PCH | **0,73 s** | **87 MB** |
+
+Bỏ qua bước này thì hệ thống vẫn chấm **đúng**, chỉ chậm hơn: thư mục không tồn tại, isolate
+bỏ qua quy tắc mount (`:maybe`), GCC bỏ qua `-I` — không có lỗi nào được ném.
+
+> ⚠️ Cờ truyền cho script phải **khớp chính xác** phần cờ trong `languages.compile_command`.
+> Lệch một cờ thì GCC bỏ qua `.gch` trong **im lặng** — không cảnh báo, chỉ là chậm như cũ.
+> Kiểm bằng `g++ ... -I/opt/oj/pch -H -fsyntax-only bai.cpp`: dòng đầu phải có dấu `!`.
 
 ### Sandbox không chạy được?
 

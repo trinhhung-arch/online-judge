@@ -35,6 +35,9 @@ public final class CommandTemplate {
      * @param template       {@code languages.compile_command} hoặc {@code run_command}
      * @param sourceFileName tên file mã nguồn trong box, ví dụ {@code Main.cpp}
      * @param memoryLimitKb  cho {@code {mem}}, đổi sang MB vì {@code -Xmx} nhận MB
+     *                       <p>{@code {pch}} trỏ tới thư mục precompiled header trong box
+     *                       (Bước 3.5). Seed viết {@code -I{pch}}; nếu host chưa dựng PCH thì
+     *                       thư mục không tồn tại và GCC bỏ qua — chậm, không sai.
      */
     public static List<String> expand(String template, String sourceFileName, int memoryLimitKb,
                                       List<String> programPath) {
@@ -44,6 +47,7 @@ public final class CommandTemplate {
                     .replace("{bin}", IsolateCommand.BOX_DIR + '/' + BINARY_NAME)
                     .replace("{src}", IsolateCommand.BOX_DIR + '/' + sourceFileName)
                     .replace("{dir}", IsolateCommand.BOX_DIR)
+                    .replace("{pch}", IsolateCommand.PCH_DIR)
                     .replace("{mem}", Integer.toString(Math.max(1, memoryLimitKb / 1024))));
         }
         if (argv.isEmpty()) {

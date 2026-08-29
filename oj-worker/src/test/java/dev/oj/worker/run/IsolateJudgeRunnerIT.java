@@ -69,7 +69,13 @@ class IsolateJudgeRunnerIT {
         var benchmark = new dev.oj.worker.calibration.HostBenchmark(properties, null);
         runner = new IsolateJudgeRunner(
                 new JobExecutor(properties, new SlotPool(properties), new Compiler(properties),
-                        new TestRunner(properties, fetcher), benchmark),
+                        new TestRunner(properties, fetcher), benchmark,
+                        // Bước 3.7: API giả không trả lời, và đó là ĐIỀU ĐANG KIỂM — lô tiến
+                        // độ gửi hỏng thì lượt chấm vẫn phải chạy tới verdict.
+                        new dev.oj.worker.report.BatchReporter(
+                                new dev.oj.worker.client.JudgeApiClient(
+                                        properties,
+                                        org.springframework.web.client.RestClient.builder()))),
                 properties, benchmark);
     }
 

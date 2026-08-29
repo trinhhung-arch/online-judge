@@ -143,6 +143,10 @@ public class ClaimJudgeJobUseCase {
                 .checker(spec.checkerType(), spec.checkerEpsilon())
                 .scoring(spec.scoringMode(), spec.maxScore())
                 .testdata(spec.testdataVersion(), spec.manifestSha256(), spec.testcases())
+                // FR-PROB-06 — rỗng với đề không chia nhóm; hợp đồng kiểm rằng nó có nội
+                // dung khi và chỉ khi scoringMode=SUBTASK, nên quên dòng này thì hỏng NGAY
+                // ở đây chứ không hỏng ở worker sau khi đã chấm xong.
+                .subtasks(spec.subtasks())
                 .build();
     }
 }

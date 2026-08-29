@@ -92,8 +92,19 @@ class InternalJudgeHttpIT extends PostgresIT {
 
         assertThat(detail).containsEntry("status", "DONE").containsEntry("verdict", "AC");
         assertThat(detail).containsEntry("timeMs", 230);          // 234 làm tròn 10ms
-        // FR-PROB-07: số thứ tự test sai chưa được lộ ra khi chưa có FeedbackPolicy (M3).
-        assertThat(detail).doesNotContainKey("failedTestOrdinal");
+        assertThat(detail).containsEntry("measurementNote", "đo trên máy chấm chuẩn, sai số ±5%");
+
+        // ★ Bước 3.11 — trường này TỒN TẠI từ M3, và ở đây nó null vì bài AC không có test
+        // nào sai. Trước M3 nó vắng mặt hoàn toàn: bộ lọc feedback_level chưa được nối, nên
+        // thà thiếu còn hơn lộ. Ca kiểm bộ lọc thật nằm ở SubmissionFeedbackIT.
+        assertThat(detail).containsKey("failedTestOrdinal");
+        assertThat(detail.get("failedTestOrdinal")).isNull();
+
+        // ★ Bước 3.11 · U3 — verdict phải nói được lý do, không chỉ là hai chữ viết tắt.
+        assertThat((String) detail.get("explanation"))
+                .isNotBlank()
+                .contains("230ms")
+                .doesNotContain("/box", "isolate");
     }
 
     @Test

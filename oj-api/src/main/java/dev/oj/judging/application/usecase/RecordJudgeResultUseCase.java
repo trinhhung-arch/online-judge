@@ -4,10 +4,12 @@ import dev.oj.contract.JudgeResultDto;
 import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.JudgeQueueRepository.ReleasedSubmission;
 import dev.oj.judging.application.port.JudgeRunRepository;
+import dev.oj.judging.application.port.SubmissionEventBus;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.config.AfterCommit;
 import dev.oj.platform.config.JudgeTransactional;
 import dev.oj.platform.trace.TraceIdFilter;
 import org.slf4j.Logger;
@@ -48,17 +50,20 @@ public class RecordJudgeResultUseCase {
     private final SubmissionRepository submissions;
     private final AppProperties.Judge config;
     private final Clock clock;
+    private final SubmissionEventBus events;
 
     public RecordJudgeResultUseCase(JudgeQueueRepository queue,
                                     JudgeRunRepository judgeRuns,
                                     SubmissionRepository submissions,
                                     AppProperties properties,
-                                    Clock clock) {
+                                    Clock clock,
+                                    SubmissionEventBus events) {
         this.queue = queue;
         this.judgeRuns = judgeRuns;
         this.submissions = submissions;
         this.config = properties.judge();
         this.clock = clock;
+        this.events = events;
     }
 
     /**
@@ -115,7 +120,19 @@ public class RecordJudgeResultUseCase {
             log.error("judge_runs đã có submission {} attempt {} dù khoá lạc quan vừa thắng",
                     released.submissionId(), released.attempt());
         }
+        // FR-PROB-06 — cùng transaction, và SAU insertIfAbsent: khoá ngoại của
+        // judge_run_subtasks trỏ vào judge_runs(submission_id, attempt).
+        judgeRuns.insertSubtaskResults(
+                released.submissionId(), released.attempt(), result.subtasks());
         submissions.markDone(released.submissionId(), released.attempt(), outcome, now);
+
+        // ★ Bước 3.9 — SAU COMMIT, không phải trong transaction. Đẩy tin rồi commit hỏng thì
+        // trang hiện "AC" cho một bài mà DB vẫn ghi là đang chấm, và F5 một cái là verdict
+        // biến mất. Sự kiện chỉ mang TRẠNG THÁI: không có failedTestOrdinal, không có log
+        // compiler — chi tiết đi qua GET /submissions/{id}, nơi có bộ lọc feedback_level
+        // (bất biến #1). Xem javadoc SubmissionEventBus.
+        AfterCommit.run(() -> events.publish(SubmissionEventBus.SubmissionEvent.done(
+                released.submissionId(), released.attempt(), outcome.verdict().name())));
     }
 
     /** Ba kết cục, và cả ba đều là {@code 204} với worker. */

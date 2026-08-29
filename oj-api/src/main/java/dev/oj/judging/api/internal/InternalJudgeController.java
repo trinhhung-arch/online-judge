@@ -2,11 +2,13 @@ package dev.oj.judging.api.internal;
 
 import dev.oj.contract.ClaimRequestDto;
 import dev.oj.contract.HostBenchmarkDto;
+import dev.oj.contract.JudgeProgressDto;
 import dev.oj.contract.JudgeEndpoints;
 import dev.oj.contract.JudgeJobDto;
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.judging.application.usecase.ClaimJudgeJobUseCase;
 import dev.oj.judging.application.usecase.RecordHostBenchmarkUseCase;
+import dev.oj.judging.application.usecase.RecordJudgeProgressUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,13 +36,16 @@ public class InternalJudgeController {
     private final ClaimJudgeJobUseCase claimJudgeJob;
     private final RecordJudgeResultUseCase recordJudgeResult;
     private final RecordHostBenchmarkUseCase recordHostBenchmark;
+    private final RecordJudgeProgressUseCase recordJudgeProgress;
 
     public InternalJudgeController(ClaimJudgeJobUseCase claimJudgeJob,
                                    RecordJudgeResultUseCase recordJudgeResult,
-                                   RecordHostBenchmarkUseCase recordHostBenchmark) {
+                                   RecordHostBenchmarkUseCase recordHostBenchmark,
+                                   RecordJudgeProgressUseCase recordJudgeProgress) {
         this.claimJudgeJob = claimJudgeJob;
         this.recordJudgeResult = recordJudgeResult;
         this.recordHostBenchmark = recordHostBenchmark;
+        this.recordJudgeProgress = recordJudgeProgress;
     }
 
     /**
@@ -87,6 +92,27 @@ public class InternalJudgeController {
      * ký vẫn chấm bài được ({@code judge_runs.host_id} cho phép NULL, S2), nên nó cũng không
      * đáng bị một mã lỗi. Use-case log lại; worker không có gì để làm khác đi.
      */
+    /**
+     * ★ Bước 3.7 — worker báo tiến độ theo lô 20 test. Luôn {@code 204}.
+     *
+     * <h2>Endpoint này KHÔNG ghi gì xuống cơ sở dữ liệu</h2>
+     * Nó chỉ đẩy hai con số lên Redis pub/sub để vẽ thanh phần trăm. Ghi mỗi lô xuống
+     * {@code submissions} là 2500 lần UPDATE trên bảng nóng nhất hệ thống khi 500 người nộp
+     * cùng lúc — xem javadoc {@code RecordJudgeProgressUseCase}.
+     *
+     * <p>Hệ quả dễ chịu: nó <b>không cần khoá lạc quan</b>. Một lô đến muộn từ một worker đã
+     * bị reaper thu hồi thì không làm hỏng được gì, vì nó không ghi gì. Chỉ
+     * {@code /result} mới cần bất biến #7.
+     *
+     * <p>{@code 204} kể cả khi bài đã chấm xong: worker gửi nốt lô cuối trong lúc verdict đã
+     * về tới nơi là chuyện thường, và trả lỗi cho nó chỉ tạo ra một dòng log hoảng hốt vô ích.
+     */
+    @PostMapping("/progress")   // JudgeEndpoints.PROGRESS
+    public ResponseEntity<Void> progress(@RequestBody JudgeProgressDto progress) {
+        recordJudgeProgress.record(progress);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/benchmark")   // JudgeEndpoints.BENCHMARK
     public ResponseEntity<Void> benchmark(@RequestBody HostBenchmarkDto benchmark) {
         recordHostBenchmark.record(benchmark);

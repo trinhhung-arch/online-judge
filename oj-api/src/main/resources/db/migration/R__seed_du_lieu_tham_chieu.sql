@@ -15,8 +15,12 @@ INSERT INTO languages (code, display_name, version_label, source_extension,
                        compile_command, run_command,
                        time_multiplier, startup_overhead_ms, memory_overhead_kb, sort_order)
 VALUES
+    -- {pch}: thư mục precompiled header bên trong box (Bước 3.5). Worker gắn nó read-only
+    -- và chỉ ở bước biên dịch. Host chưa chạy scripts/build-pch.sh thì thư mục không tồn
+    -- tại, GCC bỏ qua -I trong im lặng, và bài vẫn chấm ĐÚNG — chỉ chậm hơn.
+    -- Đo trên WSL x86: 2.5s -> 1.0s cho một bài có #include <bits/stdc++.h>.
     ('cpp20', 'C++20', 'GCC 13 / -O2 / PCH bits/stdc++.h', 'cpp',
-     'g++ -std=gnu++20 -O2 -pipe -static -o {bin} {src}', '{bin}',
+     'g++ -std=gnu++20 -O2 -pipe -static -I{pch} -o {bin} {src}', '{bin}',
      1.00, 0, 0, 10),
 
     ('java21', 'Java 21', 'OpenJDK 21', 'java',

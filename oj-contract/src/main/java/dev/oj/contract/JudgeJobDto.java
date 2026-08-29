@@ -75,6 +75,11 @@ import java.util.List;
  *                               truy được ngay vì sao (FR-PROB-10)
  * @param testdataManifestSha256 khoá cache testdata của worker. Đề sửa testdata thì hash đổi
  *                               và cache tự động miss — không cần cơ chế invalidate nào
+ * @param subtasks               mô tả các nhóm test — rỗng khi và chỉ khi
+ *                               {@code scoringMode = ALL_OR_NOTHING}. Đây là chiều ĐI của
+ *                               phép tính mà chiều về ({@code JudgeResultDto.subtasks}) đã
+ *                               đòi từ đầu: worker không thể tính điểm nhóm nếu không biết
+ *                               nhóm nào bao nhiêu điểm
  * @param testcases              metadata từng test, theo thứ tự {@code ordinal}
  */
 public record JudgeJobDto(
@@ -98,6 +103,7 @@ public record JudgeJobDto(
         int maxScore,
         int testdataVersion,
         String testdataManifestSha256,
+        List<SubtaskSpecDto> subtasks,
         List<TestcaseMetaDto> testcases) {
 
     /** FR-SUB-01 · {@code CHECK (byte_size <= 65536)} · {@code oj.submission.max-source-bytes}. */
@@ -145,6 +151,9 @@ public record JudgeJobDto(
         testcases = ContractChecks.frozen(testcases);
         ContractChecks.requireRange(
                 testcases.size(), 1, TestcaseMetaDto.MAX_ORDINAL, "testcases.size");
+
+        subtasks = ContractChecks.frozen(subtasks);
+        validateSubtasks(scoringMode, maxScore, subtasks, testcases);
     }
 
     /**
@@ -159,6 +168,68 @@ public record JudgeJobDto(
                 || name.startsWith(".") || name.length() > 255) {
             throw new IllegalArgumentException(
                     "sourceFileName phải là một tên file trần, không phải đường dẫn: " + name);
+        }
+    }
+
+    /**
+     * Ba bất biến của nhóm test, kiểm ở biên chứ không ở worker.
+     *
+     * <p>Cả ba đều là loại lỗi <b>không có triệu chứng</b>: hệ thống chạy bình thường, chấm
+     * ra một con số, và con số đó sai. Trong contest thì không ai phát hiện ra cho tới lúc
+     * công bố kết quả — và lúc đó thì không sửa được nữa.
+     */
+    private static void validateSubtasks(ScoringMode scoringMode, int maxScore,
+                                         List<SubtaskSpecDto> subtasks,
+                                         List<TestcaseMetaDto> testcases) {
+        // 1. Có nhóm khi và chỉ khi chấm theo nhóm. Một job SUBTASK không có nhóm nào thì
+        //    worker biết lấy gì mà chia điểm; một job ALL_OR_NOTHING kèm nhóm thì có hai
+        //    luật tính điểm cùng lúc, và không ai biết luật nào thắng.
+        boolean theoNhom = scoringMode == ScoringMode.SUBTASK;
+        if (theoNhom != !subtasks.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "subtasks phải có nội dung khi và chỉ khi scoringMode=SUBTASK (nhận "
+                            + scoringMode + " với " + subtasks.size() + " nhóm)");
+        }
+        if (!theoNhom) {
+            return;
+        }
+
+        java.util.Set<Integer> ordinals = new java.util.LinkedHashSet<>();
+        int tongDiem = 0;
+        for (SubtaskSpecDto subtask : subtasks) {
+            if (!ordinals.add(subtask.ordinal())) {
+                throw new IllegalArgumentException("Nhóm trùng ordinal: " + subtask.ordinal());
+            }
+            tongDiem += subtask.points();
+        }
+
+        // 2. Tổng điểm nhóm = maxScore. Lệch thì bảng xếp hạng sai một cách im lặng: bài
+        //    trọn vẹn không bao giờ đạt điểm tối đa, hoặc đạt quá điểm tối đa.
+        if (tongDiem != maxScore) {
+            throw new IllegalArgumentException(
+                    "Tổng điểm các nhóm (" + tongDiem + ") khác maxScore (" + maxScore + ")");
+        }
+
+        // 3. Mọi phụ thuộc trỏ tới một nhóm CÓ THẬT, và mọi test thuộc một nhóm CÓ THẬT.
+        //    Một test không thuộc nhóm nào thì điểm của nó rơi vào hư không.
+        for (SubtaskSpecDto subtask : subtasks) {
+            for (Integer dependency : subtask.dependsOn()) {
+                if (!ordinals.contains(dependency)) {
+                    throw new IllegalArgumentException("Nhóm " + subtask.ordinal()
+                            + " phụ thuộc nhóm " + dependency + " không tồn tại");
+                }
+            }
+        }
+        for (TestcaseMetaDto testcase : testcases) {
+            if (!testcase.belongsToSubtask()) {
+                throw new IllegalArgumentException(
+                        "Đề chấm theo nhóm nhưng test " + testcase.ordinal()
+                                + " không thuộc nhóm nào — điểm của nó sẽ rơi vào hư không");
+            }
+            if (!ordinals.contains(testcase.subtaskOrdinal())) {
+                throw new IllegalArgumentException("Test " + testcase.ordinal()
+                        + " thuộc nhóm " + testcase.subtaskOrdinal() + " không tồn tại");
+            }
         }
     }
 
@@ -222,6 +293,7 @@ public record JudgeJobDto(
         private int maxScore;
         private int testdataVersion;
         private String testdataManifestSha256;
+        private List<SubtaskSpecDto> subtasks = List.of();
         private List<TestcaseMetaDto> testcases = List.of();
 
         private Builder() {
@@ -289,13 +361,19 @@ public record JudgeJobDto(
             return this;
         }
 
+        /** Chỉ gọi khi {@code scoringMode = SUBTASK}; hợp đồng kiểm điều đó. */
+        public Builder subtasks(List<SubtaskSpecDto> subtasks) {
+            this.subtasks = subtasks;
+            return this;
+        }
+
         public JudgeJobDto build() {
             return new JudgeJobDto(submissionId, attempt, traceId, languageCode,
                     compileCommand, runCommand, compileTimeLimitMs, compileMemoryKb,
                     timeLimitMs, memoryLimitKb, outputLimitKb, sourceFileName, sourceContent,
                     sourceSha256,
                     checkerType, checkerEpsilon, scoringMode, maxScore, testdataVersion,
-                    testdataManifestSha256, testcases);
+                    testdataManifestSha256, subtasks, testcases);
         }
     }
 

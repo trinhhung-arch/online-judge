@@ -59,6 +59,12 @@ oj:
     result-batch-size: 20         # = JudgeProgressDto.BATCH_SIZE, dùng từ M3
     reference-host-name: mac-m1max-host # mọi con số thời gian quy chiếu về máy này (FR-SUB-11)
 
+  sse:
+    # FR-SUB-05 · Bước 3.9. Phải NHỎ HƠN trần của Cloudflare Tunnel: chủ động đóng thì
+    # client biết mở lại, bị tunnel cắt thì client ngồi nhìn một kết nối đã chết.
+    timeout: 5m
+    heartbeat: 15s               # im lặng là trạng thái BÌNH THƯỜNG của trang này
+
   page:
     default-size: 20              # bất biến #8 — mọi danh sách đều có LIMIT
     max-size: 50                  # xin 1000 thì trả 50, không trả lỗi

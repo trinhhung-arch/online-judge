@@ -30,7 +30,7 @@ class ClaimJudgeJobUseCaseTest {
     void setUp() {
         fakes = new JudgingFakes();
         spec = new JudgeSpec(42L, 1000, 262_144, 65_536, CheckerType.TOKEN, null,
-                ScoringMode.ALL_OR_NOTHING, 5, JudgingFakes.SHA,
+                ScoringMode.ALL_OR_NOTHING, 5, JudgingFakes.SHA, List.of(),
                 List.of(new TestcaseMetaDto(1, true, JudgingFakes.SHA, JudgingFakes.SHA, null)));
         useCase = new ClaimJudgeJobUseCase(fakes.queue, fakes.submissions,
                 specRepositoryReturning(spec), JudgingFakes.properties());

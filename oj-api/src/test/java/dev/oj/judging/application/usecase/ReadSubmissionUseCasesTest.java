@@ -89,4 +89,43 @@ class ReadSubmissionUseCasesTest {
 
         assertThat(fakes.calls).doesNotContain("submissions.listForUser");
     }
+
+    /**
+     * ★ Bước 3.11 · FR-PROB-07 — bộ lọc phải nằm TRONG use-case.
+     *
+     * <p>Trước bước này, {@code FeedbackLevel.revealsFailedTestOrdinal()} không được gọi ở
+     * bất kỳ đâu trong {@code src/main}: bộ lọc tồn tại như một hàm, và trang chi tiết đơn
+     * giản là không trả con số nào. Đúng ở M1 (thà thiếu còn hơn lộ), nhưng nó có nghĩa là
+     * FR-SUB-06 và FR-PROB-07 chưa hề được nối. Test này là chỗ giữ nó đã nối.
+     */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("★ đề mức NONE thì trang chi tiết KHÔNG trả số thứ tự test sai")
+    void feedback_level_NONE_thi_giau_test_sai() {
+        fakes.submissions.found = JudgingFakes.submission(101L, SubmissionStatus.DONE, 1);
+        fakes.submissions.feedbackLevel = dev.oj.problems.domain.FeedbackLevel.NONE;
+
+        var visible = get.detailById(101L);
+
+        assertThat(visible.submission().outcome().failedTestOrdinal())
+                .as("bài nộp VẪN lưu con số — nó cần cho SETTER và cho việc đối chiếu")
+                .isNotNull();
+        assertThat(visible.failedTestOrdinal())
+                .as("nhưng thứ đi ra ngoài thì không")
+                .isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("đề mức TEST_INDEX thì trả số thứ tự, và luôn trả log compiler")
+    void feedback_level_TEST_INDEX_thi_cho_xem() {
+        fakes.submissions.found = JudgingFakes.submission(101L, SubmissionStatus.DONE, 1);
+        fakes.submissions.feedbackLevel = dev.oj.problems.domain.FeedbackLevel.TEST_INDEX;
+
+        var visible = get.detailById(101L);
+
+        assertThat(visible.failedTestOrdinal()).isNotNull();
+        assertThat(visible.compileLog())
+                .as("FR-SUB-06 — log compiler là output từ mã của chính người nộp, "
+                        + "mọi mức feedback_level đều cho xem (ma trận hiển thị)")
+                .isNotNull();
+    }
 }

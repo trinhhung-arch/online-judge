@@ -80,6 +80,25 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency> -->
+		<!--
+			Redis — Bước 3.8. Fan-out SSE qua pub/sub.
+
+			ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2). Ba lý do nó vào ở tuần 5 chứ không tuần 7:
+
+			  1. Redis đã có trong docker-compose từ M0, và `spring.data.redis` đã nằm sẵn
+			     trong application.yml từ đó — thiếu đúng một dòng này.
+			  2. Nó ĐÃ ở trong cây phụ thuộc, chỉ ở test scope (kéo theo bởi
+			     spring-boot-starter-data-redis-test → Lettuce 7.5.2). Đây là đổi phạm vi,
+			     không phải rước một thư viện lạ vào.
+			  3. Làm bản in-memory trước rồi thay ở M4 là VIẾT HAI LẦN, và ở giữa có hai
+			     tuần mà chạy 2 instance API là 50% người dùng mất realtime — instance đang
+			     giữ kết nối SSE không phải instance nhận verdict. Xem ADR 011.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>

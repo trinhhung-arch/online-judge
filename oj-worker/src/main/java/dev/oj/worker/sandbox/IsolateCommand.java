@@ -39,6 +39,14 @@ public final class IsolateCommand {
     /** Thư mục làm việc bên trong box. Tên này do isolate quy định, không đổi được. */
     public static final String BOX_DIR = "/box";
 
+    /**
+     * Nơi precompiled header xuất hiện <b>bên trong</b> box (Bước 3.5).
+     *
+     * <p>Read-only, và chỉ ở bước biên dịch. Bước chạy không thấy nó — mã của người dùng
+     * không có lý do nào để đọc một PCH, và mỗi thư mục nhìn thấy được là một bề mặt tấn công.
+     */
+    public static final String PCH_DIR = "/pch";
+
     private static final List<String> FORBIDDEN =
             List.of("--share-net", "--special-files", "--inherit-fds", "--full-env", "-e");
 
@@ -78,6 +86,12 @@ public final class IsolateCommand {
         argv.add("HOME=" + BOX_DIR);
         argv.add("-E");
         argv.add("LANG=C.UTF-8");
+        // ★ Bước 3.5 — PCH gắn READ-ONLY, và chỉ ở đây. `maybe` để một host chưa chạy
+        // scripts/build-pch.sh vẫn biên dịch được: isolate bỏ qua quy tắc nếu thư mục không
+        // tồn tại, GCC bỏ qua -I trỏ vào hư không, và bài vẫn chấm đúng — chỉ chậm hơn.
+        if (cfg.compile().pchDir() != null) {
+            argv.add("--dir=" + PCH_DIR + "=" + cfg.compile().pchDir() + ":maybe");
+        }
         // Đo được: lệnh biên dịch trong seed (-pipe) chạy sạch khi gỡ cả /proc lẫn /tmp.
         hide(argv, cfg.run().hiddenDirs());
         return finish(cfg, argv, program);

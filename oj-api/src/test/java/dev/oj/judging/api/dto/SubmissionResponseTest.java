@@ -20,51 +20,74 @@ class SubmissionResponseTest {
     private static final Instant T0 = Instant.parse("2026-03-01T10:00:00Z");
 
     /**
-     * ★ FR-PROB-07 — {@code failedTestOrdinal} không được có mặt cho tới khi
-     * {@code FeedbackPolicy} tồn tại (M3).
+     * ★ Ranh giới rò rỉ, và nó ĐÃ DỊCH ở M3 — đó chính là điều test này ghi lại.
      *
-     * <p>Trả con số đó ra bây giờ là chạy bốn tuần với {@code feedback_level} bị bỏ qua hoàn
-     * toàn. Với đề đặt mức {@code NONE} — thể thức ICPC — đó đúng là đường rò rỉ mà FR-PROB-07
-     * sinh ra để đóng. Test này đỏ khi ai đó thêm trường vào trước bộ lọc.
+     * <p>Ở M1, {@code failedTestOrdinal} vắng mặt ở <b>cả hai</b> response, vì
+     * {@code FeedbackPolicy} chưa tồn tại và trả con số đó ra là chạy bốn tuần với
+     * {@code feedback_level} bị bỏ qua hoàn toàn.
+     *
+     * <p>Ở M3 bộ lọc đã có, nên trang chi tiết được phép mang nó — <b>bản đã lọc</b>. Danh
+     * sách thì không: một endpoint trả 50 bài một lúc không có việc gì với chi tiết của từng
+     * bài, và mỗi trường thừa ở đó là 50 lần rò rỉ thay vì một.
      */
     @Test
-    @DisplayName("★ response KHÔNG mang số thứ tự test sai, và không mang source")
-    void khong_truong_nao_lo_thong_tin_chua_duoc_loc() {
-        for (Class<?> dto : new Class<?>[]{
-                SubmissionDetailResponse.class, SubmissionSummaryResponse.class}) {
-            var fields = Arrays.stream(dto.getRecordComponents())
-                    .map(RecordComponent::getName)
-                    .map(String::toLowerCase)
-                    .toList();
+    @DisplayName("★ danh sách không mang chi tiết; chi tiết không mang source lẫn isolateStatus")
+    void moi_response_chi_mang_dung_thu_no_duoc_phep_mang() {
+        var chiTiet = fieldsOf(SubmissionDetailResponse.class);
+        var danhSach = fieldsOf(SubmissionSummaryResponse.class);
 
+        // Cấm ở CẢ HAI, không có ngoại lệ nào và sẽ không bao giờ có (bất biến #1, #9).
+        for (var fields : java.util.List.of(chiTiet, danhSach)) {
             assertThat(fields)
-                    .as("%s — số thứ tự test sai phải qua FeedbackPolicy (M3) trước", dto.getSimpleName())
-                    .noneMatch(f -> f.contains("failed") || f.contains("ordinal"));
-            assertThat(fields)
-                    .as("%s — mã nguồn và hash của nó không có việc gì ở response", dto.getSimpleName())
+                    .as("mã nguồn và hash của nó không có việc gì ở response")
                     .noneMatch(f -> f.contains("source") || f.contains("sha"));
             assertThat(fields)
-                    .as("%s — log compiler là FR-SUB-06, thuộc M3", dto.getSimpleName())
-                    .noneMatch(f -> f.contains("compile") || f.contains("log"));
+                    .as("isolateStatus chứa đường dẫn bên trong box — chỉ ADMIN, qua judge_runs")
+                    .noneMatch(f -> f.contains("isolate"));
+            assertThat(fields)
+                    .as("nội dung testcase không tồn tại ở bất kỳ đâu trong oj-api")
+                    .noneMatch(f -> f.contains("input") || f.contains("expected"));
         }
+
+        // Chỉ cấm ở DANH SÁCH.
+        assertThat(danhSach)
+                .as("50 bài một trang, mỗi trường thừa là 50 lần rò rỉ thay vì một")
+                .noneMatch(f -> f.contains("failed") || f.contains("ordinal")
+                        || f.contains("compile") || f.contains("log"));
+
+        // Và trang chi tiết PHẢI có chúng — nếu không thì FR-SUB-06 và FR-PROB-07 chỉ nằm
+        // trên giấy, đúng như tình trạng trước bước 3.11.
+        assertThat(chiTiet).contains("failedtestordinal", "compilelog", "explanation");
+    }
+
+    private static java.util.List<String> fieldsOf(Class<?> dto) {
+        return Arrays.stream(dto.getRecordComponents())
+                .map(RecordComponent::getName)
+                .map(name -> name.toLowerCase(java.util.Locale.ROOT))
+                .toList();
     }
 
     /**
-     * FR-SUB-11 · P7 — làm tròn 10ms. Chữ số hàng mili giây là nhiễu (±5%), và hiển thị nó
-     * tạo ra một trò chơi giả tốn lượt chấm thật.
+     * FR-SUB-11 · P7 — cả hai response phải dùng <b>cùng một</b> bộ làm tròn.
+     *
+     * <p>Trước bước 3.12 có hai bản: một hàm riêng trong {@code SubmissionDetailResponse} và
+     * {@code RuntimeFormatter} vừa viết mà chưa ai gọi. Hai bản làm tròn cho cùng một con số
+     * là loại lỗi chỉ lộ ra khi ai đó sửa một bản.
      */
     @Test
     void thoi_gian_chay_duoc_lam_tron_den_10ms() {
-        assertThat(SubmissionDetailResponse.roundTo10ms(23)).isEqualTo(20);
-        assertThat(SubmissionDetailResponse.roundTo10ms(26)).isEqualTo(30);
-        assertThat(SubmissionDetailResponse.roundTo10ms(2034)).isEqualTo(2030);
-        assertThat(SubmissionDetailResponse.roundTo10ms(4)).isZero();
-        assertThat(SubmissionDetailResponse.roundTo10ms(null)).isNull();
+        var outcome = new JudgeOutcome(Verdict.AC, 100, 100, null, 234, 4096);
+        var response = SubmissionDetailResponse.from(visible(SubmissionStatus.DONE, outcome));
+
+        assertThat(response.timeMs()).isEqualTo(230);
+        assertThat(response.measurementNote())
+                .as("một con số thời gian không kèm chú thích là một con số bị hiểu nhầm")
+                .isEqualTo(dev.oj.judging.api.RuntimeFormatter.MEASUREMENT_NOTE);
     }
 
     @Test
     void bai_chua_cham_xong_thi_moi_truong_ket_qua_deu_rong() {
-        var response = SubmissionDetailResponse.from(submission(SubmissionStatus.QUEUED, null));
+        var response = SubmissionDetailResponse.from(visible(SubmissionStatus.QUEUED, null));
 
         assertThat(response.status()).isEqualTo("QUEUED");
         assertThat(response.verdict()).isNull();
@@ -76,7 +99,7 @@ class SubmissionResponseTest {
     @Test
     void bai_da_cham_xong_thi_mang_du_verdict_va_so_do() {
         var outcome = new JudgeOutcome(Verdict.WA, 40, 100, 7, 234, 15_360);
-        var response = SubmissionDetailResponse.from(submission(SubmissionStatus.DONE, outcome));
+        var response = SubmissionDetailResponse.from(visible(SubmissionStatus.DONE, outcome));
 
         assertThat(response.verdict()).isEqualTo("WA");
         assertThat(response.score()).isEqualTo(40);
@@ -91,6 +114,18 @@ class SubmissionResponseTest {
         var request = new SubmitSolutionRequest(1L, "cpp20", "int main(){return 0;}");
 
         assertThat(request.toString()).doesNotContain("main", "return");
+    }
+
+    /**
+     * {@code failedTestOrdinal} truyền vào là bản ĐÃ LỌC — đúng như
+     * {@code GetSubmissionUseCase.detailById} trả ra. Ở đây để {@code null} với mọi ca, nên
+     * test này không vô tình khẳng định gì về bộ lọc; việc đó là của
+     * {@code FeedbackPolicyTest} và {@code SubmissionFeedbackIT}.
+     */
+    private static dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission
+            visible(SubmissionStatus status, JudgeOutcome outcome) {
+        return new dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission(
+                submission(status, outcome), null, null, null, 2000, 262_144);
     }
 
     private static Submission submission(SubmissionStatus status, JudgeOutcome outcome) {

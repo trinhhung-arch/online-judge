@@ -138,8 +138,17 @@ public record WorkerProperties(
          *                    {@code JudgeResultDto}: cắt sớm thì 100MB thông báo lỗi template
          *                    không bao giờ vào heap của worker
          */
+        /**
+         * @param pchDir thư mục chứa {@code bits/stdc++.h.gch} trên host, hoặc {@code null}
+         *               nếu chưa dựng. Được gắn read-only vào box lúc biên dịch và lộ ra qua
+         *               placeholder {@code {pch}} của {@code languages.compile_command}.
+         *               <p>Thiếu nó thì {@code -I} trỏ vào một thư mục không tồn tại — GCC bỏ
+         *               qua trong im lặng và biên dịch chậm như cũ. <b>Hỏng nhẹ, không hỏng
+         *               nặng</b>: một máy chưa chạy {@code scripts/build-pch.sh} vẫn chấm
+         *               đúng, chỉ chậm hơn.
+         */
         public record Compile(int processes, int openFiles, DataSize maxFileSize,
-                              DataSize logLimit) {
+                              DataSize logLimit, Path pchDir) {
         }
 
         /**
