@@ -8,14 +8,21 @@
     <!-- KaTeX vẽ công thức ở TRÌNH DUYỆT. Server chỉ render Markdown và giữ nguyên các
          đoạn toán — quyết định của Bước 4.9, xem CommonMarkStatementRenderer.
 
-         ⚠️ CHƯA CÓ integrity= (SRI). Cố ý bỏ trống thay vì điền một hash phỏng đoán: một
-         hash sai KHÔNG bảo vệ gì mà chỉ chặn thẳng tài nguyên, và trang đề mất công thức
-         toán. Trước khi deploy lên host, tạo hash thật rồi dán vào:
+         ★ integrity= (SRI) là BẮT BUỘC ở đây, không phải tuỳ chọn.
+
+         Ba tệp này nạp từ một máy chủ không phải của ta, và katex.min.js chạy với toàn quyền
+         trên trang đang giữ access token. Không có SRI thì một CDN bị xâm nhập — hoặc một
+         phiên bản bị thay lặng lẽ — là mã tuỳ ý chạy trên trang của mọi thí sinh đang thi.
+         Trình duyệt so hash trước khi thực thi; sai một byte là tệp bị chặn.
+
+         Hash dưới đây tính từ chính tệp đã tải về, KHÔNG chép từ tài liệu:
 
              curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A
 
-         Việc này thuộc buổi tấn công chéo tuần 9, cùng với cấu hình Cloudflare Tunnel. -->
+         Nâng phiên bản KaTeX là phải tính lại cả ba. Quên thì trang mất công thức toán ngay
+         lập tức và ồn ào — đó là kiểu hỏng đúng, hơn hẳn việc im lặng bỏ qua phép kiểm. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+          integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+"
           crossorigin="anonymous">
 </head>
 <body>
@@ -56,10 +63,13 @@
     </div>
 </main>
 
-<!-- Xem ghi chú về SRI ở phần <head>. -->
+<!-- Xem ghi chú về SRI ở phần <head>. Hai tệp này chạy mã, nên chúng là chỗ SRI quan
+     trọng nhất — quan trọng hơn cả tệp CSS ở trên. -->
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+        integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg"
         crossorigin="anonymous" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk"
         crossorigin="anonymous" defer></script>
 <script type="module" src="/js/problem.js"></script>
 </body>

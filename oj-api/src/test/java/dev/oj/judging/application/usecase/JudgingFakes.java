@@ -52,7 +52,7 @@ class JudgingFakes {
     final List<String> calls = new ArrayList<>();
 
     final FakeSourceBlobs sourceBlobs = new FakeSourceBlobs();
-    final FakeSubmissions submissions = new FakeSubmissions();
+    final FakeSubmissionRepository submissions = new FakeSubmissionRepository(calls);
     final FakeQueue queue = new FakeQueue();
     final FakeJudgeRuns judgeRuns = new FakeJudgeRuns();
     final FakePublisher publisher = new FakePublisher();
@@ -121,84 +121,6 @@ class JudgingFakes {
         public void saveIfAbsent(SourceBlob blob) {
             calls.add("sourceBlobs.saveIfAbsent");
             saved = blob;
-        }
-    }
-
-    class FakeSubmissions implements SubmissionRepository {
-        long nextId = 101L;
-        NewSubmission inserted;
-        Submission found;
-        JudgeOutcome doneOutcome;
-        Collection<Long> requeued;
-        Integer judgingAttempt;
-        Long requesterId;
-        Role requesterRole;
-        Long cursorSeen;
-        int sizeSeen;
-
-        @Override
-        public long insert(NewSubmission submission) {
-            calls.add("submissions.insert");
-            inserted = submission;
-            return nextId;
-        }
-
-        @Override
-        public Optional<Submission> findForRequester(long id, long requesterId, Role role) {
-            calls.add("submissions.findForRequester");
-            this.requesterId = requesterId;
-            this.requesterRole = role;
-            return Optional.ofNullable(found);
-        }
-
-        /** Mức phản hồi của "đề" trong test — đổi nó để kiểm FeedbackPolicy. */
-        dev.oj.problems.domain.FeedbackLevel feedbackLevel =
-                dev.oj.problems.domain.FeedbackLevel.TEST_INDEX;
-
-        @Override
-        public Optional<SubmissionDetail> findDetailForRequester(long id, long requesterId,
-                                                                 Role role) {
-            calls.add("submissions.findDetailForRequester");
-            this.requesterId = requesterId;
-            this.requesterRole = role;
-            return Optional.ofNullable(found).map(submission -> new SubmissionDetail(
-                    submission, feedbackLevel, 2000, 262_144, "log giả", "SG signal=11"));
-        }
-
-        @Override
-        public CursorPage<SubmissionListItem> listForUser(long userId, SubmissionFilter filter,
-                                                          Long cursor, int size) {
-            calls.add("submissions.listForUser");
-            this.cursorSeen = cursor;
-            this.sizeSeen = size;
-            return CursorPage.last(List.of());
-        }
-
-        @Override
-        public Optional<Instant> lastSubmittedAt(long userId) {
-            calls.add("submissions.lastSubmittedAt");
-            return Optional.empty();
-        }
-
-        @Override
-        public boolean markJudging(long submissionId, int attempt) {
-            calls.add("submissions.markJudging");
-            judgingAttempt = attempt;
-            return true;
-        }
-
-        @Override
-        public boolean markDone(long submissionId, int attempt, JudgeOutcome outcome, Instant at) {
-            calls.add("submissions.markDone");
-            doneOutcome = outcome;
-            return true;
-        }
-
-        @Override
-        public int markQueued(Collection<Long> submissionIds) {
-            calls.add("submissions.markQueued");
-            requeued = submissionIds;
-            return submissionIds.size();
         }
     }
 

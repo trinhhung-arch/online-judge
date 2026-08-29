@@ -138,8 +138,8 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | M6 | RabbitMQ, giám sát, deploy | chưa |
 
 ```
-./mvnw verify   →   421 test xanh, ~1 phút 50
-                    oj-api     234 unit + 96 IT (Postgres 16 + Redis 7 thật, Testcontainers)
+./mvnw verify   →   424 test xanh, ~2 phút
+                    oj-api     237 unit + 96 IT (Postgres 16 + Redis 7 thật, Testcontainers)
                     oj-worker   65 unit + 26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
 ```
 
@@ -163,8 +163,12 @@ Rate limit nộp bài là chặng **mới** duy nhất thêm vào đường nón
 thêm: `p50=9ms · p95=15ms` trên 100 mẫu — ngân sách P2 là 300ms, nên nó không lấy của ai.
 
 **Ba việc không phải code của tuần 9 chưa làm:** buổi tấn công chéo · usability test đợt 1 ·
-Cloudflare Tunnel + domain. Cùng với chúng: dán hash SRI thật cho KaTeX (xem ghi chú trong
-`static/problem.html`).
+Cloudflare Tunnel + domain.
+
+Ba tệp KaTeX nạp từ jsDelivr đều đã ghim bằng **SRI sha384**, hash tính từ chính tệp tải về
+chứ không chép từ tài liệu. `TaiNguyenNgoaiTest` giữ điều đó: thêm một `<script>` hay `<link>`
+từ CDN mà quên `integrity=` (hoặc quên `crossorigin=`, thứ mà thiếu nó thì trình duyệt bỏ qua
+`integrity` **trong im lặng**) là test đỏ, kèm đúng tên tệp và URL.
 
 ### Ba lỗi chỉ hiện ra khi chạy thật
 
