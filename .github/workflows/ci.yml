@@ -59,13 +59,30 @@ jobs:
             exit 1
           fi
 
+      # Cả HAI thư mục. Lần đỏ đầu tiên của bước trên là một IT (failsafe), mà artifact
+      # lúc ấy chỉ có surefire — tức là đúng báo cáo cần đọc thì không được giữ lại, và
+      # cách duy nhất để biết test nào hỏng là chạy lại CI.
       - name: Báo cáo test
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: surefire-reports
-          path: '**/target/surefire-reports/'
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
           if-no-files-found: ignore
+
+      # In thẳng tên test hỏng ra log. Artifact phải tải về mới đọc được; dòng này thì nhìn
+      # là thấy, và đó là khác biệt giữa sửa trong một vòng push và sửa trong ba vòng.
+      - name: Test nào hỏng?
+        if: failure()
+        run: |
+          for f in $(find . -path '*/target/*-reports/*.txt' 2>/dev/null); do
+            grep -qE '(FAILURE|ERROR)!' "$f" || continue
+            echo "::group::$f"
+            cat "$f"
+            echo "::endgroup::"
+          done
 
 # -----------------------------------------------------------------------------
 # Workflow còn lại của build-order 0.8 CHƯA thêm ở đây, vì thêm bây giờ là CI đỏ

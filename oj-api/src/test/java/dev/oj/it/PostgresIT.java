@@ -77,11 +77,26 @@ public abstract class PostgresIT {
     protected JdbcClient jdbc;
 
     /**
-     * Dọn sạch bốn bảng nóng trước mỗi test, đúng thứ tự khoá ngoại.
+     * Trả cơ sở dữ liệu về đúng trạng thái sau khi seed, trước mỗi test.
      *
      * <p>Không dùng {@code @Transactional} + rollback: use-case chạy trên <b>hai transaction
      * manager khác nhau</b> (app và judge), nên một transaction bọc ngoài của test không bao
      * trùm được cả hai — và cái không bị rollback sẽ rò sang test sau.
+     *
+     * <h2>Vì sao có cả {@code judge_hosts} và {@code host_benchmarks} ở đây</h2>
+     * Vì {@code /internal/judge/benchmark} (M2) <b>sửa</b> {@code judge_hosts.host_factor} và
+     * {@code last_seen_at}, rồi thêm một dòng vào {@code host_benchmarks}. Không hoàn nguyên
+     * thì test chạy trước để lại {@code host_factor = 1.250} cho test chạy sau — và cả bộ IT
+     * dùng chung <b>một</b> container Postgres, nên "test chạy sau" nghĩa là mọi test còn lại.
+     *
+     * <p>Kiểu hỏng của nó là kiểu tệ nhất: nó phụ thuộc <b>thứ tự chạy</b>, mà thứ tự mặc
+     * định của Failsafe là thứ tự thư mục — khác nhau giữa máy dev và runner CI. Kết quả là
+     * xanh ở đây, đỏ ở kia, và không ai tái hiện được. Xem thêm {@code <runOrder>} trong
+     * {@code oj-api/pom.xml}.
+     *
+     * <p>{@code 1.000} là giá trị của máy chấm chuẩn trong
+     * {@code R__seed_du_lieu_tham_chieu.sql}. Nó là hằng số theo định nghĩa: mọi giới hạn
+     * thời gian của đề đều quy chiếu về máy đó ({@code nfrplan.md} 9.1).
      */
     @BeforeEach
     void resetHotTables() {
@@ -89,6 +104,9 @@ public abstract class PostgresIT {
         jdbc.sql("DELETE FROM judge_queue").update();
         jdbc.sql("DELETE FROM submissions").update();
         jdbc.sql("DELETE FROM source_blobs").update();
+
+        jdbc.sql("DELETE FROM host_benchmarks").update();
+        jdbc.sql("UPDATE judge_hosts SET host_factor = 1.000, last_seen_at = NULL").update();
     }
 
     /** Id của đề {@code A-PLUS-B} trong {@code db/dev-seed}. */

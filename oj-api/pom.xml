@@ -187,6 +187,23 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<!--
+						★ Thứ tự CỐ ĐỊNH, và đây là một quyết định chứ không phải sở thích.
+
+						Mặc định của Failsafe là `filesystem` — thứ tự thư mục trả về, tức là
+						thứ tự tạo inode. Nó KHÁC NHAU giữa máy dev và runner CI, nên một bộ
+						IT có phụ thuộc thứ tự sẽ xanh ở đây và đỏ ở kia, và không ai tái hiện
+						được. Bộ IT này dùng CHUNG một Postgres (container singleton), nên
+						phụ thuộc thứ tự là chuyện có thể xảy ra thật.
+
+						`alphabetical` làm CI và máy dev chạy đúng một thứ tự. Nó không SỬA
+						được phụ thuộc thứ tự — `PostgresIT.resetHotTables()` mới làm việc đó
+						— nhưng nó biến "đỏ ngẫu nhiên ở một máy" thành "đỏ ở mọi máy", và
+						một lỗi tái hiện được là một lỗi sửa được.
+					-->
+					<runOrder>alphabetical</runOrder>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>
