@@ -23,6 +23,7 @@
  *   POST /internal/judge/claim    ClaimRequestDto  → 200 JudgeJobDto | 204 (không có việc)
  *   POST /internal/judge/result   JudgeResultDto   → 204
  *   POST /internal/judge/progress JudgeProgressDto → 204     (M3, lô 20 test)
+ *   POST /internal/judge/benchmark HostBenchmarkDto → 204     (M2, hiệu chuẩn máy chấm)
  * </pre>
  * Ba đường dẫn và tên header là hằng số trong {@link dev.oj.contract.JudgeEndpoints} —
  * hai bên dùng chung, không bên nào tự gõ lại.

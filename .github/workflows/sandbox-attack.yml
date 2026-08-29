@@ -1,0 +1,79 @@
+# ★ 14 test tấn công sandbox — SEC1, nfrplan 4.1 và 4.5.
+#
+# "Bộ 14 test tấn công chạy CI mỗi push từ tuần 4 — FAIL 1 CASE = FAIL BUILD."
+#
+# Vì sao đây là workflow riêng chứ không phải một bước trong ci.yml: khi nó đỏ, dấu X phải nói
+# ngay "sandbox hỏng" chứ không phải "build hỏng". Đây là vùng duy nhất trong dự án chạy mã
+# của người lạ, và một lần đỏ ở đây khác hẳn về mức độ so với một unit test đỏ.
+name: sandbox-attack
+
+on:
+  push:
+    branches: [main, 'a/**', 'b/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: sandbox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attacks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Build từ nguồn, không tải binary dựng sẵn: xem đầu scripts/build-isolate.sh.
+      # Runner ubuntu-latest dùng cgroup v2 và có systemd, hai điều kiện của isolate 2.x.
+      - name: Build isolate
+        run: sudo ./scripts/build-isolate.sh
+
+      - name: Kiểm môi trường sandbox
+        run: |
+          isolate --version
+          # Cảnh báo, không chặn: isolate-check-environment than phiền về mọi thứ ảnh hưởng
+          # ĐỘ ỔN ĐỊNH CỦA SỐ ĐO (turbo boost, governor) — trên runner dùng chung thì không
+          # sửa được, và không ca nào trong 14 ca phụ thuộc vào số đo chính xác.
+          isolate-check-environment --quiet || echo "::warning::môi trường không lý tưởng cho phép ĐO, nhưng đủ cho phép CHẶN"
+
+      # oj-contract + oj-worker là đủ: oj-api không có class nào chạm sandbox.
+      - name: 14 test tấn công + đường chấm thật
+        run: ./mvnw -B --no-transfer-progress -pl oj-contract,oj-worker -am verify
+
+      # ⛔ Chốt cuối: bộ 14 ca KHÔNG được phép biến mất trong im lặng. Nếu ai đó xoá một file
+      # tấn công, đổi tên lớp IT, hay thêm một @Disabled, thì bước trên vẫn xanh — và cổng
+      # chuyển của M2 trở lại thành một lời hứa.
+      - name: Đủ 14 ca và không ca nào bị skip
+        run: |
+          files=$(ls oj-worker/src/test/resources/attacks/*.cpp | wc -l)
+          if [ "$files" -ne 14 ]; then
+            echo "::error::Có $files file tấn công, phải là 14 (nfrplan 4.1)"
+            exit 1
+          fi
+          report=oj-worker/target/failsafe-reports/TEST-dev.oj.worker.sandbox.SandboxAttackIT.xml
+          if [ ! -f "$report" ]; then
+            echo "::error::SandboxAttackIT không chạy. Trên Linux nó không được phép skip."
+            exit 1
+          fi
+          grep -q 'tests="14"' "$report" || {
+            echo "::error::SandboxAttackIT không chạy đủ 14 ca:"; head -3 "$report"; exit 1; }
+          grep -q 'skipped="0"' "$report" || {
+            echo "::error::Có ca bị skip. fail 1 case = fail build (nfrplan 4.5)"; exit 1; }
+          echo "14/14 ca đã chạy, 0 skip."
+
+      - name: Báo cáo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-reports
+          path: 'oj-worker/target/failsafe-reports/'
+          if-no-files-found: ignore

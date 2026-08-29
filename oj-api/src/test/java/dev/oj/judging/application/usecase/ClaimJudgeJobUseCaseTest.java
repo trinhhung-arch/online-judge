@@ -38,7 +38,7 @@ class ClaimJudgeJobUseCaseTest {
 
     private static ClaimedJob claimedJob() {
         return new ClaimedJob(101L, 1, 42L, 5, JudgingFakes.SHA, JudgingFakes.SOURCE,
-                new ClaimedJob.LanguageSpec("java21", "javac Main.java", "java Main",
+                new ClaimedJob.LanguageSpec("java21", "java", "javac Main.java", "java Main",
                         10_000, 1_048_576, new BigDecimal("2.00"), 100, 131_072));
     }
 
@@ -86,6 +86,26 @@ class ClaimJudgeJobUseCaseTest {
         assertThat(job.sourceContent()).isEqualTo(JudgingFakes.SOURCE);
         assertThat(job.sourceSha256()).isEqualTo(JudgingFakes.SHA);
         assertThat(job.toString()).doesNotContain("main", "return");   // bất biến #9
+    }
+
+    /**
+     * ★ Tên file mã nguồn do API tính, từ {@code languages.source_extension}.
+     *
+     * <p>Với {@code java21} nó <b>phải</b> là {@code Main.java}: {@code run_command} trong
+     * bảng {@code languages} viết {@code -cp {dir} Main}, nên lớp phải tên {@code Main} và
+     * file phải tên {@code Main.java}. Sai tên thì mọi bài Java đều {@code CE}, với một thông
+     * báo mà thí sinh không thể tự hiểu.
+     *
+     * <p>Trước khi có trường này, worker giữ một bảng tra {@code languageCode -> tên file} của
+     * riêng nó — hai nguồn sự thật cho cùng một dữ kiện.
+     */
+    @Test
+    void ten_file_ma_nguon_lay_tu_source_extension_cua_ngon_ngu() {
+        fakes.queue.nextClaim = claimedJob();
+
+        var job = useCase.claim(REQUEST).orElseThrow();
+
+        assertThat(job.sourceFileName()).isEqualTo("Main.java");
     }
 
     /**

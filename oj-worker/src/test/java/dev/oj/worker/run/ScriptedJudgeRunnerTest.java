@@ -110,7 +110,7 @@ class ScriptedJudgeRunnerTest {
                 .traceId("trace-test")
                 .language("cpp20", "g++ -O2 -o {bin} {src}", "{bin}")
                 .runLimitsOnReferenceHost(1000, 262_144, 65_536)
-                .source(source, sha)
+                .source("Main.cpp", source, sha)
                 .checker(CheckerType.TOKEN, null)
                 .scoring(ScoringMode.ALL_OR_NOTHING, 100)
                 .testdata(1, sha, List.of(new TestcaseMetaDto(1, true, sha, sha, null)))
@@ -118,9 +118,7 @@ class ScriptedJudgeRunnerTest {
     }
 
     private static WorkerProperties properties() {
-        return new WorkerProperties("may-test", "arm64", 6,
-                Duration.ofSeconds(120), Duration.ofMillis(10), Duration.ofSeconds(5),
-                Duration.ofMillis(5), Duration.ofMillis(50),
-                "http://localhost:8080", "x".repeat(32), new BigDecimal("1.000"));
+        return dev.oj.worker.WorkerFixtures.properties(
+                java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "oj-worker-test"));
     }
 }

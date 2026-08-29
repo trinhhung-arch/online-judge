@@ -1,6 +1,7 @@
 package dev.oj.worker.client;
 
 import dev.oj.contract.ClaimRequestDto;
+import dev.oj.contract.HostBenchmarkDto;
 import dev.oj.contract.JudgeEndpoints;
 import dev.oj.contract.JudgeJobDto;
 import dev.oj.contract.JudgeResultDto;
@@ -33,6 +34,9 @@ import java.util.Optional;
  */
 @Component
 public class JudgeApiClient {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(JudgeApiClient.class);
 
 
     private final RestClient http;
@@ -95,6 +99,29 @@ public class JudgeApiClient {
             throw e;
         } catch (Exception e) {
             throw new JudgeApiException("không gọi được " + JudgeEndpoints.RESULT, true, e);
+        }
+    }
+
+    /**
+     * Báo một phép đo tốc độ máy chấm. Luôn {@code 204}.
+     *
+     * <p><b>Không đưa vào {@code ResultBuffer}.</b> Buffer tồn tại để không mất bài nộp; một
+     * phép đo bị mất thì 15 phút nữa có phép đo khác. Giữ lại và retry là làm hàng đợi cứu
+     * bài nộp phải chia chỗ với dữ liệu vận hành.
+     *
+     * <p>Vì thế phương thức này <b>không ném</b>: API xuống là chuyện của {@code JudgeLoop},
+     * và một lỗi ở đây không được phép làm hỏng luồng lịch đo.
+     */
+    public void reportBenchmark(HostBenchmarkDto benchmark) {
+        try {
+            http.post()
+                    .uri(JudgeEndpoints.BENCHMARK)
+                    .body(benchmark)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("Không gửi được phép đo tốc độ máy về {}: {}. Bỏ qua — 15 phút nữa đo lại.",
+                    JudgeEndpoints.BENCHMARK, e.toString());
         }
     }
 

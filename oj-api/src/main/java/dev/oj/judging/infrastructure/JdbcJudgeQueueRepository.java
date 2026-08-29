@@ -91,7 +91,7 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
     private static final String CLAIM_PAYLOAD = """
             SELECT s.id AS submission_id, s.problem_id, s.testdata_version,
                    s.source_sha256, b.content AS source_content,
-                   l.code AS language_code, l.compile_command, l.run_command,
+                   l.code AS language_code, l.source_extension, l.compile_command, l.run_command,
                    l.compile_time_limit_ms, l.compile_memory_kb,
                    l.time_multiplier, l.startup_overhead_ms, l.memory_overhead_kb
               FROM submissions  s
@@ -260,6 +260,7 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
                 rs.getString("source_content"),
                 new ClaimedJob.LanguageSpec(
                         rs.getString("language_code"),
+                        rs.getString("source_extension"),
                         rs.getString("compile_command"),
                         rs.getString("run_command"),
                         rs.getInt("compile_time_limit_ms"),

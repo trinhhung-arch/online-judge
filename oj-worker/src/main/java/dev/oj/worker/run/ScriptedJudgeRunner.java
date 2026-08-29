@@ -6,6 +6,7 @@ import dev.oj.contract.Verdict;
 import dev.oj.worker.config.WorkerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -42,6 +43,7 @@ import java.util.Locale;
  * Không thứ nào trong số đó cần một trình biên dịch.
  */
 @Component
+@ConditionalOnProperty(prefix = "oj.worker.sandbox", name = "enabled", havingValue = "false")
 public class ScriptedJudgeRunner implements JudgeRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ScriptedJudgeRunner.class);

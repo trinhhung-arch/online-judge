@@ -1,10 +1,12 @@
 package dev.oj.judging.api.internal;
 
 import dev.oj.contract.ClaimRequestDto;
+import dev.oj.contract.HostBenchmarkDto;
 import dev.oj.contract.JudgeEndpoints;
 import dev.oj.contract.JudgeJobDto;
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.judging.application.usecase.ClaimJudgeJobUseCase;
+import dev.oj.judging.application.usecase.RecordHostBenchmarkUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,11 +33,14 @@ public class InternalJudgeController {
 
     private final ClaimJudgeJobUseCase claimJudgeJob;
     private final RecordJudgeResultUseCase recordJudgeResult;
+    private final RecordHostBenchmarkUseCase recordHostBenchmark;
 
     public InternalJudgeController(ClaimJudgeJobUseCase claimJudgeJob,
-                                   RecordJudgeResultUseCase recordJudgeResult) {
+                                   RecordJudgeResultUseCase recordJudgeResult,
+                                   RecordHostBenchmarkUseCase recordHostBenchmark) {
         this.claimJudgeJob = claimJudgeJob;
         this.recordJudgeResult = recordJudgeResult;
+        this.recordHostBenchmark = recordHostBenchmark;
     }
 
     /**
@@ -68,6 +73,23 @@ public class InternalJudgeController {
     @PostMapping("/result")  // JudgeEndpoints.RESULT
     public ResponseEntity<Void> result(@RequestBody JudgeResultDto result) {
         recordJudgeResult.record(result);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Worker báo một phép đo tốc độ máy chấm. Luôn {@code 204}.
+     *
+     * <p><b>Endpoint duy nhất ở đây không nằm trên đường {@code nộp bài → verdict}</b>: worker
+     * gọi 15 phút một lần từ luồng lịch riêng. Nó vẫn ở dưới {@code /internal/judge} vì nó
+     * dùng cùng một shared secret và cùng một luật "không lộ ra tunnel".
+     *
+     * <p>{@code 204} kể cả khi máy chấm chưa có trong {@code judge_hosts}: một máy chưa đăng
+     * ký vẫn chấm bài được ({@code judge_runs.host_id} cho phép NULL, S2), nên nó cũng không
+     * đáng bị một mã lỗi. Use-case log lại; worker không có gì để làm khác đi.
+     */
+    @PostMapping("/benchmark")   // JudgeEndpoints.BENCHMARK
+    public ResponseEntity<Void> benchmark(@RequestBody HostBenchmarkDto benchmark) {
+        recordHostBenchmark.record(benchmark);
         return ResponseEntity.noContent().build();
     }
 

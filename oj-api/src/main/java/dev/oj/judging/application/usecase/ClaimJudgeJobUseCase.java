@@ -109,6 +109,24 @@ public class ClaimJudgeJobUseCase {
      * <p>Dùng builder vì {@code JudgeJobDto} có năm {@code int} đứng liền nhau, và đảo nhầm
      * hai cái thì trình biên dịch im lặng còn hệ thống chấm sai giới hạn.
      */
+    /**
+     * Tên file mã nguồn worker sẽ đặt trong box: {@code Main.} + {@code source_extension}.
+     *
+     * <p>Tính ở đây vì chỉ API mới có bảng {@code languages}. Worker <b>không được</b> tự suy
+     * ra từ {@code languageCode}: làm thế là dựng một bảng tra thứ hai cho cùng một dữ kiện,
+     * và ngày hai bảng lệch nhau thì mọi bài của ngôn ngữ đó {@code CE} với thông báo vô nghĩa.
+     *
+     * <p>Phần <b>tên</b> là {@code Main} chứ không phải một tên tuỳ ý, và đó không phải sở
+     * thích: {@code languages.run_command} của Java viết {@code -cp {dir} Main}, nên lớp phải
+     * tên {@code Main}, nên file phải là {@code Main.java}. Một tên khác thì bài Java nào cũng
+     * {@code CE} — và {@code CE} vì tên file là loại lỗi thí sinh không thể tự hiểu.
+     */
+    static final String SOURCE_BASE_NAME = "Main";
+
+    private static String sourceFileName(ClaimedJob.LanguageSpec language) {
+        return SOURCE_BASE_NAME + '.' + language.sourceExtension();
+    }
+
     private JudgeJobDto buildJob(ClaimedJob job, JudgeSpec spec) {
         ClaimedJob.LanguageSpec language = job.language();
         return JudgeJobDto.builder()
@@ -121,7 +139,7 @@ public class ClaimJudgeJobUseCase {
                                 language.timeMultiplier(), language.startupOverheadMs()),
                         spec.memoryLimitOnReferenceHost(language.memoryOverheadKb()),
                         spec.outputLimitKb())
-                .source(job.sourceContent(), job.sourceSha256())
+                .source(sourceFileName(language), job.sourceContent(), job.sourceSha256())
                 .checker(spec.checkerType(), spec.checkerEpsilon())
                 .scoring(spec.scoringMode(), spec.maxScore())
                 .testdata(spec.testdataVersion(), spec.manifestSha256(), spec.testcases())

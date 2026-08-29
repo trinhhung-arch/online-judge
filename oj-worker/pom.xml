@@ -92,6 +92,30 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+
+			<!--
+				surefire chỉ nhận *Test. Bộ 14 test tấn công là *IT vì nó cần isolate thật,
+				cgroup thật, và vài giây mỗi ca — nó không phải unit test.
+
+				Thiếu plugin này thì `mvn verify` BỎ QUA SandboxAttackIT trong im lặng: build
+				xanh, cổng chuyển của M2 coi như đã mở, mà thật ra chưa ca nào chạy. Đúng lỗi
+				đó đã xảy ra một lần ở oj-api và chỉ lộ ra khi có người đếm số test.
+
+				Đây là plugin build, không phải dependency mới trên classpath — cùng cấu hình
+				đã dùng ở oj-api.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 </project>

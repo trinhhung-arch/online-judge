@@ -43,14 +43,18 @@ online-judge/
 ├── infra/
 │   ├── postgres/init/01-roles.sql  ← tạo oj_app / oj_migrator (quyết định D)
 │   ├── docker-compose.host.yml     ← chồng lên khi chạy trên Mac host        (chưa có)
-│   ├── isolate/                    ← Dockerfile build isolate cho arm64      (M2)
+│   ├── isolate/Dockerfile          ← worker + isolate, build được cả amd64 lẫn arm64
 │   ├── prometheus/ · grafana/                                                (M6)
 │   └── scripts/                    ← backup.sh · restore.sh · deploy.sh      (M6)
+│
+├── scripts/
+│   ├── build-isolate.sh            ← build isolate TỪ NGUỒN trên chính máy chấm (Bước 2.1)
+│   └── mount-box-tmpfs.sh          ← box dir lên tmpfs (Bước 2.8)
 │
 ├── docs/
 │   ├── frplan.md · nfrplan.md · postgres-design.md · build-order.md
 │   ├── cau-truc-source.md          ← file này
-│   ├── adr/                        ← 001..009, xem nfrplan 8.3
+│   ├── adr/                        ← 001..010, xem nfrplan 8.3
 │   └── sql/
 │       ├── duong_nong.sql          ← 12 truy vấn nóng, chép nguyên văn vào repository
 │       ├── smoke_test.sql          ← 12 ca kiểm chứng schema
@@ -58,7 +62,7 @@ online-judge/
 │
 └── .github/workflows/
     ├── ci.yml                      ← mvnw verify + ArchUnit + JaCoCo, < 10 phút (M3)
-    ├── sandbox-attack.yml          ← 14 test tấn công, mỗi push (SEC1)
+    ├── sandbox-attack.yml          ← 14 test tấn công, mỗi push (SEC1) — ĐÃ BẬT ở M2
     └── buildx.yml                  ← multi-arch amd64 + arm64 (C1)
 ```
 
@@ -74,7 +78,7 @@ oj-contract/src/main/java/dev/oj/contract/
 ├── JudgeJobDto.java        submissionId · attempt · traceId · languageCode
 │                           · compileCommand · runCommand · compileTimeLimitMs
 │                           · compileMemoryKb · timeLimitMs · memoryLimitKb
-│                           · outputLimitKb · sourceContent · sourceSha256
+│                           · outputLimitKb · sourceFileName · sourceContent · sourceSha256
 │                           · checkerType · checkerEpsilon · scoringMode
 │                           · testdataVersion · testdataManifestSha256
 │                           · testcases: List<TestcaseMetaDto>          + Builder
@@ -83,6 +87,9 @@ oj-contract/src/main/java/dev/oj/contract/
 │                           · compileLog · isolateStatus · hostName · hostFactor
 │                           · startedAt · subtasks
 ├── JudgeProgressDto.java   lô 20 test — khai báo từ M1, dùng ở M3 (BATCH_SIZE = 20)
+├── HostBenchmarkDto.java   phép đo tốc độ máy chấm (M2) — hostName · arch · measuredAt
+│                           · cpuTimeMs · hostFactor · calibrated · driftPct
+├── JudgeEndpoints.java     bốn đường /internal/judge/* + tên header X-Internal-Secret
 ├── ClaimRequestDto.java    hostName · arch · freeSlots
 ├── TestcaseMetaDto.java    ordinal · isSample · inputSha256 · outputSha256 · subtaskOrdinal
 ├── SubtaskResultDto.java   điểm từng nhóm (M3)
@@ -102,11 +109,21 @@ oj-contract/src/main/java/dev/oj/contract/
    truyền nhầm — đây là bất biến #1 ép ở tầng kiểu dữ liệu.
 2. **`sourceContent` nằm trong job** (quyết định B). Worker nhận source qua response của
    `claim` nên vẫn không cần `DataSource`. Testdata thì vẫn chỉ đi bằng `sha256`.
-3. **`JudgeEndpoints.java` giữ ba đường dẫn `/internal/judge/*` và tên header
+3. **`JudgeEndpoints.java` giữ bốn đường dẫn `/internal/judge/*` và tên header
    `X-Internal-Secret`.** Trước đó `InternalSecretFilter` và `JudgeApiClient` mỗi bên tự gõ
    một chuỗi giống nhau — lệch một ký tự thì trình biên dịch im, test hai bên vẫn xanh vì mỗi
    bên dùng hằng của chính mình, và triệu chứng duy nhất là mọi request từ worker nhận 401.
-4. **`JudgeJobDto.maxScore`** — điểm tối đa do API tính (`JudgeSpec.maxScore()`), worker chỉ
+4. **`JudgeJobDto.sourceFileName`** — `Main.` + `languages.source_extension`, do API tính.
+   `g++` nhận biết ngôn ngữ **qua phần mở rộng**, và `java` bắt buộc lớp `Main` nằm đúng trong
+   `Main.java`. Không có trường này thì worker phải giữ một bảng tra `languageCode -> tên file`
+   của riêng nó — hai nguồn sự thật cho cùng một dữ kiện, và "thêm 1 ngôn ngữ = 1 dòng config,
+   0 dòng code" (chỉ số M4) không còn đúng.
+5. **`HostBenchmarkDto` + `POST /internal/judge/benchmark`** — worker không có `DataSource`
+   (bất biến #3), nên trước đây không có đường nào để một phép đo tới được bảng
+   `host_benchmarks` (đã tồn tại từ `V1`). Lịch sử hiệu chuẩn chỉ nằm trong log và mất khi
+   worker khởi động lại; sau một kỳ thi thì câu *"máy chấm hôm đó có chậm không"* không có gì
+   để trả lời.
+6. **`JudgeJobDto.maxScore`** — điểm tối đa do API tính (`JudgeSpec.maxScore()`), worker chỉ
    dùng lại. Trước đó `JudgeResultDto` bắt buộc có `maxScore` mà job không mang, nên worker
    phải tự bịa ra 100: luật tính điểm sống ở hai nơi, và ở M3 (subtask) thì bịa không nổi.
 
@@ -319,29 +336,43 @@ oj-worker/src/main/java/dev/oj/worker/
 │   └── SlotPool.java               số slot CỐ ĐỊNH theo config, không theo số core
 │
 ├── sandbox/                        ★ NƠI DUY NHẤT được spawn process
-│   ├── IsolateBox.java             init / run / cleanup
+│   ├── IsolateBox.java             init / run / cleanup, AutoCloseable
 │   ├── IsolateCommand.java         dựng tham số: no-net, ro fs, cg limits
-│   └── IsolateMeta.java            parse file meta; mã lạ → IE, không map bừa sang RE
+│   ├── IsolateMeta.java            parse file meta; mã lạ → IE, không map bừa sang RE
+│   ├── CommandTemplate.java        {bin}/{src}/{dir}/{mem} → argv; tra argv[0] vì isolate
+│   │                               dùng execve chứ KHÔNG tra PATH (ADR 010 mục 4)
+│   └── SandboxException.java       sandbox hỏng ≠ bài nộp hỏng → luôn ra IE
 │
 ├── compile/
 │   ├── Compiler.java               biên dịch TRONG box (bất biến #4)
 │   └── CompileCache.java           sha256(source + lang + flags)
 │
 ├── run/
+│   ├── JudgeRunner.java            ★ seam: Scripted (M1) ⇄ Isolate (M2)
+│   ├── IsolateJudgeRunner.java     hiện thực M2 — bắt cả Throwable, mọi lối thoát là IE
 │   ├── TestRunner.java             input qua stdin, testdata KHÔNG vào box
-│   ├── OutputLimiter.java          cắt stdout, chống ghi đầy đĩa
-│   └── checker/                    ExactChecker · TokenChecker · FloatChecker
+│   ├── OutputLimiter.java          cắt stdout NHƯNG vẫn đọc tới EOF (ADR 010 mục 2)
+│   └── checker/                    Checker · Tokens · Exact · Token · Float · Checkers
 │
 ├── testdata/
-│   ├── TestdataFetcher.java        tải theo manifest sha256
+│   ├── TestdataFetcher.java        cache trước, nguồn xa sau, băm lại trước khi tin
+│   ├── TestdataSource.java         seam cho MinIO (Bước 4.11)
+│   ├── LocalDirectoryTestdataSource.java   hiện thực duy nhất tới M4
+│   ├── TestdataUnavailableException.java   không tải được → IE, KHÔNG chấm thiếu test
 │   └── ContentAddressedCache.java  hash đổi → cache tự miss, không cần invalidate
 │
 ├── report/
 │   └── BatchReporter.java          gom lô 20 test rồi mới gửi
 │
 └── calibration/
-    └── HostBenchmark.java          đo host_factor lúc khởi động + định kỳ 15 phút
+    └── HostBenchmark.java          đo host_factor lúc khởi động + định kỳ 15 phút;
+                                    cảnh báo drift > 8% (bẫy throttle nhiệt, rủi ro #5)
 ```
+
+**Còn rỗng, có chủ ý:** `pipeline/JobExecutor.java` và `pipeline/SlotPool.java` đã có nội dung
+từ M2; `report/BatchReporter.java` (lô 20 test) chờ `/internal/judge/progress` ở **M3**, và
+`config/GracefulShutdown.java` là **Bước 6.8**. Một file rỗng ở đây nghĩa là "đã có chỗ, chưa
+tới lượt", không phải "quên".
 
 **Hai luật của cây này:**
 
@@ -370,9 +401,24 @@ oj-api/src/test/java/dev/oj/
     └── QueueChaosTest.java         2 worker + 100 bài, kill ngẫu nhiên, 0 mất 0 trùng
 
 oj-worker/src/test/
-├── java/dev/oj/worker/sandbox/AttackSuiteTest.java   ★ 14 case (nfrplan 4.1)
+├── java/dev/oj/worker/
+│   ├── WorkerFixtures.java                       cấu hình test + cổng requireIsolate
+│   ├── sandbox/SandboxAttackIT.java              ★ 14 case (nfrplan 4.1)
+│   ├── sandbox/SandboxHarness.java               chạy file tấn công qua ĐÚNG IsolateCommand
+│   ├── sandbox/{IsolateCommand,IsolateMeta,CommandTemplate}Test.java
+│   │                                             nửa chạy được trên MỌI máy, kể cả macOS
+│   └── run/IsolateJudgeRunnerIT.java             7 verdict + early exit + cache biên dịch
 └── resources/attacks/              14 file mã tấn công, mỗi file một case
 ```
+
+**Tên lớp là `SandboxAttackIT`, không phải `AttackSuiteTest`** (`build-order.md` Bước 2.2 gọi
+đúng tên này). Hậu tố `IT` không phải chuyện thẩm mỹ: surefire chỉ nhận `*Test`, nên một lớp
+tên `...Test` cần `isolate` thật sẽ đỏ trên mọi máy không có sandbox, còn `*IT` chạy ở
+failsafe đúng chỗ của nó.
+
+**Lớp IT sandbox FAIL chứ không SKIP khi thiếu `isolate` trên Linux.** Bỏ qua trong im lặng
+biến cổng chuyển của M2 thành một lời hứa, và `nfrplan` 4.5 viết rõ "fail 1 case = fail
+build". Trên macOS thì bỏ qua, vì `isolate` không tồn tại ở đó.
 
 **Vì sao 14 test tấn công là file dữ liệu chứ không phải chuỗi trong Java:** thêm case thứ 15
 là thêm một file, không phải sửa một class — và diff của PR đọc được bằng mắt.

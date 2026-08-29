@@ -3,6 +3,7 @@ package dev.oj.worker;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Tiến trình chấm bài — <b>vùng duy nhất trong dự án chạy mã của người lạ</b>.
@@ -21,6 +22,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * đúng ngày 14/14 test tấn công xanh trong CI, không sớm hơn một giờ.
  */
 @ConfigurationPropertiesScan
+@EnableScheduling
 @SpringBootApplication
 public class OjWorkerApplication {
 

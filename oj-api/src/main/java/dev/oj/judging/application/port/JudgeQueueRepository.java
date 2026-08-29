@@ -117,6 +117,7 @@ public interface JudgeQueueRepository {
          */
         public record LanguageSpec(
                 String code,
+                String sourceExtension,
                 String compileCommand,
                 String runCommand,
                 int compileTimeLimitMs,

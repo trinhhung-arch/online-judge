@@ -416,22 +416,35 @@ dev.oj.worker/
 
 Không có FR mới. Đây là mốc thuần chất lượng, và là **rủi ro #1 của cả dự án**.
 
-| Bước | Viết gì |
-|---|---|
-| **2.1** | `scripts/build-isolate-arm.sh` — build `isolate` **trong VM Linux ARM trên Mac**, không copy binary từ WSL |
-| **2.2** | ★ **14 test tấn công trước** — `oj-worker/src/test/resources/attacks/*` + `SandboxAttackIT`. Danh sách ở `nfrplan.md` 4.1 |
-| **2.3** | `IsolateCommandBuilder` — cgroup v2 · **không** `--share-net` · fs read-only trừ `/box` · uid riêng · giới hạn output |
-| **2.4** | `CompileStep` — **biên dịch cũng trong box** (compiler bomb là có thật) |
-| **2.5** | `IsolateMetaParser` — đọc file `meta` → verdict. Mã lạ → `IE`, **không map bừa sang `RE`** |
-| **2.6** | `BoxPool` — số box = `judge_slots` cố định theo config (**không** theo số core). Dọn box trong `finally` |
-| **2.7** | `TestdataFetcher` — tải theo `sha256`, cache cục bộ. **Testdata không nằm trong box** — input chỉ qua stdin |
-| **2.8** | tmpfs cho box dir (8GB RAM disk) |
-| **2.9** | `HostBenchmarkJob` — chạy lúc worker khởi động + mỗi 15 phút → ghi `host_benchmarks`, cập nhật `host_factor`, alert khi drift > 8% |
-| **2.10** | 🆕 Deploy thử lên Mac (nfrplan Phần 11 tuần 2) + ghi baseline vào README |
+| Bước | Viết gì | Trạng thái |
+|---|---|---|
+| **2.1** | `scripts/build-isolate.sh` — build `isolate` **từ nguồn, trên chính máy sẽ chấm**, không copy binary giữa hai kiến trúc | xong |
+| **2.2** | ★ **14 test tấn công trước** — `oj-worker/src/test/resources/attacks/*` + `SandboxAttackIT`. Danh sách ở `nfrplan.md` 4.1 | **14/14 xanh** |
+| **2.3** | `IsolateCommand` — cgroup v2 · **không** `--share-net` · fs read-only trừ `/box` · uid riêng · giới hạn output. Gỡ thêm `/proc` và `/tmp` (mặc định của isolate **có** cả hai) | xong |
+| **2.4** | `Compiler` — **biên dịch cũng trong box**. Đo được: bom template chạm trần 512MB sau 4,4s | xong |
+| **2.5** | `IsolateMeta` — đọc file `meta` → verdict. Mã lạ → `IE`, **không map bừa sang `RE`**; `SG`+`cg-oom` → `MLE` | xong |
+| **2.6** | `SlotPool` + `JobExecutor` — số box = `judge_slots` cố định theo config (**không** theo số core). Dọn box bằng `try`-with-resources | xong |
+| **2.7** | `TestdataFetcher` — tải theo `sha256`, cache cục bộ. **Testdata không nằm trong box** — input vào bằng fd thừa hưởng (ADR 010 mục 1). Nguồn xa là `TestdataSource`; MinIO tới ở Bước 4.11 | xong |
+| **2.8** | `scripts/mount-box-tmpfs.sh` cho box dir (8GB RAM disk) | script xong, **chưa chạy** trên host |
+| **2.9** | `HostBenchmark` — chạy lúc khởi động + mỗi 15 phút → ghi `host_benchmarks`, cập nhật `host_factor`, alert khi drift > 8% | xong, qua `POST /internal/judge/benchmark` |
+| **2.10** | 🆕 Deploy thử lên Mac (nfrplan Phần 11 tuần 2) + ghi baseline vào README | baseline máy dev đã ghi; **deploy Mac chưa làm** — cột máy chấm chuẩn trong README còn trống |
 
 > ⛔ **Cổng chuyển:** `IsolateJudgeRunner` chỉ được đăng ký thay `ScriptedJudgeRunner` khi
 > **14/14 test tấn công xanh trong CI**. Từ đó, mọi PR chạm sandbox chạy lại **toàn bộ 14 test**,
 > kể cả PR "chỉ là refactor".
+>
+> ✅ **Cổng đã mở.** 14/14 xanh, `sandbox-attack.yml` chạy mỗi push, và
+> `oj.worker.sandbox.enabled` mặc định `true` nên `IsolateJudgeRunner` là bean được chọn.
+> `ScriptedJudgeRunner` vẫn còn nhưng chỉ sống khi `enabled: false` — nó là đường lùi, không
+> phải cửa hậu: với `false` thì không một dòng mã người dùng nào được chạy cả.
+
+> ✅ **Hai thay đổi `oj-contract` của M2 đã được duyệt và làm trong cùng một PR hai phía:**
+> 1. **`JudgeJobDto.sourceFileName`** — API tính `Main.` + `languages.source_extension`. Bảng
+>    tra `languageCode -> tên file` phía worker đã bị xoá, nên "thêm 1 ngôn ngữ = 1 dòng
+>    config, 0 dòng code" (M4-nfr) đúng trở lại.
+> 2. **`POST /internal/judge/benchmark` + `HostBenchmarkDto`** — endpoint nội bộ thứ tư, và là
+>    endpoint duy nhất **không** nằm trên đường `nộp bài → verdict`. Phép đo của
+>    `HostBenchmark` giờ vào tới `judge_hosts.host_factor` và `host_benchmarks`.
 
 ---
 
@@ -631,7 +644,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 | 0 | pom, CI, ArchUnit, docker-compose | ADR, README, buildx | Cả hai |
 | 1 | **`oj-contract` (cùng nhau)** → platform, problems, judging.api | **`oj-contract` (cùng nhau)** → judging.domain/application/infrastructure, oj-worker | ★ đóng băng contract |
 | 2 | Reaper, chaos test phía API | `ScriptedJudgeRunner`, JudgeLoop, ResultBuffer | DoD M1 |
-| 3–4 | Deploy thử lên Mac, script deploy | **Sandbox + 14 test tấn công** | Cổng 14/14 |
+| 3–4 | Deploy thử lên Mac, script deploy | **Sandbox + 14 test tấn công** | Cổng 14/14 — **đã qua** |
 | 5–6 | SSE + Redis pub/sub, VerdictExplainer | Checker, subtask, early exit, PCH, lô 20 test | Bước 3.7 chạm contract |
 | 7–9 | Auth, JWT, quyền, IDOR, giao diện | Upload ZIP + validate, MinIO, LanguageRegistry | ★ tuần 9: tấn công chéo + hoán đổi vùng |
 | 10–12 | Contest, leaderboard, freeze | RabbitMQ, jobs, rejudge, health, metric | Chaos test tuần 12 |

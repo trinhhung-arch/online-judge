@@ -22,9 +22,60 @@ oj:
     request-timeout: 5s
     result-retry-min: 1s
     result-retry-max: 30s
-    host-factor: 1.000                   # M2 (Bước 2.9) đo thật bằng HostBenchmark
+    host-factor: 1.000                   # khởi điểm; HostBenchmark (Bước 2.9) đo lại
     api-base-url: ${OJ_API_BASE_URL:http://localhost:8080}
     internal-secret: ${OJ_INTERNAL_SHARED_SECRET}   # không có mặc định, cố ý
+
+    # -------------------------------------------------------------------------
+    # Sandbox. Ở đây CHỈ có thứ hợp đồng không mang. CPU, RAM và output của một
+    # lượt chạy nằm trong JudgeJobDto vì chúng là thuộc tính của ĐỀ BÀI, không
+    # phải của máy chấm — chép chúng xuống đây là tạo nguồn sự thật thứ hai, và
+    # ngày hai nguồn lệch nhau thì cùng một bài AC ở máy này, TLE ở máy kia.
+    # -------------------------------------------------------------------------
+    sandbox:
+      # false = giữ ScriptedJudgeRunner của M1 (không thực thi mã người dùng).
+      # KHÔNG phải cửa hậu bỏ sandbox: với false thì không có gì được chạy cả.
+      enabled: ${OJ_SANDBOX_ENABLED:true}
+      isolate-binary: ${OJ_ISOLATE_BIN:/usr/local/bin/isolate}
+      box-root: ${OJ_ISOLATE_BOX_ROOT:/var/local/lib/isolate}
+      # Hai worker trên cùng một máy phải đặt lệch nhau, nếu không chúng giành box của nhau.
+      first-box-id: ${OJ_WORKER_FIRST_BOX_ID:0}
+      # Chốt chặn khi chính isolate treo. Giới hạn thật là của isolate; cái này chỉ để
+      # worker không mất một slot vĩnh viễn.
+      watchdog-slack: 10s
+      # isolate gọi execve, KHÔNG tra PATH: `g++` trong bảng languages phải được worker tra
+      # thành đường dẫn tuyệt đối, nếu không mọi bài nộp đều RE với exitcode 127.
+      program-path: [/usr/bin, /bin, /usr/local/bin]
+
+      compile:
+        processes: 64        # g++ fork ra cc1plus, as, collect2
+        open-files: 256      # #include lồng nhau mở rất nhiều file cùng lúc
+        max-file-size: 64MB
+        log-limit: 32KB      # = JudgeResultDto.MAX_COMPILE_LOG_BYTES; cắt sớm để 100MB
+                             # thông báo lỗi template không vào heap của worker
+      run:
+        extra-time: 500ms    # ân hạn: báo thời gian THẬT thay vì đúng bằng giới hạn
+        processes: 1         # ⚠️ tạm của M2 — Java 21 cần vài chục. M3 phải mang con số
+                             # này trong bảng languages, xem javadoc Sandbox.Run
+        open-files: 64
+        max-file-size: 1MB
+        stderr-limit: 8KB
+        # Đo được: /proc mặc định CÓ mặt và /proc/self/environ đọc được; /tmp mặc định
+        # ghi được. Test tấn công 6 và 11 chính là hai ca đó.
+        hidden-dirs: [/proc, /tmp]
+
+      cache:
+        # NGOÀI box_root — testdata trong box là bất biến #1 bị phá.
+        dir: ${OJ_WORKER_CACHE_DIR:/var/tmp/oj-worker}
+        max-entries: 512
+
+      benchmark:
+        interval: 15m
+        samples: 3
+        # 0 = CHƯA hiệu chuẩn: worker vẫn đo và vẫn cảnh báo throttle nhiệt, nhưng không đổi
+        # giới hạn chấm. Điền con số đo trên máy chấm chuẩn ở Bước 2.10 (xem README).
+        reference-cpu-ms: ${OJ_HOST_REFERENCE_CPU_MS:0}
+        drift-alert-pct: 8.0
 
 logging:
   level:

@@ -32,12 +32,18 @@
 
 ## 3 · Không có `DataSource`
 
-Worker biết đúng hai endpoint:
+Worker biết đúng những đường dẫn trong `JudgeEndpoints` của `oj-contract`, không hơn:
 
 ```
-POST /internal/judge/claim   → nhận job
-POST /internal/judge/result  → trả kết quả
+POST /internal/judge/claim      → nhận job
+POST /internal/judge/result     → trả kết quả
+POST /internal/judge/benchmark  → báo phép đo tốc độ máy chấm   (M2)
+POST /internal/judge/progress   → tiến độ theo lô 20 test        (M3)
 ```
+
+Hai đường dưới **không nằm trên đường `nộp bài → verdict`**: `benchmark` gọi 15 phút một lần
+từ luồng lịch, `progress` là thông tin phụ. Chúng không tiêu một phần nào của ngân sách 2 giây,
+và một lỗi ở đó **không được phép** làm hỏng một lượt chấm.
 
 Không JDBC, không JPA, không Redis, không MinIO client gọi thẳng vào hạ tầng của API. Nếu một nhiệm vụ có vẻ cần worker đọc DB — **dừng lại và hỏi**, vì hầu như luôn có nghĩa là dữ liệu đó phải nằm trong `oj-contract`.
 

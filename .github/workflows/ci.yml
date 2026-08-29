@@ -29,6 +29,16 @@ jobs:
           distribution: temurin
           cache: maven
 
+      # oj-worker giờ có IT cần sandbox thật (SandboxAttackIT, IsolateJudgeRunnerIT), và
+      # chúng CỐ Ý fail thay vì skip khi thiếu isolate trên một máy Linux — một cái skip lặng
+      # lẽ biến cổng chuyển của M2 thành lời hứa. Nên `mvnw verify` ở đây cũng cần isolate,
+      # nếu không nó không còn nghĩa là "mọi thứ xanh" (CLAUDE.md mục 8).
+      #
+      # sandbox-attack.yml cài lại isolate một lần nữa, có chủ ý: khi sandbox đỏ thì dấu X
+      # phải nói ngay là sandbox đỏ, chứ không phải build đỏ.
+      - name: Build isolate
+        run: sudo ./scripts/build-isolate.sh
+
       # Surefire (unit) + Failsafe (integration, *IT.java).
       #
       # Bộ IT chạy trên Postgres 16 THẬT qua Testcontainers — ubuntu-latest có sẵn Docker.
@@ -58,10 +68,11 @@ jobs:
           if-no-files-found: ignore
 
 # -----------------------------------------------------------------------------
-# Hai workflow còn lại của build-order 0.8 CHƯA thêm ở đây, vì thêm bây giờ là CI đỏ
+# Workflow còn lại của build-order 0.8 CHƯA thêm ở đây, vì thêm bây giờ là CI đỏ
 # ngay từ lần push đầu — và một CI đỏ thường trực là một CI bị bỏ qua:
 #
-#   sandbox-attack.yml   14 test tấn công (SEC1) — bật ở M2, cùng lúc IsolateJudgeRunner
-#                        thay ScriptedJudgeRunner. Trước đó chưa có gì để tấn công.
-#   buildx.yml           image multi-arch amd64 + arm64 (C1) — cần Dockerfile, chưa có.
+#   buildx.yml           image multi-arch amd64 + arm64 (C1) — cần Dockerfile cho oj-api,
+#                        chưa có. infra/isolate/Dockerfile mới chỉ lo phần sandbox.
+#
+# sandbox-attack.yml ĐÃ BẬT ở M2, cùng lúc IsolateJudgeRunner thay ScriptedJudgeRunner.
 # -----------------------------------------------------------------------------

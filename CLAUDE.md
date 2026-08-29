@@ -47,7 +47,7 @@ Mọi quy tắc dưới đây phục vụ ba điều này. Tốc độ và trả
 |---|---|---|---|
 | 1 | **Để nội dung testcase ẩn rời khỏi worker** — không qua API response, log, exception message, prompt LLM, hay bất cứ đâu | Người dùng rút trích được toàn bộ bộ test bằng cách nộp bài cố tình sai từng test một, rồi nộp bảng tra cứu đáp án | SEC3 |
 | 2 | **Để `SubmitSolution` chờ verdict** — không gọi worker đồng bộ, không `.get()`, không `.join()`, không `@Transactional` bao quanh việc publish | Worker chậm là cả site đơ; 500 người nộp cùng lúc là 500 connection treo | P2, R1 |
-| 3 | **Cho `oj-worker` một `DataSource`** — worker chỉ biết `POST /internal/judge/claim` và `POST /internal/judge/result` | Worker có DB là worker không scale ngang được và không đổi transport được | S1, S2 |
+| 3 | **Cho `oj-worker` một `DataSource`** — worker chỉ biết các đường dẫn liệt kê trong `JudgeEndpoints` (`claim` · `result` · `progress` · `benchmark`) | Worker có DB là worker không scale ngang được và không đổi transport được | S1, S2 |
 | 4 | **Chạy mã người dùng ngoài `isolate`** — kể cả bước biên dịch, kể cả "chỉ để thử nhanh" | Compiler bomb và fork bomb là có thật; `ProcessBuilder` + timeout không phải sandbox | SEC1 |
 | 5 | **Nối chuỗi vào SQL** — chỉ `JdbcClient` với named parameter | ArchUnit chặn, và đây là lỗ hổng kinh điển | SEC2 |
 | 6 | **Sửa file Flyway đã commit** — luôn tạo `V<n+1>__mo_ta.sql` mới | Hai máy dev lệch schema, và không ai biết cho đến khi lỗi lạ xuất hiện | M |
@@ -112,7 +112,7 @@ Trả lời trong đầu, mất 2 phút, bắt được hầu hết lỗi thiế
 
 Tám tình huống. Trong tám tình huống này, **không tự quyết**:
 
-1. Cần đổi bất cứ thứ gì trong `oj-contract`, hoặc hai endpoint `/internal/judge/*` — đây là hợp đồng đã đóng băng giữa hai người.
+1. Cần đổi bất cứ thứ gì trong `oj-contract`, hoặc bất kỳ endpoint nào trong `JudgeEndpoints` — đây là hợp đồng đã đóng băng giữa hai người.
 2. Cần thêm dependency mới vào `pom.xml`.
 3. Cần sửa một file migration đã commit.
 4. Cần đổi một con số đã chốt: số judge slot · timeout reaper 120s · rate limit 10s · quota AI 5/ngày · giới hạn ZIP 200MB · source 64KB.

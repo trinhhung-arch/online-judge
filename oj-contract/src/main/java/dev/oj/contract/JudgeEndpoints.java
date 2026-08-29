@@ -40,6 +40,13 @@ public final class JudgeEndpoints {
     public static final String PROGRESS = BASE + "/progress";
 
     /**
+     * Worker báo một phép đo tốc độ máy chấm ({@link HostBenchmarkDto}). Ngoài đường
+     * {@code nộp bài → verdict}: gọi 15 phút một lần từ luồng lịch, không tiêu một phần nào
+     * của ngân sách 2 giây.
+     */
+    public static final String BENCHMARK = BASE + "/benchmark";
+
+    /**
      * Header mang shared secret.
      *
      * <p>Tên bắt đầu bằng {@code X-} theo thói quen cũ; giữ nguyên vì đổi nó là đổi hợp đồng.

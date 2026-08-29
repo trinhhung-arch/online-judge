@@ -71,9 +71,13 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 
 ---
 
-## 5 · Ba endpoint nội bộ `/internal/judge/*`
+## 5 · Bốn endpoint nội bộ `/internal/judge/*`
 
-- `claim` (M1) · `result` (M1) · `progress` (M3, lô 20 test — `JudgeProgressDto`).
+- `claim` (M1) · `result` (M1) · `benchmark` (M2, `HostBenchmarkDto`) · `progress` (M3, lô 20
+  test — `JudgeProgressDto`). Danh sách chính thức nằm ở `JudgeEndpoints` trong `oj-contract`.
+- **`benchmark` là endpoint duy nhất ở đây KHÔNG nằm trên đường `nộp bài → verdict`.** Worker
+  gọi 15 phút một lần từ luồng lịch riêng, nên nó không tiêu ngân sách 2 giây. Nó vẫn ở dưới
+  `/internal/judge` vì nó dùng cùng shared secret và cùng luật "không lộ ra tunnel".
 - **Không nằm trong `/api/v1/`** và **không được lộ ra ngoài tunnel**. Chỉ nghe trên mạng nội bộ.
 - Vì thế **không dùng `server.servlet.context-path`**: nó bọc toàn bộ ứng dụng và sẽ kéo cả ba
   endpoint này vào dưới `/api/v1/`. Mỗi controller công khai tự mang tiền tố đầy đủ.

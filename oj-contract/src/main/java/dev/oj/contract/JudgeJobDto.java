@@ -47,6 +47,19 @@ import java.util.List;
  * @param memoryLimitKb          giới hạn bộ nhớ, đã cộng {@code memory_overhead_kb} của ngôn ngữ
  * @param outputLimitKb          trần stdout; chương trình in 10GB phải bị cắt, không được
  *                               làm đầy đĩa host
+ * @param sourceFileName         tên file mã nguồn worker phải đặt trong box, ví dụ
+ *                               {@code Main.cpp}. <b>API tính, worker chỉ dùng lại</b>, từ
+ *                               {@code languages.source_extension} — vì chỉ API mới có bảng
+ *                               {@code languages}.
+ *                               <p>Vì sao nó phải nằm trong hợp đồng: {@code g++} nhận biết
+ *                               ngôn ngữ <b>qua phần mở rộng</b>, và {@code java} bắt buộc
+ *                               lớp {@code Main} nằm đúng trong {@code Main.java}. Trước đây
+ *                               trường này không có, nên worker phải giữ một bảng tra
+ *                               {@code languageCode -> tên file} của riêng nó — hai nguồn sự
+ *                               thật cho cùng một dữ kiện, và ngày chúng lệch nhau thì mọi
+ *                               bài của ngôn ngữ đó {@code CE} với một thông báo vô nghĩa.
+ *                               Với trường này thì "thêm 1 ngôn ngữ = 1 dòng config, 0 dòng
+ *                               code" (chỉ số M4 của {@code nfrplan.md}) đúng trở lại
  * @param sourceContent          mã nguồn, tối đa {@value #MAX_SOURCE_BYTES} byte
  * @param sourceSha256           khoá của {@code source_blobs}, đồng thời là một nửa khoá
  *                               cache biên dịch của worker
@@ -76,6 +89,7 @@ public record JudgeJobDto(
         int timeLimitMs,
         int memoryLimitKb,
         int outputLimitKb,
+        String sourceFileName,
         String sourceContent,
         String sourceSha256,
         CheckerType checkerType,
@@ -102,6 +116,7 @@ public record JudgeJobDto(
         ContractChecks.requireRange(memoryLimitKb, 16_384, 1_048_576, "memoryLimitKb");
         ContractChecks.requirePositive(outputLimitKb, "outputLimitKb");
 
+        requireSafeFileName(sourceFileName);
         ContractChecks.requireText(sourceContent, "sourceContent");
         if (ContractChecks.utf8Length(sourceContent) > MAX_SOURCE_BYTES) {
             throw new IllegalArgumentException(
@@ -130,6 +145,21 @@ public record JudgeJobDto(
         testcases = ContractChecks.frozen(testcases);
         ContractChecks.requireRange(
                 testcases.size(), 1, TestcaseMetaDto.MAX_ORDINAL, "testcases.size");
+    }
+
+    /**
+     * {@code sourceFileName} trở thành một thành phần đường dẫn bên trong box của worker.
+     * Kiểm ở đây chứ không ở worker: hợp đồng là nơi duy nhất cả hai tiến trình cùng đọc, và
+     * một giá trị như {@code ../../etc/passwd} lọt tới worker là một lỗ hổng ghi file tuỳ ý
+     * trên đúng cái máy đang chạy mã của người lạ.
+     */
+    private static void requireSafeFileName(String name) {
+        ContractChecks.requireText(name, "sourceFileName");
+        if (name.contains("/") || name.contains("\\") || name.contains("..")
+                || name.startsWith(".") || name.length() > 255) {
+            throw new IllegalArgumentException(
+                    "sourceFileName phải là một tên file trần, không phải đường dẫn: " + name);
+        }
     }
 
     /** Ngôn ngữ thông dịch — không có bước biên dịch, nên không có verdict {@code CE}. */
@@ -183,6 +213,7 @@ public record JudgeJobDto(
         private int timeLimitMs;
         private int memoryLimitKb;
         private int outputLimitKb = 65_536;           // mặc định của problems.output_limit_kb
+        private String sourceFileName;
         private String sourceContent;
         private String sourceSha256;
         private CheckerType checkerType = CheckerType.TOKEN;
@@ -228,7 +259,11 @@ public record JudgeJobDto(
             return this;
         }
 
-        public Builder source(String sourceContent, String sourceSha256) {
+        /**
+         * @param sourceFileName tên file trong box, {@code Main.} + {@code source_extension}
+         */
+        public Builder source(String sourceFileName, String sourceContent, String sourceSha256) {
+            this.sourceFileName = sourceFileName;
             this.sourceContent = sourceContent;
             this.sourceSha256 = sourceSha256;
             return this;
@@ -257,7 +292,8 @@ public record JudgeJobDto(
         public JudgeJobDto build() {
             return new JudgeJobDto(submissionId, attempt, traceId, languageCode,
                     compileCommand, runCommand, compileTimeLimitMs, compileMemoryKb,
-                    timeLimitMs, memoryLimitKb, outputLimitKb, sourceContent, sourceSha256,
+                    timeLimitMs, memoryLimitKb, outputLimitKb, sourceFileName, sourceContent,
+                    sourceSha256,
                     checkerType, checkerEpsilon, scoringMode, maxScore, testdataVersion,
                     testdataManifestSha256, testcases);
         }

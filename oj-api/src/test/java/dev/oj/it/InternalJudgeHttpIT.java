@@ -1,6 +1,7 @@
 package dev.oj.it;
 
 import dev.oj.contract.ClaimRequestDto;
+import dev.oj.contract.HostBenchmarkDto;
 import dev.oj.contract.JudgeEndpoints;
 import dev.oj.contract.JudgeJobDto;
 import dev.oj.contract.JudgeResultDto;
@@ -136,6 +137,73 @@ class InternalJudgeHttpIT extends PostgresIT {
                 .exchange((req, res) -> res.getStatusCode());
 
         assertThat(status).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * ★ Bước 2.9 — phép đo tốc độ máy chấm đi trọn đường: worker → HTTP → Postgres.
+     *
+     * <p>Worker không có {@code DataSource} (bất biến #3), nên đây là <b>đường duy nhất</b>
+     * để lịch sử hiệu chuẩn tới được bảng {@code host_benchmarks}. Trước endpoint này, lịch
+     * sử ấy chỉ nằm trong log của worker và mất khi worker khởi động lại — và sau một kỳ thi
+     * thì câu "máy chấm hôm đó có chậm không" không có gì để trả lời.
+     */
+    @Test
+    @DisplayName("★ phép đo tốc độ máy vào tới judge_hosts và host_benchmarks")
+    void phep_do_toc_do_may_duoc_ghi_lai() {
+        HttpStatusCode status = postBenchmark(new HostBenchmarkDto(
+                "mac-m1max-host", "arm64", Instant.now(), 630,
+                new BigDecimal("1.250"), true, new BigDecimal("11.30")));
+
+        assertThat(status).isEqualTo(HttpStatus.NO_CONTENT);
+
+        var row = jdbc.sql("SELECT b.host_factor, b.drift_pct, b.note, "
+                        + "h.host_factor AS host_current, h.last_seen_at "
+                        + "FROM host_benchmarks b JOIN judge_hosts h ON h.id = b.host_id "
+                        + "WHERE h.name = 'mac-m1max-host' "
+                        + "ORDER BY b.measured_at DESC LIMIT 1")
+                .query().singleRow();
+
+        assertThat((BigDecimal) row.get("host_factor")).isEqualByComparingTo("1.250");
+        assertThat((BigDecimal) row.get("drift_pct")).isEqualByComparingTo("11.30");
+        assertThat((BigDecimal) row.get("host_current"))
+                .as("host_factor của máy phải được cập nhật theo phép đo mới nhất")
+                .isEqualByComparingTo("1.250");
+        assertThat(row.get("note").toString())
+                .as("con số thô mới là thứ so được giữa hai lần đo; host_factor là số dẫn xuất")
+                .contains("630ms", "arm64");
+        assertThat(row.get("last_seen_at")).isNotNull();
+    }
+
+    /**
+     * Một máy chấm chưa đăng ký vẫn chấm bài được ({@code judge_runs.host_id} cho phép NULL,
+     * S2), nên nó cũng không đáng bị một mã lỗi ở đây — "bật thêm một worker là nó tự vào
+     * việc, không sửa một dòng config nào phía API" phải đúng cả với endpoint này.
+     */
+    @Test
+    @DisplayName("máy chấm lạ vẫn nhận 204, không phải 404")
+    void may_cham_la_van_nhan_204() {
+        assertThat(postBenchmark(new HostBenchmarkDto(
+                "may-chua-ai-dang-ky", "amd64", Instant.now(), 900,
+                new BigDecimal("1.400"), false, null)))
+                .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("/benchmark cũng nằm sau shared secret")
+    void benchmark_cung_can_secret() {
+        HttpStatusCode status = http.post().uri(JudgeEndpoints.BENCHMARK)
+                .body(new HostBenchmarkDto("mac-m1max-host", "arm64", Instant.now(), 630,
+                        new BigDecimal("1.000"), false, null))
+                .exchange((req, res) -> res.getStatusCode());
+
+        assertThat(status).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    private HttpStatusCode postBenchmark(HostBenchmarkDto benchmark) {
+        return http.post().uri(JudgeEndpoints.BENCHMARK)
+                .header(JudgeEndpoints.SECRET_HEADER, SECRET)
+                .body(benchmark)
+                .exchange((req, res) -> res.getStatusCode());
     }
 
     private HttpStatusCode postResult(JudgeResultDto result) {
