@@ -26,12 +26,16 @@
 FROM debian:bookworm-slim AS isolate-build
 
 ARG ISOLATE_VERSION=v2.6
+# Danh sách này khớp Makefile của isolate 2.6: `LIBS=-lcap -lseccomp` cho `isolate`, và
+# `-lsystemd` cho `isolate-cg-keeper`. asciidoc CỐ Ý không có — target `install` không phụ
+# thuộc man page.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git ca-certificates build-essential pkg-config libcap-dev libsystemd-dev \
+        git ca-certificates build-essential pkg-config \
+        libcap-dev libseccomp-dev libsystemd-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# `make install` tự build cả ba chương trình của $(PROGRAMS), gồm isolate-cg-keeper.
 RUN git clone --depth 1 --branch ${ISOLATE_VERSION} https://github.com/ioi/isolate.git /src \
-    && make -C /src isolate isolate-check-environment \
     && make -C /src install PREFIX=/opt/isolate
 
 # ---------- stage 2: build worker ----------
@@ -52,7 +56,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openjdk-21-jre-headless \
         g++ python3 default-jdk-headless \
-        libcap2 libsystemd0 \
+        libcap2 libseccomp2 libsystemd0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=isolate-build /opt/isolate/ /usr/local/
