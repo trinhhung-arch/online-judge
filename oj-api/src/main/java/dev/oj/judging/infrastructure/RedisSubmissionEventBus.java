@@ -51,6 +51,23 @@ public class RedisSubmissionEventBus implements SubmissionEventBus {
 
     private static final String CHANNEL_PREFIX = "oj:submission:";
 
+    /**
+     * Thông điệp để nguyên một dòng, <b>không nối chuỗi</b>.
+     *
+     * <p>Luật 5d của {@code ArchitectureTest} cấm mọi phép nối chuỗi trong tầng
+     * {@code infrastructure}, và nó được ép bằng một lệnh {@code grep} trong CI — thô, vì từ
+     * Java 9 phép cộng hai chuỗi biên dịch thành {@code invokedynamic} và ArchUnit không còn
+     * nhìn thấy nó nữa. Bộ lọc ấy không phân biệt được một câu SQL với một câu log, và
+     * <b>không nên</b> biết phân biệt: nới nó ra là bỏ hàng rào cuối cùng chặn một mệnh đề
+     * {@code WHERE} được ghép từ dữ liệu người dùng (bất biến #5, SEC2).
+     *
+     * <p>Cái giá phải trả là đúng chỗ này: một hằng số thay vì hai dòng nối lại. Rẻ — cả tầng
+     * {@code infrastructure} chỉ có một chỗ cần đến nó. Bộ lọc thô tới mức nó bắt cả một
+     * <i>ví dụ</i> viết trong javadoc, nên đoạn trên cố ý mô tả bằng lời thay vì bằng mã.
+     */
+    private static final String KHONG_DAY_DUOC =
+            "Không đẩy được sự kiện realtime cho submission {}: {}. Trang sẽ tự cập nhật ở nhịp polling kế tiếp.";
+
     private final StringRedisTemplate redis;
     private final RedisMessageListenerContainer container;
     private final ObjectMapper json;
@@ -70,8 +87,7 @@ public class RedisSubmissionEventBus implements SubmissionEventBus {
         } catch (RuntimeException e) {
             // Xem javadoc của class: mất một thông báo là chuyện nhỏ, hỏng đường ghi verdict
             // thì không. KHÔNG đổi thành ném lại, dù trông "sạch" hơn.
-            log.warn("Không đẩy được sự kiện realtime cho submission {} — trang sẽ cập nhật ở "
-                    + "nhịp polling kế tiếp: {}", event.submissionId(), e.toString());
+            log.warn(KHONG_DAY_DUOC, event.submissionId(), e.toString());
         }
     }
 
