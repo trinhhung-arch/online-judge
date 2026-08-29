@@ -5,6 +5,7 @@ import dev.oj.contract.ScoringMode;
 import dev.oj.judging.domain.DomainRules;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.judging.domain.SubmissionStatus;
+import dev.oj.platform.error.DomainException;
 import dev.oj.platform.security.Role;
 import dev.oj.problems.application.usecase.GetProblemUseCase;
 import dev.oj.problems.application.port.ProblemRepository;
@@ -30,14 +31,16 @@ class SubmitSolutionUseCaseTest {
 
     private JudgingFakes fakes;
     private SubmitSolutionUseCase useCase;
+    private JudgingFakes.RateLimiterGia rateLimiter;
 
     @BeforeEach
     void setUp() {
         fakes = new JudgingFakes();
+        rateLimiter = new JudgingFakes.RateLimiterGia();
         useCase = new SubmitSolutionUseCase(
                 JudgingFakes.userIs(7L, Role.USER),
-                new GetProblemUseCase(problemRepositoryReturning(publishedProblem())),
-                fakes.languages, fakes.sourceBlobs, fakes.submissions,
+                new GetProblemUseCase(problemRepositoryReturning(publishedProblem()), statements()),
+                fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
                 fakes.queue, fakes.publisher, fakes.txManager);
     }
 
@@ -49,6 +52,38 @@ class SubmitSolutionUseCaseTest {
      * ★ Bất biến #2 diễn đạt thành một danh sách: ba câu ghi nằm <b>trong</b> transaction,
      * publish nằm <b>sau</b> COMMIT, và không có gì khác chen vào giữa.
      */
+    @Test
+    @DisplayName("★ FR-SUB-08 · chốt rate limit chạy TRƯỚC persist — bị chặn thì không ghi gì")
+    void rate_limit_chan_truoc_khi_ghi() {
+        rateLimiter.chan = true;
+
+        assertThatExceptionOfType(JudgingException.class)
+                .isThrownBy(() -> useCase.submit(command()))
+                .satisfies(e -> {
+                    assertThat(e.kind()).isEqualTo(DomainException.Kind.RATE_LIMITED);
+                    // retryAfter đi ra header Retry-After — FR-SUB-08 là quy tắc được CÔNG BỐ,
+                    // UI phải hiện được đếm ngược thay vì để người dùng đoán.
+                    assertThat(e.retryAfter()).isNotNull();
+                });
+
+        assertThat(fakes.submissions.inserted).isNull();
+        assertThat(fakes.queue.enqueuedPriority).isNull();
+        assertThat(fakes.publisher.published).isNull();
+    }
+
+    @Test
+    @DisplayName("★ chốt rate limit chạy SAU validate — request sai không tiêu mất 10 giây")
+    void rate_limit_khong_bi_tinh_khi_dau_vao_sai() {
+        var quaDai = new SubmitSolutionUseCase.Command(
+                42L, "cpp20", "a".repeat(DomainRules.MAX_SOURCE_BYTES + 1));
+
+        assertThatExceptionOfType(JudgingException.class).isThrownBy(() -> useCase.submit(quaDai));
+
+        assertThat(rateLimiter.soLanGoi)
+                .describedAs("dán nhầm một file quá lớn mà bị khoá 10 giây là phạt nhầm lỗi")
+                .isZero();
+    }
+
     @Test
     @DisplayName("publish nằm SAU commit, và ba câu ghi nằm TRONG transaction")
     void thu_tu_loi_goi_dung_nhu_dac_ta() {
@@ -136,8 +171,8 @@ class SubmitSolutionUseCaseTest {
     void de_khong_ton_tai_thi_khong_ghi_gi() {
         var useCaseNoProblem = new SubmitSolutionUseCase(
                 JudgingFakes.userIs(7L, Role.USER),
-                new GetProblemUseCase(problemRepositoryReturning(null)),
-                fakes.languages, fakes.sourceBlobs, fakes.submissions,
+                new GetProblemUseCase(problemRepositoryReturning(null), statements()),
+                fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
                 fakes.queue, fakes.publisher, fakes.txManager);
 
         assertThatExceptionOfType(ProblemNotFoundException.class)
@@ -168,6 +203,41 @@ class SubmitSolutionUseCaseTest {
             public Optional<Problem> findPublishedById(long id) {
                 return Optional.ofNullable(problem);
             }
+
+            @Override
+            public dev.oj.platform.web.CursorPage<ProblemListItem> danhSachDaXuatBan(
+                    ListFilter loc, Long cursor, int size) {
+                return new dev.oj.platform.web.CursorPage<>(java.util.List.of(), null);
+            }
         };
+    }
+
+    /**
+     * {@code StatementService} thật nhưng với một cache rỗng — đường nộp bài không render đề,
+     * nên nó chỉ cần tồn tại để {@code GetProblemUseCase} dựng được.
+     */
+    private static dev.oj.problems.application.StatementService statements() {
+        var renderer = new dev.oj.problems.application.port.StatementRenderer() {
+            @Override
+            public String render(String markdown) {
+                return markdown;
+            }
+
+            @Override
+            public String version() {
+                return "test";
+            }
+        };
+        var cache = new dev.oj.problems.application.port.RenderedStatementRepository() {
+            @Override
+            public Optional<String> tim(String hash, String version) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void luu(String hash, String version, String html) {
+            }
+        };
+        return new dev.oj.problems.application.StatementService(renderer, cache);
     }
 }

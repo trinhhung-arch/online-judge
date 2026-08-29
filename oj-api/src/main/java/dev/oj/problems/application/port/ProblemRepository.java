@@ -1,5 +1,6 @@
 package dev.oj.problems.application.port;
 
+import dev.oj.platform.web.CursorPage;
 import dev.oj.problems.domain.Problem;
 
 import java.util.Optional;
@@ -16,9 +17,12 @@ import java.util.Optional;
  * nằm trong câu query của repository, không phải một câu if ở service sau khi đã load. Query
  * sai chỗ là lỗ hổng ngay cả khi câu if viết đúng."</i>
  *
- * <p>Ở M4, đường SETTER/ADMIN cần đọc cả đề chưa xuất bản. Lúc đó thêm
- * {@code findForAuthor(code, requesterId, role)} — <b>tên hàm nói rõ nó lấy nhiều hơn</b> —
- * chứ đừng nới lỏng các hàm dưới đây.
+ * <p><b>M4 đã tới, và lời dặn trên được thực hiện triệt để hơn một bước:</b> đường SETTER/ADMIN
+ * không thêm hàm vào đây mà nằm ở một port <i>riêng</i>,
+ * {@link ProblemAuthoringRepository}. Lý do là chính câu javadoc ở trên — tính chất
+ * "mọi phương thức đều có chữ Published trong tên" chỉ có giá trị khi nó <b>đúng với mọi
+ * phương thức</b>. Thêm một {@code findForAuthor} vào đây là tự tay xoá cái tính chất mà
+ * đoạn văn này tồn tại để bảo vệ.
  */
 public interface ProblemRepository {
 
@@ -27,4 +31,26 @@ public interface ProblemRepository {
 
     /** Dùng khi nhận bài nộp: {@code SubmitSolutionUseCase} cần giới hạn và testdata version. */
     Optional<Problem> findPublishedById(long id);
+
+    /** FR-PROB-09 — danh sách đề đã xuất bản, phân trang cursor-based. */
+    CursorPage<ProblemListItem> danhSachDaXuatBan(ListFilter loc, Long cursor, int size);
+
+
+
+    /**
+     * @param daGiaiBoi lọc "đã giải" của FR-PROB-09. {@code null} = không lọc.
+     *                  {@code true}/{@code false} cùng {@code requesterId} = chỉ đề đã/chưa giải
+     */
+    record ListFilter(String tagSlug, Long requesterId, Boolean daGiaiBoi) {
+    }
+
+    /**
+     * Một dòng trong danh sách đề. <b>Không có {@code statementMd}</b> — nó là cột TEXT lớn
+     * nhất bảng, và kéo nó về cho 50 dòng là kéo về vài trăm KB không ai đọc
+     * ({@code postgres-design.md} mục 15).
+     */
+    record ProblemListItem(
+            long id, String code, String title,
+            int timeLimitMs, int memoryLimitKb, boolean daGiai) {
+    }
 }

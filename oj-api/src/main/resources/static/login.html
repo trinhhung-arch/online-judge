@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Đăng nhập · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
+     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
+     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
+     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Đăng nhập</h1>
+
+    <!-- aria-live: kết quả đến bất đồng bộ, nên trình đọc màn hình phải được báo. -->
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <form id="form-dang-nhap" class="the" novalidate>
+        <label for="dinh-danh">Tên đăng nhập hoặc email</label>
+        <input id="dinh-danh" name="dinhDanh" autocomplete="username" required>
+
+        <label for="mat-khau">Mật khẩu</label>
+        <input id="mat-khau" name="password" type="password" autocomplete="current-password" required>
+
+        <p><button type="submit">Đăng nhập</button></p>
+    </form>
+
+    <h2>Chưa có tài khoản?</h2>
+    <form id="form-dang-ky" class="the" novalidate>
+        <label for="handle">Tên đăng nhập</label>
+        <input id="handle" name="handle" autocomplete="username" required>
+        <p class="goi-y">3–32 ký tự, chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.</p>
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+
+        <label for="ten-hien-thi">Tên hiển thị</label>
+        <input id="ten-hien-thi" name="displayName" autocomplete="name" required>
+
+        <label for="mat-khau-moi">Mật khẩu</label>
+        <input id="mat-khau-moi" name="password" type="password" autocomplete="new-password" required>
+        <p class="goi-y">Ít nhất 8 ký tự.</p>
+
+        <p><button type="submit">Tạo tài khoản</button></p>
+    </form>
+</main>
+<script type="module" src="/js/login.js"></script>
+</body>
+</html>

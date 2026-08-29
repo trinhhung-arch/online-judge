@@ -41,6 +41,10 @@ class TwoWorkersNoDoubleJudgeIT extends PostgresIT {
     @DisplayName("★ 2 worker + 20 bài → mỗi bài được chấm ĐÚNG MỘT LẦN")
     void hai_worker_khong_cham_trung_bai_nao() throws Exception {
         for (int i = 0; i < SUBMISSIONS; i++) {
+            // FR-SUB-08 cho phép 1 bài/10s/người — một quy tắc viết cho con người. Hai mươi
+            // bài trong một mili giây là điều kiện của phép thử này, không phải hành vi thật.
+            // Xem quenLuotNopVuaRoi(): chốt vẫn chạy, chỉ dấu vết lượt trước bị xoá.
+            quenLuotNopVuaRoi(USER_ID);
             submitSolution.submit(new SubmitSolutionUseCase.Command(
                     PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){ return " + i + "; }"));
         }

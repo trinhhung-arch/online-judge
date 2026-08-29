@@ -53,6 +53,7 @@ class InternalJudgeHttpIT extends PostgresIT {
     void vong_cham_bai_hoat_dong_qua_HTTP() {
         // ---- 1. Nộp bài: 202, và KHÔNG có verdict trong response ----
         var accepted = http.post().uri("/api/v1/submissions")
+                .header("Authorization", bearerDev())
                 .body(Map.of("problemId", PROBLEM_ID, "languageCode", "cpp20",
                         "source", "// EXPECT: AC\nint main(){return 0;}"))
                 .retrieve().toEntity(Map.class);
@@ -88,6 +89,7 @@ class InternalJudgeHttpIT extends PostgresIT {
         // ---- 5. Người dùng đọc verdict ----
         @SuppressWarnings("unchecked")
         Map<String, Object> detail = http.get().uri("/api/v1/submissions/" + submissionId)
+                .header("Authorization", bearerDev())
                 .retrieve().body(Map.class);
 
         assertThat(detail).containsEntry("status", "DONE").containsEntry("verdict", "AC");

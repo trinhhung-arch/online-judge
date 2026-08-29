@@ -82,7 +82,22 @@ class SubmitLatencyIT extends PostgresIT {
         assertThat(countJudgeRuns()).isZero();
     }
 
+    /**
+     * ★ Xoá khoá rate limit <b>ngoài</b> vùng đo, trước mỗi mẫu.
+     *
+     * <p>FR-SUB-08 cho phép 1 bài / 10 giây — một quy tắc viết cho con người. Đo p95 thì cần
+     * 100 mẫu liên tiếp, nhanh hơn mọi thứ một con người làm được. Hai yêu cầu này không sống
+     * chung, và cách giải quyết đúng là nói ra chứ không phải bỏ một trong hai.
+     *
+     * <p>Quan trọng: chốt rate limit <b>vẫn chạy</b> với cửa sổ 10 giây thật, và nó vẫn nằm
+     * trong con số p95 đo được. Nếu ai đó thêm một lời gọi I/O chậm vào chốt ấy, test này vẫn
+     * bắt được — thứ mà việc tắt hẳn giới hạn sẽ che mất.
+     *
+     * <p>Lệnh xoá nằm ngoài {@code System.nanoTime()} nên nó không tính vào phép đo.
+     * Con số 10 giây thật được kiểm ở {@code SubmissionRateLimitIT}.
+     */
     private SubmitSolutionUseCase.SubmissionAccepted submit(int seed) {
+        quenLuotNopVuaRoi(USER_ID);
         return submitSolution.submit(new SubmitSolutionUseCase.Command(
                 PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){ return " + seed + "; }"));
     }

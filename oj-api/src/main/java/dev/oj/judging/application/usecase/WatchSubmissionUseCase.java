@@ -5,6 +5,7 @@ import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEvent;
 import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEventListener;
 import dev.oj.judging.domain.Submission;
 import dev.oj.judging.domain.SubmissionStatus;
+import dev.oj.platform.security.RequiresRole;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
  * được điều đó — và nó chịu được, vì mỗi sự kiện mang trạng thái đầy đủ chứ không phải một
  * phần thay đổi.
  */
+@RequiresRole  // sàn: phải đăng nhập. Kiểm sở hữu trước khi subscribe — xem thứ tự 3 bước
 @Service
 public class WatchSubmissionUseCase {
 

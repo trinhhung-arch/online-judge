@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -75,8 +76,39 @@ public class GlobalExceptionHandler {
             details = Map.of("retryAfterSeconds", seconds);
         }
 
-        return ResponseEntity.status(status).headers(headers)
-                .body(new ApiError(e.code(), e.publicMessage(), traceId, details));
+        return json(status, headers, new ApiError(e.code(), e.publicMessage(), traceId, details));
+    }
+
+    /**
+     * ★ Mọi phản hồi lỗi <b>luôn</b> là {@code application/json}, đặt tường minh.
+     *
+     * <h2>Lỗi đã gặp thật, và nó im lặng theo cách tệ nhất</h2>
+     * {@code GET /api/v1/submissions/{id}/stream} khai {@code produces = text/event-stream}.
+     * Khi nó ném lỗi <i>trước khi</i> ghi byte nào — token hết hạn, bài của người khác —
+     * Spring đã đặt sẵn {@code Content-Type} của response theo khai báo đó, rồi không tìm được
+     * bộ chuyển đổi nào ghi {@link ApiError} thành {@code text/event-stream}. Kết quả:
+     * <b>500 với thân rỗng</b>, thay cho 401 hoặc 404.
+     *
+     * <p>Hậu quả không phải thẩm mỹ. Frontend phân biệt "token hết hạn, làm mới rồi thử lại"
+     * với "hỏng thật" bằng mã lỗi trong thân phản hồi (xem {@code js/api.js}). Một 500 rỗng
+     * xoá mất sự phân biệt ấy, nên người dùng có token hết hạn giữa lúc theo dõi một bài nộp
+     * sẽ thấy luồng chết vĩnh viễn.
+     *
+     * <p>Đặt {@code Content-Type} tường minh ghi đè giá trị Spring đã chọn sẵn. Áp cho
+     * <b>mọi</b> nhánh, không riêng nhánh SSE: một endpoint tương lai khai
+     * {@code produces} khác cũng sẽ gặp đúng vấn đề này, và lúc đó không ai nhớ tới đoạn
+     * javadoc này nữa.
+     */
+    private static ResponseEntity<ApiError> json(HttpStatus status, HttpHeaders headers,
+                                                 ApiError than) {
+        return ResponseEntity.status(status)
+                .headers(headers)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(than);
+    }
+
+    private static ResponseEntity<ApiError> json(HttpStatus status, ApiError than) {
+        return json(status, new HttpHeaders(), than);
     }
 
     private static HttpStatus toStatus(DomainException.Kind kind) {
@@ -102,7 +134,7 @@ public class GlobalExceptionHandler {
             fields.put(fe.getField(), fe.getDefaultMessage());
         }
         log.warn("Dữ liệu gửi lên không hợp lệ: {}", fields.keySet());
-        return ResponseEntity.badRequest().body(new ApiError(
+        return json(HttpStatus.BAD_REQUEST, new ApiError(
                 "request.invalid", "Dữ liệu gửi lên không hợp lệ.",
                 TraceIdFilter.current(), fields));
     }
@@ -111,7 +143,7 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ApiError> handleBadParam(Exception e) {
         log.warn("Tham số không hợp lệ: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(ApiError.of(
+        return json(HttpStatus.BAD_REQUEST, ApiError.of(
                 "request.invalid_parameter", "Tham số không hợp lệ.", TraceIdFilter.current()));
     }
 
@@ -129,13 +161,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException e) {
         log.warn("Không đọc được thân request: {}", rootMessage(e));
-        return ResponseEntity.badRequest().body(ApiError.of(
+        return json(HttpStatus.BAD_REQUEST, ApiError.of(
                 "request.malformed", "Nội dung gửi lên không đọc được.", TraceIdFilter.current()));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError.of(
+        return json(HttpStatus.NOT_FOUND, ApiError.of(
                 "resource.not_found", "Không tìm thấy.", TraceIdFilter.current()));
     }
 
@@ -153,7 +185,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleUnexpected(Exception e) {
         String traceId = TraceIdFilter.current();
         log.error("Lỗi ngoài dự kiến [traceId={}]", traceId, e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiError.of(
+        return json(HttpStatus.INTERNAL_SERVER_ERROR, ApiError.of(
                 "internal.error", GENERIC_MESSAGE, traceId));
     }
 

@@ -6,6 +6,7 @@ import dev.oj.judging.application.port.SubmissionRepository.SubmissionListItem;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.CurrentUserProvider;
+import dev.oj.platform.security.RequiresRole;
 import dev.oj.platform.web.CursorPage;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
  * không bao giờ từ tham số request. Nhận {@code userId} qua query param là tạo ra một endpoint
  * đọc trộm lịch sử của người khác, và nó sẽ được phát hiện bởi thí sinh trước khi bởi bạn.
  */
+@RequiresRole  // sàn: phải đăng nhập. "của tôi" được ép bằng WHERE user_id = :userId
 @Service
 public class ListMySubmissionsUseCase {
 

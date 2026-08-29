@@ -1,6 +1,6 @@
 -- =============================================================================
--- V7 — Job nền và vận hành
--- Mốc: M6 (tuần 10-12). FR-ADM-01..06, Quy tắc 5 của frplan.
+-- V6 — Job nền và vận hành
+-- Mốc: M4 (tuần 7) — kéo lên trước Bước 4.10 theo phương án (a). FR-ADM-01..06, Quy tắc 5 của frplan.
 --
 -- Quy tắc 5: mọi thao tác có thể vượt 5 giây là job nền có tiến độ và
 -- CHẠY TIẾP ĐƯỢC SAU KHI RESTART. "Chạy tiếp được" nghĩa là tiến độ phải nằm

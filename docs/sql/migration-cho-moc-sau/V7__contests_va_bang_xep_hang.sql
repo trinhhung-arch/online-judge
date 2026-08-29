@@ -1,5 +1,5 @@
 -- =============================================================================
--- V6 — Kỳ thi và bảng xếp hạng
+-- V7 — Kỳ thi và bảng xếp hạng
 -- Mốc: M5 (tuần 10-12). FR-CON-01..09.
 --
 -- Nguyên tắc: REDIS LÀ CACHE, POSTGRES LÀ SỰ THẬT (oj-api/CLAUDE.md mục 6).

@@ -6,22 +6,48 @@
 -- mật khẩu tên 'dev' trên hệ thống thật.
 --
 -- ⚠️ VÌ SAO FILE NÀY PHẢI TỒN TẠI:
--- `FixedDevUserProvider` (hiện thực M1 của CurrentUserProvider) trả về users.id = 1
--- cho mọi request, còn `submissions.user_id` có REFERENCES users(id). Không có file
--- này thì lần POST /api/v1/submissions ĐẦU TIÊN vỡ khoá ngoại, và DoD của M1
--- ("nộp bài trả 202 < 300ms") không thể đạt được. Tương tự với đề A-PLUS-B mà
--- build-order Bước M1-4 nói là "seed bằng SQL".
+-- `submissions.user_id` có REFERENCES users(id) và `problems.owner_id` cũng vậy.
+-- Không có file này thì lần POST /api/v1/submissions ĐẦU TIÊN vỡ khoá ngoại, và
+-- DoD của M1 ("nộp bài trả 202 < 300ms") không thể đạt được. Tương tự với đề
+-- A-PLUS-B mà build-order Bước M1-4 nói là "seed bằng SQL".
+--
+-- Ở M1 file này phục vụ `FixedDevUserProvider`, thứ trả về users.id = 1 cho mọi
+-- request. Cửa hậu đó đã bị XOÁ ở Bước 4.5; ba tài khoản dưới đây giờ là tài
+-- khoản thật, có mật khẩu thật, đăng nhập qua /api/v1/auth/login như mọi người.
 --
 -- Repeatable (R__): Flyway chạy lại mỗi khi checksum đổi. Toàn bộ file idempotent.
 -- =============================================================================
 
 -- ----- Người dùng -----------------------------------------------------------
 -- OVERRIDING SYSTEM VALUE: cột id là GENERATED ALWAYS, nhưng ở đây ta CẦN đúng
--- id = 1 vì FixedDevUserProvider gán cứng con số đó.
-INSERT INTO users (id, handle, display_name, role) OVERRIDING SYSTEM VALUE VALUES
-    (1, 'dev',    'Người dùng dev', 'USER'),
-    (2, 'setter', 'Người ra đề',    'SETTER')
-ON CONFLICT (id) DO NOTHING;
+-- những id cố định vì test và dữ liệu seed bên dưới tham chiếu tới chúng.
+--
+-- ⚠️ MẬT KHẨU CHUNG CHO CẢ BA TÀI KHOẢN: matkhau-dev-123
+--
+-- Băm dưới đây là BCrypt cost 12 thật, không phải chuỗi giả — Bước 4.4 đã thay
+-- FixedDevUserProvider bằng JwtCurrentUserProvider, nên từ M4 muốn gọi API là
+-- phải đăng nhập thật, kể cả trên máy dev.
+--
+-- Ba dòng này chỉ chạy khi profile `dev` bật. Một mật khẩu viết trong mã nguồn
+-- công khai mà lọt lên host là mất trắng, và đó là lý do thư mục này KHÔNG nằm
+-- trong spring.flyway.locations mặc định.
+--
+-- DO UPDATE chứ không DO NOTHING: R__ chạy lại mỗi khi checksum đổi, và một
+-- máy dev đã seed từ M1 sẽ có ba tài khoản KHÔNG có mật khẩu — tức là không
+-- đăng nhập được, mà cũng không hiểu vì sao.
+INSERT INTO users (id, handle, email, display_name, role, password_hash)
+OVERRIDING SYSTEM VALUE VALUES
+    (1, 'dev',    'dev@oj.test',    'Người dùng dev', 'USER',
+     '$2a$12$nbmWQ37swiou9I6Nm3N1YuQcTPBYnK/nSbXxt2M0FZc9GkUuldEoS'),
+    (2, 'setter', 'setter@oj.test', 'Người ra đề',    'SETTER',
+     '$2a$12$nbmWQ37swiou9I6Nm3N1YuQcTPBYnK/nSbXxt2M0FZc9GkUuldEoS'),
+    (3, 'admin',  'admin@oj.test',  'Quản trị viên',  'ADMIN',
+     '$2a$12$nbmWQ37swiou9I6Nm3N1YuQcTPBYnK/nSbXxt2M0FZc9GkUuldEoS')
+ON CONFLICT (id) DO UPDATE
+   SET email = EXCLUDED.email,
+       display_name = EXCLUDED.display_name,
+       role = EXCLUDED.role,
+       password_hash = EXCLUDED.password_hash;
 
 -- Đẩy sequence lên quá các id vừa chèn tay, nếu không thì lần đăng ký thật đầu tiên
 -- (M4) sẽ xin id = 1 và đâm vào khoá chính.

@@ -22,7 +22,10 @@ bài nộp** · **an toàn**. Mọi quyết định trong repo phục vụ ba đ
 
 ```bash
 docker compose up -d                      # postgres · redis · rabbitmq · minio
-cp .env.example .env                      # điền OJ_INTERNAL_SHARED_SECRET (>= 32 ký tự)
+cp .env.example .env                      # điền HAI secret, mỗi cái >= 32 ký tự:
+                                          #   OJ_INTERNAL_SHARED_SECRET  (worker gọi /internal)
+                                          #   OJ_JWT_SECRET              (ký access token)
+                                          # Thiếu cái nào thì API KHÔNG khởi động — cố ý.
 ./mvnw verify                             # phải xanh trước khi làm bất cứ gì khác
 ./mvnw -pl oj-api spring-boot:run
 ```
@@ -35,6 +38,54 @@ sudo ./scripts/build-pch.sh "-std=gnu++20 -O2"   # tuỳ chọn: biên dịch C+
 sudo ./scripts/mount-box-tmpfs.sh         # tuỳ chọn, chỉ trên máy nhiều RAM
 ./mvnw -pl oj-worker spring-boot:run
 ```
+
+### Giao diện
+
+Sau `spring-boot:run`, mở **http://localhost:8080** — giao diện là trang tĩnh nằm trong
+`oj-api/src/main/resources/static/`, không có build step và không có Node trong CI. Bốn trang:
+
+| Trang | Nội dung |
+|---|---|
+| `/` | danh sách đề, lọc theo tag và theo "đã giải", phân trang cursor |
+| `/problem.html?code=…` | đề bài (Markdown render server-side, KaTeX vẽ ở trình duyệt) + CodeMirror 6 + nộp bài |
+| `/submission.html?id=…` | chi tiết bài nộp, cập nhật realtime qua SSE, **fallback polling 3 giây** |
+| `/login.html` | đăng nhập và đăng ký |
+
+Nháp mã nguồn nằm trong `localStorage`, khoá theo *(đề, ngôn ngữ)* — đổi ngôn ngữ không xoá
+mất bản đang viết dở. Nháp **cố ý không gửi lên server**: đó là lời giải chưa nộp, và một
+bảng chứa nó là một bảng ADMIN đọc được giữa kỳ thi.
+
+CDN chết thì trình soạn mã hạ xuống `<textarea>` thường — mất tô màu cú pháp, **giữ nguyên
+khả năng nộp bài**.
+
+### Đăng nhập — từ M4 thì mọi endpoint đều cần token
+
+Cửa hậu `FixedDevUserProvider` của M1 (mọi request chạy dưới danh nghĩa `users.id=1`) **đã bị
+xoá** ở Bước 4.5. Profile `dev` seed sẵn ba tài khoản, cùng mật khẩu `matkhau-dev-123`:
+
+| handle | vai trò | dùng để |
+|---|---|---|
+| `dev` | USER | nộp bài, xem bài của mình |
+| `setter` | SETTER | chủ đề `A-PLUS-B` |
+| `admin` | ADMIN | endpoint quản trị |
+
+```bash
+TOK=$(curl -s -X POST localhost:8080/api/v1/auth/login \
+        -H 'Content-Type: application/json' \
+        -d '{"dinhDanh":"dev","password":"matkhau-dev-123"}' | jq -r .accessToken)
+
+curl localhost:8080/api/v1/me -H "Authorization: Bearer $TOK"
+curl -X POST localhost:8080/api/v1/submissions -H "Authorization: Bearer $TOK" \
+     -H 'Content-Type: application/json' \
+     -d '{"problemId":1,"languageCode":"cpp20","source":"int main(){}"}'
+```
+
+Access token sống 15 phút; hết hạn thì `POST /api/v1/auth/refresh` với `refreshToken`. Token cũ
+bị **thu hồi ngay khi làm mới** — trình lại một token đã thu hồi là dấu hiệu token bị sao chép,
+và hệ thống thu hồi toàn bộ phiên của tài khoản đó (xem `RefreshSessionUseCase`).
+
+⚠️ Ba tài khoản trên chỉ tồn tại khi `--spring.profiles.active=dev`. Trên host thì
+`db/dev-seed/` không nằm trong `spring.flyway.locations`.
 
 ### Precompiled header — tuỳ chọn, nhưng đo được
 
@@ -81,16 +132,54 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | M0 | hạ tầng, schema, hợp đồng | xong |
 | M1 | vòng nộp bài → verdict, **không thực thi mã người dùng** | xong |
 | **M2** | **sandbox `isolate` + 14 test tấn công** | **xong** (xem dưới) |
-| M3 | realtime, đa ngôn ngữ, subtask, feedback level | chưa |
-| M4 | auth, quyền, upload đề, MinIO | chưa |
+| M3 | realtime (SSE + Redis), subtask, feedback level | xong |
+| **M4** | auth, quyền, upload đề, MinIO, giao diện | **xong 4.1–4.12** (xem dưới) |
 | M5 | contest, bảng xếp hạng | chưa |
 | M6 | RabbitMQ, giám sát, deploy | chưa |
 
 ```
-./mvnw verify   →   216 test xanh
-                    oj-api     108 unit + 25 IT (Postgres 16 thật, Testcontainers)
-                    oj-worker   57 unit + 26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
+./mvnw verify   →   421 test xanh, ~1 phút 50
+                    oj-api     234 unit + 96 IT (Postgres 16 + Redis 7 thật, Testcontainers)
+                    oj-worker   65 unit + 26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
 ```
+
+### M4 — toàn bộ 12 bước
+
+| Bước | Nội dung | Bằng chứng |
+|---|---|---|
+| 4.1 | migration **V5** — `refresh_tokens` · `login_attempts` · `login_lockouts` · `audit_log` phân mảnh theo tháng | chạy trên DB rỗng (Testcontainers) **và** DB dev đã có dữ liệu: 387ms |
+| 4.2–4.4 | `identity` đầy đủ: domain thuần · 8 use-case · BCrypt cost 12 · refresh token lưu **SHA-256** | `IdentityDomainTest` 14 · `IdentityUseCasesTest` 22 |
+| 4.5 | JWT HS256 **không thêm dependency** · `JwtAuthFilter` · `JwtCurrentUserProvider` thay `FixedDevUserProvider` | `JwtTest` 14 ca, gồm 4 lớp CVE của thư viện JWT · [ADR 012](docs/adr/012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) |
+| 4.6 | `@RequiresRole` + advisor ở tầng use-case · **LUẬT 8** của ArchUnit | `AuthorizationIT` — gồm một ca hỏi thẳng Spring xem advisor có được gắn không |
+| 4.7 | khoá đăng nhập 5 lần/phút/IP (FR-AUTH-08) · rate limit nộp bài 1 bài/10s/user (FR-SUB-08), Redis là đường chính và Postgres là đường dự phòng | `SessionLifecycleHttpIT` · `SubmissionRateLimitIT` — cả hai đường, 429 kèm `Retry-After` |
+| 4.8 | rà IDOR: bài nộp của người khác trả **404**, vai trò sai trả **403 chứ không phải 200 rỗng** | `AuthorizationIT` · `IdentityHttpIT` |
+| — | migration **V6** + khung job nền (`platform/jobs`) — kéo từ M6 lên tuần 7 theo phương án (a) | `JobsIT` 11 — claim, lease, thu hồi job treo, một job mỗi loại |
+| 4.9 | `problems` đầy đủ: tạo/sửa/xuất bản · `feedback_level` · danh sách phân trang · Markdown render server-side + cache `rendered_statements` | `CommonMarkStatementRendererTest` 10 · `ProblemAuthoringIT` 13 |
+| 4.10 | `ZipTestdataValidator` + đánh dấu sample/hidden → **job nền có tiến độ** | `ZipTestdataValidatorTest` 17 · `TestdataImportIT` 6 |
+| 4.11 | `MinioTestdataStore` — content-addressed | kiểm tay: 7 đối tượng trong `oj-testdata`, khoá là sha256 |
+| 4.12 | giao diện: CodeMirror 6 · nháp localStorage · trang bài nộp SSE · a11y mức A · mobile | `GiaoDienIT` 5 |
+
+Rate limit nộp bài là chặng **mới** duy nhất thêm vào đường nóng ở mốc này. Đo lại sau khi
+thêm: `p50=9ms · p95=15ms` trên 100 mẫu — ngân sách P2 là 300ms, nên nó không lấy của ai.
+
+**Ba việc không phải code của tuần 9 chưa làm:** buổi tấn công chéo · usability test đợt 1 ·
+Cloudflare Tunnel + domain. Cùng với chúng: dán hash SRI thật cho KaTeX (xem ghi chú trong
+`static/problem.html`).
+
+### Ba lỗi chỉ hiện ra khi chạy thật
+
+Không một test nào bắt được chúng trước khi hệ thống được khởi động và gọi bằng tay:
+
+| Lỗi | Vì sao test không thấy | Đã chốt lại bằng |
+|---|---|---|
+| SSE trả **500 thân rỗng** thay vì 401/404 khi lỗi | chỉ xảy ra khi client gửi `Accept: text/event-stream`, tức là đúng cách trình duyệt gọi và không phải cách `curl` mặc định gọi | `SubmissionSseIT` — mọi phản hồi lỗi luôn là JSON có `code` |
+| Bucket MinIO chỉ tạo lúc khởi động | docker-compose không bảo đảm MinIO lên trước API; `@PostConstruct` hỏng một lần rồi thôi, nạp testdata hỏng **vĩnh viễn** tới lần restart | `MinioTestdataStore.luu` tự bảo đảm bucket, có cờ để chi phí thường trực bằng 0 |
+| Danh sách đề **500** khi không lọc gì | `:cursor IS NULL` với tham số NULL trần — Postgres không suy được kiểu. Đường đi mặc định hỏng, đường có bộ lọc thì chạy | `ProblemAuthoringIT` + `CAST(:x AS kiểu)` quanh mọi tham số tuỳ chọn |
+
+> **Ba lập trường phân quyền, và không có lập trường thứ tư.** Mọi class `*UseCase` phải mang
+> `@RequiresRole`, `@PublicAccess` hoặc `@InternalAccess`; LUẬT 8 fail CI nếu thiếu. Nhờ đó
+> `grep -rn "@PublicAccess" oj-api/src/main` liệt kê **đủ mọi lối vào không cần đăng nhập** của
+> cả hệ thống — trang đầu tiên phải đọc trong buổi tấn công chéo tuần 9.
 
 ---
 

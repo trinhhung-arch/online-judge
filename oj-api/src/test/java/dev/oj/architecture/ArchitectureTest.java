@@ -16,7 +16,6 @@ import java.util.List;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
-import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_ACCESS_STANDARD_STREAMS;
 
 /**
  * Ranh giới kiến trúc của Online Judge — ép bằng CI, không bằng lời hứa.
@@ -33,6 +32,11 @@ import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_
  *
  * <p><b>Vi phạm bất kỳ luật nào = fail CI.</b> Nếu một nhiệm vụ buộc bạn vi phạm:
  * dừng lại và nói ra ({@code CLAUDE.md} mục 5), đừng nới luật ở đây.
+ *
+ * <h2>File này giữ LUẬT 1–4 — ranh giới giữa các module</h2>
+ * LUẬT 5–8 nói về <i>cách viết code bên trong một module</i> (SQL, log, LLM, phân quyền) và
+ * sống ở {@link CodingRulesTest}. Tách ở M4 vì file gốc vượt trần 300 dòng của
+ * {@code CLAUDE.md} mục 7 — cùng một luật áp cho chính bộ test, không có ngoại lệ.
  */
 @AnalyzeClasses(
         packages = "dev.oj",
@@ -57,18 +61,6 @@ class ArchitectureTest {
             "com.rabbitmq..", "com.zaxxer.hikari..",
             "io.lettuce..", "org.redisson..",
             "io.minio.."
-    };
-
-    /**
-     * Client LLM. Chỉ {@code dev.oj.ai} được chạm (LUẬT 7 — bất biến #10).
-     * Thêm nhà cung cấp = thêm một dòng ở đây.
-     */
-    private static final String[] LLM_CLIENT = {
-            "dev.langchain4j..",
-            "com.openai..",
-            "com.anthropic..",
-            "org.springframework.ai..",
-            "io.github.sashirestela.."
     };
 
     /**
@@ -231,118 +223,6 @@ class ArchitectureTest {
                     .because("oj-contract được đóng băng ở tuần 1 và dùng chung bởi oj-api lẫn oj-worker. "
                             + "Một annotation Jackson lọt vào đây là bắt đầu của việc worker phải biết "
                             + "hạ tầng của API (CLAUDE.md mục 3 luật 4)");
-
-    // =========================================================================
-    // LUẬT 5 — không nối chuỗi vào SQL (bất biến #5, SEC2)
-    //
-    // ⚠️ Giới hạn thật của công cụ: từ Java 9, `a + b` biên dịch thành invokedynamic
-    // (StringConcatFactory), ArchUnit KHÔNG thấy được. Nên luật 5 được ép bằng ba lớp
-    // gián tiếp dưới đây, cộng một lớp thứ tư ngoài ArchUnit — xem 5d.
-    // =========================================================================
-
-    /**
-     * 5a — SQL chỉ sống trong {@code infrastructure}. Không có SQL ở controller hay use-case.
-     *
-     * <p><b>Một ngoại lệ, và chỉ một:</b> {@code dev.oj.platform.config} được chạm
-     * {@code org.springframework.jdbc} và {@code javax.sql} vì nó là chỗ tạo bean
-     * {@code DataSource}, {@code JdbcClient} và {@code JdbcTransactionManager} — hai pool tách
-     * nhau theo {@code postgres-design.md} mục 11. Nó dựng <i>công cụ</i>, không viết câu lệnh.
-     *
-     * <p>Luật vẫn còn răng: một câu SQL đặt trong {@code platform.config} sẽ không bị luật này
-     * bắt, nhưng nó cũng không có lý do gì để tồn tại ở đó, và review sẽ thấy ngay. Cái luật
-     * này thật sự chặn là SQL trong controller và trong use-case.
-     */
-    @ArchTest
-    static final ArchRule luat5a_sql_chi_o_infrastructure =
-            noClasses()
-                    .that().resideOutsideOfPackages(
-                            "dev.oj..infrastructure..", "dev.oj.platform.config..")
-                    .should().dependOnClassesThat().resideInAnyPackage(
-                            "org.springframework.jdbc..", "java.sql..", "javax.sql..")
-                    .because("thu hẹp bề mặt cần rà soát: mọi câu SQL của hệ thống nằm trong "
-                            + "đúng một loại package");
-
-    /** 5b — trong {@code infrastructure}, cấm mọi công cụ dựng chuỗi động. */
-    @ArchTest
-    static final ArchRule luat5b_khong_dung_chuoi_dong_trong_infrastructure =
-            noClasses()
-                    .that().resideInAPackage("dev.oj..infrastructure..")
-                    .should().callMethod(String.class, "format", String.class, Object[].class)
-                    // String.formatted(Object...) là String.format viết ngược — cùng một việc,
-                    // tên khác. Thiếu dòng này thì text block + .formatted() lách qua luật.
-                    .orShould().callMethod(String.class, "formatted", Object[].class)
-                    .orShould().callMethod(String.class, "concat", String.class)
-                    .orShould().callMethod(String.class, "join", CharSequence.class, Iterable.class)
-                    .orShould().dependOnClassesThat().haveFullyQualifiedName("java.lang.StringBuilder")
-                    .orShould().dependOnClassesThat().haveFullyQualifiedName("java.lang.StringBuffer")
-                    .because("mọi câu SQL là hằng số có named parameter. Cần WHERE động thì viết "
-                            + "`(:x IS NULL OR cot = :x)` như queries/duong_nong.sql số 6, "
-                            + "không phải nối chuỗi (bất biến #5)");
-
-    /** 5c — chỉ {@code JdbcClient}. {@code Statement} trần và {@code JdbcTemplate} đều bị cấm. */
-    @ArchTest
-    static final ArchRule luat5c_chi_jdbcclient =
-            noClasses()
-                    .should().dependOnClassesThat().haveFullyQualifiedName("java.sql.Statement")
-                    .orShould().dependOnClassesThat()
-                    .haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
-                    .because("java.sql.Statement không có tham số, JdbcTemplate nhận `Object...` theo "
-                            + "vị trí. Cả hai đều làm việc nối chuỗi trở nên tiện. JdbcClient thì không");
-
-    // -------------------------------------------------------------------------
-    // 5d — lớp cuối, KHÔNG làm được bằng ArchUnit. Thêm vào .github/workflows/ci.yml:
-    //
-    //   - name: Cam noi chuoi SQL
-    //     run: |
-    //       ! grep -rInE '"\s*\+|\+\s*"' --include='*.java' \
-    //            oj-api/src/main/java/dev/oj/*/infrastructure/
-    //
-    // Thô, nhưng nó bắt được đúng thứ invokedynamic giấu mất.
-    // -------------------------------------------------------------------------
-
-    // =========================================================================
-    // LUẬT 6 — không System.out / System.err (bất biến #12)
-    // =========================================================================
-
-    @ArchTest
-    static final ArchRule luat6_khong_system_out =
-            NO_CLASSES_SHOULD_ACCESS_STANDARD_STREAMS
-                    .because("không truy được sự cố xuyên API → queue → worker nếu thiếu traceId. "
-                            + "Dùng logger có traceId (bất biến #12). "
-                            + "Luật này bao gồm cả Throwable.printStackTrace()");
-
-    // =========================================================================
-    // LUẬT 7 — chỉ dev.oj.ai được import client LLM (bất biến #10, AI1)
-    // =========================================================================
-
-    @ArchTest
-    static final ArchRule luat7_llm_chi_o_package_ai =
-            noClasses()
-                    .that().resideOutsideOfPackage("dev.oj.ai..")
-                    .should().dependOnClassesThat().resideInAnyPackage(LLM_CLIENT)
-                    .because("một lần LLM chậm nằm trên đường verdict là cả hệ thống chấm bài đứng. "
-                            + "AI1 = 0ms thêm vào đường chấm, và cách rẻ nhất để giữ nó là "
-                            + "không cho package nào khác gọi được LLM (bất biến #10)");
-
-    // =========================================================================
-    // Luật bật sau — đừng viết bây giờ, nhưng biết chúng sẽ tới
-    // =========================================================================
-    //
-    //  LUẬT 8 (bật ở M4, cùng Bước 4.6) — mọi use-case sửa dữ liệu phải mang @RequiresRole:
-    //
-    //      @ArchTest
-    //      static final ArchRule luat8_use_case_ghi_phai_kiem_quyen =
-    //          classes().that().resideInAPackage("dev.oj.*.application..")
-    //                   .and().haveSimpleNameEndingWith("UseCase")
-    //                   .and().areAnnotatedWith(Transactional.class)
-    //                   .should().beAnnotatedWith(RequiresRole.class)
-    //                   .because("kiểm quyền ở controller là kiểm quyền ở chỗ dễ đi vòng nhất "
-    //                          + "(bất biến #11)");
-    //
-    //  Bất biến #3 (worker không có DataSource) KHÔNG kiểm được ở đây — oj-worker không nằm
-    //  trên classpath của oj-api. Nó là một test riêng trong oj-worker, Bước M1-10:
-    //  đọc oj-worker/pom.xml và fail nếu thấy spring-boot-starter-data-jdbc, postgresql,
-    //  flyway-core, lettuce-core hay minio.
 
     // =========================================================================
     // Trợ giúp

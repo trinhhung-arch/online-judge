@@ -3,6 +3,7 @@ package dev.oj.judging.application.usecase;
 import dev.oj.contract.JudgeProgressDto;
 import dev.oj.judging.application.port.SubmissionEventBus;
 import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEvent;
+import dev.oj.platform.security.InternalAccess;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Service;
  * làm hỏng được dữ liệu nào — khác hẳn với một kết quả đến muộn, thứ mà khoá lạc quan trên
  * {@code judge_queue} phải chặn (bất biến #7).
  */
+@InternalAccess("worker, qua POST /internal/judge/progress.")
 @Service
 public class RecordJudgeProgressUseCase {
 

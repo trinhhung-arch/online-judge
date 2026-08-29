@@ -47,4 +47,25 @@ public class JdbcLanguageRepository implements LanguageRepository {
                 .query((rs, n) -> new Language(rs.getInt("id"), rs.getString("code")))
                 .optional();
     }
+
+    /**
+     * Ba dòng, sắp theo tên hiển thị. Không {@code SELECT *} — bảng {@code languages} có cả
+     * {@code compile_command} và {@code run_command}, và chúng là chuyện của worker.
+     */
+    private static final String LIET_KE = """
+            SELECT code, display_name, version_label
+              FROM languages
+             WHERE enabled
+             ORDER BY display_name
+            """;
+
+    @Override
+    public java.util.List<LanguageOption> listEnabled() {
+        return jdbc.sql(LIET_KE)
+                .query((rs, i) -> new LanguageOption(
+                        rs.getString("code"),
+                        rs.getString("display_name"),
+                        rs.getString("version_label")))
+                .list();
+    }
 }

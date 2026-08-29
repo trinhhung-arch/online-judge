@@ -2,6 +2,7 @@ package dev.oj.problems.infrastructure;
 
 import dev.oj.contract.CheckerType;
 import dev.oj.contract.ScoringMode;
+import dev.oj.platform.web.CursorPage;
 import dev.oj.problems.application.port.ProblemRepository;
 import dev.oj.problems.domain.FeedbackLevel;
 import dev.oj.problems.domain.Problem;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -125,4 +127,79 @@ public class JdbcProblemRepository implements ProblemRepository {
     //   Đừng nới lỏng FIND_BY_CODE rồi lọc bằng if — đó là mẫu tạo ra lỗ hổng IDOR
     //   ngay cả khi câu if viết đúng (oj-api/CLAUDE.md mục 2).
     // -------------------------------------------------------------------------
+
+    // =========================================================================
+    // Bước 4.9 — danh sách đề công khai (FR-PROB-09)
+    //
+    // Đường soạn đề của SETTER/ADMIN nằm ở JdbcProblemAuthoringRepository — file riêng,
+    // vì hai port là hai bất biến khác nhau và file này đã chạm trần 300 dòng
+    // (CLAUDE.md mục 7).
+    // =========================================================================
+
+    /**
+     * FR-PROB-09. Ba bộ lọc tuỳ chọn viết theo khuôn {@code (:x IS NULL OR ...)} —
+     * cùng cách {@code duong_nong.sql} truy vấn 6 làm, và là lý do luật ArchUnit 5b cấm nối
+     * chuỗi mà vẫn không cản trở được việc lọc động.
+     *
+     * <p>{@code LIMIT :size + 1} lấy dư một dòng để biết còn trang sau hay không, mà không
+     * phải chạy một câu {@code COUNT(*)} trên bảng đề.
+     *
+     * <p>★ <b>{@code CAST(:x AS kiểu)} quanh mỗi tham số tuỳ chọn là bắt buộc, không phải
+     * trang trí.</b> Với một tham số {@code NULL} trần, Postgres không suy được kiểu từ ngữ
+     * cảnh {@code :x IS NULL} và từ chối cả câu lệnh:
+     * {@code could not determine data type of parameter $2}. Triệu chứng là 500 trên
+     * <i>đúng</i> đường đi mặc định — khi người dùng không lọc gì cả — nên nó lọt qua mọi thử
+     * nghiệm bằng tay có truyền bộ lọc.
+     *
+     * <p>Câu này chạm {@code submissions} — bảng của module {@code judging}. Luật ArchUnit 3
+     * nói về phụ thuộc giữa các <b>package Java</b>, không về SQL, nên đây không phải vi phạm;
+     * nhưng nó là một sợi dây thật, nên được viết ra ở đúng một chỗ và có tên
+     * ({@code daGiai}), thay vì rải trong nhiều câu.
+     */
+    private static final String DANH_SACH = """
+            SELECT p.id, p.code, p.title, p.time_limit_ms, p.memory_limit_kb,
+                   EXISTS (SELECT 1 FROM submissions s
+                            WHERE s.problem_id = p.id
+                              AND s.user_id = :requesterId
+                              AND s.verdict = 'AC') AS da_giai
+              FROM problems p
+             WHERE p.status = 'PUBLISHED'
+               AND (CAST(:cursor AS bigint) IS NULL OR p.id < CAST(:cursor AS bigint))
+               AND (CAST(:tagSlug AS text) IS NULL OR EXISTS (
+                        SELECT 1 FROM problem_tags pt
+                          JOIN tags t ON t.id = pt.tag_id
+                         WHERE pt.problem_id = p.id AND t.slug = CAST(:tagSlug AS text)))
+               AND (CAST(:daGiai AS boolean) IS NULL OR CAST(:daGiai AS boolean) = EXISTS (
+                        SELECT 1 FROM submissions s2
+                         WHERE s2.problem_id = p.id
+                           AND s2.user_id = :requesterId
+                           AND s2.verdict = 'AC'))
+             ORDER BY p.id DESC
+             LIMIT :limit
+            """;
+
+    @Override
+    public CursorPage<ProblemListItem> danhSachDaXuatBan(ListFilter loc, Long cursor, int size) {
+        List<ProblemListItem> duMotDong = jdbc.sql(DANH_SACH)
+                .param("cursor", cursor)
+                .param("tagSlug", loc.tagSlug())
+                // Khách chưa đăng nhập: 0 không khớp users.id nào (GENERATED ALWAYS bắt đầu từ 1),
+                // nên EXISTS luôn false và cột da_giai trả về false — đúng nghĩa "chưa giải".
+                .param("requesterId", loc.requesterId() == null ? 0L : loc.requesterId())
+                .param("daGiai", loc.daGiaiBoi())
+                .param("limit", size + 1)
+                .query((rs, i) -> new ProblemListItem(
+                        rs.getLong("id"),
+                        rs.getString("code"),
+                        rs.getString("title"),
+                        rs.getInt("time_limit_ms"),
+                        rs.getInt("memory_limit_kb"),
+                        rs.getBoolean("da_giai")))
+                .list();
+
+        boolean conTrangSau = duMotDong.size() > size;
+        List<ProblemListItem> items = conTrangSau ? duMotDong.subList(0, size) : duMotDong;
+        String next = conTrangSau ? String.valueOf(items.get(items.size() - 1).id()) : null;
+        return new CursorPage<>(items, next);
+    }
 }

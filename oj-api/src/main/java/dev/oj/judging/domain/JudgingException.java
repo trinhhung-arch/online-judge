@@ -30,6 +30,11 @@ import dev.oj.platform.error.DomainException;
  */
 public class JudgingException extends DomainException {
 
+    protected JudgingException(Kind kind, String code, String publicMessage, String logMessage,
+                               java.time.Duration retryAfter) {
+        super(kind, code, publicMessage, logMessage, retryAfter, null);
+    }
+
     protected JudgingException(Kind kind, String code, String publicMessage, String logMessage) {
         super(kind, code, publicMessage, logMessage);
     }
@@ -54,6 +59,21 @@ public class JudgingException extends DomainException {
     }
 
     /** Nộp một ô trống. Chặn ở đây để không tốn một hàng {@code source_blobs} và một lượt chấm. */
+    /**
+     * FR-SUB-08 — 1 bài / 10 giây / người dùng.
+     *
+     * <p><b>Đây là quy tắc nghiệp vụ được công bố, không phải một cơ chế ẩn</b>
+     * ({@code oj-api/CLAUDE.md} mục 8). Vì thế câu chữ nói thẳng con số và thời gian còn lại,
+     * và {@code retryAfter} đi ra header {@code Retry-After} để UI hiện đếm ngược thay vì để
+     * người dùng đoán. Một giới hạn ẩn thì bị coi là lỗi; một giới hạn nói rõ thì được chấp nhận.
+     */
+    public static JudgingException nopQuaNhanh(java.time.Duration conLai) {
+        long giay = Math.max(1, conLai.toSeconds() + (conLai.toMillisPart() > 0 ? 1 : 0));
+        return new JudgingException(Kind.RATE_LIMITED, "submission.rate_limited",
+                "Bạn vừa nộp bài. Chờ " + giay + " giây nữa rồi thử lại.",
+                "Chạm rate limit nộp bài (FR-SUB-08)", conLai);
+    }
+
     public static JudgingException emptySource() {
         return new JudgingException(
                 Kind.INVALID,

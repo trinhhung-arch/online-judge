@@ -11,6 +11,7 @@ import dev.oj.judging.domain.JudgeRun;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.AfterCommit;
 import dev.oj.platform.config.JudgeTransactional;
+import dev.oj.platform.security.InternalAccess;
 import dev.oj.platform.trace.TraceIdFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,7 @@ import java.util.Optional;
  * coi 204 là "đã ghi" — nó chỉ có nghĩa "API đã nhận và tự quyết định" (javadoc của
  * {@link JudgeResultDto}).
  */
+@InternalAccess("worker, qua POST /internal/judge/result. Chủ sở hữu bài nộp đọc từ database, không hỏi request.")
 @Service
 public class RecordJudgeResultUseCase {
 

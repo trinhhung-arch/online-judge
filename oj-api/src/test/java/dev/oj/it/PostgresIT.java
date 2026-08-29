@@ -1,9 +1,15 @@
 package dev.oj.it;
 
+import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
+import dev.oj.platform.security.GiaLapDanhTinh;
+import dev.oj.platform.security.JwtService;
+import dev.oj.platform.security.Role;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -85,6 +91,9 @@ public abstract class PostgresIT {
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("oj.internal.shared-secret", () -> "x".repeat(32));
+        // Bước 4.5: không có mặc định trong application.yml, cố ý. Thiếu dòng này thì mọi IT
+        // đỏ ngay lúc dựng context, với đúng thông báo mà một host cấu hình thiếu sẽ thấy.
+        registry.add("oj.auth.jwt-secret", () -> "khoa-ky-chi-dung-trong-test-1234567890");
         // Reaper chạy nền mỗi 15s sẽ chen vào giữa các test đang dựng trạng thái hàng đợi.
         // Đặt sát dưới lease (AppProperties ép reaper-interval < lease) để nó chỉ chạy đúng
         // một lần lúc khởi động rồi im. Test nào cần reaper thì GỌI THẲNG use-case.
@@ -94,6 +103,60 @@ public abstract class PostgresIT {
     @Autowired
     @Qualifier("appJdbcClient")
     protected JdbcClient jdbc;
+
+    @Autowired
+    protected JwtService jwtService;
+
+    @Autowired
+    protected StringRedisTemplate redis;
+
+    private GiaLapDanhTinh phien;
+
+    /**
+     * ★ Mỗi test chạy dưới danh nghĩa {@code users.id = 1} — thay cho vai trò mà
+     * {@code FixedDevUserProvider} từng đảm nhiệm tới hết M3.
+     *
+     * <h2>Vì sao cần dòng này từ Bước 4.6 trở đi</h2>
+     * {@code @RequiresRole} được ép bằng một AOP advisor, và advisor đó chạy trên <b>bean của
+     * Spring</b>. Test gọi thẳng {@code submitSolution.thucHien(...)} là gọi qua proxy, nên nó
+     * cũng bị kiểm quyền như một request thật — mà một test thì không có request nào, không có
+     * header {@code Authorization} nào, và {@code JwtAuthFilter} chưa từng chạy.
+     *
+     * <p>Không có dòng này thì mọi IT đỏ với {@code auth.chua_dang_nhap}. Điều đó <i>đúng</i>:
+     * nó chứng minh advisor thật sự đang chặn. Nhưng nó chứng minh ở sai chỗ — việc chứng
+     * minh thuộc về {@code RequiresRoleIT}, còn ở đây thì nó chỉ che mất thứ mỗi test muốn kiểm.
+     *
+     * <p>Test cần một vai trò khác (SETTER, ADMIN, hoặc khách) thì tự mở
+     * {@link GiaLapDanhTinh} lồng bên trong; phiên trong ra ghi đè phiên ngoài và trả lại
+     * trạng thái rỗng khi đóng.
+     */
+    @BeforeEach
+    void dongVaiNguoiDungDev() {
+        phien = GiaLapDanhTinh.dongVai(USER_ID, "dev", Role.USER);
+    }
+
+    @AfterEach
+    void thoiDongVai() {
+        if (phien != null) {
+            phien.close();
+        }
+    }
+
+    /**
+     * Access token thật cho một IT gọi qua HTTP.
+     *
+     * <p>Ký bằng chính {@code JwtService} của ứng dụng chứ không dựng một token bằng tay: nếu
+     * định dạng token đổi thì test đổi theo mà không phải sửa, và quan trọng hơn — một token
+     * dựng tay có thể vô tình <i>đúng</i> trong khi hàm phát token thật đang sai.
+     */
+    protected String bearer(long userId, String handle, Role role) {
+        return "Bearer " + jwtService.phat(new CurrentUser(userId, handle, role));
+    }
+
+    /** Token của {@code users.id = 1} — người dùng mặc định của phần lớn IT. */
+    protected String bearerDev() {
+        return bearer(USER_ID, "dev", Role.USER);
+    }
 
     /**
      * Trả cơ sở dữ liệu về đúng trạng thái sau khi seed, trước mỗi test.
@@ -117,32 +180,47 @@ public abstract class PostgresIT {
      * {@code R__seed_du_lieu_tham_chieu.sql}. Nó là hằng số theo định nghĩa: mọi giới hạn
      * thời gian của đề đều quy chiếu về máy đó ({@code nfrplan.md} 9.1).
      */
+    /**
+     * Trả Postgres và Redis về đúng trạng thái sau khi seed, trước mỗi test.
+     * Chi tiết và lý do ở {@link ResetGiuaCacTest} — tách ra vì trần 300 dòng
+     * ({@code CLAUDE.md} mục 7).
+     */
     @BeforeEach
-    void resetHotTables() {
-        jdbc.sql("DELETE FROM judge_runs").update();
-        jdbc.sql("DELETE FROM judge_queue").update();
-        jdbc.sql("DELETE FROM submissions").update();
-        jdbc.sql("DELETE FROM source_blobs").update();
+    void resetGiuaCacTest() {
+        ResetGiuaCacTest.tatCa(jdbc, redis);
+    }
 
-        jdbc.sql("DELETE FROM host_benchmarks").update();
-        jdbc.sql("UPDATE judge_hosts SET host_factor = 1.000, last_seen_at = NULL").update();
-
-        // Cùng lý do: SubmissionFeedbackIT đổi feedback_level để kiểm bộ lọc, và một mức
-        // NONE sót lại sẽ làm mọi test sau đó không thấy failed_test_ordinal — hỏng theo
-        // thứ tự chạy, tức là xanh ở máy này đỏ ở máy kia.
-        jdbc.sql("UPDATE problems SET feedback_level = 'TEST_INDEX', "
-                + "scoring_mode = 'ALL_OR_NOTHING'").update();
-
-        // Nhóm test: gỡ tham chiếu từ `testcases` TRƯỚC rồi mới xoá `subtasks` — khoá ngoại
-        // đi theo chiều đó. `judge_run_subtasks` tự biến mất theo `judge_runs` (ON DELETE
-        // CASCADE), nên nó không cần một dòng riêng ở đây.
-        jdbc.sql("UPDATE testcases SET subtask_id = NULL WHERE subtask_id IS NOT NULL").update();
-        jdbc.sql("DELETE FROM subtasks").update();
+    /**
+     * Xoá khoá rate limit của một người, để test nộp được bài tiếp theo ngay lập tức.
+     *
+     * <h2>Vì sao là helper này chứ không phải {@code @TestPropertySource} hạ cửa sổ xuống</h2>
+     * Vì <b>mỗi bộ thuộc tính khác nhau là một Spring context khác</b>, và mỗi context dựng
+     * hai pool Hikari: 20 connection cho {@code app} cộng 6 cho {@code judge}. Postgres mặc
+     * định cho 100. Thêm một context là thêm 26, và triệu chứng không phải "cấu hình sai" mà
+     * là <b>{@code FATAL: sorry, too many clients already}</b> ở một lớp test ngẫu nhiên —
+     * thường là lớp chạy sau cùng, tức là không phải lớp gây ra. Đây là lỗi đã gặp thật khi
+     * viết Bước 4.7.
+     *
+     * <p>Helper này không đổi cấu hình gì cả: chốt rate limit <b>vẫn chạy</b> với con số 10
+     * giây thật và vẫn nằm trong thời gian đo được của {@code SubmitLatencyIT}. Nó chỉ xoá
+     * dấu vết của lượt nộp trước — đúng như thể mười giây đã trôi qua.
+     */
+    protected void quenLuotNopVuaRoi(long userId) {
+        redis.delete(ResetGiuaCacTest.KHOA_RATE_LIMIT + userId);
     }
 
     /** Id của đề {@code A-PLUS-B} trong {@code db/dev-seed}. */
     protected static final long PROBLEM_ID = 1L;
 
-    /** Id người dùng mà {@code FixedDevUserProvider} trả về. */
+    /** {@code dev} — USER. Người dùng mặc định của mọi IT, xem {@link #dongVaiNguoiDungDev()}. */
     protected static final long USER_ID = 1L;
+
+    /** {@code setter} — SETTER, và là {@code owner_id} của đề A-PLUS-B. */
+    protected static final long SETTER_ID = 2L;
+
+    /** {@code admin} — ADMIN. */
+    protected static final long ADMIN_ID = 3L;
+
+    /** Mật khẩu chung của ba tài khoản seed. Khớp băm trong {@code R__seed_du_lieu_dev.sql}. */
+    protected static final String MAT_KHAU_DEV = "matkhau-dev-123";
 }

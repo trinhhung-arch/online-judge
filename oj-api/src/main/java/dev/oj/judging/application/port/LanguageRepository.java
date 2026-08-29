@@ -32,6 +32,27 @@ public interface LanguageRepository {
     Optional<Language> findEnabledByCode(String code);
 
     /**
+     * Ngôn ngữ đang bật, để giao diện dựng ô chọn — Bước 4.12.
+     *
+     * <p>★ Tồn tại để giữ đúng NFR M4: <i>"thêm 1 ngôn ngữ chấm = 1 dòng config, 0 dòng
+     * code"</i>. Nếu frontend gán cứng ba mã ngôn ngữ thì thêm một ngôn ngữ là <b>hai</b> chỗ
+     * phải sửa, và chỗ thứ hai sẽ bị quên — triệu chứng là một ngôn ngữ đã bật mà không ai
+     * chọn được.
+     *
+     * <p>Không phân trang: bảng này có ba dòng và sẽ không bao giờ có nghìn dòng. Đây là một
+     * trong rất ít ngoại lệ hợp lệ của bất biến #8, và nó hợp lệ vì <b>số dòng bị chặn bởi
+     * bản chất của dữ liệu</b>, không phải bởi hy vọng.
+     */
+    java.util.List<LanguageOption> listEnabled();
+
+    /**
+     * @param versionLabel thứ hiện cho người dùng — "GCC 13.2 / C++20". Người nộp bài cần
+     *                     biết phiên bản trình biên dịch, vì nó quyết định cú pháp nào dùng được
+     */
+    record LanguageOption(String code, String displayName, String versionLabel) {
+    }
+
+    /**
      * Vừa đủ để nhận một bài nộp: {@code languages.id} để ghi vào {@code submissions}, và
      * {@code code} để nhắc lại trong thông báo lỗi.
      *

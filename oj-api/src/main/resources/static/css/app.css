@@ -1,0 +1,191 @@
+/* =============================================================================
+   Giao diện Online Judge — Bước 4.12.
+
+   Không build step, không framework CSS. Một file, biến CSS, và bố cục bằng
+   flex/grid. Lý do ở README: một mốc đã kín lịch không chịu thêm được một
+   toolchain thứ hai, và deploy vẫn phải là đúng một file jar.
+
+   Ba thứ được giữ nghiêm ngặt vì chúng là yêu cầu, không phải thẩm mỹ:
+     · a11y mức A — tương phản >= 4.5:1, focus nhìn thấy được, chạm >= 44px
+     · mobile-first — mọi thứ bày một cột trước, media query mới chia đôi
+     · prefers-reduced-motion — không ai bị buộc phải xem hiệu ứng
+   ============================================================================= */
+
+:root {
+    --nen: #ffffff;
+    --nen-phu: #f5f6f8;
+    --vien: #d9dce3;
+    --chu: #1b1e24;
+    --chu-nhat: #5b6070;
+    --nhan: #1f5fbf;
+    --nhan-dam: #16468f;
+
+    /* Màu verdict. Không dùng riêng màu để truyền tin — mỗi verdict luôn kèm
+       chữ viết tắt VÀ một câu giải thích. a11y mức A, và cũng vì 8% nam giới
+       không phân biệt được đỏ với lục. */
+    --ac: #197a3d;
+    --sai: #b3261e;
+    --cho: #8a6d00;
+
+    --ban-kinh: 8px;
+    --khoang: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --nen: #16181d;
+        --nen-phu: #1e2128;
+        --vien: #333844;
+        --chu: #e9ebf0;
+        --chu-nhat: #a0a6b6;
+        --nhan: #6ba4f8;
+        --nhan-dam: #9ac2ff;
+        --ac: #5cc98a;
+        --sai: #ff8a80;
+        --cho: #e0b900;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--nen);
+    color: var(--chu);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+/* ★ a11y mức A: bỏ qua thanh điều hướng bằng bàn phím. Hiện ra khi được focus. */
+.bo-qua {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--nhan);
+    color: #fff;
+    padding: 12px 16px;
+    z-index: 100;
+}
+.bo-qua:focus { left: 0; }
+
+/* ★ Focus PHẢI nhìn thấy được. Xoá outline mà không thay gì là loại người dùng
+   bàn phím ra khỏi trang — lỗi a11y phổ biến nhất và dễ tránh nhất. */
+:focus-visible {
+    outline: 3px solid var(--nhan);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+header.thanh {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--khoang);
+    align-items: center;
+    padding: 12px var(--khoang);
+    border-bottom: 1px solid var(--vien);
+    background: var(--nen-phu);
+}
+header.thanh .hieu { font-weight: 700; font-size: 1.1rem; text-decoration: none; color: var(--chu); }
+header.thanh nav { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
+header.thanh .phien { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+
+main { max-width: 1100px; margin: 0 auto; padding: var(--khoang); }
+
+a { color: var(--nhan); }
+a:hover { color: var(--nhan-dam); }
+
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 8px; }
+h2 { font-size: 1.2rem; margin: 24px 0 8px; }
+
+/* --- Nút và ô nhập -------------------------------------------------------- */
+
+button, .nut {
+    /* 44px là ngưỡng vùng chạm của WCAG. Nút nhỏ hơn thì trên điện thoại người
+       ta bấm trượt, và trên một trang nộp bài thì bấm trượt là mất thời gian thi. */
+    min-height: 44px;
+    padding: 10px 18px;
+    font: inherit;
+    border-radius: var(--ban-kinh);
+    border: 1px solid var(--nhan);
+    background: var(--nhan);
+    color: #fff;
+    cursor: pointer;
+}
+button.phu { background: transparent; color: var(--nhan); }
+button[disabled] { opacity: .55; cursor: not-allowed; }
+
+input, select, textarea {
+    min-height: 44px;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--chu);
+    background: var(--nen);
+    border: 1px solid var(--vien);
+    border-radius: var(--ban-kinh);
+    width: 100%;
+}
+
+label { display: block; font-weight: 600; margin: 12px 0 4px; }
+.goi-y { color: var(--chu-nhat); font-size: .9rem; margin-top: 4px; }
+
+/* --- Thẻ và bảng ---------------------------------------------------------- */
+
+.the {
+    border: 1px solid var(--vien);
+    border-radius: var(--ban-kinh);
+    padding: var(--khoang);
+    margin-bottom: 12px;
+    background: var(--nen);
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--vien); }
+th { color: var(--chu-nhat); font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; }
+
+/* Bảng rộng cuộn trong khung của nó, KHÔNG làm cả trang cuộn ngang. */
+.cuon-ngang { overflow-x: auto; }
+
+/* --- Verdict -------------------------------------------------------------- */
+
+.verdict { font-weight: 700; }
+.verdict.AC { color: var(--ac); }
+.verdict.WA, .verdict.TLE, .verdict.MLE, .verdict.RE, .verdict.CE, .verdict.IE { color: var(--sai); }
+.verdict.cho { color: var(--cho); }
+
+/* --- Thông báo ------------------------------------------------------------ */
+
+.thong-bao {
+    padding: 12px var(--khoang);
+    border-radius: var(--ban-kinh);
+    border: 1px solid var(--vien);
+    margin: 12px 0;
+}
+.thong-bao.loi { border-color: var(--sai); color: var(--sai); }
+.thong-bao.on { border-color: var(--ac); color: var(--ac); }
+.thong-bao:empty { display: none; }
+
+/* --- Trình soạn mã -------------------------------------------------------- */
+
+.khung-soan { border: 1px solid var(--vien); border-radius: var(--ban-kinh); overflow: hidden; }
+.cm-editor { height: 55vh; font-size: 14px; }
+.cm-editor.cm-focused { outline: none; }   /* khung ngoài đã có focus ring */
+
+.hang-nop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.hang-nop select { width: auto; min-width: 180px; }
+
+/* --- Bố cục hai cột, mobile-first ----------------------------------------- */
+
+.hai-cot { display: grid; gap: var(--khoang); }
+@media (min-width: 900px) {
+    .hai-cot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+/* Đề bài render từ Markdown: bảng và khối mã không được làm vỡ bố cục. */
+.de-bai { overflow-wrap: anywhere; }
+.de-bai pre { background: var(--nen-phu); padding: 12px; border-radius: var(--ban-kinh); overflow-x: auto; }
+.de-bai code { background: var(--nen-phu); padding: 2px 5px; border-radius: 4px; }
+.de-bai pre code { background: none; padding: 0; }
+.de-bai table { display: block; overflow-x: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+}

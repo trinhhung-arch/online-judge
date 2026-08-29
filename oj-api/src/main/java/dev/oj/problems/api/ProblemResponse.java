@@ -31,9 +31,11 @@ import dev.oj.problems.domain.Problem;
  *                  thuần, và cũng là chỗ dễ dính XSS nhất nếu render ở client
  */
 public record ProblemResponse(
+        long problemId,
         String code,
         String title,
         String statement,
+        String statementHtml,
         int timeLimitMs,
         int memoryLimitKb,
         String checkerType,
@@ -41,11 +43,30 @@ public record ProblemResponse(
         String feedbackLevel,
         boolean acceptsSubmissions) {
 
-    public static ProblemResponse from(Problem problem) {
+    /**
+     * ★ Bước 4.9 — {@code statementHtml} là bản đã render server-side (FR-PROB-02), và
+     * {@code statement} là Markdown gốc.
+     *
+     * <p>Giữ cả hai vì chúng phục vụ hai người khác nhau: trang đề dùng HTML (đã escape, an
+     * toàn để nhúng), còn trang <b>soạn đề</b> cần lại đúng thứ tác giả đã gõ. Trả một cái rồi
+     * dựng lại cái kia ở client là dựng lại sai.
+     *
+     * <p>{@code problemId} có mặt vì {@code POST /api/v1/submissions} nhận id chứ không nhận
+     * mã đề, nên không có nó thì trang đề không nộp bài được. Đây không phải thông tin mới:
+     * {@code SubmissionDetailResponse} đã trả cùng con số đó từ M1. Đường dẫn công khai vẫn
+     * dùng {@code code} — id chỉ nằm trong thân phản hồi, nơi nó không mời gọi việc dò tuần tự.
+     *
+     * <p>HTML ở đây <b>đã escape mọi HTML thô</b> —
+     * {@code CommonMarkStatementRenderer.escapeHtml(true)}. Các đoạn {@code $...$} đi qua
+     * nguyên vẹn để KaTeX vẽ ở trình duyệt.
+     */
+    public static ProblemResponse from(Problem problem, String statementHtml) {
         return new ProblemResponse(
+                problem.id(),
                 problem.code(),
                 problem.title(),
                 problem.statementMd(),
+                statementHtml,
                 problem.timeLimitMs(),
                 problem.memoryLimitKb(),
                 problem.checkerType().code(),

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Đề bài · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
+     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
+     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
+     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Đề bài</h1>
+
+    <form id="loc" class="the">
+        <label for="tag">Lọc theo tag</label>
+        <input id="tag" name="tag" placeholder="ví dụ: quy-hoach-dong">
+
+        <label for="da-giai">Trạng thái</label>
+        <select id="da-giai" name="daGiai">
+            <option value="">Tất cả</option>
+            <option value="true">Đã giải</option>
+            <option value="false">Chưa giải</option>
+        </select>
+
+        <p><button type="submit">Lọc</button></p>
+    </form>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="cuon-ngang">
+        <table>
+            <caption class="goi-y">Danh sách đề đã xuất bản</caption>
+            <thead>
+            <tr>
+                <th scope="col">Mã đề</th>
+                <th scope="col">Tiêu đề</th>
+                <th scope="col">Thời gian</th>
+                <th scope="col">Bộ nhớ</th>
+                <th scope="col">Đã giải</th>
+            </tr>
+            </thead>
+            <tbody id="bang"></tbody>
+        </table>
+    </div>
+
+    <p><button id="them" class="phu" hidden>Tải thêm</button></p>
+</main>
+<script type="module" src="/js/list.js"></script>
+</body>
+</html>

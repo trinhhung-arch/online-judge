@@ -80,15 +80,24 @@ class JudgingFakes {
         }
     }
 
+    /** Tắt theo mặc định; {@link #chan} bật lên để kiểm chốt chạy TRƯỚC khi persist. */
+    static final class RateLimiterGia
+            implements dev.oj.judging.application.port.SubmissionRateLimiter {
+
+        boolean chan;
+        int soLanGoi;
+
+        @Override
+        public void kiemTraVaGhiNhan(long userId) {
+            soLanGoi++;
+            if (chan) {
+                throw dev.oj.judging.domain.JudgingException.nopQuaNhanh(Duration.ofSeconds(7));
+            }
+        }
+    }
+
     static AppProperties properties() {
-        return new AppProperties(
-                new AppProperties.Submission(65_536, Duration.ofSeconds(10)),
-                new AppProperties.Judge(Duration.ofSeconds(120), Duration.ofSeconds(15),
-                        2, 20, "mac-m1max-host"),
-                new AppProperties.Page(20, 50),
-                new AppProperties.Internal("x".repeat(32)),
-                new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),
-                new AppProperties.Ai(5, Duration.ofSeconds(30)));
+        return dev.oj.platform.config.AppPropertiesGia.macDinh();
     }
 
     static CurrentUserProvider userIs(long id, Role role) {
@@ -283,6 +292,11 @@ class JudgingFakes {
         public Optional<Language> findEnabledByCode(String code) {
             calls.add("languages.findEnabledByCode");
             return Optional.ofNullable(enabled);
+        }
+
+        @Override
+        public java.util.List<LanguageOption> listEnabled() {
+            return java.util.List.of(new LanguageOption("cpp20", "C++", "GCC 13 / C++20"));
         }
     }
 

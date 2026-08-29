@@ -3,6 +3,7 @@ package dev.oj.judging.application.usecase;
 import dev.oj.contract.HostBenchmarkDto;
 import dev.oj.judging.application.port.JudgeHostRepository;
 import dev.oj.platform.config.JudgeTransactional;
+import dev.oj.platform.security.InternalAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
  * <i>"máy chấm hôm đó có chậm không"</i> trả lời được bằng dữ liệu chứ không bằng trí nhớ.
  * Chỉ ghi lúc vượt ngưỡng thì đúng lúc cần đối chiếu lại không có gì để đối chiếu.
  */
+@InternalAccess("worker, qua POST /internal/judge/benchmark, 15 phút một lần.")
 @Service
 public class RecordHostBenchmarkUseCase {
 

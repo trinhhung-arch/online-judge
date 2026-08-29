@@ -3,6 +3,7 @@ package dev.oj.judging.application.usecase;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.judging.domain.Submission;
+import dev.oj.platform.security.RequiresRole;
 import dev.oj.problems.domain.FeedbackPolicy;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
  * xác nhận "id này có thật" — đủ để dò ra ai đã nộp bài nào, và trong contest thì đó là
  * thông tin không được lộ.
  */
+@RequiresRole  // sàn: phải đăng nhập. Quyền theo sở hữu nằm trong câu query — xem findDetailForRequester
 @Service
 public class GetSubmissionUseCase {
 

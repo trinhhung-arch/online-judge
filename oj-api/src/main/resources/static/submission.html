@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bài nộp · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
+     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
+     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
+     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1 id="tieu-de">Bài nộp</h1>
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <!--
+      ★ aria-live="polite" trên khối trạng thái là điều kiện để a11y mức A có nghĩa ở trang
+      này. Kết quả đến bất đồng bộ qua SSE; không có nó thì người dùng trình đọc màn hình
+      ngồi trước một trang lặng lẽ đổi nội dung mà không được báo gì.
+    -->
+    <section class="the" role="status" aria-live="polite" aria-atomic="true">
+        <h2>Trạng thái</h2>
+        <p><strong id="trang-thai">Đang tải…</strong> <span id="verdict" class="verdict"></span></p>
+        <p id="tien-do" class="goi-y"></p>
+        <p id="giai-thich"></p>
+    </section>
+
+    <section class="the">
+        <h2>Chi tiết</h2>
+        <div class="cuon-ngang">
+            <table>
+                <tbody id="chi-tiet"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="khu-compile" class="the" hidden>
+        <h2>Nhật ký biên dịch</h2>
+        <pre id="compile-log"></pre>
+    </section>
+</main>
+<script type="module" src="/js/submission.js"></script>
+</body>
+</html>

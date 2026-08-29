@@ -132,9 +132,50 @@ class SubmissionSseIT extends PostgresIT {
                 null, "OK", "mac-m1max-host", new BigDecimal("1.000"), Instant.now(), List.of());
     }
 
+    /**
+     * ★ Lỗi trên đường SSE phải là JSON đọc được, không phải 500 rỗng.
+     *
+     * <h2>Lỗi đã gặp thật khi chạy tay ở Bước 4.12</h2>
+     * Endpoint này khai {@code produces = text/event-stream}. Khi nó ném lỗi <i>trước khi</i>
+     * ghi byte nào, Spring đã đặt sẵn {@code Content-Type} theo khai báo đó rồi không tìm được
+     * bộ chuyển đổi nào ghi {@code ApiError} thành {@code text/event-stream} — kết quả là
+     * <b>500 với thân rỗng</b> thay cho 401 hoặc 404.
+     *
+     * <p>Chỉ hiện ra khi client gửi {@code Accept: text/event-stream}, tức là đúng cách trình
+     * duyệt gọi và <b>không</b> phải cách một lệnh {@code curl} thông thường gọi. Ca này cố
+     * định hành vi đúng.
+     *
+     * <p>Hậu quả nếu để nguyên: {@code js/api.js} phân biệt "token hết hạn, làm mới rồi thử
+     * lại" với "hỏng thật" bằng mã lỗi trong thân phản hồi. Một 500 rỗng xoá mất sự phân biệt
+     * ấy, và người dùng có token hết hạn giữa lúc theo dõi bài nộp thấy luồng chết vĩnh viễn.
+     */
+    @Test
+    @DisplayName("★ lỗi trên đường SSE trả JSON có mã, không phải 500 rỗng")
+    void loi_tren_duong_sse_van_la_json() throws Exception {
+        var client = HttpClient.newHttpClient();
+        var url = URI.create("http://localhost:" + port + "/api/v1/submissions/999999/stream");
+
+        for (String[] ca : new String[][]{
+                {"không token", null, "401"},
+                {"bài không tồn tại", bearerDev(), "404"}}) {
+            var req = HttpRequest.newBuilder(url).header("Accept", "text/event-stream");
+            if (ca[1] != null) {
+                req.header("Authorization", ca[1]);
+            }
+            var res = client.send(req.GET().build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(res.statusCode())
+                    .describedAs("ca '%s'", ca[0]).isEqualTo(Integer.parseInt(ca[2]));
+            assertThat(res.body())
+                    .describedAs("ca '%s' — thân rỗng thì frontend không phân biệt được lỗi gì", ca[0])
+                    .contains("\"code\"");
+        }
+    }
+
     private Stream open(long submissionId) throws Exception {
         return new Stream(URI.create(
-                "http://localhost:" + port + "/api/v1/submissions/" + submissionId + "/stream"));
+                "http://localhost:" + port + "/api/v1/submissions/" + submissionId + "/stream"),
+                bearerDev());
     }
 
     /**
@@ -151,9 +192,9 @@ class SubmissionSseIT extends PostgresIT {
         private final Thread reader;
         private volatile boolean closed;
 
-        Stream(URI uri) throws IOException, InterruptedException {
+        Stream(URI uri, String bearer) throws IOException, InterruptedException {
             HttpResponse<java.util.stream.Stream<String>> response = client.send(
-                    HttpRequest.newBuilder(uri).GET().build(),
+                    HttpRequest.newBuilder(uri).header("Authorization", bearer).GET().build(),
                     HttpResponse.BodyHandlers.ofLines());
             assertThat(response.statusCode()).isEqualTo(200);
 

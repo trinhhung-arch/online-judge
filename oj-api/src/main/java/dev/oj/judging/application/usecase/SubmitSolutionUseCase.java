@@ -4,12 +4,14 @@ import dev.oj.judging.application.port.JudgeJobPublisher;
 import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.LanguageRepository;
 import dev.oj.judging.application.port.SourceBlobRepository;
+import dev.oj.judging.application.port.SubmissionRateLimiter;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.judging.domain.DomainRules;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.judging.domain.SourceBlob;
 import dev.oj.judging.domain.SubmissionStatus;
 import dev.oj.platform.security.CurrentUserProvider;
+import dev.oj.platform.security.RequiresRole;
 import dev.oj.problems.application.usecase.GetProblemUseCase;
 import dev.oj.problems.domain.Problem;
 import org.slf4j.Logger;
@@ -42,6 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * ngoặc nhìn thấy được, và lời gọi publish nằm sau nó — không phải trong một comment mà ai
  * đó sẽ vô tình bỏ qua khi thêm việc.
  */
+@RequiresRole  // FR-SUB-02: phải đăng nhập mới nộp được, bài nộp gắn với một người
 @Service
 public class SubmitSolutionUseCase {
 
@@ -52,6 +55,7 @@ public class SubmitSolutionUseCase {
     private final LanguageRepository languages;
     private final SourceBlobRepository sourceBlobs;
     private final SubmissionRepository submissions;
+    private final SubmissionRateLimiter rateLimiter;
     private final JudgeQueueRepository queue;
     private final JudgeJobPublisher events;
     private final TransactionTemplate tx;
@@ -61,6 +65,7 @@ public class SubmitSolutionUseCase {
                                  LanguageRepository languages,
                                  SourceBlobRepository sourceBlobs,
                                  SubmissionRepository submissions,
+                                 SubmissionRateLimiter rateLimiter,
                                  JudgeQueueRepository queue,
                                  JudgeJobPublisher events,
                                  @Qualifier("appTransactionManager") PlatformTransactionManager txManager) {
@@ -69,6 +74,7 @@ public class SubmitSolutionUseCase {
         this.languages = languages;
         this.sourceBlobs = sourceBlobs;
         this.submissions = submissions;
+        this.rateLimiter = rateLimiter;
         this.queue = queue;
         this.events = events;
         // Pool app (20), KHÔNG phải pool judge (6): nộp bài là request của người dùng.
@@ -77,7 +83,8 @@ public class SubmitSolutionUseCase {
 
     /**
      * @return id và trạng thái {@code QUEUED} — controller trả {@code 202 Accepted}
-     * @throws JudgingException {@code INVALID} nếu source rỗng/quá 64KB hoặc ngôn ngữ đã tắt
+     * @throws JudgingException {@code INVALID} nếu source rỗng/quá 64KB hoặc ngôn ngữ đã tắt;
+     *         {@code RATE_LIMITED} nếu nộp lại trong vòng 10 giây (FR-SUB-08)
      * @throws dev.oj.problems.domain.ProblemNotFoundException nếu đề không tồn tại, chưa xuất
      *         bản, hoặc chưa có testdata
      */
@@ -89,6 +96,16 @@ public class SubmitSolutionUseCase {
         LanguageRepository.Language language = languages.findEnabledByCode(command.languageCode())
                 .orElseThrow(() -> JudgingException.languageNotAvailable(command.languageCode()));
         Problem problem = problems.submittableById(command.problemId());
+
+        // ---- FR-SUB-08, ĐẶT SAU validate và TRƯỚC persist -----------------------------------
+        //
+        // Sau validate: một request bị từ chối 400 không phải là "một bài nộp", nên nó không
+        // được tiêu mất mười giây của người dùng. Gõ nhầm tên ngôn ngữ rồi phải chờ 10 giây
+        // để sửa là một hình phạt cho việc nhầm lẫn, không phải cho việc nộp quá nhanh.
+        //
+        // Trước persist: đây là chỗ duy nhất chặn được HAI request song song của cùng một
+        // người. Đặt sau thì cả hai đã ghi xong, và giới hạn chỉ còn là một thông báo.
+        rateLimiter.kiemTraVaGhiNhan(userId);
 
         long submissionId = persist(userId, problem, language, blob);
         publishQuietly(submissionId);

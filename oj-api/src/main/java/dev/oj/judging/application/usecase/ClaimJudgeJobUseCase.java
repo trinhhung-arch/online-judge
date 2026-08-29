@@ -7,6 +7,7 @@ import dev.oj.judging.application.port.JudgeQueueRepository.ClaimedJob;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.JudgeTransactional;
+import dev.oj.platform.security.InternalAccess;
 import dev.oj.platform.trace.TraceIdFilter;
 import dev.oj.problems.application.port.JudgeSpecRepository;
 import dev.oj.problems.domain.JudgeSpec;
@@ -39,6 +40,7 @@ import java.util.Optional;
  * nhân {@code host_factor} của máy nó. Nhân cả hai ở một phía là bài Java được gấp đôi thời
  * gian mà không ai phát hiện ra.
  */
+@InternalAccess("worker, qua POST /internal/judge/claim — InternalSecretFilter đứng trước. Worker không phải một người dùng và không mang JWT.")
 @Service
 public class ClaimJudgeJobUseCase {
 

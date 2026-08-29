@@ -18,3 +18,5 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [008](008-6-judge-slot-thay-vi-9-vi-nhiet.md) | 6 judge slot thay vì 9, vì throttle nhiệt | M1 |
 | [009](009-khoa-lac-quan-tren-judge-queue.md) | Khoá lạc quan trên `judge_queue` | M1 |
 | [010](010-input-qua-fd-output-qua-ong.md) | Input vào bằng fd, output ra bằng ống, box dựng lại giữa mỗi test | M2 |
+| [011](011-redis-pubsub-tu-M3-khong-doi-M4.md) | Redis pub/sub cho SSE làm ở M3, không đợi M4 | M3 |
+| [012](012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) | Tự viết JWT HS256 bằng JDK, không thêm thư viện JOSE | M4 |

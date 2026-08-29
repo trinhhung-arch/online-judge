@@ -2,6 +2,17 @@ spring:
   application:
     name: oj-backend
 
+  servlet:
+    multipart:
+      # FR-PROB-03 — gói testdata ≤ 200MB. PHẢI khớp TestdataLimits.MAX_ZIP_BYTES:
+      # đặt nhỏ hơn thì Tomcat từ chối trước khi mã của ta chạy, và người dùng nhận một
+      # lỗi 500 của framework thay vì câu tiếng Việt giải thích giới hạn.
+      max-file-size: 200MB
+      max-request-size: 210MB      # dư cho phần bao multipart, không phải một giới hạn thứ hai
+      # Ghi thẳng ra đĩa thay vì đệm trong RAM. Không có dòng này thì hai người cùng nạp
+      # testdata là 400MB heap.
+      file-size-threshold: 1MB
+
   # KHÔNG cấu hình spring.datasource ở đây: DataSourceConfig tự dựng HAI pool
   # (oj.datasource.app / oj.datasource.judge) và đánh dấu @Primary, nên khối
   # spring.datasource sẽ bị bỏ qua trong im lặng — đúng loại cấu hình trông như có
@@ -73,6 +84,24 @@ oj:
     # Không có giá trị mặc định, cố ý: một secret mặc định là một secret công khai.
     # Thiếu biến môi trường này thì API không khởi động được — đó là hành vi đúng.
     shared-secret: ${OJ_INTERNAL_SHARED_SECRET}
+
+  auth:
+    # Bước 4.5 — FR-AUTH-02, FR-AUTH-08.
+    # Cùng lý do với shared-secret: không có giá trị mặc định. Một khoá ký mặc định
+    # là một khoá ký công khai, và ai biết nó thì tự phát được token ADMIN.
+    jwt-secret: ${OJ_JWT_SECRET}
+    access-ttl: 15m               # FR-AUTH-02 — cũng là trần của "vai trò đã hạ vẫn còn hiệu lực"
+    refresh-ttl: 7d               # FR-AUTH-02
+    bcrypt-cost: 12               # FR-AUTH-01 · khớp comment trên users.password_hash
+    max-login-failures: 5         # FR-AUTH-08 — bảng giới hạn, oj-api/CLAUDE.md mục 8
+    login-window: 60s             # FR-AUTH-08
+    lockout: 15m                  # FR-AUTH-08
+
+  jobs:
+    # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của
+    # build-order.md PHẦN 6, vì Bước 4.10 (upload ZIP 200MB) phải là job nền.
+    lease: 120s                   # job im lặng quá ngần này thì bị coi là bỏ rơi
+    poll-interval: 5s             # PHẢI nhỏ hơn lease — xem AppProperties.Jobs
 
   ai:
     daily-quota: 5                # FR-AI-03 — tuần 14-15

@@ -76,10 +76,24 @@
 			<artifactId>spring-boot-starter-amqp</artifactId>
 		</dependency>
 
-		<!-- <dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency> -->
+		<!--
+			BCrypt cost 12 — FR-AUTH-01, Bước 4.4. ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2).
+
+			Cố ý là `spring-security-crypto` ĐƠN LẺ chứ không phải `spring-boot-starter-security`:
+
+			  1. Starter đầy đủ tự bật chuỗi filter mặc định, khoá MỌI endpoint bằng HTTP Basic
+			     với mật khẩu sinh ngẫu nhiên. Hệ thống này đã có lớp xác thực riêng —
+			     InternalSecretFilter cho /internal, JwtAuthFilter cho /api/v1 — nên chuỗi
+			     filter thứ hai chỉ là một cơ chế nữa phải cấu hình cho nó đừng làm gì.
+			  2. Artifact này không kéo theo dependency nào và không kích hoạt auto-config nào.
+			     Bề mặt thật sự thêm vào dự án đúng bằng một class: BCryptPasswordEncoder.
+
+			KHÔNG tự viết BCrypt. Nó là lịch khoá Blowfish, không phải một vòng lặp băm.
+		-->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-crypto</artifactId>
+		</dependency>
 		<!--
 			Redis — Bước 3.8. Fan-out SSE qua pub/sub.
 
@@ -97,6 +111,47 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!--
+			Markdown server-side — FR-PROB-02, Bước 4.9. ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2).
+
+			Cố ý là commonmark chứ không phải flexmark: hai artifact, không transitive
+			dependency, và quan trọng nhất — nó TẮT ĐƯỢC HTML thô bằng một tuỳ chọn.
+
+			Đề bài do SETTER soạn và hiển thị cho MỌI thí sinh. Nếu bộ render cho phép HTML
+			thô đi qua thì một thẻ <script> trong đề là XSS trên trang mà cả kỳ thi đang mở —
+			và nó đọc được access token trong localStorage. `escapeHtml(true)` biến lỗ hổng
+			ấy thành một quyết định cấu hình thay vì một bộ lọc HTML tự viết, thứ mà lịch sử
+			ngành đã chứng minh là không ai viết đúng.
+
+			LaTeX KHÔNG render ở đây: server giữ nguyên các đoạn toán, KaTeX vẽ ở trình duyệt.
+			Xem javadoc của StatementRenderer.
+		-->
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark</artifactId>
+			<version>0.24.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.commonmark</groupId>
+			<artifactId>commonmark-ext-gfm-tables</artifactId>
+			<version>0.24.0</version>
+		</dependency>
+
+		<!--
+			Kho testdata content-addressed — FR-PROB-03, Bước 4.11. ĐÃ ĐƯỢC DUYỆT (mục 5.2).
+
+			MinIO đã chạy trong docker-compose.yml và OJ_MINIO_* đã có trong .env.example từ
+			M0, tức là hạ tầng được chọn từ đầu; đây chỉ là phần Java còn thiếu.
+
+			Chỉ sống trong problems.infrastructure, sau port TestdataStore. oj-worker KHÔNG
+			có dependency này và không được có — bất biến #3.
+		-->
+		<dependency>
+			<groupId>io.minio</groupId>
+			<artifactId>minio</artifactId>
+			<version>8.5.17</version>
 		</dependency>
 
 		<dependency>

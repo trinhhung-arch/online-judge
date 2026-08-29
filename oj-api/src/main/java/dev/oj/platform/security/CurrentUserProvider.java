@@ -8,13 +8,17 @@ package dev.oj.platform.security;
  * (tuần 7). Cách làm bản năng là cho {@code userId} thành một tham số của controller rồi truyền
  * xuống — và tới tuần 7 thì phải sửa lại hai mươi chỗ, mỗi chỗ một cơ hội để sai.
  *
- * <p>Với seam này thì M4 chỉ là: viết {@code JwtCurrentUserProvider}, xoá
- * {@link FixedDevUserProvider}. <b>Không một use-case nào đã viết phải đổi chữ ký.</b>
+ * <p>Với seam này thì M4 chỉ là: viết {@link JwtCurrentUserProvider}, xoá
+ * {@code FixedDevUserProvider}. <b>Không một use-case nào đã viết phải đổi chữ ký.</b>
  *
  * <pre>
  *   M1   FixedDevUserProvider   trả user seed id=1, chỉ chạy ngoài prod
- *   M4   JwtCurrentUserProvider đọc từ SecurityContext           (Bước 4.5)
+ *   M4   JwtCurrentUserProvider đọc từ JwtAuthFilter             (Bước 4.5) ✅ ĐÃ THAY
  * </pre>
+ *
+ * <p><b>Lời hứa đó đã được kiểm chứng.</b> Bước 4.5 thay toàn bộ cơ chế xác thực và số
+ * use-case phải sửa chữ ký là <i>không</i>. Ghi lại ở đây vì đó là bằng chứng cho nguyên tắc
+ * 4 của {@code build-order.md} Phần 1, không phải một lời tự khen.
  *
  * <h2>Nó KHÔNG phải chỗ kiểm quyền</h2>
  * Class này chỉ trả lời <i>"ai đang gọi"</i>. Câu <i>"người này được làm việc đó không"</i>

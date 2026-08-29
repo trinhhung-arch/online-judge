@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Đề bài · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <!-- KaTeX vẽ công thức ở TRÌNH DUYỆT. Server chỉ render Markdown và giữ nguyên các
+         đoạn toán — quyết định của Bước 4.9, xem CommonMarkStatementRenderer.
+
+         ⚠️ CHƯA CÓ integrity= (SRI). Cố ý bỏ trống thay vì điền một hash phỏng đoán: một
+         hash sai KHÔNG bảo vệ gì mà chỉ chặn thẳng tài nguyên, và trang đề mất công thức
+         toán. Trước khi deploy lên host, tạo hash thật rồi dán vào:
+
+             curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A
+
+         Việc này thuộc buổi tấn công chéo tuần 9, cùng với cấu hình Cloudflare Tunnel. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+          crossorigin="anonymous">
+</head>
+<body>
+<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
+     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
+     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
+     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1 id="tieu-de">Đang tải…</h1>
+    <p id="gioi-han" class="goi-y"></p>
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="hai-cot">
+        <section aria-labelledby="nhan-de">
+            <h2 id="nhan-de">Đề bài</h2>
+            <!-- ★ Chỗ DUY NHẤT trong toàn bộ giao diện dùng innerHTML. An toàn vì server đã
+                 render bằng CommonMark với escapeHtml(true) + sanitizeUrls(true): mọi HTML thô
+                 trong đề đã thành văn bản. Xem CommonMarkStatementRenderer. -->
+            <div id="de-bai" class="de-bai"></div>
+        </section>
+
+        <section aria-labelledby="nhan-nop">
+            <h2 id="nhan-nop">Nộp bài</h2>
+            <label for="ngon-ngu">Ngôn ngữ</label>
+            <select id="ngon-ngu"></select>
+
+            <label for="ma-nguon" class="goi-y" style="margin-top:12px">Mã nguồn</label>
+            <div id="khung-soan" class="khung-soan"></div>
+            <textarea id="ma-nguon" hidden aria-hidden="true"></textarea>
+            <p class="goi-y" id="trang-thai-nhap">Nháp được lưu trong trình duyệt của bạn.</p>
+
+            <div class="hang-nop">
+                <button id="nop">Nộp bài</button>
+                <span id="dem-nguoc" class="goi-y" role="status" aria-live="polite"></span>
+            </div>
+        </section>
+    </div>
+</main>
+
+<!-- Xem ghi chú về SRI ở phần <head>. -->
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+        crossorigin="anonymous" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        crossorigin="anonymous" defer></script>
+<script type="module" src="/js/problem.js"></script>
+</body>
+</html>

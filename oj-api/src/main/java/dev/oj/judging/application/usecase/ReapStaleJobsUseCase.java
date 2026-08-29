@@ -3,6 +3,7 @@ package dev.oj.judging.application.usecase;
 import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.platform.config.JudgeTransactional;
+import dev.oj.platform.security.InternalAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ import java.util.List;
  *       một worker chỉ đang chậm.</li>
  * </ul>
  */
+@InternalAccess("bộ lập lịch @Scheduled trong chính tiến trình này — lời gọi không đến từ mạng, nên không có tầng xác thực nào để đi qua.")
 @Service
 public class ReapStaleJobsUseCase {
 

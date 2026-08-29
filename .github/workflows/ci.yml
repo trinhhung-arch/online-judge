@@ -53,8 +53,18 @@ jobs:
       # Thô, nhưng nó bắt đúng thứ invokedynamic giấu mất (bất biến #5, SEC2).
       - name: Cấm nối chuỗi trong SQL
         run: |
-          if grep -rInE '"\s*\+|\+\s*"' --include='*.java' \
-               oj-api/src/main/java/dev/oj/*/infrastructure/ 2>/dev/null; then
+          # Tìm MỌI thư mục tên `infrastructure`, ở bất kỳ độ sâu nào.
+          #
+          # Bản trước dùng glob `dev/oj/*/infrastructure/` — đúng một mức — nên nó bỏ sót
+          # `dev/oj/platform/audit/infrastructure/` xuất hiện ở M4. Một hàng rào bỏ sót thì
+          # tệ hơn không có hàng rào: nó tạo cảm giác đã được canh.
+          mapfile -t thu_muc < <(find oj-api/src/main/java -type d -name infrastructure | sort)
+          if [ ${#thu_muc[@]} -eq 0 ]; then
+            echo "::error::Không tìm thấy thư mục infrastructure nào — bước kiểm này đang chạy rỗng"
+            exit 1
+          fi
+          echo "Quét ${#thu_muc[@]} thư mục:"; printf '  %s\n' "${thu_muc[@]}"
+          if grep -rInE '"\s*\+|\+\s*"' --include='*.java' "${thu_muc[@]}"; then
             echo "::error::Phát hiện nối chuỗi trong tầng infrastructure — dùng named parameter của JdbcClient"
             exit 1
           fi
