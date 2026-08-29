@@ -6,6 +6,11 @@
 #
 # isolate cần quyền tạo namespace và cần một cgroup được uỷ quyền. Tối thiểu:
 #
+# Container KHÔNG có systemd, nên `isolate-cg-keeper` phải được khởi động bằng tay trước
+# worker (nó là thứ ghi /run/isolate/cgroup mà `cg_root = auto:` trỏ tới):
+#
+#   /usr/local/sbin/isolate-cg-keeper &
+#
 #   docker run --rm \
 #     --cgroupns=private \
 #     --security-opt seccomp=unconfined \
@@ -60,9 +65,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=isolate-build /opt/isolate/ /usr/local/
-# setuid root: bắt buộc, isolate phải tạo được namespace. Bản thân worker thì KHÔNG chạy root.
+
+# ★ User `isolate` + dải subuid: config mặc định có `subid_user = isolate`, và cả `isolate`
+# lẫn `isolate-cg-keeper` CHẾT ngay lúc đọc config nếu /etc/subuid không có dòng ấy
+# (config.c: die("User %s not found in %s")). `make install` không tạo nó — đúng lỗi đã làm
+# CI đỏ một lần. Dải này là nguồn uid riêng cho từng box (bất biến sandbox #7).
+#
+# setuid root cho isolate là bắt buộc — nó phải tạo được namespace. Worker thì KHÔNG chạy root.
 RUN chmod u+s /usr/local/bin/isolate \
     && mkdir -p /var/local/lib/isolate /run/isolate/locks /var/tmp/oj-worker \
+    && useradd --system --no-create-home --shell /usr/sbin/nologin isolate \
+    && echo "isolate:200000:65536" >> /etc/subuid \
+    && echo "isolate:200000:65536" >> /etc/subgid \
     && useradd --system --create-home --uid 1500 ojworker \
     && chown ojworker:ojworker /var/tmp/oj-worker
 

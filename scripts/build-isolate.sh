@@ -87,13 +87,69 @@ git clone --depth 1 --branch "${VERSION}" https://github.com/ioi/isolate.git "${
 echo "==> Build và cài vào ${PREFIX}"
 make -C "${BUILD_DIR}" install PREFIX="${PREFIX}"
 
+# ★ isolate KHÔNG tự tạo user này, và `make install` cũng không.
+#
+# Config mặc định có `subid_user = isolate`: cả `isolate` lẫn `isolate-cg-keeper` đọc
+# /etc/subuid và /etc/subgid để lấy dải uid cấp riêng cho từng box — mỗi box một uid, đó là
+# bất biến sandbox #7 ("không chạy bằng root, mỗi box một uid riêng").
+#
+# Thiếu dòng ấy thì cả hai chết ngay lúc đọc config (config.c: die("User %s not found in %s")),
+# và triệu chứng là HAI dòng lỗi trông không liên quan gì nhau:
+#     Job for isolate.service failed because the control process exited with error code.
+#     User isolate not found in /etc/subuid
+# Một nguyên nhân, hai chỗ hỏng.
+echo "==> User và dải subuid cho sandbox"
+SUBID_COUNT="${SUBID_COUNT:-65536}"   # = số box tối đa; box id cao nhất dự án dùng là 999
+
+if ! id -u isolate >/dev/null 2>&1; then
+    nologin_shell=/usr/sbin/nologin
+    [[ -x "${nologin_shell}" ]] || nologin_shell=/sbin/nologin
+    [[ -x "${nologin_shell}" ]] || nologin_shell=/bin/false
+    useradd --system --no-create-home --shell "${nologin_shell}" isolate
+    echo "    tạo user hệ thống 'isolate'"
+fi
+
+# Chọn điểm bắt đầu nằm sau MỌI dải đã cấp, thay vì cắm cứng một con số. Hai user dùng chồng
+# dải subuid nghĩa là box của isolate và container của người khác cùng một uid — một lỗi cách
+# ly mà không có triệu chứng nào cho tới lúc bị khai thác.
+subid_floor() {
+    local floor=200000
+    for file in /etc/subuid /etc/subgid; do
+        [[ -f "${file}" ]] || continue
+        floor=$(awk -F: -v floor="${floor}" \
+            'NF>=3 && $1 != "isolate" { e = $2 + $3; if (e > floor) floor = e } END { print floor }' \
+            "${file}")
+    done
+    echo "${floor}"
+}
+
+SUBID_START="${SUBID_START:-$(subid_floor)}"
+for file in /etc/subuid /etc/subgid; do
+    touch "${file}"
+    if ! grep -q '^isolate:' "${file}"; then
+        echo "isolate:${SUBID_START}:${SUBID_COUNT}" >> "${file}"
+        echo "    ${file}: isolate:${SUBID_START}:${SUBID_COUNT}"
+    fi
+done
+
 # isolate 2.x cần isolate-cg-keeper giữ một cgroup gốc được uỷ quyền; nó ghi đường dẫn ra
 # /run/isolate/cgroup, đúng chỗ `cg_root = auto:` trong config trỏ tới. Thiếu nó thì --cg
 # không ép được giới hạn nào.
+# Sau khi qua được cf_parse(), cửa ải kế tiếp của cg-keeper là setup_cg(): nó mkdir một
+# subgroup rồi ghi "+cpuset +memory" vào cgroup.subtree_control của cgroup được uỷ quyền.
+# In sẵn danh sách controller ra đây để nếu bước sau hỏng thì câu trả lời đã nằm trong log.
+echo "    cgroup controllers: $(cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null || echo '?')"
+
 if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
     systemctl daemon-reload
-    systemctl enable --now isolate.service \
-        || echo "⚠️  isolate.service không khởi động được — kiểm chứng bên dưới sẽ nói rõ hơn"
+    if ! systemctl enable --now isolate.service; then
+        # Đổ thẳng nhật ký ra đây. Trên CI không ai gõ được `systemctl status`, nên một dòng
+        # "xem systemctl status" là một dòng vô dụng — nó đúng là thứ đã làm lần đỏ trước tốn
+        # thêm một vòng push.
+        echo "⚠️  isolate.service không khởi động được. Nhật ký:" >&2
+        systemctl status --no-pager --full isolate.service || true
+        journalctl -xeu isolate.service --no-pager -n 50 || true
+    fi
 else
     echo "⚠️  Không có systemd đang chạy. isolate-cg-keeper phải được khởi động bằng cách khác," >&2
     echo "    nếu không thì --cg sẽ hỏng." >&2
@@ -101,6 +157,11 @@ fi
 
 echo "==> Kiểm chứng"
 "${PREFIX}/bin/isolate" --version
+echo "    subuid: $(grep '^isolate:' /etc/subuid)"
+echo "    subgid: $(grep '^isolate:' /etc/subgid)"
+# isolate-check-environment gọi tput; runner không có TERM nên nó rắc 4 dòng
+# `tput: unknown terminal "unknown"` vào giữa log.
+export TERM="${TERM:-dumb}"
 # Cảnh báo, không chặn: isolate-check-environment than phiền về mọi thứ ảnh hưởng ĐỘ ỔN ĐỊNH
 # CỦA SỐ ĐO (turbo boost, CPU governor). Trên runner dùng chung thì không sửa được, và không
 # ca nào trong 14 test tấn công phụ thuộc vào số đo chính xác.
@@ -109,9 +170,10 @@ echo "==> Kiểm chứng"
 
 # Đây mới là bài kiểm thật: dựng và xoá được một box nghĩa là cgroup delegation hoạt động.
 if ! "${PREFIX}/bin/isolate" --cg -b 999 --init >/dev/null; then
-    echo "Không dựng được box. Gần như luôn là isolate-cg-keeper chưa chạy:" >&2
-    echo "  systemctl status isolate.service" >&2
-    echo "  cat /run/isolate/cgroup" >&2
+    echo "Không dựng được box. Nhật ký:" >&2
+    systemctl status --no-pager --full isolate.service 2>/dev/null || true
+    journalctl -xeu isolate.service --no-pager -n 50 2>/dev/null || true
+    echo "cg_root mà isolate đang trỏ tới: $(cat /run/isolate/cgroup 2>&1)" >&2
     exit 1
 fi
 "${PREFIX}/bin/isolate" --cg -b 999 --cleanup

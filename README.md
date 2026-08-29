@@ -35,6 +35,19 @@ sudo ./scripts/mount-box-tmpfs.sh         # tuỳ chọn, chỉ trên máy nhi�
 ./mvnw -pl oj-worker spring-boot:run
 ```
 
+### Sandbox không chạy được?
+
+`make install` của isolate **không** tạo user `isolate` và **không** ghi `/etc/subuid`. Ba lỗi
+dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả ba, nhưng nếu bạn cài tay thì
+đây là chỗ tra:
+
+| Triệu chứng | Nguyên nhân |
+|---|---|
+| `isolate.c:17: fatal error: seccomp.h` | thiếu `libseccomp-dev` — Makefile của isolate 2.6 có `LIBS=-lcap -lseccomp` |
+| `User isolate not found in /etc/subuid` **và** `Job for isolate.service failed` | một nguyên nhân, hai chỗ hỏng: config mặc định có `subid_user = isolate`, và cả `isolate` lẫn `isolate-cg-keeper` chết ở `cf_parse()` nếu thiếu user + dải subuid |
+| `Cannot write .../box-N/memory.max: No such file` | `isolate-cg-keeper` chưa chạy, nên `/run/isolate/cgroup` không tồn tại. `systemctl status isolate.service` |
+| `Cannot write to .../cgroup.subtree_control: Device or resource busy` | cg-keeper đang ở một cgroup còn tiến trình khác. Nó phải nằm riêng trong `isolate.slice` với `Delegate=true` — đó chính là việc của `isolate.service` |
+
 > Trên macOS thì `isolate` không chạy được — nó dùng cgroup v2 và namespace của Linux. Máy chấm
 > thật chạy Linux trong VM/container; xem [`infra/isolate/Dockerfile`](infra/isolate/Dockerfile).
 > Các test cần sandbox tự bỏ qua trên macOS, và **fail** trên Linux nếu thiếu `isolate` — cố ý,
