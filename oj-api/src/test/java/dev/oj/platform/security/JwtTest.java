@@ -1,6 +1,7 @@
 package dev.oj.platform.security;
 
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.config.AuthProperties;
 import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -37,7 +38,7 @@ class JwtTest {
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
 
     private static JwtService service(String khoa, Instant luc) {
-        var auth = new AppProperties.Auth(khoa, Duration.ofMinutes(15), Duration.ofDays(7),
+        var auth = new AuthProperties(khoa, Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15));
         return new JwtService(dev.oj.platform.config.AppPropertiesGia.voiAuth(auth),
                 Clock.fixed(luc, ZoneOffset.UTC));

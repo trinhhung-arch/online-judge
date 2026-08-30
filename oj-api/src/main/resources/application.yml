@@ -103,6 +103,14 @@ oj:
     lease: 120s                   # job im lặng quá ngần này thì bị coi là bỏ rơi
     poll-interval: 5s             # PHẢI nhỏ hơn lease — xem AppProperties.Jobs
 
+  contest:
+    # M5 — FR-CON-04, P8. Bảng xếp hạng cập nhật theo LÔ, không phải mỗi verdict:
+    # 500 người nộp cùng lúc là 500 lần ghi lại bảng nếu làm theo từng verdict.
+    standings-interval: 2s        # con số đã hứa với người dùng, không phải tham số vận hành
+    standings-batch-size: 500     # bất biến #8 — mọi truy vấn đều có LIMIT
+    standings-grace: 5m           # bài nộp giây cuối vẫn đang chấm khi chuông reo
+    top-size: 50                  # FR-CON-04 — top 50 + vùng quanh mình
+
   ai:
     daily-quota: 5                # FR-AI-03 — tuần 14-15
     timeout: 30s                  # cứng, không có ngoại lệ (nfrplan.md 10.5)

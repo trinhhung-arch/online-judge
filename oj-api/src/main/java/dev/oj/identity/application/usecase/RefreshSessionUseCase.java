@@ -32,7 +32,7 @@ import java.util.Map;
  * <h2>Trạng thái tài khoản được đọc lại ở đây</h2>
  * Đây là chỗ duy nhất, mỗi 15 phút, mà database được hỏi <i>"người này còn được vào không"</i>.
  * Access token thì không hỏi — nó mang sẵn vai trò, đó là cả điểm mạnh lẫn điểm yếu của nó
- * ({@code AppProperties.Auth}). Nên một tài khoản bị vô hiệu hoá dừng hẳn ở lần làm mới kế
+ * ({@code AuthProperties}). Nên một tài khoản bị vô hiệu hoá dừng hẳn ở lần làm mới kế
  * tiếp, chậm nhất 15 phút.
  */
 @PublicAccess("Chính refresh token là thứ xác thực — đòi access token ở đây thì không ai làm "

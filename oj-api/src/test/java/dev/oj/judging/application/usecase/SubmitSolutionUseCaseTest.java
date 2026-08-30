@@ -32,16 +32,19 @@ class SubmitSolutionUseCaseTest {
     private JudgingFakes fakes;
     private SubmitSolutionUseCase useCase;
     private JudgingFakes.RateLimiterGia rateLimiter;
+    private LichThiGia lichThi;
 
     @BeforeEach
     void setUp() {
         fakes = new JudgingFakes();
         rateLimiter = new JudgingFakes.RateLimiterGia();
+        lichThi = new LichThiGia();
         useCase = new SubmitSolutionUseCase(
                 JudgingFakes.userIs(7L, Role.USER),
-                new GetProblemUseCase(problemRepositoryReturning(publishedProblem()), statements()),
+                new GetProblemUseCase(problemRepositoryReturning(publishedProblem()), statements(),
+                        lichThi, JudgingFakes.userIs(7L, Role.USER)),
                 fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
-                fakes.queue, fakes.publisher, fakes.txManager);
+                lichThi, fakes.queue, fakes.publisher, fakes.txManager);
     }
 
     private SubmitSolutionUseCase.Command command() {
@@ -52,6 +55,42 @@ class SubmitSolutionUseCaseTest {
      * ★ Bất biến #2 diễn đạt thành một danh sách: ba câu ghi nằm <b>trong</b> transaction,
      * publish nằm <b>sau</b> COMMIT, và không có gì khác chen vào giữa.
      */
+    @Test
+    @DisplayName("★ M5 · bài nộp ngoài kỳ thi có contest_id = null")
+    void ngoai_ky_thi_thi_contest_id_null() {
+        useCase.submit(command());
+
+        assertThat(fakes.submissions.inserted.contestId()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ M5 · contest_id SUY RA từ máy chủ, client không khai được")
+    void contest_id_suy_ra_tu_may_chu() {
+        lichThi.contestDangChay = 77L;
+
+        useCase.submit(command());
+
+        // Command chỉ có problemId, languageCode, source — không có chỗ nào để client khai
+        // contest. Nếu ngày nào đó ai thêm một trường contestId vào Command, ca này vẫn xanh
+        // nhưng ca dưới sẽ đỏ.
+        assertThat(fakes.submissions.inserted.contestId()).isEqualTo(77L);
+    }
+
+    @Test
+    @DisplayName("★ M5 · Command KHÔNG có trường contest nào — client không được chọn")
+    void command_khong_co_truong_contest() {
+        var truong = java.util.Arrays.stream(SubmitSolutionUseCase.Command.class
+                        .getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName)
+                .map(t -> t.toLowerCase(java.util.Locale.ROOT))
+                .toList();
+
+        // Client khai được contest nghĩa là khai được contest KHÁC, hoặc khai không có contest
+        // nào để bài của mình không vào bảng xếp hạng — nộp thử trong giờ thi mà không bị tính
+        // penalty. Cả hai đều phá đúng thứ hệ thống này bán.
+        assertThat(truong).noneMatch(t -> t.contains("contest"));
+    }
+
     @Test
     @DisplayName("★ FR-SUB-08 · chốt rate limit chạy TRƯỚC persist — bị chặn thì không ghi gì")
     void rate_limit_chan_truoc_khi_ghi() {
@@ -171,9 +210,10 @@ class SubmitSolutionUseCaseTest {
     void de_khong_ton_tai_thi_khong_ghi_gi() {
         var useCaseNoProblem = new SubmitSolutionUseCase(
                 JudgingFakes.userIs(7L, Role.USER),
-                new GetProblemUseCase(problemRepositoryReturning(null), statements()),
+                new GetProblemUseCase(problemRepositoryReturning(null), statements(),
+                        lichThi, JudgingFakes.userIs(7L, Role.USER)),
                 fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
-                fakes.queue, fakes.publisher, fakes.txManager);
+                lichThi, fakes.queue, fakes.publisher, fakes.txManager);
 
         assertThatExceptionOfType(ProblemNotFoundException.class)
                 .isThrownBy(() -> useCaseNoProblem.submit(command()));

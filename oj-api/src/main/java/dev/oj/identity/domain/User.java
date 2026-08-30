@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  * @param email               có thể {@code null} sau khi ẩn danh hoá
  * @param displayName         tên hiển thị
  * @param role                vai trò hiện tại trong database — <b>không</b> phải vai trò trong
- *                            token, hai thứ này lệch nhau tối đa 15 phút (xem {@code AppProperties.Auth})
+ *                            token, hai thứ này lệch nhau tối đa 15 phút (xem {@code AuthProperties})
  * @param status              {@link UserStatus}
  * @param preferredLanguageId ngôn ngữ ưa dùng, {@code null} nếu chưa chọn (FR-AUTH-05)
  * @param createdAt           lúc đăng ký

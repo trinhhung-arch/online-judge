@@ -1,4 +1,4 @@
-package dev.oj.judging.api;
+package dev.oj.platform.web;
 
 import dev.oj.platform.config.AppProperties;
 import jakarta.annotation.PreDestroy;

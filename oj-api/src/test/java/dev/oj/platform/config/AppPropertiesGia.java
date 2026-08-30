@@ -33,12 +33,12 @@ public final class AppPropertiesGia {
     }
 
     /** Cho {@code JwtTest} — nó đổi khoá ký và mốc thời gian. */
-    public static AppProperties voiAuth(AppProperties.Auth auth) {
+    public static AppProperties voiAuth(AuthProperties auth) {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
-    public static AppProperties.Auth authMacDinh() {
-        return new AppProperties.Auth("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
+    public static AuthProperties authMacDinh() {
+        return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15));
     }
 
@@ -51,7 +51,7 @@ public final class AppPropertiesGia {
     }
 
     private static AppProperties voi(AppProperties.Internal internal,
-                                     AppProperties.Auth auth,
+                                     AuthProperties auth,
                                      AppProperties.Submission submission) {
         return new AppProperties(
                 submission,
@@ -62,6 +62,8 @@ public final class AppPropertiesGia {
                 new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),
                 auth,
                 new AppProperties.Jobs(Duration.ofSeconds(120), Duration.ofSeconds(5)),
+                new ContestProperties(Duration.ofSeconds(2), 500,
+                        Duration.ofMinutes(5), 50),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));
     }
 }

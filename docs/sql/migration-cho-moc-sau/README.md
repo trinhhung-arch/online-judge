@@ -1,6 +1,6 @@
 # Migration của các mốc sau — chưa được kích hoạt
 
-`postgres-design.md` mục 16 gắn mỗi file vào một mốc. **Đang chạy: V1–V6 + `R__seed`.**
+`postgres-design.md` mục 16 gắn mỗi file vào một mốc. **Đang chạy: V1–V7 + `R__seed`.**
 
 > ✅ `V4__subtasks_va_ket_qua_theo_nhom.sql` đã được kích hoạt ở M3 cùng với `SubtaskScorer`
 > và `SubtaskSpecDto` — nó nằm ở `oj-api/src/main/resources/db/migration/` từ đó.
@@ -10,6 +10,10 @@
 >
 > ✅ `V6__jobs_nen_va_van_hanh.sql` đã được kích hoạt ở M4 cùng khung `platform/jobs` —
 > đây chính là phương án (a) được thực thi.
+>
+> ✅ `V7__contests_va_bang_xep_hang.sql` đã được kích hoạt ở M5 (Bước 5.1) cùng module
+> `contests`. Lưu ý: `build-order.md` PHẦN 7 gọi nó là "Migration V6" — đó là số **trước**
+> lần đổi số ở M4, khi hạ tầng job được kéo lên. Nội dung không đổi, chỉ số hiệu.
 >
 > 🔀 **Job nền đã đổi số từ V7 thành V6, contest từ V6 thành V7.** `build-order.md` PHẦN 6 nêu
 > một xung đột thứ tự: Bước 4.10 (upload ZIP) phải là job nền, mà hạ tầng job lại nằm ở M6.
@@ -25,7 +29,6 @@ schema thật đang ở đâu.
 
 | File | Mốc | Kích hoạt cùng với |
 |---|---|---|
-| `V7__contests_va_bang_xep_hang.sql` | M5 | `contests`, FR-CON-* |
 | `V8__ai_review.sql` | tuần 14–15 | module `ai` |
 | `V9__phan_quyen_role_ung_dung.sql` | M6 | GRANT/REVOKE cho `oj_app` — **hai role đã tồn tại từ M0**, xem `infra/postgres/init/01-roles.sql` |
 

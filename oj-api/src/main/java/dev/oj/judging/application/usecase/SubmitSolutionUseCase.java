@@ -10,6 +10,7 @@ import dev.oj.judging.domain.DomainRules;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.judging.domain.SourceBlob;
 import dev.oj.judging.domain.SubmissionStatus;
+import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.RequiresRole;
 import dev.oj.problems.application.usecase.GetProblemUseCase;
@@ -56,6 +57,7 @@ public class SubmitSolutionUseCase {
     private final SourceBlobRepository sourceBlobs;
     private final SubmissionRepository submissions;
     private final SubmissionRateLimiter rateLimiter;
+    private final ContestWindowQuery lichThi;
     private final JudgeQueueRepository queue;
     private final JudgeJobPublisher events;
     private final TransactionTemplate tx;
@@ -66,6 +68,7 @@ public class SubmitSolutionUseCase {
                                  SourceBlobRepository sourceBlobs,
                                  SubmissionRepository submissions,
                                  SubmissionRateLimiter rateLimiter,
+                                 ContestWindowQuery lichThi,
                                  JudgeQueueRepository queue,
                                  JudgeJobPublisher events,
                                  @Qualifier("appTransactionManager") PlatformTransactionManager txManager) {
@@ -75,6 +78,7 @@ public class SubmitSolutionUseCase {
         this.sourceBlobs = sourceBlobs;
         this.submissions = submissions;
         this.rateLimiter = rateLimiter;
+        this.lichThi = lichThi;
         this.queue = queue;
         this.events = events;
         // Pool app (20), KHÔNG phải pool judge (6): nộp bài là request của người dùng.
@@ -107,7 +111,21 @@ public class SubmitSolutionUseCase {
         // người. Đặt sau thì cả hai đã ghi xong, và giới hạn chỉ còn là một thông báo.
         rateLimiter.kiemTraVaGhiNhan(userId);
 
-        long submissionId = persist(userId, problem, language, blob);
+        // ---- M5 · Bước 5.4 — bài nộp thuộc kỳ thi nào -------------------------------------
+        //
+        // ★ SUY RA TỪ MÁY CHỦ, KHÔNG NHẬN TỪ CLIENT.
+        //
+        // Cách dễ là thêm một trường `contestId` vào request. Đừng: lúc đó client khai được
+        // một contest khác, hoặc khai KHÔNG CÓ contest nào để bài của mình không vào bảng xếp
+        // hạng — nộp thử trong giờ thi mà không bị tính penalty. Cả hai đều phá đúng thứ hệ
+        // thống này bán.
+        //
+        // Chốt FR-CON-03 (đề ngoài giờ thì không nộp được) đã chạy ở `submittableById` phía
+        // trên, nên tới đây đề chắc chắn mở với người này.
+        Long contestId = lichThi.contestDangChayChuaDe(problem.id()).stream().boxed()
+                .findFirst().orElse(null);
+
+        long submissionId = persist(userId, contestId, problem, language, blob);
         publishQuietly(submissionId);
         return new SubmissionAccepted(submissionId, SubmissionStatus.QUEUED);
     }
@@ -119,12 +137,12 @@ public class SubmitSolutionUseCase {
      * submission, rồi hàng đợi. Commit xong là bài <b>chắc chắn</b> được chấm — kể cả khi
      * RabbitMQ, Redis và toàn bộ worker đang chết.
      */
-    private long persist(long userId, Problem problem, LanguageRepository.Language language,
-                         SourceBlob blob) {
+    private long persist(long userId, Long contestId, Problem problem,
+                         LanguageRepository.Language language, SourceBlob blob) {
         return tx.execute(status -> {
             sourceBlobs.saveIfAbsent(blob);                          // ON CONFLICT DO NOTHING
             long id = submissions.insert(new SubmissionRepository.NewSubmission(
-                    userId, problem.id(), null, language.id(),
+                    userId, problem.id(), contestId, language.id(),
                     blob.sha256(), blob.byteSize(), problem.currentTestdataVersion()));
             queue.enqueue(id, DomainRules.PRIORITY_LIVE);
             return id;

@@ -36,6 +36,21 @@ public class ProblemsException extends DomainException {
      * {@code current_testdata_version = 0} sẽ nhận bài nộp và mọi bài đều IE — người dùng thấy
      * hệ thống hỏng, còn tác giả thì không biết mình quên gì.
      */
+    /**
+     * FR-PROB-11 — đề đang nằm trong một kỳ thi đang diễn ra.
+     *
+     * <p>Ở đây <b>409 chứ không 404</b>, khác với {@code ContestsException.deBiKhoa()}. Hai
+     * tình huống khác nhau: bên kia là một người ngoài dò đề của kỳ thi sắp tới và không được
+     * biết kỳ thi ấy tồn tại; bên này là <i>chính tác giả đề</i>, người đã biết mọi thứ về nó.
+     * Giấu lý do với họ chỉ tạo ra một lỗi khó hiểu.
+     */
+    public static ProblemsException dangTrongKyThi() {
+        return new ProblemsException(Kind.CONFLICT, "problem.dang_trong_ky_thi",
+                "Đề này đang được dùng trong một kỳ thi đang diễn ra, không sửa được. "
+                        + "Chờ kỳ thi kết thúc, hoặc gỡ đề khỏi kỳ thi.",
+                "Từ chối sửa đề đang nằm trong contest đang chạy (FR-PROB-11)");
+    }
+
     public static ProblemsException chuaCoTestdata() {
         return new ProblemsException(Kind.CONFLICT, "problem.chua_co_testdata",
                 "Đề chưa có bộ test nào. Hãy nạp testdata trước khi xuất bản.",

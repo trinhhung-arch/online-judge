@@ -134,12 +134,12 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | **M2** | **sandbox `isolate` + 14 test tấn công** | **xong** (xem dưới) |
 | M3 | realtime (SSE + Redis), subtask, feedback level | xong |
 | **M4** | auth, quyền, upload đề, MinIO, giao diện | **xong 4.1–4.12** (xem dưới) |
-| M5 | contest, bảng xếp hạng | chưa |
+| **M5** | kỳ thi, bảng xếp hạng | **xong 5.1–5.11** (xem dưới) |
 | M6 | RabbitMQ, giám sát, deploy | chưa |
 
 ```
-./mvnw verify   →   424 test xanh, ~2 phút
-                    oj-api     237 unit + 96 IT (Postgres 16 + Redis 7 thật, Testcontainers)
+./mvnw verify   →   463 test xanh, ~2 phút
+                    oj-api     254 unit + 118 IT (Postgres 16 + Redis 7 thật, Testcontainers)
                     oj-worker   65 unit + 26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
 ```
 
@@ -179,6 +179,40 @@ Không một test nào bắt được chúng trước khi hệ thống được 
 | SSE trả **500 thân rỗng** thay vì 401/404 khi lỗi | chỉ xảy ra khi client gửi `Accept: text/event-stream`, tức là đúng cách trình duyệt gọi và không phải cách `curl` mặc định gọi | `SubmissionSseIT` — mọi phản hồi lỗi luôn là JSON có `code` |
 | Bucket MinIO chỉ tạo lúc khởi động | docker-compose không bảo đảm MinIO lên trước API; `@PostConstruct` hỏng một lần rồi thôi, nạp testdata hỏng **vĩnh viễn** tới lần restart | `MinioTestdataStore.luu` tự bảo đảm bucket, có cờ để chi phí thường trực bằng 0 |
 | Danh sách đề **500** khi không lọc gì | `:cursor IS NULL` với tham số NULL trần — Postgres không suy được kiểu. Đường đi mặc định hỏng, đường có bộ lọc thì chạy | `ProblemAuthoringIT` + `CAST(:x AS kiểu)` quanh mọi tham số tuỳ chọn |
+
+### M5 — toàn bộ 11 bước
+
+| Bước | Nội dung | Bằng chứng |
+|---|---|---|
+| 5.1 | migration **V7** — `contests` · `contest_problems` · bốn bảng xếp hạng · `standings_drift_checks` | chạy trên DB rỗng và DB dev đã có dữ liệu |
+| 5.2 | `ContestFormat` + `IcpcFormat` + `IoiFormat` — thêm thể thức = **1 file + 1 dòng + 1 migration**, cả ba đều hỏng ồn ào nếu quên | `ContestFormatTest` 14 |
+| 5.3 | `ContestWindowQuery` ở `platform` — **một câu, bốn nơi dùng**: khoá đề · cấm sửa đề · gán `contest_id` · (AI review, tuần 14–15) | `ContestAccessIT` |
+| 5.4 | FR-CON-03 — đề chỉ mở trong khung giờ, kiểm ở use-case, trả **404 chứ không 403** | `ContestAccessIT` 7 |
+| 5.5 | `RegisterForContestUseCase` — đóng đăng ký đúng lúc chuông reo | `ContestAccessIT` |
+| 5.6 | `StandingsUpdater` — lô mỗi 2 giây, idempotent theo `last_applied_submission_id`, **cả lô một transaction** | `ContestStandingsIT` 6 |
+| 5.7 | `RedisStandingsCache` (top N) + `JdbcStandingsReader` (đường dự phòng) | `ContestStandingsIT` |
+| 5.8 | `FreezeStandingsScheduler` — chụp một lần, ép ở hai lớp | `ContestStandingsIT` |
+| 5.9 | `RebuildStandingsJob` — job nền có tiến độ, **không có logic riêng** | `StandingsJobsIT` 7 |
+| 5.10 | `StandingsDriftCheckJob` — chỉ đo, không tự sửa | `StandingsJobsIT` |
+| 5.11 | `RevealStandingsUseCase` — đề và AI review mở tự động, bảng xếp hạng **chờ người bấm** | `ContestStandingsIT` |
+
+Rate limit và hai truy vấn lịch thi là ba chặng mới trên đường nộp bài kể từ M3. Đo lại sau
+M5: `p50=7ms · p95=11ms` trên 100 mẫu — ngân sách P2 là 300ms.
+
+> **Đóng băng không tự hết khi hết giờ.** Nó kéo dài tới khi có người công bố. Đó là cả điểm
+> của nghi thức trao giải kiểu ICPC: bảng vẫn kín sau tiếng chuông, và được mở ra trước mặt
+> mọi người. Tự mở lúc `ends_at` là xoá mất khoảnh khắc ấy, và không lấy lại được.
+
+**FR-CON-10 (virtual participation) chưa làm** — `frplan.md` xếp nó là ứng viên bị cắt đầu tiên
+và PHẦN 7 không liệt kê nó trong 5.1–5.11.
+
+### Ba lỗi nữa chỉ hiện ra khi chạy thật
+
+| Lỗi | Vì sao test không thấy trước | Đã chốt lại bằng |
+|---|---|---|
+| `StandingsUpdater` ghi dòng theo đề **trước** dòng tổng | khoá ngoại `contest_problem_standings → contest_standings` chỉ vỡ ở lần nộp ĐẦU TIÊN của một người, và thông báo lỗi không nhắc tới bảng đang thiếu dòng | `ContestStandingsIT` — bốn ca đỏ ngay lần chạy đầu |
+| `XepHangKey` — phép gói ba tầng vào một `double` | nó *chạy đúng* và có 5 ca xanh. Vấn đề là nó giải một bài toán thiết kế này không có: cache chỉ chứa top N, và top N đã được Postgres sắp đúng | xoá hẳn; điểm ZSET giờ là **vị trí**, không trần giá trị, không nhánh đặc biệt |
+| Cache bảng xếp hạng đứng im sau khi sửa tay bằng SQL | chỉ đường ghi của ứng dụng mới xoá cache — đúng thiết kế, nhưng người sửa tay lúc 2 giờ sáng cần biết trước | ghi vào javadoc của TTL, kèm `DEL oj:standings:*` |
 
 > **Ba lập trường phân quyền, và không có lập trường thứ tư.** Mọi class `*UseCase` phải mang
 > `@RequiresRole`, `@PublicAccess` hoặc `@InternalAccess`; LUẬT 8 fail CI nếu thiếu. Nhờ đó

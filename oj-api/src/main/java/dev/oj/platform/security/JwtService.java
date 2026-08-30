@@ -19,7 +19,7 @@ import java.time.Instant;
  * Đó là lý do nó rẻ: mỗi request được phân quyền mà không tốn một lượt đi Postgres. Cái giá
  * là token <b>cũ</b> — hạ vai trò một người từ ADMIN xuống USER thì token đã phát vẫn còn
  * ADMIN cho tới khi hết hạn. {@code oj.auth.access-ttl} là trần của khoảng cũ đó, và
- * {@link AppProperties.Auth} crash lúc boot nếu ai đó kéo nó quá 15 phút.
+ * {@link AuthProperties} crash lúc boot nếu ai đó kéo nó quá 15 phút.
  *
  * <p>Muốn hạ quyền có hiệu lực <i>ngay</i> thì phải thu hồi refresh token (một dòng UPDATE)
  * và chờ tối đa 15 phút. Không có đường tắt nào rẻ hơn mà không phải tra database mỗi request.

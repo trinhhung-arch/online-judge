@@ -70,6 +70,11 @@ final class ResetGiuaCacTest {
         jdbc.sql("UPDATE testcases SET subtask_id = NULL WHERE subtask_id IS NOT NULL").update();
         jdbc.sql("DELETE FROM subtasks").update();
 
+        // Kỳ thi (M5, V7). Phải sau khi xoá `submissions`: fk_submissions_contest KHÔNG có
+        // ON DELETE CASCADE, cố ý — mất một contest không được phép kéo theo bài nộp.
+        // Sáu bảng con của `contests` thì CÓ cascade, nên chúng tự biến mất.
+        jdbc.sql("DELETE FROM contests").update();
+
         // Đề do test tạo (Bước 4.9). Phải sau khi xoá `submissions` — khoá ngoại đi theo
         // chiều đó và KHÔNG có ON DELETE CASCADE. `testcases` và `testdata_versions` thì có,
         // nên chúng tự biến mất theo.
@@ -128,7 +133,15 @@ final class ResetGiuaCacTest {
     }
 
     private static void rateLimit(StringRedisTemplate redis) {
-        var khoa = redis.keys("oj:ratelimit:*");
+        xoaTheoMau(redis, "oj:ratelimit:*");
+        // Cache bảng xếp hạng (M5). Không xoá thì một test đọc bảng của contest id=1 sẽ thấy
+        // bảng của contest id=1 từ test trước — id được cấp lại sau mỗi lần DELETE FROM
+        // contests, nên "cùng id, khác dữ liệu" là chuyện xảy ra ở MỌI test.
+        xoaTheoMau(redis, "oj:standings:*");
+    }
+
+    private static void xoaTheoMau(StringRedisTemplate redis, String mau) {
+        var khoa = redis.keys(mau);
         if (khoa != null && !khoa.isEmpty()) {
             redis.delete(khoa);
         }

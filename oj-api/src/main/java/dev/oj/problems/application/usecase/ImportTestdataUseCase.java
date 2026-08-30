@@ -1,5 +1,6 @@
 package dev.oj.problems.application.usecase;
 
+import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.jobs.JobRepository;
 import dev.oj.platform.jobs.JobType;
 import dev.oj.platform.security.CurrentUserProvider;
@@ -57,14 +58,17 @@ public class ImportTestdataUseCase {
     private final ProblemAuthoringRepository problems;
     private final TestdataStore store;
     private final JobRepository jobs;
+    private final ContestWindowQuery lichThi;
 
     public ImportTestdataUseCase(CurrentUserProvider currentUser,
                                  ProblemAuthoringRepository problems,
-                                 TestdataStore store, JobRepository jobs) {
+                                 TestdataStore store, JobRepository jobs,
+                                 ContestWindowQuery lichThi) {
         this.currentUser = currentUser;
         this.problems = problems;
         this.store = store;
         this.jobs = jobs;
+        this.lichThi = lichThi;
     }
 
     /**
@@ -82,6 +86,13 @@ public class ImportTestdataUseCase {
         // người không sở hữu đề thì không có lý do gì được tải lên một byte nào.
         problems.findForAuthorById(problemId, nguoiGoi.id(), nguoiGoi.isAdmin())
                 .orElseThrow(() -> ProblemNotFoundException.byId(problemId));
+
+        // ★ FR-PROB-11, M5 Bước 5.3 — thay testdata giữa kỳ thi là chuyện tệ hơn hẳn sửa đề
+        // bài: các bài đã chấm giữ verdict theo bộ test cũ, bài nộp sau chấm bằng bộ test mới,
+        // và bảng xếp hạng so hai thứ không so được với nhau. Chặn TRƯỚC khi nhận file.
+        if (lichThi.deDangTrongContestDangChay(problemId)) {
+            throw ProblemsException.dangTrongKyThi();
+        }
 
         String sha = luuTamRoiDayLenKho(goi);
         long jobId = jobs.tao(JobType.TESTDATA_IMPORT,

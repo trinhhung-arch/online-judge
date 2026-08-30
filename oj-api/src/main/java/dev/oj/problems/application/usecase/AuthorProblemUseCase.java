@@ -3,6 +3,7 @@ package dev.oj.problems.application.usecase;
 import dev.oj.contract.CheckerType;
 import dev.oj.contract.ScoringMode;
 import dev.oj.platform.audit.AuditLog;
+import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.RequiresRole;
 import dev.oj.platform.security.Role;
@@ -46,13 +47,15 @@ public class AuthorProblemUseCase {
     private final CurrentUserProvider currentUser;
     private final ProblemAuthoringRepository problems;
     private final AuditLog auditLog;
+    private final ContestWindowQuery lichThi;
     private final Clock clock;
 
     public AuthorProblemUseCase(CurrentUserProvider currentUser, ProblemAuthoringRepository problems,
-                                AuditLog auditLog, Clock clock) {
+                                AuditLog auditLog, ContestWindowQuery lichThi, Clock clock) {
         this.currentUser = currentUser;
         this.problems = problems;
         this.auditLog = auditLog;
+        this.lichThi = lichThi;
         this.clock = clock;
     }
 
@@ -73,6 +76,7 @@ public class AuthorProblemUseCase {
     /** FR-PROB-01 và FR-PROB-07. Mã đề không sửa được — xem {@code ProblemEdit}. */
     public void sua(long problemId, Command lenh) {
         lenh.kiemTra(false);
+        camSuaKhiDangThi(problemId);
         var nguoiGoi = currentUser.current();
         boolean daSua = problems.capNhat(problemId, new ProblemAuthoringRepository.ProblemEdit(
                         lenh.title().trim(), lenh.statementMd(),
@@ -107,6 +111,27 @@ public class AuthorProblemUseCase {
     public void goXuong(long problemId) {
         doc(problemId);
         doiTrangThai(problemId, ProblemStatus.RETIRED);
+    }
+
+    /**
+     * ★ FR-PROB-11 — <b>cấm hoàn toàn</b> khi đề đang nằm trong một kỳ thi đang diễn ra.
+     *
+     * <p>Không phải "cảnh báo rồi cho qua", không phải "chỉ cấm sửa giới hạn". Cấm hẳn, kể cả
+     * sửa một lỗi chính tả trong đề bài. Lý do: giữa kỳ thi, mọi thay đổi trên đề đều tạo ra
+     * hai nhóm thí sinh — nhóm đọc bản cũ và nhóm đọc bản mới — và không có cách nào đền bù
+     * cho nhóm thứ nhất.
+     *
+     * <p>Sửa giới hạn thời gian thì tệ hơn nữa: các bài đã chấm xong giữ verdict tính theo
+     * giới hạn cũ, còn bài nộp sau đó tính theo giới hạn mới. Bảng xếp hạng khi đó so hai thứ
+     * không so được với nhau.
+     *
+     * <p>Người ra đề sai thì cách đúng là <b>huỷ đề khỏi kỳ thi</b> hoặc chấp nhận, không phải
+     * sửa giữa chừng. Đó là quyết định của người tổ chức, và nó không nên đi qua một endpoint.
+     */
+    private void camSuaKhiDangThi(long problemId) {
+        if (lichThi.deDangTrongContestDangChay(problemId)) {
+            throw ProblemsException.dangTrongKyThi();
+        }
     }
 
     /** Đọc đề của chính mình, <b>kể cả khi chưa xuất bản</b>. */

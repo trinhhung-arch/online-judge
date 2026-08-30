@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
  * </ul>
  *
  * <p><b>Access token vẫn sống thêm tối đa 15 phút</b> sau khi đăng xuất — nó không tra
- * database nên không thu hồi được. Đó là đánh đổi đã chọn ở {@code AppProperties.Auth}, và
+ * database nên không thu hồi được. Đó là đánh đổi đã chọn ở {@code AuthProperties}, và
  * frontend phải xoá nó khỏi bộ nhớ. Muốn cắt ngay lập tức thì phải tra database mỗi request,
  * tức là bỏ toàn bộ lợi ích của thiết kế này.
  */

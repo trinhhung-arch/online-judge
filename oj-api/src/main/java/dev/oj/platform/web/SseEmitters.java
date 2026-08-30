@@ -1,4 +1,4 @@
-package dev.oj.judging.api;
+package dev.oj.platform.web;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -6,6 +6,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Gửi lên một luồng SSE mà không biến việc client đóng tab thành một sự cố.
+ *
+ * <h2>Ở {@code platform.web} từ M5, trước đó ở {@code judging.api}</h2>
+ * Hai trang có SSE ({@code oj-api/CLAUDE.md} mục 4) nằm ở hai module khác nhau: chi tiết bài
+ * nộp ở {@code judging}, bảng xếp hạng ở {@code contests}. Để lớp này ở {@code judging.api}
+ * buộc {@code contests} phải import package {@code api} của một module khác — chạy được (luật
+ * ArchUnit 3 cho phép chiều đó) nhưng sai về ý: đây là hạ tầng HTTP, không phải nghiệp vụ
+ * chấm bài.
  *
  * <h2>★ Vì sao {@code complete()} chứ không phải {@code completeWithError()}</h2>
  * Đây là bài học từ một lần chạy thật, không phải từ một cuốn sách.
@@ -35,7 +42,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * nên một khối {@code catch (IOException | IllegalStateException)} để lọt). Danh sách đó sẽ
  * còn dài ra theo phiên bản Spring, và <b>mọi</b> phần tử của nó đều có cùng một cách xử lý.
  */
-final class SseEmitters {
+public final class SseEmitters {
 
     private static final Logger log = LoggerFactory.getLogger(SseEmitters.class);
 
@@ -43,7 +50,7 @@ final class SseEmitters {
     }
 
     /** @return {@code false} nếu kết nối đã chết — bên gọi ngừng làm việc cho nó */
-    static boolean send(SseEmitter emitter, Object payload) {
+    public static boolean send(SseEmitter emitter, Object payload) {
         return attempt(emitter, SseEmitter.event().name("submission").data(payload));
     }
 
