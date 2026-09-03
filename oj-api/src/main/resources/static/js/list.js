@@ -2,6 +2,7 @@
 
 import { goi, LoiApi, phien } from './api.js';
 import { veThanh, bao, chu } from './khung.js';
+import { DS } from './duong-dan.js';
 
 veThanh();
 
@@ -49,7 +50,7 @@ async function tai(noiTiep = false) {
     }
     bao(o, '');
     try {
-        const trang = await goi(`/api/v1/problems?${thamSoLoc()}`);
+        const trang = await goi(`${DS.de.url}?${thamSoLoc()}`);
         for (const de of trang.items) bang.append(veDong(de));
         cursor = trang.nextCursor;
         nutThem.hidden = !cursor;

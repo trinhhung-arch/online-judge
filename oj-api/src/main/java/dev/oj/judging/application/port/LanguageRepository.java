@@ -49,7 +49,22 @@ public interface LanguageRepository {
      * @param versionLabel thứ hiện cho người dùng — "GCC 13.2 / C++20". Người nộp bài cần
      *                     biết phiên bản trình biên dịch, vì nó quyết định cú pháp nào dùng được
      */
-    record LanguageOption(String code, String displayName, String versionLabel) {
+    /**
+     * ★ {@code id} có mặt ở đây để giao diện tự nối được {@code submissions.languageId}
+     * sang tên ngôn ngữ.
+     *
+     * <h2>Vì sao nối ở client chứ không thêm cột vào DTO bài nộp</h2>
+     * {@code SubmissionSummaryResponse} và {@code SubmissionDetailResponse} chỉ mang
+     * {@code languageId}, còn danh sách này trước đây chỉ mang {@code code} — không có
+     * đường nào nối hai đầu. Triệu chứng: trang chi tiết bài nộp <b>không hiện ngôn ngữ
+     * bao giờ</b> (nó né bằng cách bỏ hẳn trường đó), và bộ lọc theo ngôn ngữ mà FR-SUB-07
+     * đòi thì không viết được.
+     *
+     * <p>Cách còn lại là thêm {@code languageCode} vào hai DTO kia — nhưng thế là thêm một
+     * {@code JOIN languages} vào truy vấn danh sách bài nộp, tức là vào bảng nóng, cho một
+     * bảng tham chiếu ba dòng. Ở đây client tải ba dòng ấy một lần rồi tự nối trong bộ nhớ.
+     */
+    record LanguageOption(short id, String code, String displayName, String versionLabel) {
     }
 
     /**

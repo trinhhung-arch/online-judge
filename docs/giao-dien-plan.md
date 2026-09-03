@@ -170,8 +170,9 @@ là nghi thức của một kỳ thi ICPC, không phải một thông báo kỹ 
 ### 3.5 · 429 phải là đếm ngược, không phải thông báo
 
 FR-SUB-08 ghi rõ rate limit là **quy tắc nghiệp vụ được công bố**, và UI phải hiện đếm
-ngược. `api.js` đã bắt sẵn `Retry-After` vào `LoiApi.retryAfter` — chưa ai dùng. Nút nộp
-tắt và đếm ngược từ con số đó.
+ngược. `problem.js` đã làm đúng: `demNguocLai(Number(e.retryAfter) || 10)`. Luật ở đây là
+**giữ nguyên khuôn ấy** cho mọi nút gửi mới — một nút chỉ hiện "429 Too Many Requests" là
+một nút bắt người dùng tự đoán phải chờ bao lâu.
 
 ### 3.6 · Mọi chuỗi từ server đi qua `chu()`
 

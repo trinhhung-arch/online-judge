@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hồ sơ · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Hồ sơ</h1>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="hai-cot">
+        <section class="the">
+            <h2>Thông tin</h2>
+
+            <!-- Tên đăng nhập, email và vai trò KHÔNG sửa được ở đây: server không có
+                 endpoint nào cho chúng. Hiện dạng chỉ đọc thay vì một ô nhập bị tắt —
+                 một ô nhập tắt mời người ta đi tìm cách bật nó lên. -->
+            <dl id="chi-so-doc"></dl>
+
+            <form id="form-ho-so" novalidate>
+                <label for="ten-hien-thi">Tên hiển thị</label>
+                <input id="ten-hien-thi" name="displayName" autocomplete="name" required>
+
+                <label for="ngon-ngu">Ngôn ngữ ưa dùng</label>
+                <select id="ngon-ngu" name="preferredLanguageId">
+                    <option value="">Chưa chọn</option>
+                </select>
+                <p class="goi-y">Được chọn sẵn khi bạn mở một đề bài.</p>
+
+                <p><button type="submit">Lưu</button></p>
+            </form>
+        </section>
+
+        <section class="the">
+            <h2>Đổi mật khẩu</h2>
+
+            <!-- ★ Nói TRƯỚC, không phải sau. Server thu hồi mọi refresh token khi đổi mật
+                 khẩu (FR-AUTH-04), kể cả phiên đang thao tác. Người dùng bị đá ra mà không
+                 được báo trước sẽ tưởng là lỗi. -->
+            <p class="goi-y">Đổi mật khẩu sẽ đăng xuất bạn khỏi <strong>mọi thiết bị</strong>,
+                kể cả thiết bị này. Bạn sẽ cần đăng nhập lại.</p>
+
+            <form id="form-mat-khau" novalidate>
+                <label for="mat-khau-cu">Mật khẩu hiện tại</label>
+                <input id="mat-khau-cu" name="matKhauCu" type="password"
+                       autocomplete="current-password" required>
+
+                <label for="mat-khau-moi">Mật khẩu mới</label>
+                <input id="mat-khau-moi" name="matKhauMoi" type="password"
+                       autocomplete="new-password" required>
+                <p class="goi-y">Ít nhất 8 ký tự.</p>
+
+                <label for="mat-khau-lai">Nhập lại mật khẩu mới</label>
+                <input id="mat-khau-lai" name="matKhauLai" type="password"
+                       autocomplete="new-password" required>
+
+                <p><button type="submit">Đổi mật khẩu</button></p>
+            </form>
+        </section>
+    </div>
+</main>
+<script type="module" src="/js/ho-so.js"></script>
+</body>
+</html>

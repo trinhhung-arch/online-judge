@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trạng thái hệ thống · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Trạng thái hệ thống</h1>
+
+    <!-- Trang này CÔNG KHAI, không cần đăng nhập (FR-ADM-05). Đó là điểm của nó: người
+         không đăng nhập được cũng phải xem được là hệ thống còn sống hay không. -->
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <section class="the">
+        <h2 id="tieu-de-nhan">Đang tải…</h2>
+        <p id="mo-ta-nhan" class="goi-y"></p>
+    </section>
+
+    <div class="cuon-ngang">
+        <table>
+            <caption class="goi-y">Số liệu hàng đợi chấm bài, lấy mẫu mỗi 10 giây</caption>
+            <thead>
+            <tr>
+                <th scope="col">Chỉ số</th>
+                <th scope="col">Giá trị</th>
+                <th scope="col">Nghĩa là gì</th>
+            </tr>
+            </thead>
+            <tbody id="bang"></tbody>
+        </table>
+    </div>
+
+    <p class="goi-y">Thời gian chờ là <strong>ước tính</strong>, suy ra từ năng lực chấm
+        danh định của máy chấm chuẩn — không phải một phép đo.</p>
+</main>
+<script type="module" src="/js/trang-thai.js"></script>
+</body>
+</html>

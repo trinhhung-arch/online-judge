@@ -15,6 +15,7 @@
  */
 
 import { phien, xoaPhien, goi } from './api.js';
+import { DUONG } from './duong-dan.js';
 
 /** Tạo một phần tử với văn bản AN TOÀN. */
 export function chu(the, vanBan, lop) {
@@ -35,14 +36,27 @@ export function veThanh() {
 
     const nav = chu('nav');
     nav.setAttribute('aria-label', 'Điều hướng chính');
-    const de = chu('a', 'Đề bài');
-    de.href = '/';
-    nav.append(de);
+    // Trang cần đăng nhập chỉ hiện khi đã đăng nhập: một link dẫn thẳng tới màn hình
+    // đăng nhập là một link nói dối về nơi nó dẫn tới.
+    const muc = [['/', 'Đề bài']];
+    if (p) muc.push(['/bai-nop.html', 'Bài nộp của tôi']);
+    muc.push(['/trang-thai.html', 'Trạng thái']);
+
+    for (const [href, nhan] of muc) {
+        const a = chu('a', nhan);
+        a.href = href;
+        // ★ aria-current: người dùng trình đọc màn hình biết mình đang ở đâu trong menu.
+        // Rẻ, và là khác biệt giữa "một danh sách link" và "một thanh điều hướng".
+        if (location.pathname === href) a.setAttribute('aria-current', 'page');
+        nav.append(a);
+    }
     thanh.append(nav);
 
     const khuPhien = chu('div', null, 'phien');
     if (p) {
-        khuPhien.append(chu('span', p.handle));
+        const hoSo = chu('a', p.handle);
+        hoSo.href = '/ho-so.html';
+        khuPhien.append(hoSo);
         const ra = chu('button', 'Đăng xuất', 'phu');
         ra.addEventListener('click', dangXuat);
         khuPhien.append(ra);
@@ -60,7 +74,7 @@ async function dangXuat() {
     const p = phien();
     try {
         if (p?.refreshToken) {
-            await goi('/api/v1/auth/logout', { method: 'POST', body: { refreshToken: p.refreshToken } });
+            await goi(DUONG.auth.dangXuat, { method: 'POST', body: { refreshToken: p.refreshToken } });
         }
     } catch {
         // Đăng xuất là idempotent ở server, và frontend xoá token dù server trả gì.

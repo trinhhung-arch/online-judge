@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bài nộp của tôi · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
+     Cùng lý do đã ghi ở index.html: thứ giúp người khuyết tật không được phụ thuộc vào
+     thứ dễ hỏng nhất trên trang. -->
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Bài nộp của tôi</h1>
+
+    <form id="loc" class="the">
+        <label for="ma-de">Mã đề</label>
+        <input id="ma-de" name="maDe" placeholder="ví dụ: A-PLUS-B" autocomplete="off">
+        <p class="goi-y" id="goi-y-de">Bỏ trống để xem mọi đề.</p>
+
+        <label for="verdict">Kết quả</label>
+        <select id="verdict" name="verdict">
+            <option value="">Tất cả</option>
+        </select>
+
+        <label for="ngon-ngu">Ngôn ngữ</label>
+        <select id="ngon-ngu" name="ngonNgu">
+            <option value="">Tất cả</option>
+        </select>
+
+        <p><button type="submit">Lọc</button></p>
+    </form>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="cuon-ngang">
+        <table>
+            <caption class="goi-y">Lịch sử bài nộp, mới nhất trước</caption>
+            <thead>
+            <tr>
+                <th scope="col">Lúc nộp</th>
+                <th scope="col">Đề</th>
+                <th scope="col">Ngôn ngữ</th>
+                <th scope="col">Kết quả</th>
+                <th scope="col">Điểm</th>
+                <th scope="col">Thời gian</th>
+            </tr>
+            </thead>
+            <tbody id="bang"></tbody>
+        </table>
+    </div>
+
+    <p><button id="them" class="phu" hidden>Tải thêm</button></p>
+</main>
+<script type="module" src="/js/bai-nop.js"></script>
+</body>
+</html>

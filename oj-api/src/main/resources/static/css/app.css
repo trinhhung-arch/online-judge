@@ -144,6 +144,16 @@ th { color: var(--chu-nhat); font-size: .85rem; text-transform: uppercase; lette
 /* Bảng rộng cuộn trong khung của nó, KHÔNG làm cả trang cuộn ngang. */
 .cuon-ngang { overflow-x: auto; }
 
+/* Danh sách mô tả — phần chỉ đọc của hồ sơ (Bước G2). Hai cột trên màn hình
+   rộng, xếp chồng trên điện thoại: nhãn ngắn, giá trị dài, không cần bảng. */
+dl { display: grid; grid-template-columns: 1fr; gap: 2px 12px; margin: 0 0 var(--khoang); }
+dl dt { color: var(--chu-nhat); font-size: .85rem; }
+dl dd { margin: 0 0 8px; }
+@media (min-width: 480px) {
+    dl { grid-template-columns: minmax(9rem, auto) 1fr; align-items: baseline; }
+    dl dd { margin-bottom: 2px; }
+}
+
 /* --- Verdict -------------------------------------------------------------- */
 
 .verdict { font-weight: 700; }

@@ -17,6 +17,8 @@
  *     URL đi vào log của proxy, vào lịch sử trình duyệt, vào ảnh chụp màn hình khi báo lỗi.
  */
 
+import { DUONG } from './duong-dan.js';
+
 const KHOA_PHIEN = 'oj.phien';
 
 export function phien() {
@@ -55,7 +57,7 @@ async function doc(res) {
 async function lamMoi() {
     const p = phien();
     if (!p?.refreshToken) return false;
-    const res = await fetch('/api/v1/auth/refresh', {
+    const res = await fetch(DUONG.auth.lamMoi, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: p.refreshToken }),

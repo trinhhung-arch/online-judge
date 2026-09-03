@@ -53,7 +53,7 @@ public class JdbcLanguageRepository implements LanguageRepository {
      * {@code compile_command} và {@code run_command}, và chúng là chuyện của worker.
      */
     private static final String LIET_KE = """
-            SELECT code, display_name, version_label
+            SELECT id, code, display_name, version_label
               FROM languages
              WHERE enabled
              ORDER BY display_name
@@ -63,6 +63,7 @@ public class JdbcLanguageRepository implements LanguageRepository {
     public java.util.List<LanguageOption> listEnabled() {
         return jdbc.sql(LIET_KE)
                 .query((rs, i) -> new LanguageOption(
+                        rs.getShort("id"),
                         rs.getString("code"),
                         rs.getString("display_name"),
                         rs.getString("version_label")))

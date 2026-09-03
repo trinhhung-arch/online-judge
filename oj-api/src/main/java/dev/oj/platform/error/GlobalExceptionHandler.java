@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -182,6 +183,39 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException e) {
         return json(HttpStatus.NOT_FOUND, ApiError.of(
                 "resource.not_found", "Không tìm thấy.", TraceIdFilter.current()));
+    }
+
+    /**
+     * ★ Client đã đóng kết nối SSE. <b>Không phải lỗi</b>, và phải bắt TRƯỚC lưới cuối.
+     *
+     * <h2>Đường đi của nó, vì nó không hiển nhiên</h2>
+     * Người dùng rời trang chi tiết bài nộp. Socket đứt, nhịp heartbeat kế tiếp ghi hỏng, và
+     * {@code SseEmitters.attempt} bắt gọn — nó ghi {@code DEBUG} rồi gọi {@code complete()}
+     * để dọn. Cho tới đây mọi thứ đúng.
+     *
+     * <p>Nhưng {@code complete()} <b>không ném tại chỗ</b>: nó đẩy một async dispatch trở lại
+     * servlet container. Trên luồng Tomcat ấy, Spring dựng lại
+     * {@link AsyncRequestNotUsableException}, {@code DispatcherServlet} đưa nó tới đây, và
+     * lưới cuối ghi {@code ERROR} kèm stack trace đầy đủ.
+     *
+     * <p>Đó là lý do {@code catch (Exception ignored)} trong {@code SseEmitters.closeQuietly}
+     * <b>không sai mà vẫn không đủ</b>: ngoại lệ nổi lên ở một luồng khác, sau đó.
+     *
+     * <h2>Vì sao trả {@code void}</h2>
+     * Trả {@code ResponseEntity} là cố ghi một thân JSON vào một response đã mang
+     * {@code Content-Type: text/event-stream} — và đó chính là lỗi THỨ HAI trong log
+     * ({@code HttpMessageNotWritableException: No converter for ApiError}). Không còn ai ở
+     * đầu kia để nhận thân ấy. Không ghi gì là câu trả lời đúng.
+     *
+     * <h2>Vì sao đáng sửa dù không ai chết</h2>
+     * Rời một trang là hành vi bình thường nhất của người dùng. Một kỳ thi 200 người bấm back
+     * là 400 stack trace ở mức ERROR/WARN — đúng vào lúc cần đọc log để tìm lỗi thật. Javadoc
+     * của {@link #handleUnexpected} đã viết ra luật: lưới cuối chạy thường xuyên nghĩa là
+     * thiếu một handler ở đâu đó. Đây là cái thiếu.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDaNgatKetNoi(AsyncRequestNotUsableException e) {
+        log.debug("Client đã ngắt kết nối trước khi response ghi xong: {}", e.getMessage());
     }
 
     // -------------------------------------------------------------------------

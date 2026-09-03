@@ -37,3 +37,11 @@ build/
 # Nó sinh lại được hoàn toàn, và một lần `git add .` mà thiếu dòng này là 454 file .class
 # vào lịch sử repo.
 bin/
+
+# ★ Secret của máy dev. README bảo `cp .env.example .env` rồi điền HAI secret thật vào —
+# thiếu dòng này thì một lần `git add .` là chúng vào lịch sử repo vĩnh viễn, và
+# OJ_JWT_SECRET là thứ ai biết cũng tự phát được token ADMIN.
+# `.env.example` KHÔNG bị bỏ qua: nó là bản mẫu, và nó phải được commit.
+.env
+.env.local
+scripts/.secrets-dev

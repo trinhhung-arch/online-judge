@@ -4,6 +4,7 @@ import { goi, LoiApi } from './api.js';
 import { veThanh, bao, chu, thamSo, canDangNhap } from './khung.js';
 import { gan } from './editor.js';
 import * as nhap from './nhap.js';
+import { DUONG } from './duong-dan.js';
 
 veThanh();
 
@@ -17,7 +18,7 @@ let de = null;
 let soan = null;
 
 async function taiDe() {
-    de = await goi(`/api/v1/problems/${encodeURIComponent(code)}`);
+    de = await goi(DUONG.de.theoMa(code));
     document.title = `${de.code} · ${de.title}`;
     document.getElementById('tieu-de').textContent = `${de.code} · ${de.title}`;
     document.getElementById('gioi-han').textContent =
@@ -41,8 +42,31 @@ async function taiDe() {
     }
 }
 
+/**
+ * ★ Bước G3 — chế độ bảo trì (FR-ADM-06) phải thấy được TRƯỚC khi bấm.
+ *
+ * Khi người vận hành tắt nhận bài, `SubmitSolutionUseCase` từ chối. Để người dùng gõ xong
+ * một lời giải rồi mới biết là đổi một phút của họ lấy một thông báo lỗi — và trên trang
+ * này thì thứ họ vừa gõ là thứ họ quan tâm nhất.
+ *
+ * Best-effort có chủ ý: `/status` hỏng thì KHÔNG tắt nút. Một trang trạng thái chập chờn
+ * không được phép chặn đường nộp bài — server vẫn là nơi quyết định, và nó từ chối đúng.
+ */
+async function kiemBaoTri() {
+    try {
+        const t = await goi(DUONG.trangThai);
+        if (t.dangNhanBai) return;
+
+        nutNop.disabled = true;
+        demNguoc.textContent = 'Hệ thống đang bảo trì, tạm ngừng nhận bài nộp. '
+            + 'Mã nguồn của bạn vẫn được giữ trong trình duyệt.';
+    } catch {
+        // Im lặng: xem javadoc trên.
+    }
+}
+
 async function taiNgonNgu() {
-    const ds = await goi('/api/v1/languages');
+    const ds = await goi(DUONG.ngonNgu);
     for (const l of ds) {
         const opt = chu('option', `${l.displayName} — ${l.versionLabel}`);
         opt.value = l.code;
@@ -98,7 +122,7 @@ async function nop() {
     nutNop.disabled = true;
     bao(o, 'Đang gửi…');
     try {
-        const kq = await goi('/api/v1/submissions', {
+        const kq = await goi(DUONG.baiNop.nop, {
             method: 'POST',
             body: { problemId: de.problemId, languageCode: chonNgonNgu.value, source: ma },
         });
@@ -123,6 +147,9 @@ nutNop.addEventListener('click', nop);
     try {
         await Promise.all([taiDe(), taiNgonNgu()]);
         await dungTrinhSoan();
+        // SAU trình soạn: nháp phải được khôi phục xong trước khi ta có thể hứa
+        // "mã nguồn của bạn vẫn được giữ".
+        await kiemBaoTri();
     } catch (e) {
         bao(o, e instanceof LoiApi ? e.message : 'Không tải được đề bài.', 'loi');
     }

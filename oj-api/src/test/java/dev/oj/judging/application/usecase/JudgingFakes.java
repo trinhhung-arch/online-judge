@@ -213,7 +213,7 @@ class JudgingFakes {
 
         @Override
         public java.util.List<LanguageOption> listEnabled() {
-            return java.util.List.of(new LanguageOption("cpp20", "C++", "GCC 13 / C++20"));
+            return java.util.List.of(new LanguageOption((short) 1, "cpp20", "C++", "GCC 13 / C++20"));
         }
     }
 

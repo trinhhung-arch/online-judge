@@ -2,10 +2,24 @@
 
 import { goi, luuPhien, LoiApi } from './api.js';
 import { veThanh, bao, thamSo } from './khung.js';
+import { DUONG } from './duong-dan.js';
 
 veThanh();
 
 const o = document.getElementById('thong-bao');
+
+/**
+ * Vì sao người dùng đang đứng ở đây.
+ *
+ * Bị đưa về trang đăng nhập mà không có lời giải thích là trải nghiệm khó chịu nhất của
+ * một hệ thống có phiên: người ta tưởng mình bấm nhầm, hoặc tưởng hệ thống hỏng. Một câu
+ * là đủ, và nó phải là câu ĐÚNG — nên lý do đi qua URL từ nơi đã biết, chứ không đoán.
+ */
+const LY_DO = {
+    'doi-mat-khau': ['Đã đổi mật khẩu. Đăng nhập lại bằng mật khẩu mới.', 'on'],
+};
+const viSao = LY_DO[thamSo('vi-sao')];
+if (viSao) bao(o, viSao[0], viSao[1]);
 
 function tiepTuc() {
     // Chỉ nhận đường dẫn nội bộ. Một tham số `tiep=https://ke-tan-cong.test` là open
@@ -32,7 +46,7 @@ async function gui(form, duongDan, sauKhiXong) {
 
 document.getElementById('form-dang-nhap').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    gui(ev.target, '/api/v1/auth/login', (phien) => {
+    gui(ev.target, DUONG.auth.dangNhap, (phien) => {
         luuPhien(phien);
         location.href = tiepTuc();
     });
@@ -41,7 +55,7 @@ document.getElementById('form-dang-nhap').addEventListener('submit', (ev) => {
 document.getElementById('form-dang-ky').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const form = ev.target;
-    gui(form, '/api/v1/auth/register', () => {
+    gui(form, DUONG.auth.dangKy, () => {
         // Server cố ý KHÔNG tự đăng nhập sau khi đăng ký (xem AuthController): hai hành
         // động sẽ tách ra khi có xác minh email ở v1.1. Đăng nhập hộ ở đây bằng chính
         // thông tin vừa nhập giữ trải nghiệm liền mạch mà không cần server đổi gì.

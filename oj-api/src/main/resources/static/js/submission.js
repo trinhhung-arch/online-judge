@@ -14,6 +14,7 @@
 import { goi, accessToken, LoiApi } from './api.js';
 import { veThanh, bao, chu, thamSo, canDangNhap } from './khung.js';
 import { moLuong } from './sse.js';
+import { DUONG } from './duong-dan.js';
 
 veThanh();
 
@@ -95,7 +96,7 @@ function veChiTiet(ct) {
 }
 
 async function taiChiTiet() {
-    const ct = await goi(`/api/v1/submissions/${encodeURIComponent(id)}`);
+    const ct = await goi(DUONG.baiNop.theoId(id));
     veChiTiet(ct);
     veTrangThai(ct);
     return ct;
@@ -121,7 +122,7 @@ function poll() {
 }
 
 function theoDoi() {
-    dongLuong = moLuong(`/api/v1/submissions/${encodeURIComponent(id)}/stream`, accessToken(), {
+    dongLuong = moLuong(DUONG.baiNop.luong(id), accessToken(), {
         onSuKien: (ten, e) => {
             if (!e) return;
             veTrangThai(e);
