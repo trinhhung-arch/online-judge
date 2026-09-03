@@ -12,14 +12,15 @@
 -- volume, kể cả bài nộp trong DB dev.
 --
 --   oj_migrator  sở hữu schema, chạy Flyway, có DDL
---   oj_app       chỉ DML; V9 sẽ REVOKE DELETE/TRUNCATE trên submissions và
+--   oj_app       chỉ DML; V8 REVOKE DELETE/TRUNCATE trên submissions và
 --                REVOKE UPDATE/DELETE trên audit_log + judge_runs
 --
 -- 15 phút cấu hình đổi lấy: một lỗ SQL injection lọt lưới cũng không DROP TABLE được,
 -- và "append-only" trở thành một quyền hệ thống chứ không phải một lời hứa.
 --
--- ⚠️ Hai role đã tồn tại từ đây, NHƯNG ứng dụng vẫn chạy bằng POSTGRES_USER cho tới
--- khi V9 (M6) cấp quyền cho oj_app. Đổi sớm hơn là app không đọc được bảng nào.
+-- ⚠️ Hai role đã tồn tại từ đây, NHƯNG ứng dụng vẫn chạy bằng POSTGRES_USER. V8 đã
+-- cấp quyền cho oj_app, nên chuyển được — xem thứ tự bắt buộc ở .env.example mục 2.
+-- Chuyển sai thứ tự là Flyway mất quyền DDL, không phải app mất quyền đọc.
 
 DO $$
 BEGIN
@@ -33,4 +34,4 @@ END
 $$;
 
 COMMENT ON ROLE oj_migrator IS 'Flyway. Sở hữu schema, có DDL.';
-COMMENT ON ROLE oj_app      IS 'oj-api lúc chạy. DML, không DDL. Xem V9.';
+COMMENT ON ROLE oj_app      IS 'oj-api lúc chạy. DML, không DDL. Xem V8.';

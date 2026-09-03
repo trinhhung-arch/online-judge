@@ -31,6 +31,46 @@ public class JdbcJudgingQueries implements JudgingQueries {
             """;
 
     /**
+     * ★ Như {@link #TRONG_CONTEST}, nhưng <b>dừng lại ở bài chưa chấm xong đầu tiên</b>.
+     *
+     * <h2>Vì sao đường cập nhật cần câu riêng này</h2>
+     * {@code StandingsUpdater} tiến một watermark duy nhất theo {@code id}. Nếu lô trả về bỏ
+     * qua một bài chưa {@code DONE} rồi lấy bài id lớn hơn đã {@code DONE}, watermark vượt qua
+     * bài kia và nó <b>vĩnh viễn</b> không vào bảng xếp hạng.
+     *
+     * <p>Điều đó không hiếm — nó là chuyện thường: thứ tự claim theo id, nhưng thứ tự
+     * <i>chấm xong</i> theo độ nặng của bài. Một bài TLE chạy hết giới hạn thời gian trên mọi
+     * test, một bài AC cùng đề xong trong vài mili giây, và 6 slot chạy song song. Đo được
+     * trên Postgres thật: lô 1 áp 1 bài, lô 2 áp 0 bài, bảng còn đúng một người trong hai.
+     *
+     * <p>{@code id < ALL (…)} trên tập rỗng là {@code TRUE}, nên khi không có bài nào đang
+     * chấm dở thì câu này trùng khít {@link #TRONG_CONTEST}.
+     *
+     * <h2>Đánh đổi đã chọn, và vì sao chọn chiều này</h2>
+     * Một bài kẹt làm bảng của kỳ thi đó đứng lại cho tới khi nó xong (reaper bảo đảm điều đó
+     * xảy ra, chậm nhất sau {@code oj.judge.lease}). Bảng đứng tạm là sai <b>an toàn</b>: nó
+     * tự đúng lại. Bảng thiếu một bài thì không, và không ai kiểm lại một thứ hạng.
+     *
+     * <p>Bỏ bộ lọc {@code status} ở lớp trong <b>không</b> đổi đường truy cập: vẫn là quét
+     * khoá chính từ {@code :sau} đi lên, chỉ ít vị từ hơn.
+     */
+    private static final String TRONG_CONTEST_LIEN_MACH = """
+            WITH lo AS (
+                SELECT id, user_id, problem_id, verdict, score, created_at, status
+                  FROM submissions
+                 WHERE contest_id = :contestId
+                   AND id > :sau
+                 ORDER BY id
+                 LIMIT :gioiHan
+            )
+            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score, created_at
+              FROM lo
+             WHERE status = 'DONE'
+               AND id < ALL (SELECT id FROM lo WHERE status <> 'DONE')
+             ORDER BY id
+            """;
+
+    /**
      * Truy vấn 11 của {@code docs/sql/duong_nong.sql}, viết trọn vẹn.
      *
      * <p>Điều kiện {@code problem_id} đứng trước để {@code ix_submissions_problem_recent}
@@ -66,6 +106,17 @@ public class JdbcJudgingQueries implements JudgingQueries {
     public List<ScoredSubmission> baiDaChamTrongContest(long contestId, long sauSubmissionId,
                                                        int gioiHan) {
         return jdbc.sql(TRONG_CONTEST)
+                .param("contestId", contestId)
+                .param("sau", sauSubmissionId)
+                .param("gioiHan", gioiHan)
+                .query(MAPPER)
+                .list();
+    }
+
+    @Override
+    public List<ScoredSubmission> baiDaChamLienMach(long contestId, long sauSubmissionId,
+                                                    int gioiHan) {
+        return jdbc.sql(TRONG_CONTEST_LIEN_MACH)
                 .param("contestId", contestId)
                 .param("sau", sauSubmissionId)
                 .param("gioiHan", gioiHan)

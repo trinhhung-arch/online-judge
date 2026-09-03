@@ -77,6 +77,37 @@ class RejudgeIT extends PostgresIT {
         assertThat(viTri2).isEqualTo(bai.get(3));
     }
 
+    /**
+     * ★ Tiến độ phải CỘNG DỒN qua các lần tạm nghỉ, không đếm lại từ đầu.
+     *
+     * <h2>Ca này lấp đúng khe hở mà {@link #chay_tiep_tu_cursor} để lại</h2>
+     * Ca kia kiểm vị trí trong {@code cursor_state} tiến đúng — và nó xanh cả khi bộ đếm tiến
+     * độ về 0 sau mỗi lần nghỉ, vì hai thứ đó độc lập nhau. Kết quả: công việc chạy đúng và
+     * xong đủ, nhưng {@code done_items} luôn hiện số bài của riêng lượt chạy hiện tại.
+     *
+     * <p>Đo được trên hệ thống đang chạy trước khi sửa: một job chấm lại 34 bài đứng nguyên ở
+     * {@code 2/34} suốt thời gian chạy rồi nhảy thẳng lên {@code 34/34} lúc kết thúc. Job này
+     * tạm nghỉ theo <b>thiết kế</b> — mỗi lô đẩy nhiều nhất {@code max-in-flight} bài — nên
+     * một lượt chấm lại 5000 bài sẽ hiện "2/5000" trong hàng giờ, và người vận hành đọc ra
+     * "job đang kẹt" trong khi nó đang chạy tốt. FR-ADM-01 đòi tiến độ.
+     */
+    @Test
+    @DisplayName("★ tiến độ cộng dồn qua các lần tạm nghỉ, không đếm lại từ đầu")
+    void tien_do_cong_don_qua_cac_lan_tam_nghi() {
+        taoBaiDaCham(6);
+
+        chayRoiDonHangDoi();
+        assertThat(ctx.daXongCuoi).as("lô 1").isEqualTo(2);
+
+        chayRoiDonHangDoi();
+        assertThat(ctx.daXongCuoi).as("lô 2 — phải là 4, không phải 2 lần nữa").isEqualTo(4);
+
+        chayRoiDonHangDoi();
+        assertThat(ctx.daXongCuoi).as("lô 3").isEqualTo(6);
+
+        assertThat(ctx.tongCuoi).as("tổng không đổi giữa các lượt").isEqualTo(6);
+    }
+
     @Test
     @DisplayName("duyệt hết đề thì job kết thúc bình thường, tiến độ bằng tổng")
     void duyet_het_thi_xong() {

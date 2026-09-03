@@ -18,11 +18,20 @@ spring:
   # spring.datasource sẽ bị bỏ qua trong im lặng — đúng loại cấu hình trông như có
   # tác dụng mà không có. Xem oj.datasource ở cuối file.
   flyway:
-    # Flyway dùng URL của pool app. Khi V9 (M6) dựng hai role thật thì đổi user ở đây
-    # sang oj_migrator, còn oj.datasource.* giữ oj_app — quyết định D.
+    # ★ BIẾN RIÊNG, không dùng chung với oj.datasource.* — và đây là điểm chính.
+    #
+    # V8 tách hai role: Flyway chạy bằng role SỞ HỮU schema (oj_migrator), ứng dụng chạy
+    # bằng oj_app đã bị REVOKE hết quyền DDL. Bản trước của khối này đọc OJ_DB_APP_USER cho
+    # cả hai, nên trên host thật, đúng cái thao tác hoàn tất V8 — đặt OJ_DB_APP_USER=oj_app —
+    # cũng đẩy Flyway sang oj_app, và migration kế tiếp chết với `permission denied`.
+    #
+    # Nói cách khác: cấu hình cũ khiến V8 chỉ dùng được khi KHÔNG ai bật nó lên. Hai biến
+    # tách rời làm cho hai role thành hai thứ đặt được độc lập, đúng như V8 giả định.
+    #
+    # Mặc định vẫn là ojuser cho cả hai, nên máy dev và Testcontainers không đổi gì.
     url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}
-    user: ${OJ_DB_APP_USER:ojuser}
-    password: ${OJ_DB_APP_PASSWORD:ojpass}
+    user: ${OJ_DB_MIGRATOR_USER:${OJ_DB_APP_USER:ojuser}}
+    password: ${OJ_DB_MIGRATOR_PASSWORD:${OJ_DB_APP_PASSWORD:ojpass}}
 
 
   data:
@@ -39,6 +48,35 @@ spring:
     # nộp treo 60 giây trước khi ngoại lệ được nuốt. 200ms là trần cho MỘT lần thử; cầu dao
     # trong RabbitJudgeJobPublisher lo phần "đừng thử lại mỗi bài".
     connection-timeout: 200ms
+
+  # ★ SÁU tác vụ @Scheduled, và mặc định của Spring là MỘT luồng cho tất cả.
+  #
+  # M6 đã gặp đúng lỗi này một lần: JobRunner chạy job đồng bộ trên luồng ấy, nên một lần nạp
+  # testdata 200MB là reaper không chạy, và bài kẹt JUDGING quá lease 120s (R1). Bản sửa cho
+  # JobRunner một executor riêng — nhưng năm tác vụ còn lại vẫn dùng chung một luồng:
+  #
+  #   StaleJobReaper           15s   ← thứ R1 phụ thuộc vào
+  #   QueueMetricsSampler      10s
+  #   StandingsUpdater          2s   đọc lô 500 bài rồi tính lại bảng
+  #   FreezeStandingsScheduler  5s   chụp bảng xếp hạng, có thể là hàng trăm dòng
+  #   JobRunner                 5s   giờ chỉ gửi việc, tiêu vài micro giây
+  #   AuditPartitionScheduler  03:15 CREATE TABLE ... PARTITION OF
+  #
+  # Dòng cuối là dòng nguy hiểm: nó lấy ACCESS EXCLUSIVE trên `audit_log`, một bảng đang được
+  # ghi liên tục. Kẹt lock ở đó là kẹt luôn reaper — mất bài nộp vì một cái partition, vào
+  # 3 giờ sáng, tức là đúng lúc không ai nhìn.
+  #
+  # Năm luồng, không phải sáu: JobRunner đã tự có luồng riêng từ M6 nên nhịp @Scheduled của
+  # nó chỉ gửi việc rồi trả về. Không tác vụ nào ở đây dùng chung trạng thái trong bộ nhớ với
+  # tác vụ khác, nên chạy song song là an toàn.
+  #
+  # Con số này KHÔNG được viết tay lần nữa: HopDongVanHanhTest đếm số @Scheduled bằng phản
+  # chiếu và so với dòng dưới. Nó đã bắt đúng một lỗi ngay lần chạy đầu — bản viết tay đầu
+  # tiên ghi 4, vì StandingsUpdater khai annotation bằng tên đầy đủ và grep trượt.
+  task:
+    scheduling:
+      pool:
+        size: 5
 
 server:
   port: 8080

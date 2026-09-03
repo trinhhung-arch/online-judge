@@ -27,8 +27,24 @@ cp .env.example .env                      # điền HAI secret, mỗi cái >= 32
                                           #   OJ_JWT_SECRET              (ký access token)
                                           # Thiếu cái nào thì API KHÔNG khởi động — cố ý.
 ./mvnw verify                             # phải xanh trước khi làm bất cứ gì khác
-./mvnw -pl oj-api spring-boot:run
+./mvnw -pl oj-api spring-boot:run -Dspring-boot.run.profiles=dev
 ```
+
+> **★ `-Dspring-boot.run.profiles=dev` là bắt buộc trên máy dev, không phải tuỳ chọn.**
+>
+> `db/dev-seed/` không nằm trong `spring.flyway.locations` mặc định — chỉ `application-dev.yml`
+> thêm nó vào. Thiếu profile thì:
+>
+> * **DB trống** → không có tài khoản nào và không có đề `A-PLUS-B`, nên không đăng nhập được
+>   và không nộp được bài. Chính header của `R__seed_du_lieu_dev.sql` giải thích vì sao.
+> * **DB đã từng chạy profile `dev`** → Flyway `validate` DỪNG ứng dụng với
+>   `Detected applied migration not resolved locally: seed du lieu dev`, vì lịch sử migration
+>   có dòng ấy mà `locations` mặc định không tìm ra file. Triệu chứng là API không khởi động
+>   được, và thông báo không nhắc gì tới chữ "profile".
+>
+> Trên host thật thì ngược lại: **không** bật profile `dev`, và lúc đó DB cũng chưa bao giờ
+> có dòng lịch sử kia. Chạy nhầm nó trên host là tạo ba tài khoản có mật khẩu viết sẵn trong
+> mã nguồn công khai.
 
 Worker cần `isolate` trên máy Linux. Cài một lần:
 

@@ -54,6 +54,27 @@ public class RejudgeJobHandler implements JobHandler {
     /** Khoá trong {@code jobs.cursor_state}. */
     static final String VI_TRI = "lastSubmissionId";
 
+    /**
+     * ★ Số bài đã đẩy, cũng nằm trong {@code cursor_state} — và nó phải nằm ở đó.
+     *
+     * <h2>Vì sao cần khoá thứ hai chứ không chỉ vị trí</h2>
+     * Job này <b>tạm nghỉ liên tục theo thiết kế</b>: mỗi lô đẩy nhiều nhất
+     * {@code max-in-flight} bài rồi tự phanh cho tới khi máy chấm rút bớt. Nghĩa là một lượt
+     * chấm lại 5000 bài chạy qua hàng nghìn lần {@code PAUSED → RUNNING}.
+     *
+     * <p>Bản đầu chỉ lưu {@link #VI_TRI} và để bộ đếm là biến cục bộ. Vị trí thì khôi phục
+     * đúng, nên <i>công việc</i> vẫn chạy đúng và vẫn xong đủ — nhưng bộ đếm về 0 sau mỗi lần
+     * nghỉ, nên {@code done_items} luôn hiện đúng số bài của <b>lượt chạy hiện tại</b>. Đo
+     * được trên hệ thống đang chạy: job chấm lại 34 bài đứng nguyên ở {@code 2/34} suốt thời
+     * gian chạy rồi nhảy thẳng lên {@code 34/34} lúc kết thúc.
+     *
+     * <p>FR-ADM-01 đòi tiến độ, và một thanh tiến độ đứng im ở 2/34 nói sai đúng cái điều mà
+     * người vận hành cần biết: nó bảo job đang kẹt trong khi job đang chạy tốt. Chính javadoc
+     * của {@code ctx.tienDo(0, tong)} phía dưới đã viết ra nguy cơ ấy cho {@code totalItems};
+     * {@code doneItems} mắc đúng lỗi đó ở một chỗ khác.
+     */
+    static final String DA_XONG = "daXong";
+
     private final RejudgeRepository rejudge;
     private final JudgeJobPublisher chuong;
     private final ContestWindowQuery lichThi;
@@ -85,13 +106,15 @@ public class RejudgeJobHandler implements JobHandler {
 
         AppProperties.Rejudge cauHinh = properties.judge().rejudge();
         int tong = rejudge.demBaiCuaDe(problemId);
-        int daXong = 0;
+        // Khôi phục CẢ HAI, không chỉ vị trí — xem javadoc DA_XONG.
+        int daXong = ctx.viTriDaLuu().containsKey(DA_XONG)
+                ? (int) soNguyen(ctx.viTriDaLuu(), DA_XONG) : 0;
 
         // Báo tổng NGAY, trước vòng lặp. Không có dòng này thì một job bị phanh ở lô đầu tiên
         // hiện `totalItems: null` trên trang theo dõi — người vận hành nhìn thấy một job
         // "đang dừng" mà không biết nó dừng ở đâu trong bao nhiêu. FR-ADM-01 đòi tiến độ, và
         // "chưa biết tổng" chỉ đúng khi thật sự chưa biết; ở đây ta đã đếm xong rồi.
-        ctx.tienDo(0, tong);
+        ctx.tienDo(Math.min(daXong, tong), tong);
 
         while (true) {
             ctx.kiemHuy();
@@ -107,7 +130,7 @@ public class RejudgeJobHandler implements JobHandler {
             //   đủ trần: mọi thứ bình thường, chỉ là đang đi đúng tốc độ đã định
             RejudgeJob.NhipHangDoi nhip = rejudge.doNhip();
             if (nhip.liveDangChoLauHon(cauHinh.liveWaitBrake(), clock.instant())) {
-                ctx.luuViTri(Map.of(VI_TRI, viTri));
+                ctx.luuViTri(Map.of(VI_TRI, viTri, DA_XONG, daXong));
                 throw JobsException.tamNghi("Bài nộp trực tiếp đang phải chờ quá "
                         + cauHinh.liveWaitBrake().toSeconds() + " giây — nhường chỗ cho họ. "
                         + "Chấm lại sẽ tự chạy tiếp khi hàng đợi thông.");
@@ -115,7 +138,7 @@ public class RejudgeJobHandler implements JobHandler {
             int suat = RejudgeJob.suatConLai(nhip, cauHinh.maxInFlight(),
                     cauHinh.liveWaitBrake(), clock.instant());
             if (suat == 0) {
-                ctx.luuViTri(Map.of(VI_TRI, viTri));
+                ctx.luuViTri(Map.of(VI_TRI, viTri, DA_XONG, daXong));
                 throw JobsException.tamNghi("Đã đủ " + cauHinh.maxInFlight()
                         + " bài chấm lại đang chờ (trần 30% năng lực). Chạy tiếp khi máy "
                         + "chấm rút bớt — đây là nhịp bình thường, không phải sự cố.");
@@ -138,7 +161,7 @@ public class RejudgeJobHandler implements JobHandler {
                 goCuaImLang(id);
             }
 
-            ctx.luuViTri(Map.of(VI_TRI, viTri));
+            ctx.luuViTri(Map.of(VI_TRI, viTri, DA_XONG, daXong));
             ctx.tienDo(Math.min(daXong, tong), tong);
             log.debug("Rejudge đề {}: đẩy {}/{} bài, tới id {}", problemId, vao.size(),
                     lo.size(), viTri);

@@ -101,14 +101,19 @@ class CodingRulesTest {
                             + "vị trí. Cả hai đều làm việc nối chuỗi trở nên tiện. JdbcClient thì không");
 
     // -------------------------------------------------------------------------
-    // 5d — lớp cuối, KHÔNG làm được bằng ArchUnit. Thêm vào .github/workflows/ci.yml:
+    // 5d — lớp cuối, KHÔNG làm được bằng ArchUnit vì `+` là invokedynamic.
+    // Nó sống ở `scripts/kiem-noi-chuoi-sql.sh`, và ci.yml gọi đúng file đó.
     //
-    //   - name: Cam noi chuoi SQL
-    //     run: |
-    //       ! grep -rInE '"\s*\+|\+\s*"' --include='*.java' \
-    //            oj-api/src/main/java/dev/oj/*/infrastructure/
+    // Bản đầu của 5d là một dòng grep `'"\s*\+|\+\s*"'`. Nó đỏ ở bốn chỗ, và không chỗ nào
+    // là SQL: ba câu log dài xuống dòng, một phép ghép cursor. Hàng rào bắt nhầm nguy hơn
+    // không có hàng rào — nó dạy người ta rằng bước này hay đỏ oan, nên lần nó đỏ ĐÚNG cũng
+    // sẽ được nhìn lướt qua y hệt.
     //
-    // Thô, nhưng nó bắt được đúng thứ invokedynamic giấu mất.
+    // Bản thay thế dựa vào một sự thật đo được: cả 118 câu SQL đều là text block, và không
+    // câu log nào dùng text block. Nên trong `infrastructure`, "text block" ≈ "SQL", và luật
+    // trở thành: không `+` nào chạm text block · không `\{}` trong đó · `.sql(...)` không
+    // chứa `+` · literal SQL nháy thường mà có `+` là đỏ. Đã thử: năm kiểu vi phạm, bắt cả
+    // năm; `.param("u", 1 + 2)` không bị bắt oan.
     // -------------------------------------------------------------------------
 
     // =========================================================================

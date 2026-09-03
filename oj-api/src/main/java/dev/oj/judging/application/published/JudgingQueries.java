@@ -38,6 +38,28 @@ public interface JudgingQueries {
     List<ScoredSubmission> baiDaChamTrongContest(long contestId, long sauSubmissionId, int gioiHan);
 
     /**
+     * ★ Như {@link #baiDaChamTrongContest}, nhưng <b>cắt ở bài chưa chấm xong đầu tiên</b>.
+     *
+     * <h2>Đây là câu mà đường tiến watermark PHẢI dùng</h2>
+     * {@code baiDaChamTrongContest} lọc {@code status = 'DONE'} rồi trả về theo thứ tự id — nên
+     * nó <i>nhảy qua</i> bài đang chấm dở. Với một watermark duy nhất, nhảy qua nghĩa là mất:
+     * bài ấy có id nhỏ hơn watermark nên không lô nào đọc lại nó nữa.
+     *
+     * <p>Câu này chỉ trả về đoạn <b>liền mạch</b> tính từ {@code sauSubmissionId} — mọi bài
+     * trước bài chưa xong đầu tiên. Nhờ vậy watermark không bao giờ vượt qua thứ chưa xử lý,
+     * và tính idempotent của {@code StandingsUpdater} thành ra đúng cả khi thứ tự chấm xong
+     * khác thứ tự id.
+     *
+     * <p>{@code StandingsDriftCheckJob} thì <b>không</b> dùng câu này: việc của nó là tính lại
+     * sự thật đầy đủ từ {@code submissions} để đối chiếu, nên nó phải thấy mọi bài đã chấm,
+     * kể cả bài nằm sau một khoảng trống.
+     *
+     * @param sauSubmissionId chỉ lấy bài có {@code id} lớn hơn con số này
+     * @param gioiHan         kích thước lô. Bất biến #8
+     */
+    List<ScoredSubmission> baiDaChamLienMach(long contestId, long sauSubmissionId, int gioiHan);
+
+    /**
      * Đọc lại toàn bộ bài đã chấm của <b>một đề</b> trong một kỳ thi — dùng bởi
      * {@code RebuildStandingsJob} (FR-CON-08).
      *

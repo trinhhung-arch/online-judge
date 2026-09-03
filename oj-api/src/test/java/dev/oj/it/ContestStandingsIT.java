@@ -83,6 +83,65 @@ class ContestStandingsIT extends PostgresIT {
             return id;
         }
 
+        /**
+         * ★ Bài id NHỎ hơn nhưng chấm xong MUỘN hơn vẫn phải vào bảng.
+         *
+         * <h2>Ca này tái hiện một lỗi có thật, đã đo trên Postgres</h2>
+         * {@code StandingsUpdater} tiến một watermark duy nhất theo {@code id}, còn lô đọc
+         * trước đây lọc {@code status='DONE'}. Hai thứ đó cộng lại nghĩa là bài đang chấm dở
+         * bị nhảy qua, watermark vượt lên, và <b>không lô nào đọc lại nó nữa</b>.
+         *
+         * <p>Trước khi sửa, ca này ra {@code lô1=1 · lô2=0 · bảng có 1 người}: bài AC của
+         * người nộp trước biến mất vĩnh viễn. Đó không phải tình huống hiếm mà là tình huống
+         * thường của một kỳ thi — thứ tự claim theo id, thứ tự chấm xong theo độ nặng của bài.
+         *
+         * <p>Bản sửa dùng {@code baiDaChamLienMach}: lô dừng ở bài chưa xong đầu tiên. Bảng
+         * đứng lại một nhịp thay vì thiếu một người, và nó tự đúng lại.
+         */
+        @Test
+        @DisplayName("★ bài id nhỏ hơn chấm xong sau vẫn vào bảng — watermark không nhảy qua")
+        void watermark_khong_nhay_qua_bai_dang_cham() {
+            long c = dangChay();
+            contests.dangKy(c, USER_ID, MOC);
+            contests.dangKy(c, SETTER_ID, MOC);
+
+            long cham = nopChuaCham(USER_ID);      // id nhỏ hơn, chấm lâu
+            long nhanh = nopChuaCham(SETTER_ID);   // id lớn hơn, xong trước
+            assertThat(cham).isLessThan(nhanh);
+
+            chamXong(nhanh);
+            // Lô này phải KHÔNG áp gì: bài id nhỏ hơn còn đang chấm, tiến qua nó là mất nó.
+            assertThat(updater.capNhat(doc(c)))
+                    .as("lô không được vượt qua bài chưa chấm xong")
+                    .isZero();
+
+            chamXong(cham);
+            assertThat(updater.capNhat(doc(c))).isEqualTo(2);
+
+            assertThat(standings.top(c, 50, false))
+                    .as("cả hai người đều phải có mặt")
+                    .hasSize(2);
+        }
+
+        /** Nộp thật nhưng KHÔNG chấm — bài nằm lại ở {@code QUEUED}. */
+        private long nopChuaCham(long userId) {
+            try (var phien = GiaLapDanhTinh.dongVai(userId, "nguoi" + userId, Role.USER)) {
+                quenLuotNopVuaRoi(userId);
+                assertThat(phien).isNotNull();
+                return submitSolution.submit(new SubmitSolutionUseCase.Command(
+                        PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
+            }
+        }
+
+        private void chamXong(long id) {
+            jdbc.sql("""
+                    UPDATE submissions
+                       SET status = 'DONE', verdict = 'AC', score = 100, max_score = 100,
+                           judged_at = now()
+                     WHERE id = :id
+                    """).param("id", id).update();
+        }
+
         @Test
         @DisplayName("★ bài AC vào bảng; bài WA không")
         void ac_vao_bang() {

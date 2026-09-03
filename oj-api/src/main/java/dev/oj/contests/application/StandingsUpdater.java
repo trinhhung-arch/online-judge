@@ -43,6 +43,12 @@ import java.util.Set;
  *       làm lại từ đúng chỗ ấy.</li>
  * </ul>
  *
+ * <p><b>Một watermark duy nhất chỉ đúng nếu lô không bao giờ có khoảng trống.</b> Đây là chỗ
+ * bản đầu sai: nó đọc {@code baiDaChamTrongContest}, vốn lọc {@code status='DONE'}, nên lô
+ * <i>nhảy qua</i> bài đang chấm dở và watermark vượt lên trên nó — bài ấy vĩnh viễn không vào
+ * bảng. Không hiếm chút nào: thứ tự claim theo id, thứ tự chấm xong theo độ nặng của bài.
+ * Từ nay {@link #capNhat} dùng {@code baiDaChamLienMach}, câu cắt ở bài chưa xong đầu tiên.
+ *
  * <h2>Cả lô nằm trong MỘT transaction, và đó là điều bắt buộc</h2>
  * Watermark của kỳ thi là {@code MAX} qua các dòng theo người. Nếu ghi được dòng của người B
  * (id 20) mà hỏng ở dòng người A (id 10), watermark thành 20 và <b>bài id 10 vĩnh viễn không
@@ -101,7 +107,10 @@ public class StandingsUpdater {
      */
     public int capNhat(Contest contest) {
         long watermark = standings.watermark(contest.id());
-        List<ScoredSubmission> lo = judging.baiDaChamTrongContest(
+        // ★ LIỀN MẠCH, không phải baiDaChamTrongContest. Câu kia lọc status='DONE' nên nó
+        // nhảy qua bài đang chấm dở, và watermark vượt qua thì bài ấy mất vĩnh viễn — xem
+        // javadoc JudgingQueries.baiDaChamLienMach.
+        List<ScoredSubmission> lo = judging.baiDaChamLienMach(
                 contest.id(), watermark, properties.contest().standingsBatchSize());
         if (lo.isEmpty()) {
             return 0;

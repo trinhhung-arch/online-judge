@@ -24,7 +24,13 @@ import java.util.Map;
  * để phát hiện ra là không.
  *
  * <h2>Dựng lại KHÔNG có logic riêng, và đó là điểm chính</h2>
- * Nó xoá bảng rồi gọi <b>đúng</b> {@link StandingsUpdater#capNhat} mà đường thường dùng. Viết
+ * <p><b>Chạy giữa kỳ thi thì nó dừng ở bài chưa chấm xong đầu tiên</b> — {@code capNhat} trả 0
+ * và vòng lặp kết thúc. Đó là hành vi đúng, không phải thiếu sót: dựng lại vượt qua một bài
+ * đang chấm sẽ đặt watermark lên trên nó và làm mất nó, đúng cái lỗi mà
+ * {@code baiDaChamLienMach} sinh ra để chặn. Muốn bảng đầy đủ thì chạy sau khi kỳ thi kết
+ * thúc, lúc mọi bài đều {@code DONE}.
+ *
+ * <p>Nó xoá bảng rồi gọi <b>đúng</b> {@link StandingsUpdater#capNhat} mà đường thường dùng. Viết
  * một đường tính riêng cho rebuild là tạo ra hai hiện thực của cùng một quy tắc, và chúng sẽ
  * lệch nhau — lúc đó "dựng lại" cho ra một bảng <i>khác</i> bảng đang chạy, và không ai biết
  * bảng nào đúng.

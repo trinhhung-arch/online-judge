@@ -48,26 +48,13 @@ jobs:
       - name: mvnw verify
         run: ./mvnw -B --no-transfer-progress verify
 
-      # Luật 5d của ArchitectureTest — phần mà ArchUnit KHÔNG làm được.
+      # Luật 5d của CodingRulesTest — phần mà ArchUnit KHÔNG làm được.
       # Từ Java 9, `a + b` biên dịch thành invokedynamic nên ArchUnit không thấy nối chuỗi.
-      # Thô, nhưng nó bắt đúng thứ invokedynamic giấu mất (bất biến #5, SEC2).
+      #
+      # Luật nằm trong scripts/, không nằm inline ở đây, vì một lý do đã trả giá rồi: bản
+      # inline chỉ tái hiện được bằng cách push rồi chờ CI. Giờ nó chạy ở máy trong một giây.
       - name: Cấm nối chuỗi trong SQL
-        run: |
-          # Tìm MỌI thư mục tên `infrastructure`, ở bất kỳ độ sâu nào.
-          #
-          # Bản trước dùng glob `dev/oj/*/infrastructure/` — đúng một mức — nên nó bỏ sót
-          # `dev/oj/platform/audit/infrastructure/` xuất hiện ở M4. Một hàng rào bỏ sót thì
-          # tệ hơn không có hàng rào: nó tạo cảm giác đã được canh.
-          mapfile -t thu_muc < <(find oj-api/src/main/java -type d -name infrastructure | sort)
-          if [ ${#thu_muc[@]} -eq 0 ]; then
-            echo "::error::Không tìm thấy thư mục infrastructure nào — bước kiểm này đang chạy rỗng"
-            exit 1
-          fi
-          echo "Quét ${#thu_muc[@]} thư mục:"; printf '  %s\n' "${thu_muc[@]}"
-          if grep -rInE '"\s*\+|\+\s*"' --include='*.java' "${thu_muc[@]}"; then
-            echo "::error::Phát hiện nối chuỗi trong tầng infrastructure — dùng named parameter của JdbcClient"
-            exit 1
-          fi
+        run: ./scripts/kiem-noi-chuoi-sql.sh
 
       # Cả HAI thư mục. Lần đỏ đầu tiên của bước trên là một IT (failsafe), mà artifact
       # lúc ấy chỉ có surefire — tức là đúng báo cáo cần đọc thì không được giữ lại, và
