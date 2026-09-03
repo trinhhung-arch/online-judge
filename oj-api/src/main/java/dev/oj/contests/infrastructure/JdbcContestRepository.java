@@ -26,6 +26,26 @@ import java.util.Optional;
 @Repository
 public class JdbcContestRepository implements ContestRepository {
 
+    /**
+     * {@code (:sauId IS NULL OR id < :sauId)} thay vì nối chuỗi hai câu — đúng khuôn
+     * {@code duong_nong.sql} số 6, và là lý do bất biến #5 không cần ngoại lệ nào ở đây.
+     *
+     * <p>★ {@code ::bigint} là bắt buộc, không phải trang trí. Với một tham số bind, Postgres
+     * không có gì để suy ra kiểu của {@code :sauId} trong {@code :sauId IS NULL} — cả hai vế
+     * đều vô định — và nó từ chối ngay lúc parse với
+     * {@code could not determine data type of parameter}. Ép kiểu một lần ở đây trả lời câu
+     * hỏi ấy. Cùng họ với ghi chú {@code make_interval} ở {@code JdbcJudgeQueueRepository}:
+     * chỗ nào Postgres phải ĐOÁN kiểu của tham số thì chỗ đó sẽ hỏng.
+     */
+    private static final String DANH_SACH = """
+            SELECT id, slug, title, format, starts_at, ends_at, freeze_at, unfrozen_at,
+                   penalty_minutes, registration_required, reveal_after_end, created_by
+              FROM contests
+             WHERE (CAST(:sauId AS bigint) IS NULL OR id < CAST(:sauId AS bigint))
+             ORDER BY id DESC
+             LIMIT :gioiHan
+            """;
+
     private static final String CHON = """
             SELECT id, slug, title, format, starts_at, ends_at, freeze_at, unfrozen_at,
                    penalty_minutes, registration_required, reveal_after_end, created_by
@@ -85,11 +105,17 @@ public class JdbcContestRepository implements ContestRepository {
                    points = EXCLUDED.points
             """;
 
+    /**
+     * {@code JOIN problems} chỉ để lấy {@code code}. Rẻ và không nằm trên đường nóng:
+     * {@code contest_problems} có vài chục dòng, và trang kỳ thi không phải
+     * {@code POST /submissions}.
+     */
     private static final String DE_CUA = """
-            SELECT problem_id, label, ordinal, points
-              FROM contest_problems
-             WHERE contest_id = :contestId
-             ORDER BY ordinal
+            SELECT cp.problem_id, p.code, cp.label, cp.ordinal, cp.points
+              FROM contest_problems cp
+              JOIN problems p ON p.id = cp.problem_id
+             WHERE cp.contest_id = :contestId
+             ORDER BY cp.ordinal
             """;
 
     private static final String DA_DANG_KY = """
@@ -167,7 +193,7 @@ public class JdbcContestRepository implements ContestRepository {
         return jdbc.sql(DE_CUA)
                 .param("contestId", contestId)
                 .query((rs, i) -> new DeCuaContest(
-                        rs.getLong("problem_id"), rs.getString("label"),
+                        rs.getLong("problem_id"), rs.getString("code"), rs.getString("label"),
                         rs.getInt("ordinal"), rs.getInt("points")))
                 .list();
     }
@@ -190,6 +216,15 @@ public class JdbcContestRepository implements ContestRepository {
         } catch (DuplicateKeyException e) {
             throw ContestsException.daDangKy();
         }
+    }
+
+    @Override
+    public List<Contest> danhSach(Long sauId, int gioiHan) {
+        return jdbc.sql(DANH_SACH)
+                .param("sauId", sauId)
+                .param("gioiHan", gioiHan)
+                .query(MAPPER)
+                .list();
     }
 
     @Override

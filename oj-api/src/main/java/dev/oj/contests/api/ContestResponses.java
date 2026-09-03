@@ -3,6 +3,7 @@ package dev.oj.contests.api;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.contests.application.port.StandingsReader;
 import dev.oj.contests.application.usecase.GetContestUseCase;
+import dev.oj.contests.application.usecase.ListContestsUseCase;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.contests.domain.Contest;
 
@@ -26,21 +27,53 @@ public final class ContestResponses {
     public record ChiTiet(long id, String slug, String title, String format,
                           Instant startsAt, Instant endsAt, Instant freezeAt,
                           boolean daCongBo, boolean registrationRequired,
-                          boolean daDangKy, List<De> cacDe) {
+                          boolean daDangKy, String trangThai, List<De> cacDe) {
 
-        public static ChiTiet tu(GetContestUseCase.ChiTiet ct) {
+        /**
+         * ★ {@code trangThai} suy ở SERVER, và nó là thứ làm cho {@code cacDe} đọc được.
+         *
+         * <p>{@code cacDe} rỗng ở <b>hai</b> nghĩa khác hẳn nhau: "chưa tới giờ, chưa cho
+         * xem" và "kỳ thi này thật sự chưa có đề nào". Javadoc của
+         * {@code GetContestUseCase.ChiTiet} đã ghi luật — phân biệt bằng thời gian, không
+         * bằng độ dài danh sách — nhưng nếu response không mang trạng thái thì client phải
+         * tự so {@code startsAt} với đồng hồ của <i>trình duyệt</i>.
+         *
+         * <p>Đồng hồ ấy lệch. Và nó lệch nhiều nhất ở đúng chỗ người ta để ý nhất: phút bắt
+         * đầu kỳ thi. Một trang hiện "kỳ thi chưa bắt đầu" trong khi server đã mở là một
+         * khiếu nại không ai giải quyết được, vì hai bên đang nhìn hai đồng hồ.
+         */
+        public static ChiTiet tu(GetContestUseCase.ChiTiet ct, java.time.Instant bayGio) {
             Contest c = ct.contest();
             return new ChiTiet(c.id(), c.slug(), c.title(), c.format().code(),
                     c.startsAt(), c.endsAt(), c.freezeAt(), c.daCongBo(),
                     c.registrationRequired(), ct.daDangKy(),
+                    ListContestsUseCase.TrangThai.cua(c, bayGio).name(),
                     ct.cacDe().stream().map(De::tu).toList());
         }
     }
 
-    public record De(long problemId, String label, int ordinal, int points) {
+    /**
+     * Một dòng của trang danh sách — Bước G4.
+     *
+     * <p><b>Cố ý không có {@code cacDe}.</b> Nếu record này mang danh sách đề thì trang danh
+     * sách lộ đề của mọi kỳ thi chưa mở, qua đúng cái endpoint dùng để tìm kỳ thi. Xem
+     * javadoc {@code ListContestsUseCase}.
+     */
+    public record TomTat(long id, String slug, String title, String format,
+                         Instant startsAt, Instant endsAt,
+                         boolean registrationRequired, String trangThai) {
+
+        public static TomTat tu(ListContestsUseCase.TomTat t) {
+            return new TomTat(t.id(), t.slug(), t.title(), t.format(),
+                    t.startsAt(), t.endsAt(), t.registrationRequired(),
+                    t.trangThai().name());
+        }
+    }
+
+    public record De(long problemId, String code, String label, int ordinal, int points) {
 
         static De tu(ContestRepository.DeCuaContest d) {
-            return new De(d.problemId(), d.label(), d.ordinal(), d.points());
+            return new De(d.problemId(), d.code(), d.label(), d.ordinal(), d.points());
         }
     }
 

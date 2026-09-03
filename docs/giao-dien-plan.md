@@ -96,7 +96,7 @@ một lỗi bất ngờ.
 
 | # | Trang | Endpoint | FR |
 |---|---|---|---|
-| **G4** | `contests.html` — danh sách kỳ thi | ⚠️ **endpoint chưa có** — xem mục 6 | FR-CON-01 |
+| **G4** | `contests.html` — danh sách kỳ thi | `GET /api/v1/contests` ✅ đã thêm | FR-CON-01 |
 | **G5** | `contest.html` — chi tiết + đăng ký + danh sách đề | `GET /api/v1/contests/{slug}` · `POST .../register` | FR-CON-02, 03 |
 | **G6** | Bảng xếp hạng trong `contest.html` — REST trước | `GET .../standings` | FR-CON-04, 06 |
 | **G7** | Bảng xếp hạng qua SSE + hiển thị đóng băng | `GET .../standings/stream` | FR-CON-04, 05 |
@@ -228,7 +228,15 @@ KHÔNG cắt  →  a11y mức A
 1. **`GET /api/v1/submissions` nhận `limit`**, trong khi `problems` · `jobs` · `audit-log`
    đều nhận `size`. Một tên là đủ. Sai tên thì server bỏ qua trong im lặng, nên đây là loại
    lệch không bao giờ tự lộ ra.
-2. **`GET /api/v1/contests` KHÔNG TỒN TẠI.** `ContestController` chỉ có `/{slug}`,
+2. ~~**`GET /api/v1/contests` KHÔNG TỒN TẠI.**~~ ✅ **Đã làm ở Đợt 2.**
+   `ListContestsUseCase` + `GET /api/v1/contests?cursor=&size=`, với DTO tóm tắt riêng
+   không mang danh sách đề. Kèm hai thay đổi phát sinh khi viết trang, cả hai đều đã làm:
+   `ContestResponses.ChiTiet.trangThai` (server suy, để client khỏi so bằng đồng hồ lệch) và
+   `ContestResponses.De.code` (không có nó thì bảng đề trong lúc thi không bấm được).
+
+   Ghi chú gốc giữ lại vì lập luận vẫn đúng:
+
+   **`GET /api/v1/contests` KHÔNG TỒN TẠI.** `ContestController` chỉ có `/{slug}`,
    `/{contestId}/standings`, `register`, `POST` tạo, thêm đề, và `reveal`. Không có
    use-case liệt kê nào trong `contests.application.usecase`.
 

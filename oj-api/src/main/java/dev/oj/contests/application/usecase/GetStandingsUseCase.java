@@ -7,6 +7,7 @@ import dev.oj.contests.domain.ContestsException;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.AuthorizationException;
 import dev.oj.platform.security.CurrentUserProvider;
+import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import dev.oj.platform.security.PublicAccess;
 import org.springframework.stereotype.Service;
 
@@ -51,21 +52,42 @@ public class GetStandingsUseCase {
         this.clock = clock;
     }
 
+    /**
+     * Đọc bảng cho người của <b>request đang chạy</b>. Chỉ đúng khi gọi trên thread của request.
+     *
+     * @see #thucHien(long, CurrentUser) khi lời gọi KHÔNG nằm trên thread ấy
+     */
     public BangXepHang thucHien(long contestId) {
+        return thucHien(contestId, nguoiGoiHienTai());
+    }
+
+    /**
+     * ★ Người gọi truyền vào TƯỜNG MINH — dành cho lời gọi không ở trên thread của request.
+     *
+     * <h2>Vì sao bản này phải tồn tại</h2>
+     * {@link #nguoiGoiHienTai()} đọc một {@code ThreadLocal} do {@code JwtAuthFilter} đặt rồi
+     * xoá trong {@code finally}. Một luồng SSE thì sống lâu hơn cái request đã mở nó: các
+     * khung tiếp theo được đẩy từ thread điều phối của Redis, nơi {@code ThreadLocal} ấy rỗng.
+     *
+     * <p>Gọi bản không tham số ở đó thì mọi khung sau khung đầu đều là ẩn danh —
+     * {@code cuaToi} thành {@code null}, và dòng của chính thí sinh <b>biến mất</b> khỏi bảng
+     * ngay ở lần cập nhật đầu tiên (FR-CON-04 đòi "top N + vùng quanh mình"). Nên chỗ gọi
+     * phải phân giải danh tính trước, trên đúng thread, rồi giữ lại vật thể ấy.
+     *
+     * <h2>Danh tính được chốt tại lúc mở luồng</h2>
+     * Một admin bị hạ vai trò giữa kỳ thi vẫn thấy bảng chưa đóng băng cho tới khi luồng đứt.
+     * Đó là đánh đổi có chủ ý: hướng sai của cách này là <i>hiện thừa cho một người vừa mới
+     * còn là admin</i>, còn hướng sai của cách kia là <i>giấu mất dòng của mọi thí sinh</i>.
+     *
+     * @param nguoiGoi {@code null} nghĩa là khán giả chưa đăng nhập — vẫn xem được bảng
+     */
+    public BangXepHang thucHien(long contestId, CurrentUser nguoiGoi) {
         Contest contest = contests.timTheoId(contestId)
                 .orElseThrow(ContestsException::khongTimThay);
 
-        Long userId = null;
-        boolean laAdmin = false;
-        try {
-            var nguoiGoi = currentUser.current();
-            userId = nguoiGoi.id();
-            laAdmin = nguoiGoi.isAdmin();
-        } catch (AuthorizationException e) {
-            userId = null;   // khán giả chưa đăng nhập vẫn xem được bảng
-        }
-
-        // ★ Dòng quan trọng nhất của lớp này. Xem ma trận hiển thị.
+        // ★ Dòng quan trọng nhất của lớp này. Xem ma trận hiển thị. `laAdmin` được suy Ở ĐÂY
+        // từ danh tính, chứ không nhận một cờ boolean từ chỗ gọi — bất biến #11.
+        boolean laAdmin = nguoiGoi != null && nguoiGoi.isAdmin();
         boolean dongBang = contest.dangDongBang(clock.instant()) && !laAdmin;
 
         List<StandingsReader.Dong> top =
@@ -73,11 +95,25 @@ public class GetStandingsUseCase {
 
         StandingsReader.Dong cuaToi = null;
         Integer hangCuaToi = null;
-        if (userId != null) {
-            cuaToi = standings.cuaNguoi(contestId, userId, dongBang).orElse(null);
-            hangCuaToi = standings.hang(contestId, userId, dongBang).orElse(null);
+        if (nguoiGoi != null) {
+            cuaToi = standings.cuaNguoi(contestId, nguoiGoi.id(), dongBang).orElse(null);
+            hangCuaToi = standings.hang(contestId, nguoiGoi.id(), dongBang).orElse(null);
         }
         return new BangXepHang(contest, dongBang, top, cuaToi, hangCuaToi);
+    }
+
+    /**
+     * Ai đang gọi, hoặc {@code null} nếu chưa đăng nhập.
+     *
+     * <p><b>Phải gọi trên thread của request.</b> Ở bất cứ thread nào khác nó trả {@code null}
+     * một cách im lặng — xem javadoc của {@link #thucHien(long, CurrentUser)}.
+     */
+    public CurrentUser nguoiGoiHienTai() {
+        try {
+            return currentUser.current();
+        } catch (AuthorizationException e) {
+            return null;   // khán giả chưa đăng nhập vẫn xem được bảng
+        }
     }
 
     /**

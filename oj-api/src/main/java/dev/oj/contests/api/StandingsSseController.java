@@ -3,6 +3,7 @@ package dev.oj.contests.api;
 import dev.oj.contests.application.StandingsEventBus;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import dev.oj.platform.web.SseEmitters;
 import dev.oj.platform.web.SseHeartbeat;
 import org.slf4j.Logger;
@@ -59,15 +60,23 @@ public class StandingsSseController {
     public SseEmitter stream(@PathVariable long contestId) {
         SseEmitter emitter = new SseEmitter(properties.sse().timeout().toMillis());
 
+        // ★ Phân giải danh tính NGAY TẠI ĐÂY, còn đang trên thread của request, rồi giữ lại.
+        // Bên trong lambda dưới thì đã muộn: nó chạy trên thread điều phối của Redis, nơi
+        // ThreadLocal của JwtAuthFilter rỗng, nên `thucHien(contestId)` sẽ coi mọi khung sau
+        // khung đầu là ẩn danh — và dòng của chính thí sinh biến mất khỏi bảng ở lần cập nhật
+        // đầu tiên (FR-CON-04). Xem javadoc của GetStandingsUseCase#thucHien(long, CurrentUser).
+        CurrentUser nguoiGoi = getStandings.nguoiGoiHienTai();
+
         // Đọc một lần ngay TRƯỚC khi đăng ký nghe: nếu kỳ thi không tồn tại thì ném ở đây,
         // trước khi có bất kỳ kết nối nào được mở. Và nó cũng gửi trạng thái hiện tại, để
         // client không phải chờ thay đổi đầu tiên mới có gì hiển thị.
-        SseEmitters.send(emitter, ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId)));
+        SseEmitters.send(emitter,
+                ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId, nguoiGoi)));
 
         AutoCloseable dangKy = bus.subscribe(contestId, () -> {
-            // Đọc lại qua use-case — bộ lọc đóng băng chạy lại cho ĐÚNG người này.
+            // Đọc lại qua use-case — bộ lọc đóng băng chạy lại cho đúng người đã mở luồng này.
             SseEmitters.send(emitter,
-                    ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId)));
+                    ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId, nguoiGoi)));
         });
         AutoCloseable ping = heartbeat.start(emitter);
 

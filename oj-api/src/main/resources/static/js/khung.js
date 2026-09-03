@@ -38,7 +38,7 @@ export function veThanh() {
     nav.setAttribute('aria-label', 'Điều hướng chính');
     // Trang cần đăng nhập chỉ hiện khi đã đăng nhập: một link dẫn thẳng tới màn hình
     // đăng nhập là một link nói dối về nơi nó dẫn tới.
-    const muc = [['/', 'Đề bài']];
+    const muc = [['/', 'Đề bài'], ['/contests.html', 'Kỳ thi']];
     if (p) muc.push(['/bai-nop.html', 'Bài nộp của tôi']);
     muc.push(['/trang-thai.html', 'Trạng thái']);
 

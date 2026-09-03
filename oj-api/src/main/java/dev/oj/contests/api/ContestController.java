@@ -3,8 +3,10 @@ package dev.oj.contests.api;
 import dev.oj.contests.application.usecase.AuthorContestUseCase;
 import dev.oj.contests.application.usecase.GetContestUseCase;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
+import dev.oj.contests.application.usecase.ListContestsUseCase;
 import dev.oj.contests.application.usecase.RegisterForContestUseCase;
 import dev.oj.contests.application.usecase.RevealStandingsUseCase;
+import dev.oj.platform.web.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,24 +32,46 @@ import java.util.Map;
 public class ContestController {
 
     private final GetContestUseCase getContest;
+    private final ListContestsUseCase listContests;
     private final GetStandingsUseCase getStandings;
     private final RegisterForContestUseCase register;
     private final AuthorContestUseCase author;
     private final RevealStandingsUseCase reveal;
+    private final java.time.Clock clock;
 
-    public ContestController(GetContestUseCase getContest, GetStandingsUseCase getStandings,
+    public ContestController(GetContestUseCase getContest, ListContestsUseCase listContests,
+                             GetStandingsUseCase getStandings,
                              RegisterForContestUseCase register, AuthorContestUseCase author,
-                             RevealStandingsUseCase reveal) {
+                             RevealStandingsUseCase reveal, java.time.Clock clock) {
         this.getContest = getContest;
+        this.listContests = listContests;
         this.getStandings = getStandings;
         this.register = register;
         this.author = author;
         this.reveal = reveal;
+        this.clock = clock;
+    }
+
+    /**
+     * FR-CON-01 — lịch thi. Công khai, phân trang cursor (bất biến #8).
+     *
+     * <p>Xin {@code size=1000} thì nhận {@code page.max-size}, không nhận lỗi
+     * ({@code oj-api/CLAUDE.md} mục 3).
+     */
+    @GetMapping
+    public CursorPage<ContestResponses.TomTat> danhSach(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer size) {
+
+        var trang = listContests.thucHien(cursor, size);
+        return new CursorPage<>(
+                trang.items().stream().map(ContestResponses.TomTat::tu).toList(),
+                trang.nextCursor());
     }
 
     @GetMapping("/{slug}")
     public ContestResponses.ChiTiet xem(@PathVariable String slug) {
-        return ContestResponses.ChiTiet.tu(getContest.theoSlug(slug));
+        return ContestResponses.ChiTiet.tu(getContest.theoSlug(slug), clock.instant());
     }
 
     /** FR-CON-04. Đường REST này cũng là <b>fallback bắt buộc</b> của luồng SSE. */

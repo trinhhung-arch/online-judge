@@ -46,6 +46,16 @@ export const DUONG = {
         luong:  (id) => `/api/v1/submissions/${encodeURIComponent(id)}/stream`,
     },
 
+    kyThi: {
+        theoSlug:    (slug) => `/api/v1/contests/${encodeURIComponent(slug)}`,
+        bangXepHang: (id) => `/api/v1/contests/${encodeURIComponent(id)}/standings`,
+        luongBang:   (id) => `/api/v1/contests/${encodeURIComponent(id)}/standings/stream`,
+        dangKy:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/register`,
+        tao:         '/api/v1/contests',
+        themDe:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/problems`,
+        congBo:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/reveal`,
+    },
+
     ngonNgu:   '/api/v1/languages',
     trangThai: '/api/v1/status',
 };
@@ -60,6 +70,14 @@ export const DUONG = {
 export const DS = {
     de:     { url: '/api/v1/problems',    khoaSize: 'size'  },
     baiNop: { url: '/api/v1/submissions', khoaSize: 'limit' },
+    kyThi:  { url: '/api/v1/contests',    khoaSize: 'size'  },
+};
+
+/** Trạng thái kỳ thi — server suy, client chỉ hiển thị. Xem ListContestsUseCase.TrangThai. */
+export const TRANG_THAI_KY_THI = {
+    SAP_DIEN_RA:  ['Sắp diễn ra', 'cho'],
+    DANG_CHAY:    ['Đang diễn ra', 'AC'],
+    DA_KET_THUC:  ['Đã kết thúc', ''],
 };
 
 /**

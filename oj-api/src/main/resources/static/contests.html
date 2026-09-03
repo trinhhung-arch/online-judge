@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kỳ thi · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Kỳ thi</h1>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <!-- Chỉ ADMIN thấy. Ẩn bằng `hidden` trong HTML tĩnh chứ không dựng bằng JS: một khối
+         form dựng động sẽ nhấp nháy trên trang của người không có quyền trước khi bị gỡ. -->
+    <section id="khu-tao" class="the" hidden>
+        <h2>Tạo kỳ thi</h2>
+        <form id="form-tao" novalidate>
+            <label for="slug">Đường dẫn (slug)</label>
+            <input id="slug" name="slug" required placeholder="thi-thu-thang-9">
+
+            <label for="tieu-de">Tiêu đề</label>
+            <input id="tieu-de" name="title" required>
+
+            <label for="the-thuc">Thể thức</label>
+            <select id="the-thuc" name="format">
+                <option value="ICPC">ICPC — penalty theo thời gian</option>
+                <option value="IOI">IOI — điểm theo subtask</option>
+            </select>
+
+            <label for="bat-dau">Bắt đầu</label>
+            <input id="bat-dau" name="startsAt" type="datetime-local" required>
+            <p class="goi-y">Phải ở tương lai — nếu không thì đăng ký đóng ngay lúc tạo.</p>
+
+            <label for="ket-thuc">Kết thúc</label>
+            <input id="ket-thuc" name="endsAt" type="datetime-local" required>
+
+            <label for="dong-bang">Đóng băng bảng xếp hạng lúc (tuỳ chọn)</label>
+            <input id="dong-bang" name="freezeAt" type="datetime-local">
+
+            <p><button type="submit">Tạo kỳ thi</button></p>
+        </form>
+    </section>
+
+    <div class="cuon-ngang">
+        <table>
+            <caption class="goi-y">Lịch thi, mới tạo trước</caption>
+            <thead>
+            <tr>
+                <th scope="col">Kỳ thi</th>
+                <th scope="col">Thể thức</th>
+                <th scope="col">Bắt đầu</th>
+                <th scope="col">Kết thúc</th>
+                <th scope="col">Trạng thái</th>
+            </tr>
+            </thead>
+            <tbody id="bang"></tbody>
+        </table>
+    </div>
+
+    <p><button id="them" class="phu" hidden>Tải thêm</button></p>
+</main>
+<script type="module" src="/js/contests.js"></script>
+</body>
+</html>

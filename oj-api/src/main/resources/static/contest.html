@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kỳ thi · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1 id="tieu-de">Đang tải…</h1>
+    <p id="tom-tat" class="goi-y"></p>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="hai-cot">
+        <section aria-labelledby="nhan-de">
+            <h2 id="nhan-de">Đề bài</h2>
+
+            <!-- ★ Vùng này có HAI nghĩa khi rỗng: "chưa tới giờ" và "kỳ thi chưa có đề nào".
+                 js/contest.js phân biệt bằng `trangThai` của server, không bằng độ dài mảng. -->
+            <p id="vi-sao-trong" class="thong-bao" hidden></p>
+
+            <div class="cuon-ngang">
+                <table>
+                    <caption class="goi-y">Đề trong kỳ thi</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">Nhãn</th>
+                        <th scope="col">Mã đề</th>
+                        <th scope="col">Điểm</th>
+                    </tr>
+                    </thead>
+                    <tbody id="bang-de"></tbody>
+                </table>
+            </div>
+
+            <p><button id="dang-ky" hidden>Đăng ký tham gia</button></p>
+
+            <section id="khu-admin" class="the" hidden>
+                <h3>Điều hành</h3>
+
+                <form id="form-them-de" novalidate>
+                    <label for="problem-id">Thêm đề — id</label>
+                    <input id="problem-id" name="problemId" type="number" min="1" required>
+
+                    <label for="nhan-de-moi">Nhãn</label>
+                    <input id="nhan-de-moi" name="label" required placeholder="A">
+
+                    <label for="thu-tu">Thứ tự</label>
+                    <input id="thu-tu" name="ordinal" type="number" min="1" value="1" required>
+
+                    <label for="diem">Điểm</label>
+                    <input id="diem" name="points" type="number" min="1" value="100" required>
+
+                    <p><button type="submit">Thêm đề</button></p>
+                </form>
+
+                <p><button id="cong-bo" class="phu">Công bố bảng xếp hạng đầy đủ</button></p>
+                <p class="goi-y">Chỉ dùng sau khi kỳ thi kết thúc — nó mở bảng đã đóng băng
+                    cho mọi người.</p>
+            </section>
+        </section>
+
+        <section aria-labelledby="nhan-bang">
+            <h2 id="nhan-bang">Bảng xếp hạng</h2>
+
+            <!-- ★ Đóng băng PHẢI nhìn thấy được. Một bảng ngừng đổi mà không nói gì làm
+                 thí sinh kết luận hệ thống hỏng, đúng vào lúc căng nhất. -->
+            <p id="bang-dong-bang" class="thong-bao" hidden></p>
+            <p id="nguon-bang" class="goi-y"></p>
+
+            <div class="cuon-ngang">
+                <table>
+                    <caption class="goi-y">Top 50</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">Hạng</th>
+                        <th scope="col">Thí sinh</th>
+                        <th scope="col">Đạt</th>
+                        <th scope="col">Điểm</th>
+                        <th scope="col">Penalty</th>
+                        <th scope="col">Chờ</th>
+                    </tr>
+                    </thead>
+                    <tbody id="bang-xep-hang"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+<script type="module" src="/js/contest.js"></script>
+</body>
+</html>

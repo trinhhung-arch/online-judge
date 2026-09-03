@@ -54,6 +54,93 @@ class ContestAccessIT extends PostgresIT {
 
     // =========================================================================
 
+    /**
+     * ★ Trang DANH SÁCH kỳ thi không được lộ đề — Bước G4, FR-CON-01.
+     *
+     * <h2>Vì sao ca này nằm ở file "ai được thấy gì", không ở một file phân trang</h2>
+     * {@code GetContestUseCase} đã giấu danh sách đề tới giờ bắt đầu, và
+     * {@link TruyCapDe} bên dưới canh điều đó. Nhưng endpoint danh sách là một
+     * đường thứ hai tới cùng dữ liệu, và nó là đường mà một người chưa đăng nhập dùng để
+     * <i>tìm</i> kỳ thi — tức là đường dễ bị quên nhất khi rà soát.
+     *
+     * <p>Cách hỏng cụ thể mà ca này chặn: ai đó tái dùng {@code ContestResponses.ChiTiet}
+     * cho trang danh sách "cho đỡ phải viết DTO mới". Nó biên dịch được, trang chạy đẹp, và
+     * mã đề của mọi kỳ thi chưa mở nằm sẵn trong JSON.
+     */
+    @Nested
+    @DisplayName("★ FR-CON-01 · danh sách kỳ thi")
+    class DanhSach {
+
+        @Autowired dev.oj.contests.application.usecase.ListContestsUseCase listContests;
+
+        @Test
+        @DisplayName("★ DTO tóm tắt KHÔNG có chỗ nào để nhét danh sách đề")
+        void tom_tat_khong_mang_duoc_de() {
+            var thanhPhan = dev.oj.contests.api.ContestResponses.TomTat.class
+                    .getRecordComponents();
+
+            for (var tp : thanhPhan) {
+                assertThat(java.util.Collection.class.isAssignableFrom(tp.getType()))
+                        .as("trường '%s' là một tập hợp — trang danh sách chỉ được mang giá trị "
+                                + "đơn. Một List ở đây là chỗ để danh sách đề lọt vào, và nó sẽ "
+                                + "lọt qua đúng endpoint mà khách chưa đăng nhập dùng để tìm "
+                                + "kỳ thi", tp.getName())
+                        .isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("kỳ thi chưa mở vẫn hiện trong lịch — giấu đề, không giấu kỳ thi")
+        void chua_mo_van_hien_trong_lich() {
+            long id = dungContest(MOC.plus(Duration.ofHours(2)),
+                    MOC.plus(Duration.ofHours(5)), null);
+
+            var trang = listContests.thucHien(null, 50);
+
+            assertThat(trang.items())
+                    .as("giấu đề KHÔNG có nghĩa là giấu kỳ thi — người ta phải xem được lịch "
+                            + "để quyết định có đăng ký không")
+                    .anyMatch(t -> t.id() == id
+                            && t.trangThai() == dev.oj.contests.application.usecase
+                                    .ListContestsUseCase.TrangThai.SAP_DIEN_RA);
+        }
+
+        @Test
+        @DisplayName("phân trang cursor: trang sau không lặp dòng của trang trước")
+        void phan_trang_khong_lap() {
+            for (int i = 0; i < 4; i++) {
+                dungContest(MOC.plus(Duration.ofHours(2)), MOC.plus(Duration.ofHours(5)), null);
+            }
+
+            var trang1 = listContests.thucHien(null, 2);
+            assertThat(trang1.items()).hasSize(2);
+            assertThat(trang1.nextCursor()).isNotNull();
+
+            var trang2 = listContests.thucHien(trang1.nextCursor(), 2);
+
+            assertThat(trang2.items()).extracting(t -> t.id())
+                    .doesNotContainAnyElementsOf(
+                            trang1.items().stream().map(t -> t.id()).toList());
+        }
+
+        @Test
+        @DisplayName("xin 1000 thì nhận trần, không nhận lỗi")
+        void xin_qua_nhieu_thi_bi_cat() {
+            dungContest(MOC.plus(Duration.ofHours(2)), MOC.plus(Duration.ofHours(5)), null);
+
+            assertThat(listContests.thucHien(null, 1000).items().size())
+                    .isLessThanOrEqualTo(50);
+        }
+
+        @Test
+        @DisplayName("cursor rác trả trang đầu, không ném lỗi")
+        void cursor_rac_khong_no() {
+            dungContest(MOC.plus(Duration.ofHours(2)), MOC.plus(Duration.ofHours(5)), null);
+
+            assertThat(listContests.thucHien("khong-phai-so", 5).items()).isNotEmpty();
+        }
+    }
+
     @Nested
     @DisplayName("★ FR-CON-02 · đăng ký")
     class DangKy {
