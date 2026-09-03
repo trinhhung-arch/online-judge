@@ -21,3 +21,4 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [011](011-redis-pubsub-tu-M3-khong-doi-M4.md) | Redis pub/sub cho SSE làm ở M3, không đợi M4 | M3 |
 | [012](012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) | Tự viết JWT HS256 bằng JDK, không thêm thư viện JOSE | M4 |
 | [013](013-rabbitmq-la-chuong-cua-khong-phai-goi-viec.md) | RabbitMQ là chuông cửa, không phải gói việc — message chỉ mang `submissionId` | M6 |
+| [014](014-worker-lay-testdata-qua-api-khong-qua-minio.md) | Worker lấy testdata qua API (endpoint thứ năm), không qua MinIO | M6 |

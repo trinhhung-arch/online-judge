@@ -109,6 +109,55 @@ public class JudgeApiClient {
         }
     }
 
+    /**
+     * ★ Tải nội dung một đối tượng testdata theo hash — {@code JudgeEndpoints.TESTDATA}.
+     *
+     * <h2>Đây là đường DUY NHẤT worker lấy được testdata</h2>
+     * Worker không có MinIO client và sẽ không bao giờ có (bất biến #3,
+     * {@code oj-worker/CLAUDE.md} mục 3). API là thứ duy nhất chạm kho; worker chỉ biết đường
+     * dẫn này. Nhờ vậy một máy chấm bị chiếm không mở ra được kho testdata của mọi đề khác —
+     * trên đúng cái máy chạy mã của người lạ thì đó không phải chi tiết nhỏ.
+     *
+     * <h2>Ném khi hỏng, KHÔNG trả về mảng rỗng</h2>
+     * Ngược với {@code reportProgress}, vốn nuốt lỗi vì tiến độ chỉ là tiện nghi. Ở đây một
+     * mảng rỗng sẽ được đem đi so với output kỳ vọng và cho ra một verdict <b>sai</b> — hệ
+     * thống này bán tính công bằng, nên "không chắc" phải thành {@code IE} chứ không thành
+     * một kết quả trông như thật ({@code oj-worker/CLAUDE.md} mục 6).
+     *
+     * <p>{@code 404} là {@code retryable = false}: hash ấy sẽ không tự xuất hiện. Nó nghĩa là
+     * testdata đã bị thay giữa lúc claim và lúc tải — hiếm, nhưng thử lại thì vô ích.
+     *
+     * <p><b>Không log nội dung, không log kích thước.</b> Kích thước một testcase phân biệt
+     * được test nhỏ với test lớn, và trong một bộ test sắp theo độ khó thì đó là một tín hiệu
+     * (bất biến #1 và #9).
+     *
+     * @return nội dung thô; người gọi băm lại để kiểm — xem {@code TestdataFetcher}
+     */
+    public byte[] fetchTestdata(String sha256) {
+        try {
+            byte[] noiDung = http.get()
+                    .uri(JudgeEndpoints.TESTDATA + "/" + sha256)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new JudgeApiException(
+                                "testdata " + sha256.substring(0, 8) + "... trả "
+                                        + res.getStatusCode(),
+                                res.getStatusCode().is5xxServerError());
+                    })
+                    .body(byte[].class);
+            if (noiDung == null) {
+                throw new JudgeApiException(
+                        "testdata " + sha256.substring(0, 8) + "... trả thân rỗng", true);
+            }
+            return noiDung;
+        } catch (JudgeApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new JudgeApiException(
+                    "không gọi được " + JudgeEndpoints.TESTDATA, true, e);
+        }
+    }
+
     public void reportResult(JudgeResultDto result) {
         try {
             http.post()

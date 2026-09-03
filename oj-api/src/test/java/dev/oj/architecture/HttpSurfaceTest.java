@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import dev.oj.contract.JudgeEndpoints;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,5 +119,74 @@ class HttpSurfaceTest {
     }
 
     private record Controller(String name, String path, boolean internalPackage) {
+    }
+
+    /**
+     * ★ Mọi hằng đường dẫn trong {@code JudgeEndpoints} phải có một controller phục vụ nó.
+     *
+     * <h2>Vì sao ca này đáng tồn tại — nó bắt đúng lỗi đã xảy ra thật</h2>
+     * {@code JudgeEndpoints} là hợp đồng đóng băng giữa hai người: một bên khai đường dẫn,
+     * bên kia gọi. Không có gì bắt được lúc một đầu tồn tại mà đầu kia không — trình biên
+     * dịch im lặng vì cả hai chỉ tham chiếu một hằng {@code String}.
+     *
+     * <p>Đó chính là cách mắt xích testdata bị bỏ sót suốt bốn mốc: {@code TestcaseMetaDto}
+     * nói worker "tải nội dung từ MinIO", nhưng <b>không có đường dẫn nào để tải</b>, và không
+     * hiện thực nào ở phía worker. Hệ thống biên dịch được, test xanh, và mọi bài nộp trả
+     * {@code IE} ngay khi testdata được nạp qua API.
+     *
+     * <p>Ca này không bắt được toàn bộ lớp lỗi ấy — nó không biết worker có gọi hay không.
+     * Nhưng nó bắt nửa quan trọng hơn: <b>một đường dẫn được hứa mà không ai phục vụ</b>.
+     */
+    @Test
+    @DisplayName("★ mỗi hằng trong JudgeEndpoints đều có controller phục vụ")
+    void moi_duong_dan_noi_bo_deu_co_nguoi_phuc_vu() throws Exception {
+        Set<String> daKhai = new TreeSet<>();
+        for (java.lang.reflect.Field f : JudgeEndpoints.class.getFields()) {
+            Object v = f.get(null);
+            if (v instanceof String duong && duong.startsWith(JudgeEndpoints.BASE + "/")) {
+                daKhai.add(duong);
+            }
+        }
+        assertThat(daKhai).as("hợp đồng phải khai ít nhất bốn đường của M1–M3")
+                .hasSizeGreaterThanOrEqualTo(4);
+
+        Set<String> daPhucVu = new TreeSet<>();
+        for (JavaClass type : CLASSES) {
+            if (!type.isAnnotatedWith(RestController.class)
+                    || !type.isAnnotatedWith(RequestMapping.class)) {
+                continue;
+            }
+            Class<?> lop = type.reflect();
+            String[] goc = lop.getAnnotation(RequestMapping.class).value();
+            if (goc.length == 0 || !goc[0].startsWith(JudgeEndpoints.BASE)) {
+                continue;
+            }
+            // Controller gắn thẳng vào hằng (InternalTestdataController dùng TESTDATA làm
+            // @RequestMapping, còn phần {sha256} là path variable).
+            if (daKhai.contains(goc[0])) {
+                daPhucVu.add(goc[0]);
+            }
+            for (java.lang.reflect.Method m : lop.getDeclaredMethods()) {
+                for (String duong : duongCuaPhuongThuc(m)) {
+                    daPhucVu.add(goc[0] + duong);
+                }
+            }
+        }
+
+        assertThat(daPhucVu)
+                .as("đường dẫn được hứa trong hợp đồng nhưng KHÔNG controller nào phục vụ")
+                .containsAll(daKhai);
+    }
+
+    private static List<String> duongCuaPhuongThuc(java.lang.reflect.Method m) {
+        var post = m.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class);
+        if (post != null) {
+            return List.of(post.value());
+        }
+        var get = m.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class);
+        if (get != null) {
+            return List.of(get.value());
+        }
+        return List.of();
     }
 }

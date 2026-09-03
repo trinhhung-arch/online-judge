@@ -48,6 +48,18 @@ oj:
     result-retry-min: 1s
     result-retry-max: 30s
     host-factor: 1.000                   # khởi điểm; HostBenchmark (Bước 2.9) đo lại
+    # ★ Nguồn testdata: `api` (mặc định) hay `local`.
+    #
+    #   api    ApiTestdataSource  -> tải qua GET /internal/judge/testdata/{sha256}.
+    #          Worker KHÔNG có MinIO client và sẽ không bao giờ có (bất biến #3): API là thứ
+    #          duy nhất chạm kho. Worker cache theo hash, nên một bộ test đi qua API một lần
+    #          cho cả nghìn bài nộp cùng đề.
+    #
+    #   local  LocalDirectoryTestdataSource -> đọc <cache.dir>/testdata-store.
+    #          Giữ lại cho hai việc: chấm thử offline khi chưa dựng nổi API, và dò lỗi bằng
+    #          cách đổ testdata vào tay để loại trừ đoạn vận chuyển.
+    testdata-source: ${OJ_WORKER_TESTDATA_SOURCE:api}
+
     api-base-url: ${OJ_API_BASE_URL:http://localhost:8080}
     internal-secret: ${OJ_INTERNAL_SHARED_SECRET}   # không có mặc định, cố ý
 

@@ -71,10 +71,16 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 
 ---
 
-## 5 · Bốn endpoint nội bộ `/internal/judge/*`
+## 5 · Năm endpoint nội bộ `/internal/judge/*`
 
 - `claim` (M1) · `result` (M1) · `benchmark` (M2, `HostBenchmarkDto`) · `progress` (M3, lô 20
-  test — `JudgeProgressDto`). Danh sách chính thức nằm ở `JudgeEndpoints` trong `oj-contract`.
+  test — `JudgeProgressDto`) · **`testdata/{sha256}` (M6, ADR 014)**. Danh sách chính thức nằm
+  ở `JudgeEndpoints` trong `oj-contract`.
+- **`testdata` là đường ra DUY NHẤT của nội dung testcase ẩn.** Nó tồn tại vì worker không có
+  MinIO client và sẽ không bao giờ có (bất biến #3): API là thứ duy nhất chạm kho. Khoá là
+  hash nội dung, nên không đoán được và không duyệt được. Cũng không nằm trên đường
+  `nộp bài → verdict` — worker cache theo hash, một bộ test đi qua đây một lần cho cả nghìn
+  bài nộp cùng đề.
 - **`benchmark` là endpoint duy nhất ở đây KHÔNG nằm trên đường `nộp bài → verdict`.** Worker
   gọi 15 phút một lần từ luồng lịch riêng, nên nó không tiêu ngân sách 2 giây. Nó vẫn ở dưới
   `/internal/judge` vì nó dùng cùng shared secret và cùng luật "không lộ ra tunnel".

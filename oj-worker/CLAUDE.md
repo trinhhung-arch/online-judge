@@ -35,11 +35,18 @@
 Worker biết đúng những đường dẫn trong `JudgeEndpoints` của `oj-contract`, không hơn:
 
 ```
-POST /internal/judge/claim      → nhận job
-POST /internal/judge/result     → trả kết quả
-POST /internal/judge/benchmark  → báo phép đo tốc độ máy chấm   (M2)
-POST /internal/judge/progress   → tiến độ theo lô 20 test        (M3)
+POST /internal/judge/claim            → nhận job
+POST /internal/judge/result           → trả kết quả
+POST /internal/judge/benchmark        → báo phép đo tốc độ máy chấm   (M2)
+POST /internal/judge/progress         → tiến độ theo lô 20 test        (M3)
+GET  /internal/judge/testdata/{sha}   → tải nội dung một testcase      (M6, ADR 014)
 ```
+
+`testdata` là cách worker lấy được bộ test, và là lý do câu "không MinIO client" ở dưới vẫn
+đứng vững. Trước M6 câu ấy đúng nhưng **không có đường thay thế** — hiện thực `TestdataSource`
+duy nhất đọc một thư mục cục bộ mà không gì đổ dữ liệu vào, nên mọi bài nộp trả `IE` ngay khi
+testdata được nạp qua API. Không test nào bắt được, vì mọi test của worker tự đổ testdata vào
+thư mục ấy trước khi chạy.
 
 Hai đường dưới **không nằm trên đường `nộp bài → verdict`**: `benchmark` gọi 15 phút một lần
 từ luồng lịch, `progress` là thông tin phụ. Chúng không tiêu một phần nào của ngân sách 2 giây,

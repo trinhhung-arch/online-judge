@@ -36,6 +36,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class InternalJudgeHttpIT extends PostgresIT {
 
+    /** Kho trong bộ nhớ, cắm làm {@code @Primary} bởi {@link KhoTestdataTrongBoNho.Dang}. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private KhoTestdataTrongBoNho kho;
+
     /**
      * Bản sao của {@code HttpIT.THAN_JSON}. Lớp này kế thừa {@link PostgresIT} chứ không phải
      * {@code HttpIT} — nó tự dựng client cho cổng nội bộ, nơi xác thực bằng shared secret chứ
@@ -138,6 +142,83 @@ class InternalJudgeHttpIT extends PostgresIT {
                 .exchange((req, res) -> res.getStatusCode());
 
         assertThat(status).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    // =========================================================================
+    // ★★ GET /internal/judge/testdata/{sha256} — đường ra của NỘI DUNG TESTCASE ẨN.
+    //
+    // Mắt xích này từng thiếu suốt bốn mốc: TestcaseMetaDto chỉ mang hash, javadoc của nó
+    // nói worker tải "từ MinIO", còn oj-worker/CLAUDE.md mục 3 cấm worker có MinIO client.
+    // Không ai viết đoạn vận chuyển, và không test nào đỏ — vì mọi test của worker tự đổ
+    // testdata vào thư mục cục bộ trước khi chạy.
+    // =========================================================================
+
+    @Test
+    @DisplayName("★★ tải được nội dung theo hash, đúng byte")
+    void tai_duoc_testdata_theo_hash() {
+        String noiDung = "3 4\n";
+        String sha = kho.them(noiDung);
+
+        byte[] ve = http.get().uri(JudgeEndpoints.TESTDATA + "/" + sha)
+                .header(JudgeEndpoints.SECRET_HEADER, SECRET)
+                .retrieve().body(byte[].class);
+
+        assertThat(ve).isNotNull();
+        assertThat(new String(ve, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo(noiDung);
+    }
+
+    /**
+     * ★ Ca quan trọng nhất của cả khối này. Không có secret thì nội dung testcase ẩn ra khỏi
+     * hệ thống — và đó là bất biến #1, thứ mà mọi quy tắc khác của dự án phục vụ.
+     */
+    @Test
+    @DisplayName("★★ không có secret → 401, KHÔNG trả một byte nội dung nào")
+    void khong_co_secret_thi_khong_tai_duoc_testdata() {
+        String sha = kho.them("bi mat khong duoc ra ngoai\n");
+
+        var res = http.get().uri(JudgeEndpoints.TESTDATA + "/" + sha)
+                .exchange((req, r) -> java.util.Map.entry(
+                        r.getStatusCode(),
+                        new String(r.getBody().readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8)));
+
+        assertThat(res.getKey()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(res.getValue())
+                .as("401 mà vẫn kèm nội dung thì chốt quyền chỉ là trang trí")
+                .doesNotContain("bi mat");
+    }
+
+    @Test
+    @DisplayName("★ KHÔNG nằm dưới /api/v1 — tunnel không publish được nó")
+    void testdata_khong_ton_tai_duoi_tien_to_cong_khai() {
+        String sha = kho.them("x\n");
+
+        HttpStatusCode status = http.get().uri("/api/v1" + JudgeEndpoints.TESTDATA + "/" + sha)
+                .header(JudgeEndpoints.SECRET_HEADER, SECRET)
+                .exchange((req, res) -> res.getStatusCode());
+
+        assertThat(status).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    /**
+     * Hash sai định dạng và hash không tồn tại phải cho <b>cùng một 404</b>. Phân biệt chúng
+     * là xác nhận "chuỗi này đúng định dạng nhưng không có trong kho" — một tín hiệu cho
+     * người đang dò, và là thứ duy nhất họ cần để biết mình đoán đúng dạng khoá.
+     */
+    @Test
+    @DisplayName("★ hash không tồn tại và hash dị dạng đều là 404, cùng một câu")
+    void hash_la_hoac_khong_co_deu_404() {
+        for (String hash : new String[]{
+                "a".repeat(64),                       // đúng dạng, không có trong kho
+                "KHONG-PHAI-HEX" + "0".repeat(50),    // 64 ký tự nhưng không phải hex
+                "abc",                                // quá ngắn
+                "../../../etc/passwd"}) {             // đi ngang thư mục
+            HttpStatusCode status = http.get().uri(JudgeEndpoints.TESTDATA + "/" + hash)
+                    .header(JudgeEndpoints.SECRET_HEADER, SECRET)
+                    .exchange((req, res) -> res.getStatusCode());
+
+            assertThat(status).as("hash '%s'", hash).isEqualTo(HttpStatus.NOT_FOUND);
+        }
     }
 
     /** Hàng đợi rỗng phải là 204, không phải 200 với thân rỗng. */
