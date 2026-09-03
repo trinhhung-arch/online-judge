@@ -147,6 +147,22 @@ public interface SubmissionRepository {
     int markQueued(Collection<Long> submissionIds);
 
     /**
+     * FR-SUB-09 — ADMIN <b>ẩn</b> một bài nộp. Bước 6.13.
+     *
+     * <p>Không có {@code delete} nào trong interface này, và sẽ không bao giờ có. V8 biến điều
+     * đó thành ràng buộc thật ở tầng database ({@code REVOKE DELETE ON submissions}), nên kể
+     * cả một câu SQL viết tay lúc 2 giờ sáng cũng không xoá được một bài nộp.
+     *
+     * <p>Câu {@code UPDATE} mang {@code AND hidden_at IS NULL} khi ẩn: ẩn một bài đã ẩn phải
+     * trả về {@code false} chứ không im lặng ghi đè {@code hidden_by} — nếu không thì
+     * {@code audit_log} sẽ ghi hai người cùng "đã ẩn" một bài, và người thứ hai chỉ bấm nhầm.
+     *
+     * @param an {@code true} = ẩn, {@code false} = hiện lại
+     * @return {@code false} nếu bài không tồn tại hoặc đã ở đúng trạng thái ấy rồi
+     */
+    boolean datAn(long submissionId, boolean an, long adminId, Instant luc);
+
+    /**
      * Một bài nộp đang được tạo — tham số của {@link #insert}.
      *
      * <p>Không phải {@code Submission}: bản ghi domain đó đòi {@code id > 0}, mà id thì do

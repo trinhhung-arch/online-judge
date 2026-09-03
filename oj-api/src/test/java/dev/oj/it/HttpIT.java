@@ -3,6 +3,7 @@ package dev.oj.it;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
@@ -36,14 +37,34 @@ public abstract class HttpIT extends PostgresIT {
         http = RestClient.create("http://localhost:" + port);
     }
 
+    /**
+     * ★ Kiểu của thân JSON, khai báo <b>một lần</b> cho cả bộ IT.
+     *
+     * <h2>Vì sao không phải {@code Map.class}</h2>
+     * {@code res.bodyTo(Map.class)} trả về một {@code Map} <b>thô</b>, và kiểu thô ấy lan ra
+     * mọi lời gọi: {@code assertThat(res.getBody())} ở tám lớp IT sinh ra khoảng sáu mươi cảnh
+     * báo <i>unchecked</i>. Cách chữa cũ là {@code @SuppressWarnings("rawtypes")} ở đây —
+     * nó làm im cảnh báo tại chỗ khai báo mà <b>không</b> làm im ở chỗ dùng, nên nó chỉ giấu
+     * được một phần và giấu ở sai chỗ.
+     *
+     * <p>{@link ParameterizedTypeReference} mang được {@code Map<String, Object>} qua ranh
+     * giới xoá kiểu, nên không còn kiểu thô nào và không cần bỏ qua cảnh báo nào. Sáu mươi
+     * cảnh báo biến mất vì <b>nguyên nhân</b> biến mất, không vì bị tắt tiếng.
+     *
+     * <p>Một cảnh báo bị tắt tiếng là một cảnh báo sẽ tắt tiếng cả thứ đáng nghe sau này —
+     * và trong một bộ IT thì thứ đáng nghe ấy thường là "bạn vừa đọc một trường không tồn tại".
+     */
+    protected static final ParameterizedTypeReference<Map<String, Object>> THAN_JSON =
+            new ParameterizedTypeReference<>() {
+            };
+
     /** Không ném ở 4xx — xem javadoc của class. */
-    @SuppressWarnings("rawtypes")
-    protected ResponseEntity<Map> login(String dinhDanh, String matKhau) {
+    protected ResponseEntity<Map<String, Object>> login(String dinhDanh, String matKhau) {
         return http.post().uri("/api/v1/auth/login")
                 .body(Map.of("dinhDanh", dinhDanh, "password", matKhau))
                 .exchange((req, res) -> ResponseEntity.status(res.getStatusCode())
                         .headers(res.getHeaders())
-                        .body(res.bodyTo(Map.class)), false);
+                        .body(res.bodyTo(THAN_JSON)), false);
     }
 
     /** Access token thật, lấy qua đường đăng nhập thật — BCrypt cost 12 và tất cả. */
@@ -52,10 +73,9 @@ public abstract class HttpIT extends PostgresIT {
     }
 
     /** Gọi một endpoint và chỉ quan tâm mã trạng thái, không ném ở 4xx. */
-    @SuppressWarnings("rawtypes")
-    protected ResponseEntity<Map> goi(RestClient.RequestHeadersSpec<?> spec) {
+    protected ResponseEntity<Map<String, Object>> goi(RestClient.RequestHeadersSpec<?> spec) {
         return spec.exchange((req, res) -> ResponseEntity.status(res.getStatusCode())
                 .headers(res.getHeaders())
-                .body(res.bodyTo(Map.class)), false);
+                .body(res.bodyTo(THAN_JSON)), false);
     }
 }

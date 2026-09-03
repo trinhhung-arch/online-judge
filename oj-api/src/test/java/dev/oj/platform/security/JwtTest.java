@@ -1,6 +1,5 @@
 package dev.oj.platform.security;
 
-import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.AuthProperties;
 import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import org.junit.jupiter.api.DisplayName;

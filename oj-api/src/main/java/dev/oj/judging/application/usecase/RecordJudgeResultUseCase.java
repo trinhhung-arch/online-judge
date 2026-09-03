@@ -10,6 +10,7 @@ import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.AfterCommit;
+import dev.oj.judging.application.port.JudgeJobPublisher;
 import dev.oj.platform.config.JudgeTransactional;
 import dev.oj.platform.security.InternalAccess;
 import dev.oj.platform.trace.TraceIdFilter;
@@ -52,6 +53,7 @@ public class RecordJudgeResultUseCase {
     private final SubmissionRepository submissions;
     private final AppProperties.Judge config;
     private final Clock clock;
+    private final JudgeJobPublisher chuong;
     private final SubmissionEventBus events;
 
     public RecordJudgeResultUseCase(JudgeQueueRepository queue,
@@ -59,12 +61,14 @@ public class RecordJudgeResultUseCase {
                                     SubmissionRepository submissions,
                                     AppProperties properties,
                                     Clock clock,
-                                    SubmissionEventBus events) {
+                                    SubmissionEventBus events,
+                                    JudgeJobPublisher chuong) {
         this.queue = queue;
         this.judgeRuns = judgeRuns;
         this.submissions = submissions;
         this.config = properties.judge();
         this.clock = clock;
+        this.chuong = chuong;
         this.events = events;
     }
 
@@ -85,6 +89,16 @@ public class RecordJudgeResultUseCase {
                 && queue.retryIe(id, attempt, config.maxIeRetries())) {
             log.warn("IE cho submission {} attempt {} trên máy {} — đã đưa lại vào hàng đợi",
                     id, attempt, result.hostName());
+            // ★ Bước 6.13, phần "FR-SUB-12 hoàn chỉnh": gõ cửa SAU COMMIT.
+            //
+            // Không có dòng này thì một bài IE nằm chờ tới nhịp poll kế tiếp của worker — và
+            // IE là đúng trường hợp người dùng đã chờ lâu nhất, vì họ vừa mất trọn một lượt
+            // chấm cho một lỗi không phải của họ.
+            //
+            // AfterCommit chứ không gọi thẳng: phương thức này chạy trong @JudgeTransactional,
+            // và publish TRONG transaction là để worker nhận một trạng thái chưa commit
+            // (oj-api/CLAUDE.md mục 1). Cùng luật đã áp cho đường nộp bài.
+            AfterCommit.run(() -> goCuaImLang(id));
             return Outcome.IE_RETRY_SCHEDULED;
         }
 
@@ -152,4 +166,13 @@ public class RecordJudgeResultUseCase {
         /** FR-SUB-12: {@code IE} còn lượt, bài đã quay lại hàng đợi, chưa ghi verdict nào. */
         IE_RETRY_SCHEDULED
     }
+    private void goCuaImLang(long submissionId) {
+        try {
+            chuong.publishEnqueued(submissionId);
+        } catch (RuntimeException e) {
+            log.warn("Không gõ cửa được cho submission {} sau IE — bài vẫn trong judge_queue "
+                    + "và worker sẽ thấy nó ở nhịp poll kế tiếp: {}", submissionId, e.toString());
+        }
+    }
+
 }

@@ -139,7 +139,20 @@ public class GlobalExceptionHandler {
                 TraceIdFilter.current(), fields));
     }
 
+    /**
+     * ★ {@code MissingServletRequestPartException} thêm vào ở M6, và nó là một lỗi thật.
+     *
+     * <p>Gửi multipart mà đặt sai tên phần (ví dụ {@code goi} thay vì {@code file}) rơi xuống
+     * {@code handleUnexpected} và nhận <b>500 kèm câu "Có lỗi phía hệ thống"</b>. Cả hai đều
+     * sai: lỗi nằm ở request, và câu chữ ấy bảo người ta đi báo sự cố cho một thứ họ tự sửa
+     * được trong một giây.
+     *
+     * <p>Endpoint duy nhất nhận multipart là nạp testdata — người dùng của nó là SETTER dùng
+     * {@code curl} hoặc một script, tức là chính nhóm dễ gõ sai tên phần nhất. Tìm ra khi
+     * chạy tay ở Bước 6.14.
+     */
     @ExceptionHandler({MissingServletRequestParameterException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
             MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ApiError> handleBadParam(Exception e) {
         log.warn("Tham số không hợp lệ: {}", e.getMessage());

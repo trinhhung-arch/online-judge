@@ -31,4 +31,22 @@ public interface JudgeJobPublisher {
      * nó. Đây chính là lý do reaper tồn tại.
      */
     void publishEnqueued(long submissionId);
+
+    /**
+     * Gõ cửa cho một bài vừa được {@code RejudgeJobHandler} đẩy lại vào hàng đợi —
+     * FR-ADM-01, Bước 6.3.
+     *
+     * <h2>Vì sao một phương thức riêng chứ không dùng lại {@link #publishEnqueued}</h2>
+     * Không phải vì thứ tự ưu tiên — thứ tự đến từ {@code ORDER BY (priority, enqueued_at)}
+     * của câu claim, và một tiếng chuông không mang thông tin nào về việc chấm bài nào
+     * trước. Lý do là <b>vận hành</b>: hai hàng đợi tách nhau thì đo được riêng ("rejudge
+     * đang dồn bao nhiêu"), và ngắt binding của rejudge lúc 2 giờ sáng không đụng tới bài
+     * nộp trực tiếp.
+     *
+     * <p>Mặc định <b>không làm gì</b>, và đó là một hiện thực đúng chứ không phải chỗ trống
+     * chưa viết: hàng đã nằm trong {@code judge_queue}, nên worker sẽ thấy nó ở nhịp poll kế
+     * tiếp. Tiếng chuông chỉ rút ngắn độ trễ.
+     */
+    default void publishRejudgeEnqueued(long submissionId) {
+    }
 }

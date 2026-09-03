@@ -20,3 +20,4 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [010](010-input-qua-fd-output-qua-ong.md) | Input vào bằng fd, output ra bằng ống, box dựng lại giữa mỗi test | M2 |
 | [011](011-redis-pubsub-tu-M3-khong-doi-M4.md) | Redis pub/sub cho SSE làm ở M3, không đợi M4 | M3 |
 | [012](012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) | Tự viết JWT HS256 bằng JDK, không thêm thư viện JOSE | M4 |
+| [013](013-rabbitmq-la-chuong-cua-khong-phai-goi-viec.md) | RabbitMQ là chuông cửa, không phải gói việc — message chỉ mang `submissionId` | M6 |

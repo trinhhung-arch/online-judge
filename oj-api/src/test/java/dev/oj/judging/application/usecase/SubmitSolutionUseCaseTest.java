@@ -33,18 +33,20 @@ class SubmitSolutionUseCaseTest {
     private SubmitSolutionUseCase useCase;
     private JudgingFakes.RateLimiterGia rateLimiter;
     private LichThiGia lichThi;
+    private JudgingFakes.CongTacGia congTac;
 
     @BeforeEach
     void setUp() {
         fakes = new JudgingFakes();
         rateLimiter = new JudgingFakes.RateLimiterGia();
         lichThi = new LichThiGia();
+        congTac = new JudgingFakes.CongTacGia();
         useCase = new SubmitSolutionUseCase(
                 JudgingFakes.userIs(7L, Role.USER),
                 new GetProblemUseCase(problemRepositoryReturning(publishedProblem()), statements(),
                         lichThi, JudgingFakes.userIs(7L, Role.USER)),
                 fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
-                lichThi, fakes.queue, fakes.publisher, fakes.txManager);
+                lichThi, congTac, fakes.queue, fakes.publisher, fakes.txManager);
     }
 
     private SubmitSolutionUseCase.Command command() {
@@ -213,7 +215,7 @@ class SubmitSolutionUseCaseTest {
                 new GetProblemUseCase(problemRepositoryReturning(null), statements(),
                         lichThi, JudgingFakes.userIs(7L, Role.USER)),
                 fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
-                lichThi, fakes.queue, fakes.publisher, fakes.txManager);
+                lichThi, congTac, fakes.queue, fakes.publisher, fakes.txManager);
 
         assertThatExceptionOfType(ProblemNotFoundException.class)
                 .isThrownBy(() -> useCaseNoProblem.submit(command()));
@@ -224,6 +226,22 @@ class SubmitSolutionUseCaseTest {
     @Test
     void toString_cua_command_khong_chua_ma_nguon() {
         assertThat(command().toString()).doesNotContain("main", "return");
+    }
+
+    /**
+     * Dùng chung với {@code AdminJudgingUseCasesTest} — hai bộ test cùng cần một
+     * {@code GetProblemUseCase} trả về (hoặc không trả về) một đề.
+     *
+     * <p>Để ở đây chứ không nhân đôi sang file kia: {@code publishedProblem()} có mười ba
+     * tham số, và hai bản sao của nó sẽ lệch nhau vào lần đầu tiên {@code Problem} thêm một
+     * trường.
+     *
+     * @param problemId {@code null} = đề không tồn tại
+     */
+    static GetProblemUseCase getProblemUseCaseTraVe(Long problemId, LichThiGia lichThi) {
+        Problem de = problemId == null ? null : publishedProblem();
+        return new GetProblemUseCase(problemRepositoryReturning(de), statements(), lichThi,
+                JudgingFakes.userIs(9L, Role.ADMIN));
     }
 
     private static Problem publishedProblem() {

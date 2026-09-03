@@ -45,6 +45,16 @@ public class JdbcContestWindowQuery implements ContestWindowQuery {
             """;
 
     /**
+     * Không {@code COUNT(*)}: {@code EXISTS} dừng ở dòng đầu tiên tìm thấy. Bảng
+     * {@code contests} có hàng chục dòng, nhưng thói quen viết {@code COUNT} vào một câu chỉ
+     * cần biết "có hay không" là thói quen sẽ theo người viết sang một bảng có hàng triệu.
+     */
+    private static final String CO_KY_THI_DANG_CHAY = """
+            SELECT EXISTS (SELECT 1 FROM contests
+                            WHERE starts_at <= :bayGio AND ends_at > :bayGio)
+            """;
+
+    /**
      * Đề bị khoá khi <b>tồn tại</b> một kỳ thi chứa nó mà người gọi không được vào.
      *
      * <p>Ba nhánh {@code NOT} đọc là: đề mở nếu kỳ thi đã kết thúc, <i>hoặc</i> người gọi đã
@@ -85,6 +95,14 @@ public class JdbcContestWindowQuery implements ContestWindowQuery {
                 .optional()
                 .map(OptionalLong::of)
                 .orElseGet(OptionalLong::empty);
+    }
+
+    @Override
+    public boolean coKyThiDangChay() {
+        return Boolean.TRUE.equals(jdbc.sql(CO_KY_THI_DANG_CHAY)
+                .param("bayGio", bayGio())
+                .query(Boolean.class)
+                .single());
     }
 
     @Override

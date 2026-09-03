@@ -38,7 +38,7 @@ class IdentityHttpIT extends HttpIT {
             var dangKy = http.post().uri("/api/v1/auth/register")
                     .body(Map.of("handle", "nguoi-moi", "email", "moi@oj.test",
                             "displayName", "Người mới", "password", "matkhau-that-su-123"))
-                    .retrieve().toEntity(Map.class);
+                    .retrieve().toEntity(THAN_JSON);
             assertThat(dangKy.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             long id = ((Number) dangKy.getBody().get("userId")).longValue();
 
@@ -50,10 +50,9 @@ class IdentityHttpIT extends HttpIT {
                     .containsEntry("expiresIn", 900)
                     .containsKeys("accessToken", "refreshToken");
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> hoSo = http.get().uri("/api/v1/me")
                     .header("Authorization", "Bearer " + phien.getBody().get("accessToken"))
-                    .retrieve().body(Map.class);
+                    .retrieve().body(THAN_JSON);
 
             assertThat(hoSo).containsEntry("id", (int) id)
                     .containsEntry("handle", "nguoi-moi")
@@ -76,7 +75,7 @@ class IdentityHttpIT extends HttpIT {
                     .body(Map.of("handle", "dev", "email", "khac@oj.test",
                             "displayName", "Trùng", "password", "matkhau-that-su-123"))
                     .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
-                            .body(r.bodyTo(Map.class)), false);
+                            .body(r.bodyTo(THAN_JSON)), false);
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(res.getBody()).containsEntry("code", "identity.da_ton_tai");
@@ -108,7 +107,7 @@ class IdentityHttpIT extends HttpIT {
         void khong_token() {
             var res = http.get().uri("/api/v1/me")
                     .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
-                            .body(r.bodyTo(Map.class)), false);
+                            .body(r.bodyTo(THAN_JSON)), false);
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(res.getBody()).containsEntry("code", "auth.chua_dang_nhap");
@@ -126,7 +125,7 @@ class IdentityHttpIT extends HttpIT {
                 var res = http.get().uri("/api/v1/me")
                         .header("Authorization", "Bearer " + xau)
                         .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
-                                .body(r.bodyTo(Map.class)), false);
+                                .body(r.bodyTo(THAN_JSON)), false);
 
                 assertThat(res.getStatusCode())
                         .describedAs("token '%s'", xau).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -157,7 +156,7 @@ class IdentityHttpIT extends HttpIT {
             var res = http.post().uri("/api/v1/admin/users/" + SETTER_ID + "/anonymize")
                     .header("Authorization", "Bearer " + tokenCua("dev"))
                     .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
-                            .body(r.bodyTo(Map.class)), false);
+                            .body(r.bodyTo(THAN_JSON)), false);
 
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(res.getBody()).containsEntry("code", "auth.thieu_quyen");

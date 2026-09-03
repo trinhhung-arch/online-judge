@@ -51,6 +51,7 @@ class IsolateJudgeRunnerIT {
         WorkerProperties properties = new WorkerProperties(
                 "may-test", "amd64", 2,
                 java.time.Duration.ofSeconds(120), java.time.Duration.ofMillis(10),
+                java.time.Duration.ofMillis(200),
                 java.time.Duration.ofSeconds(5), java.time.Duration.ofMillis(5),
                 java.time.Duration.ofMillis(50), "http://localhost:8080", "x".repeat(32),
                 new java.math.BigDecimal("1.000"),

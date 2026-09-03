@@ -18,7 +18,7 @@ public interface JobRepository {
 
     /**
      * @return id job vừa tạo
-     * @throws JobsException {@code job.dang_chay} nếu chạm {@code ux_jobs_one_active_per_type}
+     * @throws JobsException {@code job.dang_chay} nếu chạm {@code ux_jobs_one_active_per_entity}
      */
     long tao(JobType type, Map<String, Object> params, Long createdBy);
 
@@ -57,7 +57,7 @@ public interface JobRepository {
      * Đưa mọi job {@code RUNNING} có lease đã hết hạn về {@code PAUSED}.
      *
      * <p>Cùng vai trò với reaper của {@code judge_queue}: không có nó thì một lần restart để
-     * lại một job {@code RUNNING} vĩnh viễn, và {@code ux_jobs_one_active_per_type} chặn mọi
+     * lại một job {@code RUNNING} vĩnh viễn, và {@code ux_jobs_one_active_per_entity} chặn mọi
      * job cùng loại về sau — một sự cố nhỏ khoá vĩnh viễn một tính năng.
      *
      * @return số job đã thu hồi
@@ -65,6 +65,18 @@ public interface JobRepository {
     int thuHoiJobTreo(Instant bayGio);
 
     void ketThuc(long jobId, JobStatus status, String errorMessage, Instant luc);
+
+    /**
+     * Đưa job về {@code PAUSED} và <b>thả lease</b> — job chưa xong, chỉ nhường lượt.
+     *
+     * <p>Không dùng lại {@link #ketThuc}: câu đó đặt {@code finished_at}, và một job còn phải
+     * chạy tiếp mà mang dấu thời gian kết thúc là một dòng dữ liệu nói dối — nó sẽ hiện trên
+     * trang theo dõi là "đã xong lúc 02:14" trong khi nó đang chờ để chạy tiếp.
+     *
+     * <p>{@code cursor_state} <b>không</b> bị đụng tới: nó là thứ duy nhất cho phép lần chạy
+     * sau tiếp tục đúng chỗ.
+     */
+    void tamNghi(long jobId, String lyDo);
 
     /** @throws JobsException {@code job.da_ket_thuc} nếu job đã xong */
     void huy(long jobId, Instant luc);

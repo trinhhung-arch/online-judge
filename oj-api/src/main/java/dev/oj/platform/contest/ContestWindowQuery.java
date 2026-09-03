@@ -55,6 +55,20 @@ public interface ContestWindowQuery {
     }
 
     /**
+     * Có <b>bất kỳ</b> kỳ thi nào đang diễn ra không — FR-ADM-01, Bước 6.3.
+     *
+     * <h2>Vì sao câu này rộng hơn {@link #deDangTrongContestDangChay} chứ không dùng lại nó</h2>
+     * Rejudge một đề <i>không</i> thuộc kỳ thi nào vẫn phá kỳ thi đang chạy: nó đẩy hàng nghìn
+     * bài vào cùng {@code judge_queue}, và dù {@code priority = 10} cho chúng xếp sau, sáu
+     * judge slot vẫn là sáu — bài của thí sinh chờ lâu hơn ({@code frplan.md} mâu thuẫn 3.2).
+     *
+     * <p>Nói cách khác: chốt của FR-PROB-11 hỏi <i>"đề này có đang thi không"</i>, còn chốt
+     * của FR-ADM-01 hỏi <i>"máy chấm có đang bận việc không được phép trễ không"</i>. Hai câu
+     * hỏi khác nhau, và gộp chúng lại là mở một đường vòng qua một trong hai.
+     */
+    boolean coKyThiDangChay();
+
+    /**
      * FR-CON-03 — đề của kỳ thi chỉ truy cập được trong khung giờ, và chỉ bởi người đã đăng ký.
      *
      * @param userId       {@code null} nếu khách chưa đăng nhập

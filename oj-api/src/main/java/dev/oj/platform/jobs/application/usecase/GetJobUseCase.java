@@ -14,7 +14,7 @@ import java.util.List;
  * Tiến độ của một job — Quy tắc 5 của {@code frplan.md}: <i>job nền phải CÓ TIẾN ĐỘ</i>.
  *
  * <p>Không có endpoint này thì "job nền" chỉ là "một thao tác không bao giờ trả lời", và
- * người dùng sẽ bấm lại — tạo ra đúng thứ {@code ux_jobs_one_active_per_type} phải chặn.
+ * người dùng sẽ bấm lại — tạo ra đúng thứ {@code ux_jobs_one_active_per_entity} phải chặn.
  */
 @RequiresRole(Role.SETTER)
 @Service

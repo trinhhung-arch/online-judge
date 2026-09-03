@@ -1,5 +1,5 @@
 -- =============================================================================
--- V8 — AI Code Reviewer
+-- V10 — AI Code Reviewer
 -- Mốc: tuần 14-15 (phương án C, nfrplan 10.7). FR-AI-01..09.
 --
 -- Ràng buộc kiến trúc AI1: 0ms thêm vào đường chấm. Ở tầng dữ liệu điều đó

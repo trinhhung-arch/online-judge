@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * Vòng đời một job: mượn slot → mở box → biên dịch → chạy từng test → <b>dọn box trong

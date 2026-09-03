@@ -21,7 +21,7 @@ package dev.oj.platform.jobs;
  *
  * <p>Đây đúng là cơ chế của reaper ở {@code judge_queue}, áp cho một bảng khác. Cùng một lý
  * do: không có nó thì một lần restart là một job treo vĩnh viễn, và
- * {@code ux_jobs_one_active_per_type} sẽ chặn mọi job cùng loại về sau.
+ * {@code ux_jobs_one_active_per_entity} sẽ chặn mọi job cùng loại về sau.
  */
 public enum JobStatus {
 
@@ -32,7 +32,7 @@ public enum JobStatus {
     FAILED,
     CANCELLED;
 
-    /** Đang chiếm chỗ trong {@code ux_jobs_one_active_per_type}. */
+    /** Đang chiếm chỗ trong {@code ux_jobs_one_active_per_entity}. */
     public boolean dangSong() {
         return this == PENDING || this == RUNNING || this == PAUSED;
     }

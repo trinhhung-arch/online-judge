@@ -3,6 +3,8 @@ package dev.oj.judging.infrastructure;
 import dev.oj.judging.application.port.JudgeRunRepository;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
+import dev.oj.platform.metrics.OjMetrics;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -48,8 +50,28 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
 
     private final JdbcClient jdbc;
 
-    public JdbcJudgeRunRepository(@Qualifier("judgeJdbcClient") JdbcClient jdbc) {
+    private final MeterRegistry metrics;
+
+    public JdbcJudgeRunRepository(@Qualifier("judgeJdbcClient") JdbcClient jdbc,
+                                  MeterRegistry metrics) {
         this.jdbc = jdbc;
+        this.metrics = metrics;
+    }
+
+    /**
+     * ★ Bước 6.10 — P4 (throughput) và R3 (tỉ lệ IE) đo <b>ở đây</b>, không ở use-case.
+     *
+     * <p>Đây là chỗ duy nhất một verdict trở nên bền vững, và đó là định nghĩa đúng của "một
+     * bài đã chấm xong". Đếm ở use-case thì con số gồm cả những lần bị khoá lạc quan từ chối —
+     * tức là đếm cả công việc bị vứt đi, và throughput sẽ đẹp hơn sự thật đúng vào lúc hệ
+     * thống đang giao trùng việc.
+     *
+     * <p>{@code insertIfAbsent} trả {@code false} khi khoá chính {@code (submission_id,
+     * attempt)} đã có — bản giao trùng của RabbitMQ. Không đếm nhánh đó, cùng lý do.
+     */
+    private void dem(JudgeOutcome outcome) {
+        metrics.counter(OjMetrics.JUDGE_FINISHED,
+                OjMetrics.TAG_VERDICT, outcome.verdict().name()).increment();
     }
 
     @Override
@@ -77,6 +99,9 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
                 .param("startedAt", JdbcSubmissionRepository.timestamptz(run.startedAt()))
                 .param("finishedAt", JdbcSubmissionRepository.timestamptz(run.finishedAt()))
                 .update();
+        if (rows == 1) {
+            dem(outcome);
+        }
         return rows == 1;
     }
 

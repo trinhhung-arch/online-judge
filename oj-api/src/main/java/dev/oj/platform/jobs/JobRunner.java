@@ -12,6 +12,9 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * ★ Vòng đời của một job nền — Bước 4.7b, kéo lên từ M6 theo phương án (a) của
@@ -24,6 +27,22 @@ import java.util.Map;
  * job nền làm cạn connection lúc 500 người nộp bài là cách mất bài rẻ nhất.
  *
  * <p>Nên: một nhịp lấy đúng một job. Job xếp hàng chờ, và đó là hành vi đúng.
+ *
+ * <h2>★ Luồng RIÊNG, không dùng chung với {@code @Scheduled} — sửa ở M6</h2>
+ * {@code spring.task.scheduling.pool.size} mặc định là <b>1</b>, và trên đúng luồng đó có
+ * {@code StaleJobReaper} (15s), {@code StandingsUpdater} (2s) và {@code FreezeStandingsScheduler}.
+ * Bản M4 của lớp này chạy job <i>đồng bộ</i> trong nhịp {@code @Scheduled}, nghĩa là một lần
+ * nạp 200MB testdata — hay một lần rejudge 10.000 bài ở Bước 6.3 — <b>chặn reaper suốt thời
+ * gian đó</b>.
+ *
+ * <p>Hậu quả không phải là "job nền hơi chậm": reaper trễ nghĩa là bài kẹt ở {@code JUDGING}
+ * quá 120 giây mà không ai thu hồi, và đó là R1 — điều không thể thoả hiệp thứ hai của dự án.
+ * Một tiện nghi vận hành không bao giờ được xếp hàng trước một bảo đảm không mất bài.
+ *
+ * <p>Cách chữa giống hệt {@code SseHeartbeat} đã làm ở M3: một executor một luồng của riêng
+ * mình. Nhịp {@code @Scheduled} chỉ còn <i>gửi việc</i> rồi trả về ngay, nên nó tiêu vài
+ * micro giây của luồng chung thay vì vài phút. Cờ {@code dangChay} giữ nguyên bất biến "một
+ * job mỗi lúc" — không có nó thì mỗi nhịp 5 giây lại xếp thêm một việc vào hàng.
  *
  * <h2>Nuốt mọi ngoại lệ ở tầng ngoài cùng — cùng lý do với {@code StaleJobReaper}</h2>
  * Spring <b>huỷ hẳn</b> một tác vụ {@code @Scheduled} nếu nó ném ra ngoài. Một lỗi tạm thời
@@ -45,6 +64,17 @@ public class JobRunner {
     private final AppProperties properties;
     private final Clock clock;
     private final String leaseOwner = java.util.UUID.randomUUID().toString();
+
+    /** Xem javadoc lớp. Daemon: một job dở dang không được giữ JVM sống lúc tắt máy — nó sẽ
+     *  được nhặt lại từ {@code cursor_state} ở lần khởi động sau, đó là cả điểm của Quy tắc 5. */
+    private final ExecutorService luong = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "oj-job-runner");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Một job mỗi lúc. Nhịp 5 giây không được xếp chồng việc lên hàng đợi của executor. */
+    private final AtomicBoolean dangChay = new AtomicBoolean(false);
 
     public JobRunner(JobRepository jobs, List<JobHandler> handlers,
                      AppProperties properties, Clock clock) {
@@ -68,10 +98,27 @@ public class JobRunner {
 
     @Scheduled(fixedDelayString = "${oj.jobs.poll-interval}")
     public void nhip() {
+        if (!dangChay.compareAndSet(false, true)) {
+            return;     // job trước còn chạy — bỏ nhịp này, không xếp hàng
+        }
+        try {
+            luong.execute(this::motLuot);
+        } catch (RuntimeException e) {
+            // execute() ném khi executor đã tắt (đang shutdown). Trả cờ về, nếu không thì
+            // một lần tắt máy dở dang sẽ khoá vĩnh viễn mọi job của lần chạy sau.
+            dangChay.set(false);
+            log.warn("Không gửi được việc cho luồng job: {}", e.toString());
+        }
+    }
+
+    /** Chạy trên {@link #luong}, KHÔNG trên luồng lập lịch chung. */
+    private void motLuot() {
         try {
             thuHoiRoiChay();
         } catch (RuntimeException e) {
-            log.error("Nhịp JobRunner hỏng — nuốt để bộ lập lịch không huỷ tác vụ", e);
+            log.error("Nhịp JobRunner hỏng — nuốt để không giết luồng job", e);
+        } finally {
+            dangChay.set(false);
         }
     }
 
@@ -88,7 +135,7 @@ public class JobRunner {
         JobHandler handler = handlers.get(job.type());
         if (handler == null) {
             // Job của một module chưa viết (REJUDGE ở M6, contest ở M5). Đánh dấu FAILED
-            // thay vì để nó chiếm chỗ vĩnh viễn trong ux_jobs_one_active_per_type.
+            // thay vì để nó chiếm chỗ vĩnh viễn trong ux_jobs_one_active_per_entity.
             log.error("Không có handler cho {} — job {} bị đánh FAILED", job.type(), job.id());
             jobs.ketThuc(job.id(), JobStatus.FAILED,
                     "Loại công việc này chưa được cài đặt.", clock.instant());
@@ -119,6 +166,13 @@ public class JobRunner {
         if ("job.da_bi_huy".equals(e.code())) {
             log.info("Job {} dừng vì bị huỷ", job.id());
             jobs.ketThuc(job.id(), JobStatus.CANCELLED, null, clock.instant());
+            return;
+        }
+        if ("job.tam_nghi".equals(e.code())) {
+            // Job tự nhường lượt (FR-ADM-01: phanh khi hàng đợi live chờ lâu). Chưa xong,
+            // chưa hỏng — nhịp kế tiếp nhặt lại từ cursor_state đã lưu.
+            log.info("Job {} tạm nghỉ: {}", job.id(), e.publicMessage());
+            jobs.tamNghi(job.id(), e.publicMessage());
             return;
         }
         log.warn("Job {} hỏng: {}", job.id(), e.getMessage());

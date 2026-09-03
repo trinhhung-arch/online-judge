@@ -1,6 +1,24 @@
 spring:
   application:
     name: oj-worker
+
+  # Bước 6.4 — chỉ để NHẬN chuông. Worker không khai báo hàng đợi nào (oj-api làm việc đó);
+  # nó chỉ nghe theo tên. Xem javadoc JudgeQueueListener.
+  rabbitmq:
+    host: ${OJ_RABBIT_HOST:localhost}
+    port: ${OJ_RABBIT_PORT:5672}
+    username: ${OJ_RABBIT_USER:ojuser}
+    password: ${OJ_RABBIT_PASSWORD:ojpass}
+    listener:
+      simple:
+        # Mặc định của Spring AMQP là 250. Với 250, một worker vừa khởi động hút sạch hàng
+        # đợi vào bộ đệm của nó và những worker khác thấy hàng đợi rỗng trong khi máy rảnh.
+        prefetch: 1
+        acknowledge-mode: manual
+        # Hàng đợi do oj-api tạo. Worker khởi động trước API là chuyện thường (docker compose
+        # không đợi), và `true` biến chuyện thường đó thành worker chết lúc boot.
+        missing-queues-fatal: false
+
   main:
     # Worker KHÔNG phải máy chủ: nó không mở cổng nào và không nhận request nào.
     # Mở một cổng nghe ở đây là mở một bề mặt tấn công mới trên đúng cái máy sẽ chạy
@@ -18,13 +36,31 @@ oj:
     arch: ${OJ_WORKER_ARCH:arm64}
     slots: ${OJ_WORKER_SLOTS:6}          # CỐ ĐỊNH theo cấu hình, không theo số core (ADR 008)
     lease: 120s                          # bản sao của oj.judge.lease phía API, chỉ để cảnh báo
-    idle-poll: 500ms                     # hàng đợi rỗng thì ngủ; M6 đổi sang RabbitMQ push
+    # Hàng đợi rỗng thì CHỜ, tối đa ngần này. Từ Bước 6.4 nó không còn là độ trễ giao việc
+    # mà là NHỊP DỰ PHÒNG: chuông RabbitMQ đánh thức ngay, con số này chỉ đỡ khi broker chết,
+    # khi reaper thả một bài, hoặc khi publish hỏng sau commit. Xem JudgeDoorbell.
+    idle-poll: 500ms
+    # Bước 6.8 — SIGTERM: chờ tối đa ngần này cho slot chấm nốt bài đang chạy. Phải LỚN HƠN
+    # thời gian chấm một bài (~1.5s cho C++, lâu hơn cho bài TLE), và nhỏ hơn lease 120s —
+    # quá lease thì reaper đã giao lại bài cho worker khác trong lúc ta còn đang chờ.
+    shutdown-grace: 30s
     request-timeout: 5s
     result-retry-min: 1s
     result-retry-max: 30s
     host-factor: 1.000                   # khởi điểm; HostBenchmark (Bước 2.9) đo lại
     api-base-url: ${OJ_API_BASE_URL:http://localhost:8080}
     internal-secret: ${OJ_INTERNAL_SHARED_SECRET}   # không có mặc định, cố ý
+
+    rabbit:
+      # false = quay về hành vi M1 (chỉ PULL theo nhịp idle-poll). Mọi bài vẫn được chấm —
+      # judge_queue là sự thật, RabbitMQ chỉ là đường dẫn.
+      enabled: ${OJ_WORKER_RABBIT_ENABLED:true}
+      # ⚠️ HAI TÊN NÀY CŨNG NẰM Ở oj-api/src/main/resources/application.yml.
+      # Không đặt được vào oj-contract vì đó là hợp đồng đóng băng (CLAUDE.md mục 5.1), nên
+      # HopDongVanHanhTest đọc cả hai file và đỏ ngay lúc chúng lệch nhau — nếu không thì
+      # triệu chứng duy nhất là "worker nghe một hàng đợi không ai gửi vào", tức là im lặng.
+      live-queue: judge.live
+      rejudge-queue: judge.rejudge
 
     # -------------------------------------------------------------------------
     # Sandbox. Ở đây CHỈ có thứ hợp đồng không mang. CPU, RAM và output của một

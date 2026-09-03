@@ -16,16 +16,23 @@ public class JobsException extends DomainException {
     }
 
     /**
-     * Chạm {@code ux_jobs_one_active_per_type} — mỗi loại chỉ được có tối đa một job đang sống.
+     * Chạm {@code ux_jobs_one_active_per_entity} (V9) — mỗi <b>(loại, thực thể)</b> chỉ được
+     * có tối đa một job đang sống.
      *
-     * <p>Đây là hàng rào chống thảm hoạ <i>"ba job rejudge hàng loạt chạy song song"</i>, thứ
-     * mà <b>một cú double click</b> trên trang admin là đủ để tạo ra. 409 và một câu nói rõ
-     * còn hơn ba job cùng ghi vào {@code judge_queue}.
+     * <p>Đây là hàng rào chống <b>một cú double click</b> trên trang admin. V6 khoá theo
+     * <i>loại</i>, và nó chặn rộng hơn ý định: hai SETTER nạp testdata cho hai đề khác nhau
+     * cũng đụng nhau. V9 thu phạm vi về đúng thứ cần chặn — cùng đề, cùng loại.
+     *
+     * <p>Thứ V6 thật sự sợ — "ba job rejudge cùng bơm vào {@code judge_queue}" — giờ do
+     * {@code RejudgeJob.suatConLai} chặn, và nó đếm toàn bộ số dòng {@code priority = 10}
+     * đang chờ chứ không đếm theo job. N job rejudge chia nhau một ngân sách 30%: chậm hơn,
+     * không đông hơn.
      */
     public static JobsException dangCoJobCungLoai(JobType type) {
         return new JobsException(Kind.CONFLICT, "job.dang_chay",
-                "Đã có một công việc cùng loại đang chạy. Chờ nó xong rồi thử lại.",
-                "Chạm ux_jobs_one_active_per_type cho type=" + type);
+                "Đã có một công việc cùng loại đang chạy cho đối tượng này. "
+                        + "Chờ nó xong rồi thử lại.",
+                "Chạm ux_jobs_one_active_per_entity cho type=" + type);
     }
 
     public static JobsException daKetThuc() {
@@ -44,5 +51,27 @@ public class JobsException extends DomainException {
     public static JobsException daBiHuy() {
         return new JobsException(Kind.CONFLICT, "job.da_bi_huy",
                 "Công việc đã bị huỷ.", "Handler dừng vì job bị huỷ");
+    }
+
+    /**
+     * Job tự nhường lượt: nó chưa xong, nhưng lúc này chưa phải lúc chạy tiếp.
+     *
+     * <h2>Vì sao nhường lượt chứ không {@code Thread.sleep}</h2>
+     * {@code RejudgeJobHandler} phải phanh khi hàng đợi bài nộp trực tiếp bắt đầu chờ lâu
+     * (FR-ADM-01: <i>"tự giảm về 0 khi queue_wait live > 5s"</i>). Ngủ trong handler thì
+     * lease vẫn bị giữ, tiến độ vẫn hiện RUNNING, và người vận hành nhìn vào không phân biệt
+     * được "đang chạy" với "đang bị phanh".
+     *
+     * <p>{@code PAUSED} nói đúng sự thật, và {@code JdbcJobRepository.CLAIM} đã nhận
+     * {@code PENDING} lẫn {@code PAUSED} từ đầu — nên nhịp kế tiếp tự nhặt job lên chạy tiếp
+     * từ {@code cursor_state}. Đây là cùng một cơ chế đã cho job sống sót qua restart, dùng lại
+     * cho một mục đích khác.
+     *
+     * @param lyDo hiện cho người vận hành đọc. <b>Không chứa dữ liệu nhạy cảm</b> — bảng
+     *             {@code jobs} là bề mặt ADMIN đọc được (bất biến #9)
+     */
+    public static JobsException tamNghi(String lyDo) {
+        return new JobsException(Kind.CONFLICT, "job.tam_nghi", lyDo,
+                "job tự nhường lượt: " + lyDo);
     }
 }

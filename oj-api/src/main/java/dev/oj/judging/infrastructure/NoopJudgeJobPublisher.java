@@ -4,6 +4,7 @@ import dev.oj.judging.application.port.JudgeJobPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -30,10 +31,20 @@ public class NoopJudgeJobPublisher implements JudgeJobPublisher {
     }
 
     /**
-     * Đăng ký qua {@code @Bean} chứ không phải {@code @Component}, vì cùng lý do với
-     * {@code DevSecurityConfig}: {@code @ConditionalOnMissingBean} chỉ đáng tin ở đây.
-     * Ngày {@code RabbitJudgeJobPublisher} ra đời (Bước 6.4), bean này tự biến mất.
+     * ★ M6 đã sửa điều kiện ở đây, và đó là một lỗi thật chứ không phải dọn dẹp.
+     *
+     * <p>Bản M1 chỉ có {@code @ConditionalOnMissingBean(JudgeJobPublisher.class)}, với ghi chú
+     * "ngày {@code RabbitJudgeJobPublisher} ra đời thì bean này tự biến mất". Nó <b>không</b>
+     * tự biến mất một cách đáng tin: {@code @ConditionalOnMissingBean} chỉ có bảo đảm thứ tự
+     * trong auto-configuration, còn hai lớp {@code @Configuration} do component scan tìm thấy
+     * thì được xử lý theo thứ tự không cam kết. Kết quả có thể là bean Noop thắng dù RabbitMQ
+     * đã bật — và triệu chứng là <i>độ trễ chấm bài lặng lẽ quay về nhịp poll</i>, thứ không
+     * có test nào bắt được vì mọi bài vẫn được chấm đúng.
+     *
+     * <p>Một thuộc tính, hai giá trị đối nhau. Đọc {@code application.yml} là biết transport
+     * nào đang chạy, không phải đọc thứ tự quét package.
      */
+    @ConditionalOnProperty(name = "oj.judge.rabbit.enabled", havingValue = "false")
     @Configuration
     public static class Registration {
 

@@ -78,7 +78,8 @@ class HostBenchmarkIT {
                 new WorkerProperties.Sandbox.Benchmark(
                         Duration.ofMinutes(15), 3, referenceCpuMs, 8.0));
         return new WorkerProperties("may-test", "amd64", 2,
-                Duration.ofSeconds(120), Duration.ofMillis(10), Duration.ofSeconds(5),
+                Duration.ofSeconds(120), Duration.ofMillis(10), Duration.ofMillis(200),
+                Duration.ofSeconds(5),
                 Duration.ofMillis(5), Duration.ofMillis(50), "http://localhost:8080",
                 "x".repeat(32), new BigDecimal("1.000"), sandbox);
     }

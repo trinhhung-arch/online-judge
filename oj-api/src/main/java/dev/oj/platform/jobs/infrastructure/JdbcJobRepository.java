@@ -130,6 +130,14 @@ public class JdbcJobRepository implements JobRepository {
              WHERE id = :id
             """;
 
+    /** Thả lease, giữ nguyên cursor_state, KHÔNG đặt finished_at. Xem JobRepository.tamNghi. */
+    private static final String TAM_NGHI = """
+            UPDATE jobs
+               SET status = 'PAUSED', error_message = :lyDo,
+                   lease_owner = NULL, lease_until = NULL
+             WHERE id = :id
+            """;
+
     private static final String HUY = """
             UPDATE jobs
                SET status = 'CANCELLED', finished_at = :luc,
@@ -168,7 +176,7 @@ public class JdbcJobRepository implements JobRepository {
                     .query(Long.class)
                     .single();
         } catch (DuplicateKeyException e) {
-            // ux_jobs_one_active_per_type. Một cú double click trên trang admin là đủ.
+            // ux_jobs_one_active_per_entity. Một cú double click trên trang admin là đủ.
             throw JobsException.dangCoJobCungLoai(type);
         }
     }
@@ -239,6 +247,11 @@ public class JdbcJobRepository implements JobRepository {
                 .param("luc", luc(luc))
                 .param("id", jobId)
                 .update();
+    }
+
+    @Override
+    public void tamNghi(long jobId, String lyDo) {
+        jdbc.sql(TAM_NGHI).param("lyDo", lyDo).param("id", jobId).update();
     }
 
     @Override

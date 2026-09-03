@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.0</version>
+		<version>4.1.1</version>
 		<relativePath /> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.oj</groupId>
@@ -152,6 +152,27 @@
 			<groupId>io.minio</groupId>
 			<artifactId>minio</artifactId>
 			<version>8.5.17</version>
+		</dependency>
+
+		<!--
+			Actuator + Micrometer — Bước 6.7 (health thật) và 6.10 (P1–P8).
+			ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2).
+
+			Bảng SLO ở nfrplan.md Phần 1 ghi thẳng "Đo bằng: Micrometer" cho P1, P2 và R3.
+			Tự viết một bộ đếm percentile là viết lại đúng phần khó của một thư viện đã đúng —
+			p95 tính từ một histogram, không phải từ một biến trung bình.
+
+			⚠️ Hai điều PHẢI cấu hình cùng lúc, xem application.yml:
+			  1. management.server.port = 8081. Cloudflare Tunnel chỉ publish cổng 8080, nên
+			     /actuator/** không có lối vào từ internet — cùng cách đã dùng cho
+			     /internal/judge/*. Không có dòng đó thì /actuator/health lộ ra ngoài tunnel.
+			  2. exposure.include chỉ có `health`. Mặc định của Boot đã hẹp, nhưng viết ra
+			     tường minh để một lần "bật tạm cái env để xem" không mở luôn /actuator/env,
+			     nơi có OJ_JWT_SECRET.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
 		<dependency>

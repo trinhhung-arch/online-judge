@@ -13,6 +13,7 @@ import dev.oj.judging.domain.SubmissionStatus;
 import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.RequiresRole;
+import dev.oj.platform.settings.SystemSettings;
 import dev.oj.problems.application.usecase.GetProblemUseCase;
 import dev.oj.problems.domain.Problem;
 import org.slf4j.Logger;
@@ -58,6 +59,7 @@ public class SubmitSolutionUseCase {
     private final SubmissionRepository submissions;
     private final SubmissionRateLimiter rateLimiter;
     private final ContestWindowQuery lichThi;
+    private final SystemSettings congTac;
     private final JudgeQueueRepository queue;
     private final JudgeJobPublisher events;
     private final TransactionTemplate tx;
@@ -69,6 +71,7 @@ public class SubmitSolutionUseCase {
                                  SubmissionRepository submissions,
                                  SubmissionRateLimiter rateLimiter,
                                  ContestWindowQuery lichThi,
+                                 SystemSettings congTac,
                                  JudgeQueueRepository queue,
                                  JudgeJobPublisher events,
                                  @Qualifier("appTransactionManager") PlatformTransactionManager txManager) {
@@ -79,6 +82,7 @@ public class SubmitSolutionUseCase {
         this.submissions = submissions;
         this.rateLimiter = rateLimiter;
         this.lichThi = lichThi;
+        this.congTac = congTac;
         this.queue = queue;
         this.events = events;
         // Pool app (20), KHÔNG phải pool judge (6): nộp bài là request của người dùng.
@@ -94,6 +98,21 @@ public class SubmitSolutionUseCase {
      */
     public SubmissionAccepted submit(Command command) {
         long userId = currentUser.current().id();
+
+        // ---- M6 · Bước 6.12 — FR-ADM-06, và nó đứng TRƯỚC MỌI THỨ ------------------------
+        //
+        // Trước validate: khi hệ thống đang bảo trì thì câu trả lời giống nhau cho mọi request,
+        // nên đọc source 64KB rồi tra bảng languages để cuối cùng vẫn nói "đang bảo trì" là
+        // công vô ích ĐÚNG LÚC hệ thống đang có sự cố.
+        //
+        // Trước rate limit: một request bị 503 không phải là một bài nộp, nên nó không được
+        // tiêu mười giây của người dùng — cùng lập luận với chỗ đặt rate limit ở dưới.
+        //
+        // Một truy vấn thêm vào ngân sách 300ms? Không: JdbcSystemSettings cache 2 giây, nên
+        // chi phí thật là một truy vấn mỗi hai giây cho cả hệ thống, không phải mỗi bài nộp.
+        if (!congTac.bat(SystemSettings.NHAN_BAI_NOP, true)) {
+            throw JudgingException.dangBaoTri();
+        }
 
         // ---- validate: hỏng ở đây thì chưa có gì được ghi, và người dùng nhận 400 rõ ràng --
         SourceBlob blob = SourceBlob.of(command.source());          // 64KB · rỗng (FR-SUB-01)
@@ -188,11 +207,10 @@ public class SubmitSolutionUseCase {
     }
 
     // -------------------------------------------------------------------------
-    // Mọc thêm ở đây, theo đúng thứ tự, và mỗi cái phải trả lời "lấy đâu ra mili giây":
+    // Đã mọc, theo đúng thứ tự dự đoán, và mỗi cái phải trả lời "lấy đâu ra mili giây":
     //
     //   M4  FR-SUB-08 rate limit 1 bài/10s -> RateLimiter (platform.ratelimit), kiểm TRƯỚC
-    //       mọi câu ghi. Redis chết thì lùi về SubmissionRepository.lastSubmittedAt.
-    //   M4  FR-ADM-06 kill switch submissions.accepting đọc từ system_settings (có cache).
+    //       mọi câu ghi. Redis chết thì lùi về SubmissionRepository.lastSubmittedAt. ĐÃ XONG.
     //   M5  FR-CON-03 nộp bài trong contest -> contestId khác null, và kiểm khung giờ qua
     //       ContestWindowQuery đặt ở platform (luật ArchUnit 3 cấm judging -> contests).
     // -------------------------------------------------------------------------

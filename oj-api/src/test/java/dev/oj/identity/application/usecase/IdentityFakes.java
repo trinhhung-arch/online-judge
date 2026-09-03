@@ -14,7 +14,6 @@ import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.Role;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -126,6 +125,29 @@ final class IdentityFakes {
             theoId.put(userId, new User(u.id(), u.handle(), null, tenHienThiMoi, u.role(),
                     UserStatus.ANONYMIZED, null, u.createdAt()));
             bamMatKhau.put(userId, null);
+        }
+
+        @Override
+        public boolean doiVaiTro(long userId, String vaiTroMoi) {
+            User u = theoId.get(userId);
+            if (u == null || u.status() == UserStatus.ANONYMIZED) {
+                return false;
+            }
+            theoId.put(userId, new User(u.id(), u.handle(), u.email(), u.displayName(),
+                    Role.valueOf(vaiTroMoi), u.status(), u.preferredLanguageId(), u.createdAt()));
+            return true;
+        }
+
+        @Override
+        public boolean doiTrangThai(long userId, String trangThaiMoi) {
+            User u = theoId.get(userId);
+            if (u == null || u.status() == UserStatus.ANONYMIZED) {
+                return false;
+            }
+            theoId.put(userId, new User(u.id(), u.handle(), u.email(), u.displayName(),
+                    u.role(), UserStatus.valueOf(trangThaiMoi), u.preferredLanguageId(),
+                    u.createdAt()));
+            return true;
         }
     }
 

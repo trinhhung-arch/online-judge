@@ -34,6 +34,7 @@ public record WorkerProperties(
         int slots,
         Duration lease,
         Duration idlePoll,
+        Duration shutdownGrace,
         Duration requestTimeout,
         Duration resultRetryMin,
         Duration resultRetryMax,
@@ -61,6 +62,14 @@ public record WorkerProperties(
             throw new IllegalStateException(
                     "Thiếu OJ_INTERNAL_SHARED_SECRET (cần >= 32 ký tự). Đây là thứ duy nhất "
                             + "cho worker quyền ghi verdict — không có giá trị mặc định, cố ý");
+        }
+        if (shutdownGrace == null || shutdownGrace.isNegative()) {
+            throw new IllegalStateException(
+                    "oj.worker.shutdown-grace không hợp lệ: " + shutdownGrace
+                            + ". Đây là thời gian tối đa chờ slot chấm nốt bài đang chạy khi "
+                            + "nhận SIGTERM (Bước 6.8). Đặt 0 là quay lại hành vi cắt ngang "
+                            + "của M1, tức là mỗi lần deploy đội thêm 120 giây chờ reaper cho "
+                            + "mỗi bài đang chấm dở");
         }
         if (idlePoll == null || idlePoll.isZero() || idlePoll.isNegative()) {
             throw new IllegalStateException("oj.worker.idle-poll phải dương");

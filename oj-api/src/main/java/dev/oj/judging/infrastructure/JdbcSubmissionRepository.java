@@ -1,7 +1,6 @@
 package dev.oj.judging.infrastructure;
 
 import dev.oj.judging.application.port.SubmissionRepository;
-import dev.oj.judging.application.port.SubmissionRepository.SubmissionDetail;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.Submission;
 import dev.oj.platform.security.Role;
@@ -175,6 +174,17 @@ public class JdbcSubmissionRepository implements SubmissionRepository {
             """;
 
     // ---- truy vấn 4, phần submissions. attempt KHÔNG đổi ở đây ----
+    /** FR-SUB-09 — xem javadoc của port. `hidden_at IS NULL` là chốt chống ghi đè. */
+    private static final String AN_BAI = """
+            UPDATE submissions SET hidden_at = :luc, hidden_by = :adminId
+             WHERE id = :id AND hidden_at IS NULL
+            """;
+
+    private static final String HIEN_BAI = """
+            UPDATE submissions SET hidden_at = NULL, hidden_by = NULL
+             WHERE id = :id AND hidden_at IS NOT NULL
+            """;
+
     private static final String MARK_QUEUED = """
             UPDATE submissions
                SET status = 'QUEUED'
@@ -300,5 +310,22 @@ public class JdbcSubmissionRepository implements SubmissionRepository {
         return judgeJdbc.sql(MARK_QUEUED)
                 .param("ids", submissionIds)
                 .update();
+    }
+
+    /**
+     * FR-SUB-09. POOL app — đây là thao tác quản trị của một người, không phải đường verdict.
+     *
+     * <p>Hai câu riêng thay vì một câu có {@code CASE}: {@code ck_submissions_hidden} ép
+     * {@code (hidden_at IS NULL) = (hidden_by IS NULL)}, nên hai chiều đặt và xoá hai cặp cột
+     * khác nhau. Một câu {@code CASE} gộp cả hai sẽ đúng, và sẽ khó đọc đúng.
+     */
+    @Override
+    public boolean datAn(long submissionId, boolean an, long adminId, Instant luc) {
+        String sql = an ? AN_BAI : HIEN_BAI;
+        return appJdbc.sql(sql)
+                .param("id", submissionId)
+                .param("adminId", adminId)
+                .param("luc", timestamptz(luc))
+                .update() > 0;
     }
 }

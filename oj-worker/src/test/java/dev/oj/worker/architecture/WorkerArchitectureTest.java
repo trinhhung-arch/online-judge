@@ -59,6 +59,29 @@ class WorkerArchitectureTest {
                             + "địa chỉ của oj-api (bất biến #3)");
 
     /**
+     * ★ Luật 7 mở rộng ở M6 — <b>AMQP cũng là một đường ra khỏi tiến trình</b>.
+     *
+     * <p>Bước 6.4 thêm một kết nối RabbitMQ vào worker. Luật 7 nguyên bản chỉ kể tên hai thư
+     * viện HTTP, nên nó sẽ im lặng cho phép một {@code @RabbitListener} mọc ở
+     * {@code worker.pipeline} hay {@code worker.run}. Điều luật 7 bảo vệ không phải là "HTTP"
+     * mà là: <i>bề mặt phụ thuộc của worker phải đọc được bằng một package</i>.
+     *
+     * <p>Bất biến #3 nói worker chỉ biết bốn đường dẫn trong {@code JudgeEndpoints}. Một tiếng
+     * chuông AMQP không phá điều đó — nó không mang dữ liệu nào, và worker vẫn phải gọi
+     * {@code claim} để lấy việc. Nhưng bước thứ hai của mọi vi phạm bất biến #3 luôn bắt đầu
+     * bằng "chỗ này cũng có sẵn một kết nối rồi".
+     */
+    @ArchTest
+    static final ArchRule luat7b_chi_client_duoc_noi_amqp =
+            noClasses()
+                    .that().resideOutsideOfPackage("dev.oj.worker.client..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework.amqp..", "com.rabbitmq..")
+                    .because("một kết nối AMQP là một đường ra khỏi tiến trình y hệt một lời "
+                            + "gọi HTTP. Bề mặt phụ thuộc của worker phải đọc được bằng MỘT "
+                            + "package (bất biến #3, Bước 6.4)");
+
+    /**
      * Mặt còn lại của bất biến #3, ở tầng kiểu dữ liệu: worker không được biết JDBC tồn tại.
      * {@code WorkerHasNoDataSourceTest} chặn ở tầng {@code pom.xml}; luật này chặn ở tầng
      * import, phòng trường hợp một dependency khác vô tình kéo driver vào classpath.

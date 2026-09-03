@@ -7,9 +7,6 @@ import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.JudgeRunRepository;
 import dev.oj.judging.application.port.LanguageRepository;
 import dev.oj.judging.application.port.SourceBlobRepository;
-import dev.oj.judging.application.port.SubmissionRepository;
-import dev.oj.judging.application.port.SubmissionRepository.SubmissionDetail;
-import dev.oj.judging.application.port.SubmissionRepository.SubmissionListItem;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
 import dev.oj.judging.domain.SourceBlob;
@@ -18,7 +15,6 @@ import dev.oj.judging.domain.SubmissionStatus;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.Role;
-import dev.oj.platform.web.CursorPage;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -30,7 +26,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -250,4 +245,27 @@ class JudgingFakes {
     static BigDecimal hostFactor() {
         return new BigDecimal("1.000");
     }
+    /**
+     * {@link dev.oj.platform.settings.SystemSettings} giả — mặc định <b>mọi công tắc đều bật</b>.
+     *
+     * <p>Mặc định "bật" chứ không "tắt": {@code SubmitSolutionUseCase} hỏi công tắc
+     * {@code submissions.accepting} ở dòng đầu tiên (Bước 6.12), nên một bản giả mặc định tắt
+     * sẽ làm mọi ca nộp bài đỏ với lý do không liên quan tới thứ chúng kiểm. Đây cũng là mặc
+     * định của hiện thực thật khi không đọc được database — hỏng theo hướng nhận bài.
+     */
+    static final class CongTacGia implements dev.oj.platform.settings.SystemSettings {
+
+        final java.util.Map<String, Boolean> giaTri = new java.util.LinkedHashMap<>();
+
+        @Override
+        public boolean bat(String khoa, boolean macDinh) {
+            return giaTri.getOrDefault(khoa, true);
+        }
+
+        @Override
+        public void dat(String khoa, boolean giaTriMoi, Long nguoiDoi) {
+            giaTri.put(khoa, giaTriMoi);
+        }
+    }
+
 }

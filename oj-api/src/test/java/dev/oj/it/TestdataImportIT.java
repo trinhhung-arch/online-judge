@@ -1,29 +1,23 @@
 package dev.oj.it;
 
 import dev.oj.platform.audit.AuditLog;
-import dev.oj.platform.jobs.JobContext;
 import dev.oj.platform.jobs.JobsException;
 import dev.oj.problems.application.TestdataImportJob;
 import dev.oj.problems.application.ZipTestdataValidator;
 import dev.oj.problems.application.port.TestdataRepository;
-import dev.oj.problems.application.port.TestdataStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -60,10 +54,14 @@ class TestdataImportIT extends PostgresIT {
     /** Nội dung của một test ẩn — chuỗi này KHÔNG được xuất hiện ở bất kỳ đâu trong Postgres. */
     private static final String BI_MAT = "9999999 8888888 BI-MAT-KHONG-DUOC-VAO-POSTGRES";
 
+    /** FR-PROB-10 (Bước 6.14): job nạp testdata phải TỰ tạo job chấm lại khi đổi phiên bản. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private dev.oj.platform.jobs.JobRepository jobs;
+
     @BeforeEach
     void dungJob() {
         kho = new KhoTestdataTrongBoNho();
-        job = new TestdataImportJob(validator, kho, testdata, auditLog);
+        job = new TestdataImportJob(validator, kho, testdata, auditLog, jobs);
     }
 
     // -------------------------------------------------------------------------

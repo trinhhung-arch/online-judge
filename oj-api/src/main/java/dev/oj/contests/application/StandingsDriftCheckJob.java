@@ -60,12 +60,30 @@ public class StandingsDriftCheckJob implements JobHandler {
     private final JudgingQueries judging;
     private final AppProperties properties;
 
+    /**
+     * P8 trên dashboard vận hành — Bước 6.10.
+     *
+     * <p>{@code AtomicInteger} chứ không phải một trường {@code volatile int}: Micrometer giữ
+     * <b>tham chiếu yếu</b> tới đối tượng của gauge. Một trường nguyên thuỷ phải được bọc lại
+     * mỗi lần đọc, và cái bọc đó bị thu gom ngay — gauge sẽ báo {@code NaN} sau lần GC đầu tiên.
+     * Đây là cái bẫy kinh điển của Micrometer, và triệu chứng của nó (ô dashboard trống sau vài
+     * phút chạy) trông giống hệt một lỗi cấu hình.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger soDongLechGanNhat =
+            new java.util.concurrent.atomic.AtomicInteger();
+
     public StandingsDriftCheckJob(ContestRepository contests, StandingsRepository standings,
-                                  JudgingQueries judging, AppProperties properties) {
+                                  JudgingQueries judging, AppProperties properties,
+                                  io.micrometer.core.instrument.MeterRegistry metrics) {
         this.contests = contests;
         this.standings = standings;
         this.judging = judging;
         this.properties = properties;
+        io.micrometer.core.instrument.Gauge
+                .builder(dev.oj.platform.metrics.OjMetrics.STANDINGS_DRIFT, soDongLechGanNhat,
+                        java.util.concurrent.atomic.AtomicInteger::get)
+                .description("P8 — số dòng bảng xếp hạng lệch ở lần đối soát gần nhất")
+                .register(metrics);
     }
 
     @Override
@@ -100,6 +118,7 @@ public class StandingsDriftCheckJob implements JobHandler {
             }
         }
 
+        soDongLechGanNhat.set(soDongLech);
         standings.ghiDrift(contestId, soDongKiem, soDongLech, Map.of(
                 "soDongLech", soDongLech, "mau", lech));
 

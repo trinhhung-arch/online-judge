@@ -22,12 +22,20 @@ final class LichThiGia implements ContestWindowQuery {
     /** Đặt {@code true} để giả lập FR-CON-03 từ chối truy cập. */
     boolean biKhoa;
 
+    /** FR-ADM-01: có kỳ thi nào đang chạy không — chốt của {@code StartRejudgeUseCase}. */
+    boolean coKyThi;
+
     int soLanHoi;
 
     @Override
     public OptionalLong contestDangChayChuaDe(long problemId) {
         soLanHoi++;
         return contestDangChay == null ? OptionalLong.empty() : OptionalLong.of(contestDangChay);
+    }
+
+    @Override
+    public boolean coKyThiDangChay() {
+        return coKyThi;
     }
 
     @Override

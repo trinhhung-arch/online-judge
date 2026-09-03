@@ -155,7 +155,6 @@ public class MinioTestdataStore implements TestdataStore {
      */
     private static ProblemsException khoHong(Exception e) {
         log.error("Kho testdata không dùng được", e);
-        return ProblemsException.khongHopLe("problem.kho_testdata_hong",
-                "Kho dữ liệu test hiện không dùng được. Thử lại sau.");
+        return ProblemsException.khoTestdataHong();
     }
 }

@@ -59,4 +59,27 @@ public interface UserRepository {
      * thứ hạng của mọi kỳ thi người đó từng dự phụ thuộc vào dòng này còn tồn tại.
      */
     void anDanhHoa(long userId, String tenHienThiMoi);
+
+    /**
+     * FR-ADM-03 — ADMIN đổi vai trò. Bước 6.6.
+     *
+     * <p>Câu {@code UPDATE} mang {@code AND status <> 'ANONYMIZED'}: một tài khoản đã ẩn danh
+     * hoá không được nhận lại vai trò nào. Điều kiện nằm <b>trong SQL</b> chứ không phải một
+     * câu {@code if} ở use-case, cùng lý do với chống IDOR ({@code oj-api/CLAUDE.md} mục 2) —
+     * một đường ghi thứ hai sau này sẽ quên câu {@code if}, nhưng không quên được câu query.
+     *
+     * @return {@code false} nếu không dòng nào khớp: người dùng không tồn tại, hoặc đã ẩn danh hoá
+     */
+    boolean doiVaiTro(long userId, String vaiTroMoi);
+
+    /**
+     * FR-ADM-03 — vô hiệu hoá / mở lại. <b>Không xoá cứng</b>, ở đây cũng như mọi nơi khác.
+     *
+     * <p>{@code DISABLED} khác {@code ANONYMIZED}: dữ liệu định danh còn nguyên và thao tác
+     * đảo ngược được. Đó là công cụ cho tình huống thật — một tài khoản đang gian lận giữa kỳ
+     * thi cần bị chặn <i>ngay</i>, và cần được mở lại sau khi làm rõ.
+     *
+     * @return {@code false} nếu không dòng nào khớp
+     */
+    boolean doiTrangThai(long userId, String trangThaiMoi);
 }

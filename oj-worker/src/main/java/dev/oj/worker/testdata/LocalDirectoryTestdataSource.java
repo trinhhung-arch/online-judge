@@ -1,6 +1,5 @@
 package dev.oj.worker.testdata;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -15,13 +14,25 @@ import java.nio.file.Path;
  * MinIO trông như thế từ phía worker — nên đây không phải bản giả, nó là cùng một hình dạng
  * dữ liệu với một transport khác.
  *
- * <p>{@code @ConditionalOnMissingBean} nằm trên phương thức {@code @Bean} chứ không trên
- * class là có lý do — nhưng ở đây nó nằm trên class vì bean này <b>được phép</b> thua bất kỳ
- * hiện thực nào khác, và ngày M4 thêm {@code MinioTestdataSource} thì hỏng ồn ào
- * ({@code NoUniqueBeanDefinitionException}) vẫn tốt hơn là chọn nhầm trong im lặng.
+ * <h2>★ {@code @ConditionalOnMissingBean} đã bị GỠ ở M6 — nó là một lỗi, không phải một lựa chọn</h2>
+ * Bản M2 mang {@code @ConditionalOnMissingBean(TestdataSource.class)} trên chính class này,
+ * với ý định "bean này được phép thua bất kỳ hiện thực nào khác". Ý định đúng; cơ chế thì sai.
+ *
+ * <p>{@code @ConditionalOnMissingBean} <b>chỉ đáng tin trong auto-configuration</b>, nơi
+ * Spring bảo đảm nó chạy sau khi mọi bean của người dùng đã đăng ký. Trên một class được
+ * component scan, nó được đánh giá <i>trong lúc</i> quét — thời điểm mà bean factory còn gần
+ * như rỗng — và kết quả là bean này <b>không bao giờ được đăng ký</b>. Tiến trình worker chết
+ * lúc dựng context với {@code No qualifying bean of type 'TestdataSource'}.
+ *
+ * <p>Không test nào bắt được suốt từ M2 tới M6, vì mọi test của {@code oj-worker} đều dựng
+ * đối tượng bằng {@code new}. Xem {@code WorkerContextSmokeTest}.
+ *
+ * <p>Cách giữ đúng ý định ban đầu mà không cần annotation: một {@code @Component} trần. Ngày
+ * có {@code MinioTestdataSource} thứ hai, Spring ném {@code NoUniqueBeanDefinitionException}
+ * — <b>đúng cái "hỏng ồn ào" mà ghi chú cũ nói là muốn</b>, và lúc đó người thêm nó chọn
+ * tường minh bằng {@code @Primary} hoặc một thuộc tính cấu hình.
  */
 @Component
-@ConditionalOnMissingBean(TestdataSource.class)
 public class LocalDirectoryTestdataSource implements TestdataSource {
 
     private final Path root;

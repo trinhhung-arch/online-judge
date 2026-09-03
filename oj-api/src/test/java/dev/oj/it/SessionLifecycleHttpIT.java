@@ -35,16 +35,15 @@ class SessionLifecycleHttpIT extends HttpIT {
         void xoay_vong_va_phat_hien_dung_lai() {
             String cu = (String) login("dev", MAT_KHAU_DEV).getBody().get("refreshToken");
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> moi = http.post().uri("/api/v1/auth/refresh")
-                    .body(Map.of("refreshToken", cu)).retrieve().body(Map.class);
+                    .body(Map.of("refreshToken", cu)).retrieve().body(THAN_JSON);
             assertThat((String) moi.get("refreshToken")).isNotEqualTo(cu);
 
             // Trình lại bản cũ: hệ thống hiểu là có hai bản sao đang tồn tại.
             var dungLai = http.post().uri("/api/v1/auth/refresh")
                     .body(Map.of("refreshToken", cu))
                     .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
-                            .body(r.bodyTo(Map.class)), false);
+                            .body(r.bodyTo(THAN_JSON)), false);
             assertThat(dungLai.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(dungLai.getBody()).containsEntry("code", "identity.phien_bi_dung_lai");
 

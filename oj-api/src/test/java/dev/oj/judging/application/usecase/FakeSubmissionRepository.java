@@ -116,4 +116,17 @@ class FakeSubmissionRepository implements SubmissionRepository {
             requeued = submissionIds;
             return submissionIds.size();
         }
+    /** FR-SUB-09 — Bước 6.13. Bản giả chỉ ghi lại lời gọi; luật thật nằm trong câu SQL. */
+    final java.util.List<String> daAn = new java.util.ArrayList<>();
+
+    @Override
+    public boolean datAn(long submissionId, boolean an, long adminId, java.time.Instant luc) {
+        String khoa = submissionId + ":" + an;
+        if (daAn.contains(khoa)) {
+            return false;      // đã ở đúng trạng thái ấy — giống AND hidden_at IS NULL
+        }
+        daAn.add(khoa);
+        return true;
+    }
+
 }

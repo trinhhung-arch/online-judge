@@ -1,3 +1,25 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive"
+    // ★ "automatic", KHÔNG phải "interactive".
+    //
+    // Với "interactive", JDT chỉ nạp lại mô hình dự án khi có người BẤM vào một thông báo.
+    // Bỏ lỡ cú bấm đó — hoặc đóng cửa sổ trước khi nó hiện ra — thì mô hình đứng yên vĩnh
+    // viễn, còn Maven vẫn biên dịch đúng. Kết quả là bảng Problems đầy lỗi đỏ "cannot be
+    // resolved" cho những lớp có thật, `./mvnw verify` xanh, và không ai nối được hai điều
+    // đó với nhau.
+    //
+    // Đã xảy ra thật ở M6: pom.xml của cả hai module đổi ngày 30/08, .classpath của JDT
+    // dừng ở ngày 28/08 — hai ngày lệch, sáu lỗi đỏ giả.
+    //
+    // Dự án này đổi pom.xml ở gần như mọi mốc: mỗi dependency mới là một quyết định phải hỏi
+    // người (CLAUDE.md mục 5.2), nên chúng đến từng cái một, rải đều. Một cơ chế đồng bộ cần
+    // thao tác tay là một cơ chế sẽ lệch.
+    "java.configuration.updateBuildConfiguration": "automatic"
+
+    // Khi mô hình vẫn lệch, hai lệnh cứu — ghi ra đây để lần sau không phải đi tìm:
+    //   Ctrl+Shift+P -> "Java: Reload Projects"                       (nhẹ, thử trước)
+    //   Ctrl+Shift+P -> "Java: Clean Java Language Server Workspace"  (xoá cache, nạp lại)
+    //
+    // Thước đo để biết lỗi là THẬT hay là chỉ mục cũ: `./mvnw clean test-compile`.
+    // Javac không bao giờ bỏ qua một ký hiệu không giải được, nên build sạch mà xanh thì
+    // code đúng và chỉ mục sai.
 }

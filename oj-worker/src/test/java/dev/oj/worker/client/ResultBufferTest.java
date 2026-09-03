@@ -2,7 +2,6 @@ package dev.oj.worker.client;
 
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.contract.Verdict;
-import dev.oj.worker.client.JudgeApiClient.JudgeApiException;
 import dev.oj.worker.config.WorkerProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

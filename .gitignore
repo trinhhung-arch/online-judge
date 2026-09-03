@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Thư mục output của Eclipse/JDT (VS Code Java tạo khi nạp dự án).
+# 520 file: .class, bản sao của src/main/resources, và một pom.xml nữa.
+# Nó sinh lại được hoàn toàn, và một lần `git add .` mà thiếu dòng này là 454 file .class
+# vào lịch sử repo.
+bin/

@@ -47,4 +47,14 @@ public interface TestdataRepository {
      * đây là chỗ mà "nguyên tử" thật sự quan trọng, và nó chỉ tốn một câu {@code UPDATE}.
      */
     void kichHoatPhienBan(long problemId, int version);
+
+    /**
+     * {@code manifest_sha256} của một phiên bản — khoá để lấy lại gói ZIP gốc từ kho.
+     *
+     * <p>Dùng bởi FR-PROB-12 (tải testdata về). {@code version} {@code null} nghĩa là phiên
+     * bản đang hoạt động.
+     *
+     * @return rỗng nếu đề hoặc phiên bản không tồn tại
+     */
+    java.util.Optional<String> shaCuaPhienBan(long problemId, Integer version);
 }

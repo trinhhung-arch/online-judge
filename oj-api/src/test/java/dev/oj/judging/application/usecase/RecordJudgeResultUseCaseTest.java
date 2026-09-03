@@ -29,7 +29,7 @@ class RecordJudgeResultUseCaseTest {
         fakes = new JudgingFakes();
         events = new JudgingFakes.FakeEventBus();
         useCase = new RecordJudgeResultUseCase(fakes.queue, fakes.judgeRuns, fakes.submissions,
-                JudgingFakes.properties(), JudgingFakes.CLOCK, events);
+                JudgingFakes.properties(), JudgingFakes.CLOCK, events, fakes.publisher);
     }
 
     /**
@@ -155,6 +155,11 @@ class RecordJudgeResultUseCaseTest {
      * FR-SUB-12 — {@code IE} còn lượt thì bài quay lại hàng đợi và <b>không có verdict nào
      * được ghi</b>. Nhánh này phải rẽ TRƯỚC khoá lạc quan: rẽ sau thì hàng đã bị xoá và bài
      * không còn đường quay lại.
+     *
+     * <p><b>Bước 6.13 thêm một lời gọi vào danh sách này</b>, và nó phải ở đúng chỗ: tiếng
+     * chuông gõ cửa đứng SAU {@code retryIe}, không đứng trước. IE là trường hợp người nộp đã
+     * chờ lâu nhất — họ vừa mất trọn một lượt chấm cho một lỗi không phải của họ — nên để bài
+     * nằm tới nhịp poll kế tiếp là phạt họ thêm lần nữa.
      */
     @Test
     void IE_con_luot_thi_khong_ghi_verdict_va_khong_dung_toi_khoa_lac_quan() {
@@ -163,7 +168,25 @@ class RecordJudgeResultUseCaseTest {
         var outcome = useCase.record(result(Verdict.IE, 1));
 
         assertThat(outcome).isEqualTo(RecordJudgeResultUseCase.Outcome.IE_RETRY_SCHEDULED);
-        assertThat(fakes.calls).containsExactly("queue.retryIe");
+        assertThat(fakes.calls).containsExactly("queue.retryIe", "events.publishEnqueued");
+    }
+
+    /**
+     * Cùng nhánh trên, nhưng chuông hỏng: bài <b>vẫn</b> quay lại hàng đợi.
+     *
+     * <p>Cùng luật với đường nộp bài — {@code judge_queue} là sự thật, chuông chỉ là tối ưu.
+     * Nếu một ngày ai đó bỏ {@code try/catch} quanh lời gọi chuông thì ca này đỏ, và nó đỏ
+     * trước khi có ai mất một bài nộp thật.
+     */
+    @Test
+    void IE_chuong_hong_thi_bai_van_quay_lai_hang_doi() {
+        fakes.queue.ieRetryAccepted = true;
+        fakes.publisher.explode = true;
+
+        var outcome = useCase.record(result(Verdict.IE, 1));
+
+        assertThat(outcome).isEqualTo(RecordJudgeResultUseCase.Outcome.IE_RETRY_SCHEDULED);
+        assertThat(fakes.calls).contains("queue.retryIe");
     }
 
     /** Hết lượt retry thì {@code IE} thành verdict thật để người dùng biết chuyện gì xảy ra. */

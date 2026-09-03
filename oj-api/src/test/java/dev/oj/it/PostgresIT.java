@@ -35,6 +35,7 @@ import java.util.List;
  * thật vỡ.
  */
 @SpringBootTest
+@org.springframework.context.annotation.Import(DemQuery.class)
 public abstract class PostgresIT {
 
     /**
@@ -49,8 +50,18 @@ public abstract class PostgresIT {
      * <p>Không gọi {@code stop()}: Ryuk (container phụ của Testcontainers) dọn khi JVM thoát.
      * Đổi lại, cả bộ IT dùng chung một database — nên {@link #resetHotTables()} bên dưới là
      * bắt buộc, không phải tuỳ chọn.
+     *
+     * <p><b>Không có {@code @SuppressWarnings("resource")} ở đây, và đừng thêm lại.</b> Nó
+     * từng có, và nó tự sinh ra một dòng trong bảng Problems: <i>"At least one of the problems
+     * in category 'resource' is not analysed due to a compiler option being ignored"</i> —
+     * với một trường được gán thẳng từ {@code new} như dòng dưới, trình phân tích không báo
+     * gì cả, nên chú thích chẳng bỏ qua được gì mà chỉ báo rằng nó chẳng bỏ qua được gì.
+     *
+     * <p>Điều đó <b>không</b> có nghĩa là phân tích rò rỉ tài nguyên bị tắt hẳn. Nó vẫn bắt
+     * được một dạng khác — một {@link AutoCloseable} tạo ra rồi nối chuỗi ngay, không gán cho
+     * ai — và {@link #REDIS} bên dưới từng dính đúng dạng đó. Cách chữa ở đấy là <i>đổi cách
+     * viết</i>, không phải thêm một chú thích bỏ qua.
      */
-    @SuppressWarnings("resource")
     // Testcontainers 2.x: lớp này KHÔNG còn generic như bản 1.x mà mọi hướng dẫn còn viết.
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
@@ -64,12 +75,23 @@ public abstract class PostgresIT {
      * mới chứng minh được thông điệp đi qua một tiến trình khác rồi quay lại.
      *
      * <p>{@code redis:7-alpine} khởi động khoảng một giây, một lần cho cả JVM.
+     *
+     * <p><b>Cấu hình cổng nằm ở khối {@code static} bên dưới, không nối chuỗi vào đây —
+     * và đừng nối lại.</b> Viết
+     * {@code new GenericContainer<>("redis:7-alpine").withExposedPorts(6379)} sinh ra một
+     * cảnh báo <i>"Resource leak: '&lt;unassigned Closeable value&gt;' is never closed"</i>:
+     * trình phân tích thấy một {@link AutoCloseable} được tạo mà không gán cho ai, vì thứ
+     * được gán là <i>kết quả</i> của lời gọi nối chuỗi. Nó không phân biệt được rằng
+     * {@code withExposedPorts} trả về chính đối tượng ấy.
+     *
+     * <p>Gán thẳng rồi cấu hình sau làm cảnh báo biến mất mà <b>không cần
+     * {@code @SuppressWarnings}</b> — và nó cũng làm hai container ở đây có cùng một hình
+     * dạng, thay vì một cái nối chuỗi còn một cái không.
      */
-    @SuppressWarnings("resource")
-    static final GenericContainer<?> REDIS =
-            new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine");
 
     static {
+        REDIS.withExposedPorts(6379);   // phải đặt TRƯỚC start(); xem javadoc ngay trên
         POSTGRES.start();
         REDIS.start();
     }
@@ -98,6 +120,12 @@ public abstract class PostgresIT {
         // Đặt sát dưới lease (AppProperties ép reaper-interval < lease) để nó chỉ chạy đúng
         // một lần lúc khởi động rồi im. Test nào cần reaper thì GỌI THẲNG use-case.
         registry.add("oj.judge.reaper-interval", () -> "119s");
+        // Bước 6.4: KHÔNG dựng container RabbitMQ cho bộ IT. Tắt ở đây làm
+        // NoopJudgeJobPublisher thắng, và đó cũng là bài kiểm cho dòng "RabbitMQ chết" của
+        // bảng degraded mode: cả bộ IT chạy xanh mà không có broker nào, tức là chứng minh
+        // được rằng chuông cửa là tối ưu chứ không phải cơ chế giao việc.
+        // Cầu dao và hình trạng hàng đợi được kiểm riêng ở RabbitJudgeJobPublisherTest.
+        registry.add("oj.judge.rabbit.enabled", () -> "false");
     }
 
     @Autowired
@@ -109,6 +137,17 @@ public abstract class PostgresIT {
 
     @Autowired
     protected StringRedisTemplate redis;
+
+    /**
+     * Ba công tắc {@code system_settings} phải về giá trị seed trước mỗi test.
+     *
+     * <p><b>Đặt qua {@code dat()} chứ không qua một câu {@code UPDATE}</b>, và đó là điểm
+     * chính: {@code JdbcSystemSettings} cache 2 giây, và chỉ {@code dat()} xoá cache. Khôi
+     * phục bằng SQL thì database đúng còn instance đang chạy vẫn nhớ giá trị cũ trong hai giây
+     * — đủ để test kế tiếp đỏ, và đỏ theo nhịp đồng hồ chứ không theo logic.
+     */
+    @Autowired
+    protected dev.oj.platform.settings.SystemSettings congTac;
 
     private GiaLapDanhTinh phien;
 
@@ -188,6 +227,9 @@ public abstract class PostgresIT {
     @BeforeEach
     void resetGiuaCacTest() {
         ResetGiuaCacTest.tatCa(jdbc, redis);
+        congTac.dat(dev.oj.platform.settings.SystemSettings.NHAN_BAI_NOP, true, null);
+        congTac.dat(dev.oj.platform.settings.SystemSettings.REJUDGE, true, null);
+        congTac.dat(dev.oj.platform.settings.SystemSettings.AI_REVIEW, false, null);
     }
 
     /**

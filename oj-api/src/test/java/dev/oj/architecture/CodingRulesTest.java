@@ -185,4 +185,37 @@ class CodingRulesTest {
     //  trên classpath của oj-api. Nó là một test riêng trong oj-worker, Bước M1-10:
     //  đọc oj-worker/pom.xml và fail nếu thấy spring-boot-starter-data-jdbc, postgresql,
     //  flyway-core, lettuce-core hay minio.
+
+    // =========================================================================
+    // LUẬT 9 — MinIO chết thì vẫn xem được đề. nfrplan.md 7.2, dòng bốn của bảng
+    //          degraded mode. Bước 6.9.
+    // =========================================================================
+
+    /**
+     * ★ <b>Đường đọc đề không được chạm vào kho đối tượng.</b>
+     *
+     * <p>Bảng degraded mode hứa: <i>"MinIO chết → đề đã cache vẫn xem được, không upload đề mới
+     * được"</i>. Hôm nay lời hứa ấy đúng vì lý do kiến trúc — đề bài nằm ở Postgres, bản render
+     * nằm ở {@code rendered_statements}, và MinIO chỉ giữ gói testdata.
+     *
+     * <p>Nhưng nó đúng một cách <b>tình cờ</b> cho tới khi có luật này. Một yêu cầu rất hợp lý
+     * — "cho phép đính kèm ảnh vào đề bài" — sẽ đưa một lời gọi {@code TestdataStore} vào
+     * {@code GetProblemUseCase}, và từ hôm đó một MinIO chết làm <b>mọi trang đề trắng</b>
+     * giữa kỳ thi. Không có gì báo trước, vì trang vẫn chạy đúng khi MinIO sống.
+     *
+     * <p>Luật này không cấm đính kèm ảnh. Nó bắt người thêm tính năng ấy phải <i>nhìn thấy</i>
+     * dòng degraded mode và quyết định một cách có ý thức — ví dụ cache ảnh, hoặc chấp nhận
+     * và sửa lại lời hứa.
+     */
+    @ArchTest
+    static final ArchRule luat9_doc_de_khong_cham_kho_doi_tuong =
+            noClasses()
+                    .that().haveSimpleName("GetProblemUseCase")
+                    .or().haveSimpleName("ListProblemsUseCase")
+                    .or().haveSimpleName("StatementService")
+                    .should().dependOnClassesThat()
+                    .haveSimpleName("TestdataStore")
+                    .because("nfrplan.md 7.2: MinIO chết thì đề đã cache vẫn phải xem được. "
+                            + "Đường đọc đề đi qua Postgres và rendered_statements, không qua "
+                            + "kho đối tượng — và đó phải là một luật, không phải một sự trùng hợp");
 }

@@ -10,8 +10,7 @@ import dev.oj.worker.config.WorkerProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
-import java.time.Duration;
+
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -7,7 +7,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.0</version>
+		<version>4.1.1</version>
 		<relativePath />
 	</parent>
 
@@ -33,6 +33,26 @@
 		WorkerHasNoDataSourceTest đọc thẳng file này và fail nếu thấy tên bị cấm.
 	-->
 	<dependencies>
+		<!--
+			RabbitMQ — Bước 6.4. ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2 và 5.6: thay đổi chạm cả
+			oj-api lẫn oj-worker).
+
+			Nó KHÔNG nằm trong danh sách cấm của WorkerHasNoDataSourceTest, và lý do nên nói
+			rõ chứ không để người đọc tự suy: danh sách đó cấm những đường worker chạm THẲNG
+			vào hạ tầng dữ liệu của API — JDBC, Flyway, Redis, MinIO. Một kết nối AMQP không
+			cho worker đọc được gì cả; message nó nhận chỉ có một submissionId, và worker vẫn
+			phải gọi /internal/judge/claim để lấy việc. Bất biến #3 nguyên vẹn: worker vẫn
+			không có DataSource, và vẫn chỉ biết bốn đường dẫn trong JudgeEndpoints.
+
+			Luật ArchUnit 7 được mở rộng theo: chỉ worker.client được import org.springframework
+			.amqp — cùng lý do đã áp cho HTTP, vì một kết nối ra khỏi tiến trình là một kết nối
+			ra khỏi tiến trình.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>com.oj</groupId>
 			<artifactId>oj-contract</artifactId>

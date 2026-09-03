@@ -34,9 +34,38 @@ public final class TestdataKeys {
      * khuôn git dùng cho {@code objects/}, và vì đúng lý do đó.
      */
     public static String khoa(String sha256) {
-        if (sha256 == null || sha256.length() != 64) {
-            throw new IllegalArgumentException("sha256 phải là 64 ký tự hex");
+        if (!hopLe(sha256)) {
+            throw new IllegalArgumentException("sha256 phải là 64 ký tự hex thường");
         }
         return TIEN_TO + sha256.substring(0, 2) + "/" + sha256;
+    }
+
+    /**
+     * ★ Đúng 64 ký tự {@code [0-9a-f]}, không gì khác.
+     *
+     * <h2>Vì sao kiểm ký tự chứ không chỉ kiểm độ dài</h2>
+     * Bản đầu chỉ kiểm {@code length() != 64}, và điều đó đủ khi hash chỉ đến từ code của
+     * chính ta. Từ khi có {@code JudgeEndpoints.TESTDATA}, nó đến từ một <b>path variable</b>
+     * — tức là từ mạng — và được ghép thẳng vào khoá đối tượng của kho.
+     *
+     * <p>Một chuỗi 64 ký tự chứa {@code ../} vẫn qua được phép kiểm độ dài. Nó sẽ không tìm
+     * thấy gì trong MinIO (khoá không khớp), nhưng đó là <i>may</i>, không phải <i>thiết kế</i>
+     * — và ngày kho đổi sang một hệ thống tệp thật thì may hết.
+     *
+     * <p>Chỉ nhận chữ thường: hash do ta sinh ra luôn là chữ thường, nên chấp nhận chữ hoa là
+     * mở ra hai khoá cho cùng một nội dung, và cache content-addressed mất tính duy nhất.
+     */
+    public static boolean hopLe(String sha256) {
+        if (sha256 == null || sha256.length() != 64) {
+            return false;
+        }
+        for (int i = 0; i < 64; i++) {
+            char c = sha256.charAt(i);
+            boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+            if (!hex) {
+                return false;
+            }
+        }
+        return true;
     }
 }

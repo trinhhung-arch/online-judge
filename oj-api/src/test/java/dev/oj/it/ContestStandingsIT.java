@@ -6,7 +6,6 @@ import dev.oj.contests.application.port.StandingsReader;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.contests.domain.Contest;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
-import dev.oj.platform.error.DomainException;
 import dev.oj.platform.security.GiaLapDanhTinh;
 import dev.oj.platform.security.Role;
 import org.junit.jupiter.api.DisplayName;
@@ -19,7 +18,6 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * ★ Bảng xếp hạng trên Postgres thật — M5, FR-CON-04 và FR-CON-05.

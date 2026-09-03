@@ -69,12 +69,16 @@ public class TestdataImportJob implements JobHandler {
     private final TestdataRepository testdata;
     private final AuditLog auditLog;
 
+    private final dev.oj.platform.jobs.JobRepository jobs;
+
     public TestdataImportJob(ZipTestdataValidator validator, TestdataStore store,
-                             TestdataRepository testdata, AuditLog auditLog) {
+                             TestdataRepository testdata, AuditLog auditLog,
+                             dev.oj.platform.jobs.JobRepository jobs) {
         this.validator = validator;
         this.store = store;
         this.testdata = testdata;
         this.auditLog = auditLog;
+        this.jobs = jobs;
     }
 
     @Override
@@ -108,9 +112,13 @@ public class TestdataImportJob implements JobHandler {
         ghiMetadata(ctx, problemId, version, cacTest, theoTen);
 
         testdata.kichHoatPhienBan(problemId, version);
+        Long rejudgeJobId = batBuocChamLai(ctx, problemId, version, nguoiTao);
         auditLog.ghi("PROBLEM_TESTDATA_IMPORTED", "problem", problemId,
-                Map.of("version", version, "testCount", cacTest.size(),
-                        "totalBytes", kiem.tongByte()));
+                rejudgeJobId == null
+                        ? Map.of("version", version, "testCount", cacTest.size(),
+                                "totalBytes", kiem.tongByte())
+                        : Map.of("version", version, "testCount", cacTest.size(),
+                                "totalBytes", kiem.tongByte(), "rejudgeJobId", rejudgeJobId));
         ctx.ghiSuKien("INFO", "Xong. Đề đã chuyển sang phiên bản " + version);
     }
 
@@ -242,4 +250,63 @@ public class TestdataImportJob implements JobHandler {
         }
         return n.longValue();
     }
+    /**
+     * ★ FR-PROB-10 — <b>bắt buộc</b> tạo job chấm lại khi testdata đổi. Bước 6.14.
+     *
+     * <h2>Vì sao "bắt buộc" chứ không "gợi ý"</h2>
+     * Sau khi {@code kichHoatPhienBan} chạy, mọi bài nộp cũ mang một
+     * {@code testdata_version} không còn là phiên bản hiện tại. Verdict của chúng vẫn đúng
+     * <i>với bộ test lúc đó</i> và sai <i>với bộ test bây giờ</i>. Một bảng xếp hạng trộn hai
+     * loại verdict ấy không so sánh được với chính nó — và không có gì trên màn hình nói ra
+     * điều đó. Đây là loại sai lệch chỉ lộ ra khi có người khiếu nại, tức là quá muộn.
+     *
+     * <p>Nên việc chấm lại không được để cho ai nhớ: nó được tạo ngay tại đây, trong cùng
+     * lượt chạy đã đổi dữ liệu.
+     *
+     * <h2>Phiên bản 1 thì không tạo — và đó không phải ngoại lệ, mà là định nghĩa</h2>
+     * Một đề chưa có testdata thì {@code hasTestdata()} sai, và {@code GetProblemUseCase
+     * .submittableById} từ chối nó. Không tồn tại bài nộp nào để chấm lại. Tạo một job rejudge
+     * rỗng ở đây chỉ chiếm chỗ trong {@code ux_jobs_one_active_per_entity} và làm nhiễu trang
+     * theo dõi.
+     *
+     * <h2>"Cảnh báo rõ số bài bị ảnh hưởng" nằm ở đâu</h2>
+     * {@code problems} không đọc được bảng {@code submissions} — luật ArchUnit 3 không có
+     * chiều {@code problems → judging}, và nó không có chiều đó vì một lý do đúng. Con số ấy
+     * là {@code total_items} của chính job vừa tạo: {@code RejudgeJobHandler} đếm nó ở dòng
+     * đầu tiên, và trang {@code GET /api/v1/jobs/{id}} hiện nó cùng thanh tiến độ.
+     *
+     * <p>Nên cảnh báo ở đây trỏ tới đó thay vì tự bịa một con số. Trỏ tới một chỗ có số thật
+     * tốt hơn hiện một số lấy từ một đường vòng qua kiến trúc.
+     *
+     * <h2>Không tạo được thì KHÔNG làm hỏng việc nạp</h2>
+     * Testdata đã kích hoạt xong và đã commit. Ném ngoại lệ ở đây đánh dấu job
+     * {@code TESTDATA_IMPORT} là {@code FAILED} trong khi nó đã thành công — người vận hành sẽ
+     * nạp lại, và lần nạp lại ấy mới là thứ gây hại. Ghi ERROR và một dòng
+     * {@code job_events} để nghĩa vụ chấm lại không biến mất trong im lặng.
+     *
+     * @return {@code jobs.id} của job chấm lại, hoặc {@code null} nếu không tạo
+     */
+    private Long batBuocChamLai(JobContext ctx, long problemId, int version, long nguoiTao) {
+        if (version <= 1) {
+            return null;
+        }
+        try {
+            long rejudgeId = jobs.tao(dev.oj.platform.jobs.JobType.REJUDGE,
+                    Map.of(dev.oj.platform.jobs.JobParams.PROBLEM_ID, problemId),
+                    nguoiTao == 0 ? null : nguoiTao);
+            ctx.ghiSuKien("WARN", "★ Testdata đã đổi (phiên bản " + version + "). Mọi bài nộp "
+                    + "trước đó được chấm bằng bộ test CŨ. Job chấm lại #" + rejudgeId
+                    + " đã được tạo — số bài bị ảnh hưởng hiện ở tiến độ của job đó.");
+            return rejudgeId;
+        } catch (RuntimeException e) {
+            ctx.ghiSuKien("ERROR", "★ KHÔNG tạo được job chấm lại (" + e.getMessage()
+                    + "). Testdata ĐÃ đổi, nên bài nộp cũ đang mang verdict của bộ test cũ. "
+                    + "Phải tạo job chấm lại bằng tay cho đề " + problemId + ".");
+            org.slf4j.LoggerFactory.getLogger(TestdataImportJob.class)
+                    .error("FR-PROB-10: không tạo được job rejudge cho đề {} sau khi đổi "
+                            + "testdata sang phiên bản {}", problemId, version, e);
+            return null;
+        }
+    }
+
 }

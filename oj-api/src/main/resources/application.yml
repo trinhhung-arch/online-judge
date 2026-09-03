@@ -31,10 +31,14 @@ spring:
       port: 6379
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: ojuser
-    password: ojpass
+    host: ${OJ_RABBIT_HOST:localhost}
+    port: ${OJ_RABBIT_PORT:5672}
+    username: ${OJ_RABBIT_USER:ojuser}
+    password: ${OJ_RABBIT_PASSWORD:ojpass}
+    # ★ Bước 6.9. Mặc định là 60 GIÂY, và nó nằm trên đường nộp bài: broker chết thì mỗi lần
+    # nộp treo 60 giây trước khi ngoại lệ được nuốt. 200ms là trần cho MỘT lần thử; cầu dao
+    # trong RabbitJudgeJobPublisher lo phần "đừng thử lại mỗi bài".
+    connection-timeout: 200ms
 
 server:
   port: 8080
@@ -43,6 +47,78 @@ server:
   # /api/v1/internal/judge/* — đúng thứ mà oj-api/CLAUDE.md mục 5 cấm, và nó sẽ lọt ra
   # tunnel cùng với phần công khai. Tiền tố /api/v1 nằm trong @RequestMapping của từng
   # controller công khai; hai endpoint nội bộ cố ý đứng ngoài.
+
+# =============================================================================
+# Actuator — Bước 6.7 và 6.10.
+#
+# ★ CỔNG RIÊNG, và đây là phần quan trọng nhất của khối này.
+# Cloudflare Tunnel chỉ publish cổng `server.port` (8080). Đặt actuator ở 8081 nghĩa là
+# /actuator/** không có lối vào từ internet — cùng cơ chế đã dùng cho /internal/judge/*,
+# và cùng lý do: một bề mặt vận hành lọt ra ngoài là một bề mặt tấn công.
+#
+# UptimeRobot giám sát TỪ BÊN NGOÀI (nfrplan 7.2) nên nó không gọi được cổng này; nó ping
+# một endpoint công khai. Điều đó đúng — health check chi tiết là cho người vận hành, còn
+# "site còn sống không" là câu hỏi khác và có câu trả lời khác.
+# =============================================================================
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health          # KHÔNG mở env/configprops: ở đó có OJ_JWT_SECRET
+  endpoint:
+    health:
+      show-details: always       # chỉ nghe trên 8081, nội bộ — chi tiết là thứ cần khi trực
+      show-components: always
+      # ★ HAI BỀ MẶT, HAI NGƯỜI ĐỌC — và gộp chúng làm một là có hại.
+      #
+      # /actuator/health          -> cho NGƯỜI trực. Gộp mọi thành phần, kể cả những thứ
+      #                              hỏng mà hệ thống vẫn chạy (Redis, RabbitMQ, worker).
+      # /actuator/health/sanSang  -> cho MÁY. 503 ở đây nghĩa là "restart tôi đi".
+      #
+      # Vì sao phải tách: bảng degraded mode (nfrplan 7.2) liệt kê năm thành phần, và
+      # ĐÚNG MỘT trong năm là chí mạng. Redis chết thì bảng xếp hạng đọc Postgres; RabbitMQ
+      # chết thì worker quay về nhịp poll; worker chết hết thì bài vẫn vào hàng đợi. Trả 503
+      # cho những trường hợp ấy là bảo bộ giám sát restart một API đang chạy đúng — và
+      # restart không mang một worker nào trở lại.
+      #
+      # nfrplan 7.2 nói "một health check luôn xanh còn tệ hơn không có health check". Mặt
+      # còn lại cũng đúng: một health check đỏ vì chuyện không phải sự cố sẽ bị người ta tắt
+      # thông báo, và lúc đó nó cũng vô dụng như một cái luôn xanh.
+      group:
+        sanSang:
+          include: db            # chỉ Postgres. Mất nó là mất tất cả (R1)
+          show-details: always
+      # OUT_OF_SERVICE = "một năng lực đang thiếu", không phải "tôi hỏng". Mặc định của Boot
+      # ánh xạ nó sang 503; ở đây nó là 200 kèm thân nói rõ, còn 503 để dành cho DOWN.
+      status:
+        http-mapping:
+          out-of-service: 200
+  health:
+    # Postgres/Redis/RabbitMQ đã có HealthIndicator sẵn của Boot. `db` kiểm CẢ HAI pool
+    # (app và judge) vì Boot dò mọi bean DataSource — đúng thứ ta muốn: pool judge chết mà
+    # pool app sống nghĩa là verdict không ghi được, và đó KHÔNG phải "UP".
+    defaults:
+      enabled: true
+  metrics:
+    tags:
+      application: oj-api
+    # P1 < 200ms và P2 < 300ms là mục tiêu p95, nên phải khai báo — không có khối này thì
+    # Micrometer chỉ giữ count/sum/max, và p95 KHÔNG tính được từ ba con số đó.
+    #
+    # Hai dòng, hai mục đích khác nhau, và cần cả hai:
+    #   percentiles            -> Micrometer tự tính p95 TRONG TIẾN TRÌNH. Đây là thứ
+    #                             OpsDashboardController đọc; không có nó thì ô p95 luôn là 0.
+    #   percentiles-histogram  -> phát ra bucket cho một backend gộp số liệu nhiều instance.
+    #                             Chưa dùng tới, nhưng bỏ đi thì ngày dựng backend phải nhớ.
+    distribution:
+      percentiles:
+        http.server.requests: 0.95
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 50ms,100ms,200ms,300ms,500ms,1s,2s
 
 logging:
   level:
@@ -69,6 +145,36 @@ oj:
     max-ie-retries: 2             # FR-SUB-12
     result-batch-size: 20         # = JudgeProgressDto.BATCH_SIZE, dùng từ M3
     reference-host-name: mac-m1max-host # mọi con số thời gian quy chiếu về máy này (FR-SUB-11)
+
+    # Bước 6.7/6.11 — cửa sổ coi một máy chấm là còn sống. PHẢI ≥ 2 lần
+    # oj.worker.sandbox.benchmark.interval (15 phút), vì đó là nhịp DUY NHẤT cập nhật
+    # judge_hosts.last_seen_at. Đặt nhỏ hơn là báo động giả mỗi 15 phút.
+    host-liveness: 30m
+    # FR-ADM-05 "thời gian chờ ước tính". Đây là con số của SLO P4 (≥5 bài/s trên host
+    # chuẩn), KHÔNG phải một phép đo — trang trạng thái phải nói rõ nó là ước tính.
+    throughput-estimate: 5.0
+    # Nhịp lấy mẫu hàng đợi — con số ghi trong comment của bảng queue_metrics (V6).
+    metrics-interval: 10s
+
+    rejudge:
+      # FR-ADM-01 · Bước 6.3 — luật ở judging.domain.RejudgeJob, đây chỉ là ba con số.
+      #
+      # max-in-flight LÀ cách viết "trần 30% năng lực chấm" thành thứ kiểm được: mỗi dòng
+      # rejudge đang chờ là nhiều nhất một judge slot có thể bận vì nó, nên 2 trên 6 slot
+      # (OJ_WORKER_SLOTS, ADR 008) là 33%. Đổi số slot ở worker thì phải đổi số này —
+      # HopDongVanHanhTest đọc cả hai file yml và bắt lúc chúng lệch nhau.
+      max-in-flight: 2
+      live-wait-brake: 5s     # = P6 (p95 queue_wait < 5s). Live chờ lâu hơn -> rejudge về 0
+      batch-size: 200         # bất biến #8
+
+    rabbit:
+      # Bước 6.4 — false = quay về NoopJudgeJobPublisher của M1 (worker tự PULL). Dùng khi
+      # broker chưa dựng, và trong test không cần một container RabbitMQ.
+      #
+      # Tên exchange và hàng đợi KHÔNG ở đây mà là hằng số trong RabbitJudgeJobPublisher:
+      # phía API vừa khai báo hình trạng vừa gửi, nên một con số duy nhất trong Java là đủ.
+      # Phía worker phải lặp lại tên trong yml của nó — HopDongVanHanhTest đối chiếu hai bên.
+      enabled: ${OJ_RABBIT_ENABLED:true}
 
   sse:
     # FR-SUB-05 · Bước 3.9. Phải NHỎ HƠN trần của Cloudflare Tunnel: chủ động đóng thì

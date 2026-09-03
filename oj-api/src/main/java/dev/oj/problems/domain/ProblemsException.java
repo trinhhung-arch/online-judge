@@ -56,4 +56,25 @@ public class ProblemsException extends DomainException {
                 "Đề chưa có bộ test nào. Hãy nạp testdata trước khi xuất bản.",
                 "Từ chối xuất bản đề có current_testdata_version = 0");
     }
+
+    /**
+     * ★ Kho đối tượng không dùng được — Bước 6.9, dòng MinIO của bảng degraded mode.
+     *
+     * <h2>503, không phải 400 — và đây là một phân loại SAI đã sửa ở M6</h2>
+     * Bản M4 dùng {@code khongHopLe(...)}, tức {@code Kind.INVALID}, tức HTTP 400. Nhưng
+     * <b>400 nghĩa là "yêu cầu của bạn sai, sửa rồi gửi lại"</b>, và ở đây không có gì để
+     * client sửa: cùng một yêu cầu ấy sẽ thành công khi MinIO sống lại.
+     *
+     * <p>Phân loại sai kiểu này không vô hại. Trình duyệt, thư viện client và người vận hành
+     * đều xử lý 4xx và 5xx khác nhau: 4xx thì không thử lại, 5xx thì thử lại và tính vào tỉ
+     * lệ lỗi hạ tầng. Một sự cố MinIO báo cáo dưới dạng 400 sẽ <b>không xuất hiện</b> trên
+     * bất kỳ biểu đồ nào theo dõi sức khoẻ hệ thống — nó trông như hàng loạt người dùng gửi
+     * yêu cầu hỏng.
+     */
+    public static ProblemsException khoTestdataHong() {
+        return new ProblemsException(Kind.UNAVAILABLE, "problem.kho_testdata_hong",
+                "Kho dữ liệu test hiện không dùng được. Thử lại sau.",
+                "MinIO không phản hồi — chi tiết ở log, KHÔNG ra HTTP (nó mang endpoint và "
+                        + "tên bucket)");
+    }
 }

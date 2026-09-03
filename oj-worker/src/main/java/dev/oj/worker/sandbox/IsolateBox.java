@@ -69,6 +69,36 @@ public final class IsolateBox implements AutoCloseable {
         return box;
     }
 
+    /**
+     * ★ Bước 6.8 — dọn một box <b>mà không init nó</b>.
+     *
+     * <p>{@link #open} luôn {@code init} trước, nên nó không dùng được lúc tắt máy: mở một box
+     * chỉ để đóng ngay là tạo ra đúng thứ mình đang muốn dọn, và nếu tiến trình chết giữa hai
+     * bước thì tình trạng còn tệ hơn lúc đầu.
+     *
+     * <p>Box rò rỉ không phải chuyện nhỏ: {@code isolate} giữ cgroup và thư mục của box, nên
+     * lần khởi động sau {@code --init} trên cùng id sẽ đè lên một box còn dấu vết của lượt
+     * chấm trước — và dấu vết đó có thể là <b>file testdata</b> ({@code oj-worker/CLAUDE.md}
+     * mục 1 điều 5).
+     *
+     * <p>Nuốt mọi lỗi: đây là đường tắt máy, và một box không dọn được không được phép giữ
+     * tiến trình lại. Nó ghi ERROR để có người vào xoá tay.
+     */
+    public static void donDep(Sandbox cfg, int boxId) {
+        // KHÔNG dựng một IsolateBox ở đây. Bản đầu có `new IsolateBox(...)` chỉ để mượn
+        // runControl, và trình biên dịch cảnh báo đúng: một AutoCloseable được tạo mà không
+        // bao giờ đóng. Cảnh báo ấy không sai về hình thức và cũng không sai về nội dung —
+        // một đối tượng "box" tồn tại mà không tương ứng với một box nào đang mở là một khái
+        // niệm sai, và người đọc sau sẽ phải mất một phút để tin rằng nó vô hại.
+        try {
+            chayLenhDieuKhien(IsolateCommand.cleanup(cfg, boxId), "cleanup", boxId);
+            log.debug("Đã dọn box {}", boxId);
+        } catch (RuntimeException e) {
+            log.error("KHÔNG DỌN ĐƯỢC box {} lúc tắt máy — cần xoá tay {}",
+                    boxId, cfg.boxRoot().resolve(String.valueOf(boxId)), e);
+        }
+    }
+
     public int boxId() {
         return boxId;
     }
@@ -273,6 +303,18 @@ public final class IsolateBox implements AutoCloseable {
 
     /** {@code --init} / {@code --cleanup}: nhanh, không có input, không cần giới hạn output. */
     private String runControl(List<String> argv, String what) {
+        return chayLenhDieuKhien(argv, what, boxId);
+    }
+
+    /**
+     * Phần thân của {@link #runControl}, tách ra dạng {@code static} để {@link #donDep} dùng
+     * được mà không phải dựng một {@link IsolateBox}.
+     *
+     * <p>{@code boxId} chỉ đi vào thông điệp lỗi — nhưng nó phải đi vào: "isolate --cleanup
+     * thất bại" mà không nói box nào là một dòng log không hành động được, và lúc tắt máy thì
+     * có sáu box đang được dọn cùng lúc.
+     */
+    private static String chayLenhDieuKhien(List<String> argv, String what, int boxId) {
         try {
             Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
             String output;

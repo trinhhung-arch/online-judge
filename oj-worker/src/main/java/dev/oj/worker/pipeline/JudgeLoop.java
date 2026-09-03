@@ -5,6 +5,7 @@ import dev.oj.contract.JudgeJobDto;
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.worker.client.JudgeApiClient;
 import dev.oj.worker.client.JudgeApiClient.JudgeApiException;
+import dev.oj.worker.client.JudgeDoorbell;
 import dev.oj.worker.client.ResultBuffer;
 import dev.oj.worker.config.WorkerProperties;
 import dev.oj.worker.run.JudgeRunner;
@@ -34,11 +35,17 @@ import java.util.concurrent.TimeUnit;
  * sẽ throttle, và bài phút thứ 90 chấm chậm hơn bài phút thứ 5 — mất công bằng ngay giữa
  * contest, mà không ai nhận ra (ADR 008).
  *
- * <h2>Hàng đợi rỗng thì ngủ, không quay vòng</h2>
+ * <h2>Hàng đợi rỗng thì chờ, không quay vòng</h2>
  * {@code 204} nghĩa là hết việc. Hỏi lại ngay lập tức là sáu luồng quay tít đốt CPU và dội
- * request vào API — đúng lúc rảnh việc thì lại tốn nhiều tài nguyên nhất. Nhịp
- * {@code oj.worker.idle-poll} là độ trễ giao việc phải trả ở M1; M6 đổi sang RabbitMQ push
- * và độ trễ đó biến mất.
+ * request vào API — đúng lúc rảnh việc thì lại tốn nhiều tài nguyên nhất.
+ *
+ * <p><b>M6 · Bước 6.4:</b> nhịp ngủ {@code oj.worker.idle-poll} trở thành một lần
+ * {@link JudgeDoorbell#cho} — dậy ngay khi API gõ cửa qua RabbitMQ, và <i>vẫn</i> dậy sau
+ * {@code idlePoll} nếu không có tiếng nào. Vế thứ hai là thứ giữ cho bước 6.4 an toàn: broker
+ * chết thì worker quay về đúng hành vi M1. Xem javadoc {@code JudgeDoorbell}.
+ *
+ * <h2>Tắt máy êm — Bước 6.8, A3</h2>
+ * {@link #stop()} <b>không</b> gọi {@code shutdownNow()} nữa. Xem javadoc của nó.
  */
 @Component
 public class JudgeLoop implements SmartLifecycle {
@@ -48,16 +55,18 @@ public class JudgeLoop implements SmartLifecycle {
     private final JudgeApiClient api;
     private final JudgeRunner runner;
     private final ResultBuffer results;
+    private final JudgeDoorbell chuong;
     private final WorkerProperties properties;
 
     private ExecutorService slots;
     private volatile boolean running;
 
     public JudgeLoop(JudgeApiClient api, JudgeRunner runner, ResultBuffer results,
-                     WorkerProperties properties) {
+                     JudgeDoorbell chuong, WorkerProperties properties) {
         this.api = api;
         this.runner = runner;
         this.results = results;
+        this.chuong = chuong;
         this.properties = properties;
     }
 
@@ -89,7 +98,10 @@ public class JudgeLoop implements SmartLifecycle {
             try {
                 Optional<JudgeJobDto> job = api.claim(request);
                 if (job.isEmpty()) {
-                    sleep(properties.idlePoll());     // hàng đợi rỗng
+                    // Hàng đợi rỗng: chờ tiếng chuông, tối đa idlePoll. Bước 6.4.
+                    if (!chuong.cho(properties.idlePoll())) {
+                        return;      // bị ngắt -> đang tắt máy
+                    }
                     continue;
                 }
                 judge(job.get());
@@ -144,21 +156,52 @@ public class JudgeLoop implements SmartLifecycle {
         }
     }
 
+    /**
+     * ★ Bước 6.8 — SIGTERM: ngừng nhận job mới, <b>chấm nốt bài đang chạy</b>, rồi mới thoát.
+     *
+     * <h2>Bản M1 gọi {@code shutdownNow()}, và đó là một lỗi thật</h2>
+     * {@code shutdownNow()} <b>ngắt</b> mọi luồng đang chạy — kể cả sáu slot đang chấm dở.
+     * Mỗi lần deploy worker là sáu bài bị cắt ngang giữa chừng: chúng không mất (lease 120s
+     * hết hạn thì reaper giao lại), nhưng người nộp chờ thêm hai phút cho một verdict mà máy
+     * đã tính gần xong. Nhân với một lần deploy giữa contest thì đó là A3 bị phá:
+     * <i>"deploy worker: 0 bài mất"</i> đúng theo nghĩa đen, sai theo nghĩa người dùng thấy.
+     *
+     * <p>{@code shutdown()} thì ngược lại: không nhận việc mới, để luồng đang chạy làm nốt.
+     *
+     * <h2>Ba việc, đúng thứ tự — {@code oj-worker/CLAUDE.md} mục 5</h2>
+     * <ol>
+     *   <li>{@code running = false} — slot nào xong bài hiện tại thì thoát, không claim nữa.</li>
+     *   <li>{@link JudgeDoorbell#reo()} — <b>đánh thức slot đang chờ chuông</b>. Không có dòng
+     *       này thì một worker rảnh việc phải nằm hết {@code idlePoll} rồi mới thấy cờ đã đổi,
+     *       và mỗi lần tắt máy đội thêm chừng ấy thời gian mà không vì lý do gì.</li>
+     *   <li>Chờ tới {@code shutdown-grace}. Hết hạn mà còn slot chạy thì mới cắt — một bài
+     *       chấm lâu bất thường không được giữ tiến trình lại vô hạn.</li>
+     * </ol>
+     *
+     * <p>Việc gửi nốt kết quả và dọn box nằm ở {@code GracefulShutdown}, chạy <b>sau</b> lớp
+     * này (phase thấp hơn).
+     */
     @Override
     public void stop() {
         running = false;
-        if (slots != null) {
-            slots.shutdownNow();
-            try {
-                if (!slots.awaitTermination(10, TimeUnit.SECONDS)) {
-                    log.warn("Còn slot chưa dừng sau 10 giây");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        chuong.reo();
+        if (slots == null) {
+            return;
         }
-        log.info("JudgeLoop dừng. Tắt máy êm đầy đủ — chấm nốt bài đang chạy rồi mới thoát — "
-                + "là Bước 6.8 (A3: deploy worker không mất bài).");
+        Duration anHan = properties.shutdownGrace();
+        slots.shutdown();
+        try {
+            if (slots.awaitTermination(anHan.toMillis(), TimeUnit.MILLISECONDS)) {
+                log.info("Mọi slot đã chấm xong bài của mình và dừng.");
+                return;
+            }
+            log.warn("Còn slot đang chấm sau {} — cắt. Những bài đó sẽ được reaper giao lại "
+                    + "sau khi lease {} hết hạn.", anHan, properties.lease());
+            slots.shutdownNow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            slots.shutdownNow();
+        }
     }
 
     @Override

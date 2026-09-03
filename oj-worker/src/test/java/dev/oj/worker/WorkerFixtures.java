@@ -55,8 +55,11 @@ public final class WorkerFixtures {
     /** Nhịp retry là thứ duy nhất test khác nhau cần chỉnh — nó quyết định test chạy bao lâu. */
     public static WorkerProperties properties(Path cacheDir, Duration retryMin, Duration retryMax) {
         return new WorkerProperties("may-test", "arm64", 6,
-                Duration.ofSeconds(120), Duration.ofMillis(10), Duration.ofSeconds(5),
-                retryMin, retryMax,
+                Duration.ofSeconds(120), Duration.ofMillis(10),
+                // Bước 6.8 — ân hạn tắt máy. Ngắn trong test: không ca nào ở đây cần chờ
+                // một bài chấm xong, và một test chờ 30 giây là một test sẽ bị @Disabled.
+                Duration.ofMillis(200),
+                Duration.ofSeconds(5), retryMin, retryMax,
                 "http://localhost:8080", "x".repeat(32), new BigDecimal("1.000"),
                 sandbox(cacheDir));
     }

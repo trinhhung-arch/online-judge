@@ -115,4 +115,17 @@ public class IdentityException extends DomainException {
                 "ADMIN tự ẩn danh hoá mình sẽ tự khoá quyền quản trị và có thể để lại hệ "
                         + "thống không còn ADMIN nào");
     }
+
+    /**
+     * FR-ADM-03 — ADMIN không tự đổi vai trò và không tự vô hiệu hoá mình.
+     *
+     * <p>Cùng lý do với {@link #khongTheAnDanhChinhMinh()}: hệ thống có thể còn đúng một
+     * ADMIN, và thao tác ấy khoá vĩnh viễn mọi đường quản trị. Không có "quên mật khẩu" nào
+     * lấy lại được một vai trò.
+     */
+    public static IdentityException khongTuThaoTacVoiMinh(String thaoTac) {
+        return new IdentityException(Kind.CONFLICT, "identity.tu_thao_tac",
+                "Không thể tự " + thaoTac + " tài khoản đang dùng để thực hiện thao tác này.",
+                "ADMIN tự " + thaoTac + " có thể để lại hệ thống không còn ADMIN nào");
+    }
 }

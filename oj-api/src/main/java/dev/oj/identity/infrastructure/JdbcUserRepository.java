@@ -78,6 +78,17 @@ public class JdbcUserRepository implements UserRepository {
              WHERE id = :id
             """;
 
+    /** FR-ADM-03. Điều kiện ANONYMIZED nằm trong SQL — xem javadoc của port. */
+    private static final String DOI_VAI_TRO = """
+            UPDATE users SET role = :vaiTro
+             WHERE id = :id AND status <> 'ANONYMIZED'
+            """;
+
+    private static final String DOI_TRANG_THAI = """
+            UPDATE users SET status = :trangThai
+             WHERE id = :id AND status <> 'ANONYMIZED'
+            """;
+
     private static final String DOI_MAT_KHAU = """
             UPDATE users SET password_hash = :passwordHash WHERE id = :id
             """;
@@ -199,5 +210,16 @@ public class JdbcUserRepository implements UserRepository {
     private static Short ngonNgu(ResultSet rs) throws SQLException {
         short value = rs.getShort("preferred_language_id");
         return rs.wasNull() ? null : value;
+    }
+
+    @Override
+    public boolean doiVaiTro(long userId, String vaiTroMoi) {
+        return jdbc.sql(DOI_VAI_TRO).param("vaiTro", vaiTroMoi).param("id", userId).update() > 0;
+    }
+
+    @Override
+    public boolean doiTrangThai(long userId, String trangThaiMoi) {
+        return jdbc.sql(DOI_TRANG_THAI).param("trangThai", trangThaiMoi)
+                .param("id", userId).update() > 0;
     }
 }

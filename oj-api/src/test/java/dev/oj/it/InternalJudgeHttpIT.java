@@ -36,6 +36,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class InternalJudgeHttpIT extends PostgresIT {
 
+    /**
+     * Bản sao của {@code HttpIT.THAN_JSON}. Lớp này kế thừa {@link PostgresIT} chứ không phải
+     * {@code HttpIT} — nó tự dựng client cho cổng nội bộ, nơi xác thực bằng shared secret chứ
+     * không bằng JWT, nên các helper của {@code HttpIT} (đều gắn với {@code Authorization:
+     * Bearer}) không dùng được ở đây.
+     */
+    private static final org.springframework.core.ParameterizedTypeReference<
+            java.util.Map<String, Object>> THAN_JSON =
+            new org.springframework.core.ParameterizedTypeReference<>() {
+            };
+
     private static final String SECRET = "x".repeat(32);   // khớp PostgresIT
 
     @LocalServerPort
@@ -56,7 +67,7 @@ class InternalJudgeHttpIT extends PostgresIT {
                 .header("Authorization", bearerDev())
                 .body(Map.of("problemId", PROBLEM_ID, "languageCode", "cpp20",
                         "source", "// EXPECT: AC\nint main(){return 0;}"))
-                .retrieve().toEntity(Map.class);
+                .retrieve().toEntity(THAN_JSON);
 
         assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(accepted.getBody()).containsEntry("status", "QUEUED")
@@ -87,10 +98,9 @@ class InternalJudgeHttpIT extends PostgresIT {
                 .isEqualTo(HttpStatus.NO_CONTENT);
 
         // ---- 5. Người dùng đọc verdict ----
-        @SuppressWarnings("unchecked")
         Map<String, Object> detail = http.get().uri("/api/v1/submissions/" + submissionId)
                 .header("Authorization", bearerDev())
-                .retrieve().body(Map.class);
+                .retrieve().body(THAN_JSON);
 
         assertThat(detail).containsEntry("status", "DONE").containsEntry("verdict", "AC");
         assertThat(detail).containsEntry("timeMs", 230);          // 234 làm tròn 10ms

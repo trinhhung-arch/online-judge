@@ -18,7 +18,7 @@ import java.util.Map;
  * @param totalItems  {@code null} khi handler chưa biết tổng — ví dụ trước khi đọc xong mục lục
  *                    của file ZIP. UI hiện "đang chuẩn bị" thay vì một thanh tiến độ nói dối
  * @param leaseOwner  instance nào đang giữ job. Hai instance API không được cùng chạy một job,
- *                    và {@code ux_jobs_one_active_per_type} một mình không đủ — nó chỉ chặn
+ *                    và {@code ux_jobs_one_active_per_entity} một mình không đủ — nó chỉ chặn
  *                    hai job, không chặn hai instance chạy cùng một job
  * @param errorMessage <b>câu cho người vận hành đọc</b>. Không đưa stack trace vào đây: bảng
  *                    này ADMIN xem được (FR-ADM-02) và nó chịu đúng bất biến #9 như log

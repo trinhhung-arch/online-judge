@@ -56,7 +56,9 @@ public final class AppPropertiesGia {
         return new AppProperties(
                 submission,
                 new AppProperties.Judge(Duration.ofSeconds(120), Duration.ofSeconds(15),
-                        2, 20, "mac-m1max-host"),
+                        2, 20, "mac-m1max-host", Duration.ofMinutes(30), 5.0,
+                        Duration.ofSeconds(10),
+                        new AppProperties.Rejudge(2, Duration.ofSeconds(5), 200)),
                 new AppProperties.Page(20, 50),
                 internal,
                 new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),

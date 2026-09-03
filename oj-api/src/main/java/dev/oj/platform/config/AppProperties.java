@@ -130,7 +130,11 @@ public record AppProperties(
             Duration reaperInterval,
             int maxIeRetries,
             int resultBatchSize,
-            String referenceHostName) {
+            String referenceHostName,
+            Duration hostLiveness,
+            double throughputEstimate,
+            Duration metricsInterval,
+            Rejudge rejudge) {
 
         public Judge {
             if (lease == null || lease.isZero() || lease.isNegative()) {
@@ -145,6 +149,18 @@ public record AppProperties(
             if (maxIeRetries < 0) {
                 throw new IllegalStateException("oj.judge.max-ie-retries phải >= 0");
             }
+            if (hostLiveness == null || hostLiveness.isZero() || hostLiveness.isNegative()) {
+                throw new IllegalStateException("oj.judge.host-liveness không hợp lệ");
+            }
+            if (metricsInterval == null || metricsInterval.isZero()
+                    || metricsInterval.isNegative()) {
+                throw new IllegalStateException("oj.judge.metrics-interval không hợp lệ");
+            }
+            if (throughputEstimate <= 0) {
+                throw new IllegalStateException(
+                        "oj.judge.throughput-estimate phải > 0 — nó là mẫu số của phép chia "
+                                + "tính 'thời gian chờ ước tính' (FR-ADM-05)");
+            }
             if (resultBatchSize != JudgeProgressDto.BATCH_SIZE) {
                 throw new IllegalStateException(
                         "oj.judge.result-batch-size = " + resultBatchSize
@@ -156,6 +172,40 @@ public record AppProperties(
         /** Giây, để ghép thẳng vào tham số {@code :leaseSeconds} của truy vấn claim. */
         public int leaseSeconds() {
             return (int) lease.toSeconds();
+        }
+    }
+
+    /**
+     * Điều tiết chấm lại hàng loạt — FR-ADM-01, Bước 6.3. Luật nằm ở
+     * {@code judging.domain.RejudgeJob}; đây chỉ là ba con số.
+     *
+     * @param maxInFlight    trần số dòng rejudge được nằm chờ trong {@code judge_queue} cùng
+     *                       lúc. <b>Đây là cách viết "30% năng lực chấm" thành một con số
+     *                       kiểm được</b>: mỗi dòng chờ là nhiều nhất một judge slot có thể
+     *                       bận vì rejudge, nên 2 trên 6 slot là 33%. Đổi số slot ở
+     *                       {@code oj-worker} thì phải đổi số này — {@code HopDongVanHanhTest}
+     *                       đọc cả hai file yml và đối chiếu, để hai con số không lệch nhau
+     *                       trong im lặng
+     * @param liveWaitBrake  bài nộp trực tiếp chờ lâu hơn ngần này thì rejudge về 0. Khớp
+     *                       P6 (p95 queue_wait &lt; 5s) của {@code nfrplan.md} Phần 1
+     * @param batchSize      bất biến #8 — mọi truy vấn đều có {@code LIMIT}
+     */
+    public record Rejudge(int maxInFlight, Duration liveWaitBrake, int batchSize) {
+
+        public Rejudge {
+            if (maxInFlight < 1) {
+                throw new IllegalStateException(
+                        "oj.judge.rejudge.max-in-flight phải >= 1, nhận " + maxInFlight
+                                + ". Đặt 0 để tắt rejudge là sai chỗ: dùng công tắc "
+                                + "system_settings['rejudge.enabled'], thứ ADMIN đổi được "
+                                + "lúc đang chạy mà không deploy lại");
+            }
+            if (liveWaitBrake == null || liveWaitBrake.isNegative()) {
+                throw new IllegalStateException("oj.judge.rejudge.live-wait-brake không hợp lệ");
+            }
+            if (batchSize < 1) {
+                throw new IllegalStateException("oj.judge.rejudge.batch-size phải >= 1");
+            }
         }
     }
 

@@ -124,4 +124,50 @@ public class JudgingException extends DomainException {
                 "Tham số phân trang không hợp lệ.",
                 "cursor không phải số nguyên: " + cursor);
     }
+
+    /**
+     * FR-ADM-06 — chế độ bảo trì: ADMIN đã tắt công tắc {@code submissions.accepting}.
+     *
+     * <h2>503, không phải 403</h2>
+     * Người dùng không làm gì sai và không cần đổi gì cả — họ chỉ cần quay lại sau. 403 nói
+     * "bạn không được phép", và nó sai: mọi người đều không được phép, kể cả ADMIN. 503 là
+     * câu duy nhất mà cả trình duyệt lẫn con người đọc ra cùng một nghĩa.
+     *
+     * <p><b>Bài đang chấm vẫn chấm xong.</b> Công tắc này chỉ chặn cửa vào; nó không đụng tới
+     * {@code judge_queue}, nên mọi bài đã commit vẫn đi hết đường của nó (FR-ADM-06, R1).
+     */
+    public static JudgingException dangBaoTri() {
+        return new JudgingException(
+                Kind.UNAVAILABLE,
+                "submission.maintenance",
+                "Hệ thống đang tạm ngừng nhận bài nộp để bảo trì. "
+                        + "Bài đã nộp trước đó vẫn đang được chấm bình thường.",
+                "system_settings['submissions.accepting'] = false");
+    }
+
+    /**
+     * FR-ADM-01 — cấm rejudge khi có kỳ thi đang diễn ra.
+     *
+     * <p>Chốt này nằm ở use-case chứ không ở nút bấm: rejudge một đề giữa contest đẩy hàng
+     * nghìn bài vào cùng hàng đợi với bài nộp trực tiếp, và thí sinh chờ nửa tiếng cho một
+     * verdict ({@code frplan.md} mâu thuẫn 3.2). Giới hạn 30% năng lực cũng không cứu được
+     * điều đó, vì thứ bị phá không phải throughput mà là <b>tính công bằng</b> — bài nộp phút
+     * thứ 90 chấm chậm hơn bài phút thứ 5.
+     */
+    public static JudgingException rejudgeTrongKyThi() {
+        return new JudgingException(
+                Kind.CONFLICT,
+                "rejudge.contest_dang_chay",
+                "Đang có kỳ thi diễn ra. Chấm lại hàng loạt chỉ chạy được khi không kỳ thi nào mở.",
+                "FR-ADM-01: ContestWindowQuery.coKyThiDangChay() = true");
+    }
+
+    /** Phanh tay {@code system_settings['rejudge.enabled']} đang tắt. */
+    public static JudgingException rejudgeDaTat() {
+        return new JudgingException(
+                Kind.CONFLICT,
+                "rejudge.da_tat",
+                "Chấm lại hàng loạt đang bị tắt trên toàn hệ thống.",
+                "system_settings['rejudge.enabled'] = false");
+    }
 }

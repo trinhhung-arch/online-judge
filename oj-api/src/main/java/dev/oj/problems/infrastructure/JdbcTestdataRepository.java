@@ -15,6 +15,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcTestdataRepository implements TestdataRepository {
 
+    private static final String SHA_CUA_PHIEN_BAN = """
+            SELECT tv.manifest_sha256
+              FROM testdata_versions tv
+              JOIN problems p ON p.id = tv.problem_id
+             WHERE tv.problem_id = :problemId
+               AND tv.version = COALESCE(CAST(:version AS integer), p.current_testdata_version)
+            """;
+
     private static final String PHIEN_BAN_KE_TIEP = """
             SELECT COALESCE(max(version), 0) + 1
               FROM testdata_versions
@@ -111,5 +119,21 @@ public class JdbcTestdataRepository implements TestdataRepository {
     @Override
     public void kichHoatPhienBan(long problemId, int version) {
         jdbc.sql(KICH_HOAT).param("version", version).param("problemId", problemId).update();
+    }
+
+    /**
+     * FR-PROB-12. {@code version IS NULL} -> phiên bản đang hoạt động của đề.
+     *
+     * <p>{@code CAST(:version AS integer)} bắt buộc: thiếu nó, Postgres không suy được kiểu
+     * của tham số {@code NULL} và trả {@code could not determine data type of parameter} —
+     * đúng lỗi 500 đã gặp ở danh sách đề tại M4.
+     */
+    @Override
+    public java.util.Optional<String> shaCuaPhienBan(long problemId, Integer version) {
+        return jdbc.sql(SHA_CUA_PHIEN_BAN)
+                .param("problemId", problemId)
+                .param("version", version)
+                .query(String.class)
+                .optional();
     }
 }

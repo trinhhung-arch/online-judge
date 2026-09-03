@@ -135,12 +135,12 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | M3 | realtime (SSE + Redis), subtask, feedback level | xong |
 | **M4** | auth, quyền, upload đề, MinIO, giao diện | **xong 4.1–4.12** (xem dưới) |
 | **M5** | kỳ thi, bảng xếp hạng | **xong 5.1–5.11** (xem dưới) |
-| M6 | RabbitMQ, giám sát, deploy | chưa |
+| **M6** | RabbitMQ, giám sát, vận hành | **xong 6.1–6.15** (xem dưới) |
 
 ```
-./mvnw verify   →   463 test xanh, ~2 phút
-                    oj-api     254 unit + 118 IT (Postgres 16 + Redis 7 thật, Testcontainers)
-                    oj-worker   65 unit + 26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
+./mvnw verify   →   541 test xanh, ~4 phút
+                    oj-api     287 unit + 157 IT (Postgres 16 + Redis 7 thật, Testcontainers)
+                    oj-worker   71 unit +  26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
 ```
 
 ### M4 — toàn bộ 12 bước
@@ -220,6 +220,81 @@ và PHẦN 7 không liệt kê nó trong 5.1–5.11.
 > cả hệ thống — trang đầu tiên phải đọc trong buổi tấn công chéo tuần 9.
 
 ---
+
+### M6 — toàn bộ 15 bước
+
+| Bước | Nội dung | Bằng chứng |
+|---|---|---|
+| 6.1 | migration **V8** (phân quyền `oj_app`) + **V9** (một job đang sống mỗi *thực thể*) | `MigrationTrenDuLieuCoSanIT` — chạy tới V8, chèn dữ liệu, rồi migrate tiếp. Kiểm tay dưới role `oj_app` thật: 6 lệnh bị từ chối, 3 lệnh phải chạy được thì chạy được |
+| 6.2 | khung job nền — **đã có từ M4**; M6 thêm luồng riêng + trạng thái `PAUSED` | `JobsIT` · `RejudgeIT` |
+| 6.3 | ★ `RejudgeJob`: hai hàng đợi · trần 30% · phanh khi live chờ >5s · cấm khi có kỳ thi | `RejudgeJobTest` 9 (domain thuần) · `RejudgeIT` 6 · `AdminJudgingUseCasesTest` 8 |
+| 6.4 | ★ Postgres queue → RabbitMQ: quorum queue · `prefetch=1` · ack tay · DLQ sau 3 lần | `RabbitJudgeJobPublisherTest` 4 · `JudgeDoorbellTest` 3 · kiểm tay: 3 quorum queue, 1 consumer mỗi hàng |
+| 6.5 | `audit_log` đọc được (ADMIN, phân trang) + job tạo partition hàng tháng | `VanHanhIT` — gồm ca phân trang khi trùng mốc thời gian |
+| 6.6 | `AdminUserController`: đổi vai trò, vô hiệu hoá — **không xoá cứng** | `AccountManagementUseCasesTest` 6 |
+| 6.7 | `/actuator/health` thật: cả **hai** pool Postgres · Redis · RabbitMQ · máy chấm sống | `SuyGiamIT` · kiểm tay ở cổng 8081 |
+| 6.8 | tắt worker êm bằng SIGTERM | `WorkerContextSmokeTest` · kiểm tay: SIGTERM → "Mọi slot đã chấm xong bài của mình và dừng" |
+| 6.9 | degraded mode 5 kịch bản | `SuyGiamIT` 5 · `CodingRulesTest` LUẬT 9 (MinIO) |
+| 6.10 | Micrometer P1–P8 + `GET /api/v1/admin/ops` | `VanHanhHttpIT` · kiểm tay: 9 ô số liệu |
+| 6.11 | trang trạng thái công khai — truy vấn 12, đếm trên `judge_queue` | `VanHanhHttpIT` — gồm ca "không lộ mã đề hay submissionId nào" |
+| 6.12 | công tắc `submissions.accepting` | `VanHanhHttpIT` — gồm ca "bài đang chấm vẫn chấm xong" |
+| 6.13 | `HideSubmission` + FR-SUB-12 hoàn chỉnh (gõ cửa sau khi IE quay lại hàng đợi) | `AdminJudgingUseCasesTest` · `RecordJudgeResultUseCaseTest` +2 |
+| 6.14 | FR-PROB-10/11/12 | kiểm tay: nạp testdata phiên bản 2 → job `REJUDGE` **tự sinh** với `total_items: 6` |
+| 6.15 | đếm query chống N+1, JDK thuần | `DemQuery` (80 dòng, `java.lang.reflect.Proxy`) · `DemQueryIT` — 30 dòng dữ liệu vẫn ≤2 truy vấn |
+
+**Bước 6.4 chạm đúng hai file phía API** (`RabbitJudgeJobPublisher`, `NoopJudgeJobPublisher`)
+— con số mà `build-order.md` đặt làm thước đo cho việc M1 có làm đúng hay không. Không một
+use-case nào, không một câu SQL nào phải sửa.
+
+**Thông điệp là một *tiếng chuông*, không phải một gói việc.** Thân message chỉ có
+`submissionId`, và worker không dùng con số đó để chọn bài — nó vẫn gọi `claim`. Nhờ vậy
+`oj-contract` không đổi một dòng, mã nguồn người dùng không vào ổ đĩa của broker, và message
+không bao giờ cũ khi reaper tăng `attempt`. Đổi lại, mệnh đề *"ack sau khi kết quả đã vào DB"*
+của Bước 6.4 không áp dụng nguyên văn: ack xảy ra sau khi rung chuông. Bảo đảm mà nó nhắm tới
+vẫn còn và **mạnh hơn** — nó do `judge_queue` + lease 120s + reaper cung cấp, không do broker.
+
+### Kill RabbitMQ — bài test quan trọng nhất sau Bước 6.4
+
+```
+docker compose stop rabbitmq
+  nộp #1..#5  →  202 trong 0.019–0.031s      hàng đợi: 4 → 9, không mất bài nào
+  log:           đúng MỘT dòng WARN, không phải năm
+docker compose start rabbitmq
+  log:           "RabbitMQ đã trở lại — gõ cửa hoạt động lại."
+```
+
+Một dòng WARN thay vì năm là nhờ cầu dao trong `RabbitJudgeJobPublisher`. Nuốt ngoại lệ giữ
+cho bài nộp **đúng**; nó không giữ cho bài nộp **nhanh**. Mỗi lần publish vẫn phải mở một kết
+nối TCP rồi chờ nó hỏng, và timeout mặc định của Spring AMQP là **60 giây** — với nó, P2
+không còn là 300ms mà là một sự cố toàn hệ thống. Hai lớp chữa:
+`spring.rabbitmq.connection-timeout: 200ms` là trần cho một lần thử, cầu dao là thứ khiến chỉ
+có một lần thử mỗi 10 giây.
+
+### Năm lỗi chỉ hiện ra ở M6 — và hai trong số đó đã sống từ M1
+
+| Lỗi | Sống từ | Vì sao không test nào thấy | Đã chốt lại bằng |
+|---|---|---|---|
+| ★ **Tiến trình `oj-worker` chưa từng khởi động được** — không bean `RestClient.Builder` | M1 | mọi test của `oj-worker` dựng đối tượng bằng `new`; **không test nào dựng Spring context** | `JudgeApiClientConfig` + `WorkerContextSmokeTest` |
+| ★ `LocalDirectoryTestdataSource` không bao giờ được đăng ký — `@ConditionalOnMissingBean` trên một `@Component` | M2 | như trên. Annotation ấy **chỉ đáng tin trong auto-configuration** | gỡ annotation; xung đột hai hiện thực giờ hỏng ồn ào, đúng ý định ban đầu |
+| `JobRunner` chạy job **đồng bộ trên luồng lập lịch chung** với reaper | M4 | pool `spring.task.scheduling` mặc định có **một** luồng; một job nạp 200MB chặn reaper suốt thời gian đó → bài kẹt `JUDGING` quá 120s mà không ai thu hồi (R1) | executor riêng, cùng cách `SseHeartbeat` đã làm ở M3 |
+| Con trỏ phân trang `audit_log` cắt xuống **mili** giây | M6 | `timestamptz` có độ chính xác **micro** giây → trang hai thiếu dòng, và chỉ thiếu khi các bản ghi rơi vào cùng một mili giây | ca `cung_mili_khac_micro_khong_bo_sot`, đã kiểm chứng bằng cách trả lại lỗi cũ |
+| Cache `system_settings` nhớ **mặc định của người gọi đầu tiên** | M6 | khoá vắng mặt + hai người gọi có hai mặc định khác nhau → mượn mặc định của nhau. `ai_review.enabled` mặc định `false`, `submissions.accepting` mặc định `true` | cache giữ ba trạng thái: `true` · `false` · *không có* |
+
+Hai lỗi đầu cùng một nguyên nhân, và nó đáng nói thẳng: **một bộ test toàn unit test không
+trả lời được câu hỏi "tiến trình này có chạy được không"** — với một hệ thống hai tiến trình
+thì đó là câu hỏi quan trọng thứ hai, ngay sau tính đúng đắn. `oj-worker` có gần một trăm
+test và không cái nào hỏi câu ấy.
+
+Ngoài bảng: sai tên phần multipart trả **500 "có lỗi phía hệ thống"** thay vì 400, và kho
+MinIO chết bị phân loại **400 thay vì 503** — cả hai đều là phân loại sai làm một sự cố hạ
+tầng biến mất khỏi mọi biểu đồ theo dõi.
+
+### Ba con số của M6
+
+| | |
+|---|---|
+| trần rejudge | **2 trên 6 slot** = 30% năng lực. `HopDongVanHanhTest` đọc cả `oj-api` lẫn `oj-worker/application.yml` và đỏ khi hai con số lệch nhau |
+| `/actuator/**` | cổng **8081**, không phải 8080 — Cloudflare Tunnel chỉ publish 8080, nên nó không có lối vào từ internet. Cùng cơ chế đã dùng cho `/internal/judge/*` |
+| health | `/actuator/health` cho **người** (gộp mọi thành phần) · `/actuator/health/sanSang` cho **máy** (chỉ Postgres). Bảng degraded mode có năm thành phần và đúng một trong năm là chí mạng; trả 503 cho bốn cái còn lại là bảo bộ giám sát restart một API đang chạy đúng |
 
 ## Baseline sandbox — Bước 2.10
 
