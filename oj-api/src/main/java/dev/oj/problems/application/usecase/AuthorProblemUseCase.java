@@ -68,7 +68,8 @@ public class AuthorProblemUseCase {
                 StatementService.bam(lenh.statementMd()),
                 lenh.timeLimitMs(), lenh.memoryLimitKb(),
                 lenh.checkerType(), lenh.checkerEpsilon(),
-                lenh.scoringMode(), lenh.feedbackLevel(), ownerId));
+                lenh.scoringMode(), lenh.feedbackLevel(), ownerId,
+                lenh.allowPublicSolutions()));
         auditLog.ghi("PROBLEM_CREATED", "problem", id, Map.of("code", lenh.code().trim()));
         return id;
     }

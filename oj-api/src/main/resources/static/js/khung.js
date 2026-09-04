@@ -40,6 +40,14 @@ export function veThanh() {
     // đăng nhập là một link nói dối về nơi nó dẫn tới.
     const muc = [['/', 'Đề bài'], ['/contests.html', 'Kỳ thi']];
     if (p) muc.push(['/bai-nop.html', 'Bài nộp của tôi']);
+    // Trang theo vai trò. Đây KHÔNG phải phân quyền — mỗi use-case tự kiểm (bất biến #11).
+    // Nó chỉ tránh bày ra một link mà bấm vào là 403: mời rồi từ chối là một cách nói dối
+    // về những gì người ta làm được.
+    if (p?.role === 'SETTER' || p?.role === 'ADMIN') muc.push(['/ra-de.html', 'Soạn đề']);
+    if (p?.role === 'ADMIN') {
+        muc.push(['/quan-tri.html', 'Vận hành']);
+        muc.push(['/nhat-ky.html', 'Nhật ký']);
+    }
     muc.push(['/trang-thai.html', 'Trạng thái']);
 
     for (const [href, nhan] of muc) {

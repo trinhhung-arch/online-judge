@@ -51,12 +51,18 @@ public interface ProblemAuthoringRepository {
                          Instant luc);
 
     /** Đầu vào tạo đề — FR-PROB-01. */
+    /**
+     * @param allowPublicSolutions phải có mặt ở đây dù {@link ProblemEdit} cũng có nó. Bản đầu
+     *                             chỉ để nó ở đường SỬA, nên một đề tạo ra với cờ bật vẫn nằm
+     *                             ở {@code false} cho tới lần lưu đầu tiên — và không có gì
+     *                             báo, vì cột mang {@code DEFAULT FALSE}
+     */
     record NewProblem(
             String code, String title, String statementMd, String statementHash,
             int timeLimitMs, int memoryLimitKb,
             CheckerType checkerType, BigDecimal checkerEpsilon,
             ScoringMode scoringMode, FeedbackLevel feedbackLevel,
-            long ownerId) {
+            long ownerId, boolean allowPublicSolutions) {
     }
 
     /**

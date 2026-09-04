@@ -40,13 +40,33 @@ class GiaoDienIT extends HttpIT {
                 .exchange((req, res) -> res.getStatusCode(), false);
     }
 
+    /**
+     * ★ Quét thư mục, KHÔNG chép tay danh sách trang.
+     *
+     * <p>Bản đầu liệt kê năm trang bằng tay. Đợt 1 và Đợt 2 thêm bảy trang nữa mà không ai
+     * sửa danh sách ấy — nên suốt hai đợt, "trang có phục vụ được không" là câu không ai
+     * hỏi. Một danh sách chép tay trong test là một danh sách sẽ lạc hậu, và nó lạc hậu
+     * đúng theo hướng làm test dễ xanh hơn.
+     */
     @Test
-    @DisplayName("★ Spring phục vụ trang tĩnh — trang gốc và cả bốn trang con")
-    void trang_tinh_duoc_phuc_vu() {
-        for (String duongDan : List.of(
-                "/", "/index.html", "/login.html", "/problem.html", "/submission.html",
-                "/css/app.css", "/js/api.js", "/js/khung.js", "/js/sse.js",
-                "/js/editor.js", "/js/nhap.js")) {
+    @DisplayName("★ Spring phục vụ MỌI trang tĩnh có trong thư mục")
+    void trang_tinh_duoc_phuc_vu() throws Exception {
+        List<String> canPhucVu = new java.util.ArrayList<>(List.of(
+                "/", "/css/app.css", "/js/api.js", "/js/khung.js", "/js/sse.js",
+                "/js/editor.js", "/js/nhap.js"));
+
+        try (var trang = Files.list(GOC)) {
+            trang.filter(f -> f.toString().endsWith(".html"))
+                    .map(f -> "/" + f.getFileName())
+                    .sorted()
+                    .forEach(canPhucVu::add);
+        }
+
+        assertThat(canPhucVu)
+                .as("không quét thấy trang HTML nào — GOC trỏ sai chỗ?")
+                .hasSizeGreaterThan(10);
+
+        for (String duongDan : canPhucVu) {
             assertThat(lay(duongDan))
                     .describedAs("Spring không phục vụ %s — kiểm classpath:/static/", duongDan)
                     .isEqualTo(HttpStatus.OK);

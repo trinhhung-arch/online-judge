@@ -38,6 +38,35 @@ export const DUONG = {
 
     de: {
         theoMa: (ma) => `/api/v1/problems/${encodeURIComponent(ma)}`,
+
+        // ★ Soạn đề dùng problemId (SỐ), còn trang đề dùng code (CHỮ). Hai định danh cho
+        // cùng một thứ, và server không nhận lẫn: `/problems/A-PLUS-B` là bài đã xuất bản,
+        // `/problems/12/edit` là bản nháp. Trộn hai cái là 404 mà không ai hiểu vì sao.
+        tao:      '/api/v1/problems',
+        sua:      (id) => `/api/v1/problems/${encodeURIComponent(id)}`,
+        soan:     (id) => `/api/v1/problems/${encodeURIComponent(id)}/edit`,
+        xuatBan:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/publish`,
+        goXuong:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/retire`,
+        testdata: (id) => `/api/v1/problems/${encodeURIComponent(id)}/testdata`,
+    },
+
+    viec: {
+        theoId: (id) => `/api/v1/jobs/${encodeURIComponent(id)}`,
+        huy:    (id) => `/api/v1/jobs/${encodeURIComponent(id)}/cancel`,
+        cuaToi: '/api/v1/jobs',
+    },
+
+    quanTri: {
+        bangDieuKhien: '/api/v1/admin/ops',
+        chamLai:  (id) => `/api/v1/admin/problems/${encodeURIComponent(id)}/rejudge`,
+        anBai:    (id) => `/api/v1/admin/submissions/${encodeURIComponent(id)}/hide`,
+        hienBai:  (id) => `/api/v1/admin/submissions/${encodeURIComponent(id)}/unhide`,
+        vaiTro:   (id) => `/api/v1/admin/users/${encodeURIComponent(id)}/role`,
+        hoatDong: (id) => `/api/v1/admin/users/${encodeURIComponent(id)}/active`,
+        anDanh:   (id) => `/api/v1/admin/users/${encodeURIComponent(id)}/anonymize`,
+
+        congTac:    '/api/v1/admin/settings',
+        datCongTac: (khoa) => `/api/v1/admin/settings/${encodeURIComponent(khoa)}`,
     },
 
     baiNop: {
@@ -71,6 +100,7 @@ export const DS = {
     de:     { url: '/api/v1/problems',    khoaSize: 'size'  },
     baiNop: { url: '/api/v1/submissions', khoaSize: 'limit' },
     kyThi:  { url: '/api/v1/contests',    khoaSize: 'size'  },
+    nhatKy: { url: '/api/v1/admin/audit-log', khoaSize: 'size' },
 };
 
 /** Trạng thái kỳ thi — server suy, client chỉ hiển thị. Xem ListContestsUseCase.TrangThai. */

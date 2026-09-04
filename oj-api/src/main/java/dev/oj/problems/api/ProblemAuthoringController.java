@@ -55,11 +55,17 @@ public class ProblemAuthoringController {
         authorProblem.sua(problemId, body.toCommand());
     }
 
-    /** Đọc đề của chính mình để sửa — thấy cả {@code DRAFT}. */
+    /**
+     * Đọc đề của chính mình để sửa — thấy cả {@code DRAFT}.
+     *
+     * <p>Trả {@link ProblemAuthoringResponse}, <b>không</b> {@link ProblemResponse}: bản công
+     * khai thiếu {@code checkerEpsilon} và {@code allowPublicSolutions}, mà {@link #sua} lại
+     * ghi đè cả hai. Xem javadoc của {@code ProblemAuthoringResponse}.
+     */
     @GetMapping("/{problemId}/edit")
-    public ProblemResponse doc(@PathVariable long problemId) {
+    public ProblemAuthoringResponse doc(@PathVariable long problemId) {
         var de = authorProblem.doc(problemId);
-        return ProblemResponse.from(de, getProblem.html(de));
+        return ProblemAuthoringResponse.from(de, getProblem.html(de));
     }
 
     /** FR-PROB-08. Từ chối nếu đề chưa có testdata — xem {@link AuthorProblemUseCase#xuatBan}. */

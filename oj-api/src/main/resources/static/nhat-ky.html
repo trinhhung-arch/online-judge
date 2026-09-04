@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nhật ký · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Nhật ký</h1>
+    <p class="goi-y">Mỗi lần dùng quyền quản trị đều để lại một dòng ở đây. Nhật ký chỉ ghi
+        thêm — không sửa, không xoá.</p>
+
+    <form id="loc" class="the">
+        <label for="hanh-dong">Hành động</label>
+        <input id="hanh-dong" name="action" autocomplete="off"
+               placeholder="ví dụ: PROBLEM_PUBLISH">
+        <p class="goi-y">Khớp đúng tên hành động. Bỏ trống để xem tất cả.</p>
+
+        <label for="nguoi-id">Người thực hiện (mã số)</label>
+        <input id="nguoi-id" name="actorId" type="number" min="1" inputmode="numeric"
+               autocomplete="off">
+
+        <label for="tu">Từ lúc</label>
+        <input id="tu" name="tu" type="datetime-local">
+
+        <label for="den">Đến lúc</label>
+        <input id="den" name="den" type="datetime-local">
+
+        <p><button type="submit">Lọc</button>
+            <button type="button" id="xoa-loc" class="phu">Xoá bộ lọc</button></p>
+    </form>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <div class="cuon-ngang">
+        <table>
+            <caption class="goi-y">Mới nhất trước</caption>
+            <thead>
+            <tr>
+                <th scope="col">Lúc</th>
+                <th scope="col">Người thực hiện</th>
+                <th scope="col">Hành động</th>
+                <th scope="col">Đối tượng</th>
+                <th scope="col">Chi tiết</th>
+                <th scope="col">IP</th>
+            </tr>
+            </thead>
+            <tbody id="bang"></tbody>
+        </table>
+    </div>
+
+    <p><button id="them" class="phu" hidden>Tải thêm</button></p>
+</main>
+<script type="module" src="/js/nhat-ky.js"></script>
+</body>
+</html>

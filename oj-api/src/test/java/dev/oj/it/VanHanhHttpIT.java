@@ -1,12 +1,15 @@
 package dev.oj.it;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -36,6 +39,31 @@ class VanHanhHttpIT extends HttpIT {
                     .header(HttpHeaders.AUTHORIZATION, bearerDev())),
                     () -> goi(http.get().uri("/api/v1/admin/audit-log")
                             .header(HttpHeaders.AUTHORIZATION, adminBearer())));
+        }
+
+        @Test
+        @DisplayName("POST /admin/settings/{khoa} — FR-ADM-06")
+        void doi_cong_tac() {
+            kiemChiAdmin(() -> goi(http.post().uri("/api/v1/admin/settings/{k}",
+                            "submissions.accepting")
+                    .header(HttpHeaders.AUTHORIZATION, bearerDev())
+                    .body(Map.of("bat", true))),
+                    () -> goi(http.post().uri("/api/v1/admin/settings/{k}",
+                                    "submissions.accepting")
+                            .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                            .body(Map.of("bat", true))));
+        }
+
+        @Test
+        @DisplayName("SETTER cũng KHÔNG được đổi công tắc hệ thống")
+        void setter_khong_doi_duoc_cong_tac() {
+            // ★ Ca này không thừa. SETTER có quyền quản trị NỘI DUNG (đề của chính mình);
+            // công tắc nhận bài là quyền quản trị HỆ THỐNG. Gộp hai thứ ấy là cho người soạn
+            // đề tắt được cả sàn nộp bài giữa kỳ thi.
+            assertThat(goi(http.post().uri("/api/v1/admin/settings/{k}", "submissions.accepting")
+                    .header(HttpHeaders.AUTHORIZATION, setterBearer())
+                    .body(Map.of("bat", false))).getStatusCode())
+                    .isEqualTo(HttpStatus.FORBIDDEN);
         }
 
         @Test
@@ -191,6 +219,120 @@ class VanHanhHttpIT extends HttpIT {
                     .param("id", id).query(Integer.class).single())
                     .as("bài đã nhận trước khi bảo trì vẫn nằm trong hàng đợi")
                     .isEqualTo(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("★ FR-ADM-06 · đổi công tắc qua API, không phải qua psql")
+    class CongTacQuaApi {
+
+        private static final String NHAN_BAI = "submissions.accepting";
+
+        /**
+         * Trả công tắc về {@code true} bằng SQL, không qua endpoint: một ca hỏng ở giữa không
+         * được phép để lại chế độ bảo trì cho các lớp test chạy sau.
+         */
+        @AfterEach
+        void batLai() {
+            jdbc.sql("UPDATE system_settings SET value = 'true'::jsonb "
+                    + "WHERE key IN ('submissions.accepting', 'rejudge.enabled')").update();
+            choCacheCongTacHetHan();
+        }
+
+        @Test
+        @DisplayName("★ tắt qua API thì POST /submissions trả 503 — công tắc có hiệu lực thật")
+        void tat_qua_api_thi_tu_choi_bai_nop() {
+            assertThat(goi(http.post().uri("/api/v1/admin/settings/{k}", NHAN_BAI)
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .body(Map.of("bat", false))).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+            // ★ KHÔNG chờ hết TTL. `dat()` xoá cache của chính instance nhận lệnh, nên hiệu
+            // lực phải tức thì — đó là cả lý do endpoint này tồn tại thay cho một câu UPDATE.
+            quenLuotNopVuaRoi(USER_ID);
+            var res = goi(http.post().uri("/api/v1/submissions")
+                    .header(HttpHeaders.AUTHORIZATION, bearerDev())
+                    .body(Map.of("problemId", PROBLEM_ID, "languageCode", "cpp20",
+                            "source", "int main(){}")));
+
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(res.getBody()).containsEntry("code", "submission.maintenance");
+        }
+
+        @Test
+        @DisplayName("bật lại qua API thì nhận bài trở lại")
+        void bat_lai_qua_api() {
+            goi(http.post().uri("/api/v1/admin/settings/{k}", NHAN_BAI)
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .body(Map.of("bat", false)));
+            goi(http.post().uri("/api/v1/admin/settings/{k}", NHAN_BAI)
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .body(Map.of("bat", true)));
+
+            quenLuotNopVuaRoi(USER_ID);
+            assertThat(goi(http.post().uri("/api/v1/submissions")
+                    .header(HttpHeaders.AUTHORIZATION, bearerDev())
+                    .body(Map.of("problemId", PROBLEM_ID, "languageCode", "cpp20",
+                            "source", "int main(){}"))).getStatusCode())
+                    .isEqualTo(HttpStatus.ACCEPTED);
+        }
+
+        @Test
+        @DisplayName("★ mỗi lần đổi để lại đúng một dòng audit_log — đây là điểm của endpoint")
+        void moi_lan_doi_deu_vao_audit_log() {
+            int truoc = soDongAudit();
+
+            goi(http.post().uri("/api/v1/admin/settings/{k}", NHAN_BAI)
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .body(Map.of("bat", false)));
+
+            assertThat(soDongAudit())
+                    .as("một câu UPDATE trong psql không để lại gì; endpoint thì phải")
+                    .isEqualTo(truoc + 1);
+        }
+
+        @Test
+        @DisplayName("★ khoá ngoài danh sách trắng → 400, và KHÔNG ghi gì vào bảng")
+        void khoa_la_bi_tu_choi() {
+            int truoc = soDongSetting();
+
+            var res = goi(http.post().uri("/api/v1/admin/settings/{k}", "ai_review.enabled")
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .body(Map.of("bat", true)));
+
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(res.getBody()).containsEntry("code", "settings.khoa_khong_doi_duoc");
+            assertThat(soDongSetting()).isEqualTo(truoc);
+            // Khoá AI vẫn nguyên giá trị seed — không ai bật được tính năng chưa tồn tại.
+            assertThat(jdbc.sql("SELECT value #>> '{}' FROM system_settings "
+                            + "WHERE key = 'ai_review.enabled'")
+                    .query(String.class).single()).isEqualTo("false");
+        }
+
+        @Test
+        @DisplayName("GET /admin/settings liệt kê công tắc kèm câu mô tả hậu quả")
+        void doc_liet_ke_cong_tac() {
+            // `goi()` giải mã vào Map nên không dùng được cho một mảng JSON.
+            List<Map<String, Object>> ds = http.get().uri("/api/v1/admin/settings")
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() { });
+
+            assertThat(ds).hasSize(2);
+            assertThat(ds).allSatisfy(ct -> {
+                assertThat(ct).containsKeys("khoa", "bat", "moTa");
+                assertThat((String) ct.get("moTa")).isNotBlank();
+            });
+            assertThat(ds).extracting(ct -> ct.get("khoa"))
+                    .containsExactlyInAnyOrder("submissions.accepting", "rejudge.enabled");
+        }
+
+        private int soDongAudit() {
+            return jdbc.sql("SELECT count(*) FROM audit_log WHERE action = 'SYSTEM_SWITCH_SET'")
+                    .query(Integer.class).single();
+        }
+
+        private int soDongSetting() {
+            return jdbc.sql("SELECT count(*) FROM system_settings").query(Integer.class).single();
         }
     }
 

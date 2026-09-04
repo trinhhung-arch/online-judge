@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vận hành · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Vận hành</h1>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <section aria-labelledby="tieu-bang">
+        <h2 id="tieu-bang">Bảng điều khiển</h2>
+        <p class="goi-y">
+            <span id="cap-nhat-luc">—</span>
+            <button type="button" id="lam-moi" class="phu">Làm mới</button>
+        </p>
+        <!-- Các số đến từ metrics, không từ một truy vấn đếm: `COUNT(*)` trên `submissions`
+             là một lần quét bảng hàng triệu dòng (bất biến #8 cùng lý do). -->
+        <dl id="bang-so" class="so-lieu"></dl>
+    </section>
+
+    <hr>
+
+    <section class="the" aria-labelledby="tieu-cham-lai">
+        <h2 id="tieu-cham-lai">Chấm lại một đề</h2>
+        <!-- ★ Chấm lại chạy ở ưu tiên 10 (thấp nhất) và có phanh theo thời gian chờ của bài
+             LIVE — nó không được phép làm chậm người đang nộp bài. Nói ra ở đây để người
+             vận hành không tưởng rằng bấm nút là dừng cả hệ thống chấm. -->
+        <p class="goi-y">Việc chạy nền ở ưu tiên thấp nhất và tự phanh khi hàng đợi bài nộp
+            trực tiếp bắt đầu chờ lâu. Bấm được giữa giờ cao điểm, nhưng nó sẽ chạy chậm lại.</p>
+        <form id="form-cham-lai">
+            <label for="cham-lai-id">Mã số đề (problemId)</label>
+            <input id="cham-lai-id" name="problemId" type="number" min="1" required
+                   inputmode="numeric" autocomplete="off">
+            <p><button type="submit">Chấm lại toàn bộ bài của đề này</button></p>
+        </form>
+        <div id="tien-do" aria-live="polite"></div>
+    </section>
+
+    <hr>
+
+    <section class="the" aria-labelledby="tieu-bai-nop">
+        <h2 id="tieu-bai-nop">Ẩn / hiện một bài nộp</h2>
+        <p class="goi-y">Ẩn là <strong>không xoá</strong> (FR-SUB-09): bài vẫn còn, vẫn tính
+            điểm, chỉ không hiện ra công khai.</p>
+        <form id="form-bai-nop">
+            <label for="bai-nop-id">Mã số bài nộp</label>
+            <input id="bai-nop-id" name="submissionId" type="number" min="1" required
+                   inputmode="numeric" autocomplete="off">
+            <p>
+                <button type="submit" name="viec" value="an">Ẩn</button>
+                <button type="submit" name="viec" value="hien" class="phu">Hiện lại</button>
+            </p>
+        </form>
+    </section>
+
+    <hr>
+
+    <section class="the" aria-labelledby="tieu-nguoi-dung">
+        <h2 id="tieu-nguoi-dung">Người dùng</h2>
+        <!-- ★ Nhập bằng SỐ vì máy chủ không có endpoint liệt kê người dùng. Một ô tìm theo
+             handle ở đây sẽ là một endpoint mới, không phải một thay đổi giao diện. -->
+        <p class="goi-y">Máy chủ chưa có endpoint tra cứu người dùng, nên phải nhập mã số.
+            Lấy nó từ <a href="/nhat-ky.html">nhật ký</a> hoặc từ cơ sở dữ liệu.</p>
+
+        <form id="form-nguoi-dung">
+            <label for="nguoi-dung-id">Mã số người dùng</label>
+            <input id="nguoi-dung-id" name="userId" type="number" min="1" required
+                   inputmode="numeric" autocomplete="off">
+
+            <label for="vai-tro">Vai trò</label>
+            <select id="vai-tro" name="vaiTro">
+                <option value="USER">USER</option>
+                <option value="SETTER">SETTER</option>
+                <option value="ADMIN">ADMIN</option>
+            </select>
+            <p><button type="button" id="doi-vai-tro">Đặt vai trò</button></p>
+
+            <p>
+                <button type="button" id="mo-khoa" class="phu">Cho hoạt động</button>
+                <button type="button" id="khoa" class="phu">Vô hiệu hoá</button>
+            </p>
+
+            <p><button type="button" id="an-danh" class="nguy-hiem">Ẩn danh hoá tài khoản</button></p>
+            <p class="goi-y">Ẩn danh hoá là <strong>một chiều</strong>: handle, email và tên
+                hiển thị bị thay vĩnh viễn. Bài nộp và điểm giữ nguyên.</p>
+        </form>
+    </section>
+
+    <hr>
+
+    <section class="the" aria-labelledby="tieu-bao-tri">
+        <h2 id="tieu-bao-tri">Công tắc hệ thống</h2>
+        <p id="trang-thai-bao-tri">Đang kiểm tra…</p>
+        <!-- ★ Danh sách công tắc do MÁY CHỦ liệt kê, kể cả câu mô tả hậu quả. Viết lại câu ấy
+             ở đây là tạo bản mô tả thứ hai cho cùng một công tắc, và hai bản sẽ lệch nhau. -->
+        <div id="cong-tac"></div>
+        <p class="goi-y">Mỗi lần đổi để lại một dòng trong
+            <a href="/nhat-ky.html">nhật ký</a> kèm tên người đổi và giờ. Tắt nhận bài chỉ chặn
+            cửa vào — bài đang chấm vẫn chấm xong.</p>
+    </section>
+</main>
+<script type="module" src="/js/quan-tri.js"></script>
+</body>
+</html>

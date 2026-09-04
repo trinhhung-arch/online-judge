@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Soạn đề · Online Judge</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
+<main id="chinh">
+    <h1>Soạn đề</h1>
+
+    <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
+
+    <!-- ★ Mở đề bằng SỐ, không bằng mã.
+         Server chỉ liệt kê đề đã xuất bản (`GET /api/v1/problems` lọc PUBLISHED), nên
+         không có cách nào hỏi "những bản nháp của tôi đâu". Thứ duy nhất mở lại được một
+         bản nháp là `problemId` trả về lúc tạo. Danh sách dưới đây là bộ nhớ của TRÌNH
+         DUYỆT NÀY, không phải của máy chủ — xoá dữ liệu trình duyệt thì mất lối tắt, không
+         mất đề. -->
+    <section class="the" aria-labelledby="tieu-mo">
+        <h2 id="tieu-mo">Mở một đề</h2>
+        <form id="form-mo">
+            <label for="mo-id">Mã số đề (problemId)</label>
+            <input id="mo-id" name="problemId" type="number" min="1" inputmode="numeric"
+                   required autocomplete="off">
+            <p class="goi-y">Đây là số máy chủ trả về lúc tạo đề, không phải mã chữ như
+                <code>A-PLUS-B</code>.</p>
+            <p><button type="submit">Mở</button>
+                <button type="button" id="de-moi" class="phu">Soạn đề mới</button></p>
+        </form>
+        <div id="gan-day"></div>
+    </section>
+
+    <hr>
+
+    <form id="form-de" class="the">
+        <h2 id="tieu-de-form">Đề mới</h2>
+
+        <label for="code">Mã đề</label>
+        <input id="code" name="code" required autocomplete="off" placeholder="A-PLUS-B">
+
+        <label for="title">Tiêu đề</label>
+        <input id="title" name="title" required autocomplete="off">
+
+        <label for="statementMd">Đề bài (Markdown)</label>
+        <textarea id="statementMd" name="statementMd" rows="14" required></textarea>
+        <p class="goi-y">Máy chủ render Markdown và tự khử HTML nguy hiểm (FR-PROB-02).</p>
+
+        <label for="timeLimitMs">Giới hạn thời gian (ms)</label>
+        <input id="timeLimitMs" name="timeLimitMs" type="number" min="1" value="1000" required>
+
+        <label for="memoryLimitKb">Giới hạn bộ nhớ (KB)</label>
+        <input id="memoryLimitKb" name="memoryLimitKb" type="number" min="1" value="262144"
+               required>
+
+        <label for="checkerType">Bộ so sánh</label>
+        <select id="checkerType" name="checkerType">
+            <option value="token">token — bỏ qua khoảng trắng thừa</option>
+            <option value="exact">exact — khớp từng byte</option>
+            <option value="float">float — so số thực theo epsilon</option>
+        </select>
+
+        <label for="checkerEpsilon">Epsilon (chỉ dùng cho <code>float</code>)</label>
+        <input id="checkerEpsilon" name="checkerEpsilon" type="text" inputmode="decimal"
+               autocomplete="off" placeholder="ví dụ: 0.000001">
+
+        <label for="scoringMode">Cách tính điểm</label>
+        <select id="scoringMode" name="scoringMode">
+            <option value="ALL_OR_NOTHING">ALL_OR_NOTHING — đúng hết mới có điểm</option>
+            <option value="SUBTASK">SUBTASK — điểm theo từng nhóm test</option>
+        </select>
+
+        <label for="feedbackLevel">Mức phản hồi</label>
+        <select id="feedbackLevel" name="feedbackLevel">
+            <option value="TEST_INDEX">TEST_INDEX — chỉ nói sai ở test thứ mấy</option>
+            <option value="NONE">NONE — chỉ nói đúng hay sai</option>
+            <option value="SAMPLE_DETAIL">SAMPLE_DETAIL — hiện chi tiết test ví dụ</option>
+        </select>
+        <!-- ★ Mức phản hồi là biện pháp chống rút trích bộ test, không phải một tiện ích.
+             Càng nói nhiều về lý do sai, càng ít lần nộp là đủ để dựng lại đáp án. -->
+        <p class="goi-y" id="canh-bao-phan-hoi"></p>
+
+        <p>
+            <label class="hang">
+                <input id="allowPublicSolutions" name="allowPublicSolutions" type="checkbox">
+                Cho phép xem lời giải công khai sau khi giải được
+            </label>
+        </p>
+
+        <p id="trang-thai-de" class="thong-bao" hidden></p>
+
+        <p>
+            <button type="submit" id="luu">Tạo đề</button>
+            <button type="button" id="xuat-ban" class="phu" hidden>Xuất bản</button>
+            <button type="button" id="go-xuong" class="phu" hidden>Gỡ xuống</button>
+        </p>
+    </form>
+
+    <hr>
+
+    <section class="the" id="khu-testdata" aria-labelledby="tieu-testdata" hidden>
+        <h2 id="tieu-testdata">Bộ test</h2>
+        <p class="goi-y">Gói ZIP tối đa 200MB, theo cấu trúc ở <code>docs/frplan.md</code>
+            FR-PROB-03. Máy chủ nhận gói rồi nạp bằng một việc chạy nền.</p>
+
+        <form id="form-testdata">
+            <label for="tep">Gói testdata (.zip)</label>
+            <input id="tep" name="file" type="file" accept=".zip,application/zip" required>
+            <p><button type="submit" id="nap">Nạp lên</button></p>
+        </form>
+
+        <div id="tien-do" aria-live="polite"></div>
+
+        <p><button type="button" id="tai-ve" class="phu">Tải bộ test hiện tại về</button></p>
+    </section>
+</main>
+<script type="module" src="/js/ra-de.js"></script>
+</body>
+</html>

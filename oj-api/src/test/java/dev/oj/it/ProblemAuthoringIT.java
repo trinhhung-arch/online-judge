@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -152,6 +154,74 @@ class ProblemAuthoringIT extends HttpIT {
     // =========================================================================
 
     @Nested
+    @DisplayName("★ Vòng đọc → ghi không được làm mất trường nào")
+    class VongDocGhi {
+
+        /** Đúng tập trường mà {@code ProblemAuthoringRequest} nhận. */
+        private static final List<String> TRUONG_PUT = List.of(
+                "code", "title", "statementMd", "timeLimitMs", "memoryLimitKb",
+                "checkerType", "checkerEpsilon", "scoringMode", "feedbackLevel",
+                "allowPublicSolutions");
+
+        private long taoDeFloat() {
+            var m = deMoi("DE-FLOAT");
+            m.put("checkerType", "float");
+            m.put("checkerEpsilon", "0.000001");
+            m.put("allowPublicSolutions", true);
+            var res = goi(http.post().uri("/api/v1/problems")
+                    .header("Authorization", "Bearer " + tokenCua("setter")).body(m));
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            return ((Number) res.getBody().get("problemId")).longValue();
+        }
+
+        private Map<String, Object> doc(long id) {
+            return goi(http.get().uri("/api/v1/problems/" + id + "/edit")
+                    .header("Authorization", "Bearer " + tokenCua("setter"))).getBody();
+        }
+
+        @Test
+        @DisplayName("★ mở một đề float rồi lưu lại y nguyên KHÔNG xoá epsilon")
+        void luu_lai_y_nguyen_khong_mat_epsilon() {
+            long id = taoDeFloat();
+
+            // Đúng thứ trang soạn đề làm: đọc về, sửa một ô, gửi lại cả bản ghi.
+            var doc = doc(id);
+            var gui = new LinkedHashMap<String, Object>();
+            for (String k : TRUONG_PUT) {
+                gui.put(k, doc.get(k));
+            }
+            gui.put("title", "Đổi mỗi tiêu đề");
+
+            assertThat(goi(http.put().uri("/api/v1/problems/" + id)
+                    .header("Authorization", "Bearer " + tokenCua("setter")).body(gui))
+                    .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+            var sau = doc(id);
+            assertThat(sau.get("title")).isEqualTo("Đổi mỗi tiêu đề");
+            // ★ Lỗi cũ nằm đúng ở hai dòng này: `checkerEpsilon` thành null và cờ thành false,
+            // vì GET không trả chúng nên vòng lặp ở trên gửi đi hai giá trị null.
+            assertThat(sau.get("checkerEpsilon")).isNotNull();
+            assertThat(new BigDecimal(String.valueOf(sau.get("checkerEpsilon"))))
+                    .isEqualByComparingTo(new BigDecimal("0.000001"));
+            assertThat(sau.get("allowPublicSolutions")).isEqualTo(true);
+            assertThat(sau.get("checkerType")).isEqualTo("float");
+        }
+
+        @Test
+        @DisplayName("GET .../edit trả về MỌI trường mà PUT nhận")
+        void doc_tra_du_moi_truong_put_nhan() {
+            var doc = doc(taoDeFloat());
+            assertThat(doc).containsKeys(TRUONG_PUT.toArray(String[]::new));
+        }
+
+        @Test
+        @DisplayName("bản soạn đề mang status để trang biết nút nào dùng được")
+        void co_trang_thai() {
+            assertThat(doc(taoDeFloat()).get("status")).isEqualTo("DRAFT");
+        }
+    }
+
+    @Nested
     @DisplayName("★ Người đọc thấy gì")
     class NguoiDocThayGi {
 
@@ -171,7 +241,9 @@ class ProblemAuthoringIT extends HttpIT {
                     .contains("<strong>Đậm</strong>")
                     .doesNotContain("<script>");
             // Markdown gốc vẫn trả về nguyên vẹn — trang soạn đề cần đúng thứ tác giả đã gõ.
-            assertThat((String) de.get("statement")).contains("<script>");
+            // Khoá là `statementMd`, TRÙNG tên trường mà PUT nhận: bản soạn đề đọc lại đúng
+            // những gì bản ghi sẽ đặt (xem ProblemAuthoringRoundTripTest).
+            assertThat((String) de.get("statementMd")).contains("<script>");
         }
 
         @Test

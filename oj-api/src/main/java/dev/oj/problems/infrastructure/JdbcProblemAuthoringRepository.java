@@ -62,15 +62,25 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
                AND (:laAdmin OR owner_id = :requesterId)
             """;
 
+    /**
+     * ★ {@code allow_public_solutions} phải có mặt ở ĐÂY, không chỉ ở {@link #CAP_NHAT}.
+     *
+     * <p>Bản đầu bỏ sót nó, nên cột nhận {@code DEFAULT FALSE} của V2 dù tác giả gửi
+     * {@code true} — và vì {@code CAP_NHAT} thì lại ghi, lỗi chỉ hiện ra khi ai đó tạo đề với
+     * cờ bật rồi đọc lại. Cột có {@code DEFAULT} là cột mà một câu INSERT thiếu vẫn chạy trót
+     * lọt: không lỗi, không cảnh báo, chỉ là một giá trị khác thứ người dùng yêu cầu.
+     */
     private static final String TAO_MOI = """
             INSERT INTO problems (code, title, statement_md, statement_hash,
                                   time_limit_ms, memory_limit_kb,
                                   checker_type, checker_epsilon, scoring_mode,
-                                  feedback_level, owner_id, status)
+                                  feedback_level, owner_id, status,
+                                  allow_public_solutions)
             VALUES (:code, :title, :statementMd, :statementHash,
                     :timeLimitMs, :memoryLimitKb,
                     :checkerType, :checkerEpsilon, :scoringMode,
-                    :feedbackLevel, :ownerId, 'DRAFT')
+                    :feedbackLevel, :ownerId, 'DRAFT',
+                    :allowPublicSolutions)
             RETURNING id
             """;
 
@@ -145,6 +155,7 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
                     .param("scoringMode", p.scoringMode().name())
                     .param("feedbackLevel", p.feedbackLevel().name())
                     .param("ownerId", p.ownerId())
+                    .param("allowPublicSolutions", p.allowPublicSolutions())
                     .query(Long.class)
                     .single();
         } catch (DuplicateKeyException e) {
