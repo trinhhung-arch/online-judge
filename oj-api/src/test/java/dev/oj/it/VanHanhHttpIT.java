@@ -42,6 +42,15 @@ class VanHanhHttpIT extends HttpIT {
         }
 
         @Test
+        @DisplayName("GET /admin/users — FR-ADM-03")
+        void danh_sach_nguoi_dung() {
+            kiemChiAdmin(() -> goi(http.get().uri("/api/v1/admin/users")
+                    .header(HttpHeaders.AUTHORIZATION, bearerDev())),
+                    () -> goi(http.get().uri("/api/v1/admin/users")
+                            .header(HttpHeaders.AUTHORIZATION, adminBearer())));
+        }
+
+        @Test
         @DisplayName("POST /admin/settings/{khoa} — FR-ADM-06")
         void doi_cong_tac() {
             kiemChiAdmin(() -> goi(http.post().uri("/api/v1/admin/settings/{k}",
@@ -219,6 +228,61 @@ class VanHanhHttpIT extends HttpIT {
                     .param("id", id).query(Integer.class).single())
                     .as("bài đã nhận trước khi bảo trì vẫn nằm trong hàng đợi")
                     .isEqualTo(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("★ FR-ADM-03 · tìm người dùng để quản lý")
+    class DanhSachNguoiDung {
+
+        @SuppressWarnings("unchecked")
+        private List<Map<String, Object>> tim(String truyVan) {
+            var res = goi(http.get().uri("/api/v1/admin/users" + truyVan)
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer()));
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+            return (List<Map<String, Object>>) res.getBody().get("items");
+        }
+
+        @Test
+        @DisplayName("★ KHÔNG trả về email — endpoint này liệt kê MỌI người dùng")
+        void khong_tra_ve_email() {
+            // Javadoc của ProfileResponse cảnh báo đúng về endpoint kiểu này: một trường email
+            // ở đây là một lần rò rỉ toàn bộ danh sách email. Quản lý vai trò cần handle.
+            assertThat(tim("")).isNotEmpty().allSatisfy(u -> {
+                assertThat(u).doesNotContainKey("email");
+                assertThat(u.values()).noneSatisfy(v ->
+                        assertThat(String.valueOf(v)).contains("@"));
+                assertThat(u).containsKeys("id", "handle", "displayName", "vaiTro", "trangThai");
+            });
+        }
+
+        @Test
+        @DisplayName("tìm theo chuỗi con của tên đăng nhập, không phân biệt hoa thường")
+        void tim_theo_handle() {
+            assertThat(tim("?tim=ADM")).extracting(u -> u.get("handle")).contains("admin");
+            assertThat(tim("?tim=khong-ai-ten-the-nay")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("★ dấu gạch dưới trong từ khoá KHÔNG thành ký tự đại diện của LIKE")
+        void gach_duoi_khong_phai_dai_dien() {
+            // `handle` hợp lệ chứa được `_`. Không thoát thì "a_min" khớp "admin", và ADMIN
+            // đổi nhầm vai trò của một người khác vì kết quả tìm kiếm nói dối.
+            assertThat(tim("?tim=a_min"))
+                    .as("'a_min' chỉ được khớp handle có đúng dấu gạch dưới")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("★ có phân trang — bất biến #8, bảng users là bảng sẽ lớn")
+        void co_phan_trang() {
+            var res = goi(http.get().uri("/api/v1/admin/users?size=1")
+                    .header(HttpHeaders.AUTHORIZATION, adminBearer()));
+
+            assertThat((List<?>) res.getBody().get("items")).hasSize(1);
+            assertThat(res.getBody().get("nextCursor"))
+                    .as("còn người dùng phía sau thì phải có con trỏ trang tiếp")
+                    .isNotNull();
         }
     }
 

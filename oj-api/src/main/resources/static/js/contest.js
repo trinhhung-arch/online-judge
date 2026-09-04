@@ -20,7 +20,7 @@
 import { goi, LoiApi, phien } from './api.js';
 import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
-import { DUONG } from './duong-dan.js';
+import { DUONG, DS } from './duong-dan.js';
 import { gan as ganBangXepHang } from './bang-xep-hang.js';
 
 const o = khoiDong();
@@ -33,6 +33,7 @@ const viSaoTrong = document.getElementById('vi-sao-trong');
 const nutDangKy = document.getElementById('dang-ky');
 const khuRaDe = document.getElementById('khu-ra-de');
 const khuCongBo = document.getElementById('khu-cong-bo');
+const dsMaDe = document.getElementById('ds-ma-de');
 
 const NHAN_TRANG_THAI = {
     SAP_DIEN_RA: 'Sắp diễn ra',
@@ -96,11 +97,67 @@ async function tai() {
     // Hai mức quyền khác nhau, hai lần hỏi khác nhau — xem chú thích ở contest.html.
     khuRaDe.hidden = !vaiTroItNhat('SETTER');
     khuCongBo.hidden = !vaiTroItNhat('ADMIN');
+    if (!khuRaDe.hidden) goiYMaDe();
 
     ganBangXepHang(kyThi.id, { o });
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Đổ <datalist> gợi ý mã đề — TIỆN, không phải NGUỒN SỰ THẬT.
+ *
+ * Chỉ lấy trang đầu. Một kho đề lớn sẽ không nằm hết ở đây, và đó là lý do ô nhập vẫn là
+ * <input> tự do chứ không phải <select>: gõ một mã không có trong gợi ý vẫn phải thêm được.
+ * Một <select> đổ từ trang đầu thì đề thứ 101 biến mất mà không ai được báo.
+ *
+ * Lỗi ở đây nuốt im lặng: mất gợi ý là mất tiện nghi, không mất chức năng, và một dòng đỏ
+ * cho việc đó chỉ làm người ta tưởng form đang hỏng.
+ */
+async function goiYMaDe() {
+    try {
+        const trang = await goi(`${DS.de.url}?${DS.de.khoaSize}=100`);
+        dsMaDe.replaceChildren();
+        for (const de of trang.items) {
+            // `muc`, không phải `o`: `o` là ô thông báo của cả trang, và che nó ở đây là
+            // thứ chạy đúng hôm nay rồi hỏng vào ngày ai đó thêm một dòng bao() vào vòng lặp.
+            const muc = chu('option');
+            muc.value = de.code;
+            muc.label = de.title;
+            dsMaDe.append(muc);
+        }
+    } catch {
+        // Không sao — ô nhập vẫn dùng tay được.
+    }
+}
+
+/**
+ * Mã đề (thứ người dùng nhìn thấy) -> problemId (thứ API nhận).
+ *
+ * Một request thêm, cố ý. Đây là thao tác của người ra đề, không nằm trên đường nóng
+ * `nộp bài -> verdict`, nên đổi 1 request lấy một thông báo lỗi đúng là đổi có lãi.
+ *
+ * 404 ở đây gộp ba nguyên nhân — không có mã ấy, đề còn DRAFT, hoặc đề đang bị một kỳ thi
+ * khác khoá. Không tách ra được từ phía client, và cũng không NÊN tách: `GetProblemUseCase`
+ * cố ý trả cùng một câu cho cả ba để đề của kỳ thi sắp mở không bị dò ra bằng cách so mã lỗi.
+ */
+async function doiMaDeRaId(maDe) {
+    try {
+        const de = await goi(DUONG.de.theoMa(maDe));
+        return de.problemId;
+    } catch (e) {
+        if (e instanceof LoiApi && e.status === 404) {
+            // Vẫn là LoiApi — nó THẬT SỰ là lỗi từ API, chỉ được nói lại bằng câu có ích
+            // hơn "Không tìm thấy đề này." Giữ đúng kiểu để nhánh catch ở form không phải
+            // nới ra bắt Error trần, thứ sẽ hiện cả TypeError của một lỗi lập trình ra
+            // trước mặt người dùng.
+            throw new LoiApi(404, 'contest.ma_de_khong_ro',
+                `Không tìm thấy đề có mã “${maDe}”. `
+                + 'Kiểm lại cột “Mã đề” ở trang Đề bài — và đề phải đã xuất bản.');
+        }
+        throw e;
+    }
+}
 
 nutDangKy.addEventListener('click', async () => {
     nutDangKy.disabled = true;
@@ -122,10 +179,11 @@ document.getElementById('form-them-de').addEventListener('submit', async (ev) =>
     nut.disabled = true;
     bao(o, '');
     try {
+        const problemId = await doiMaDeRaId(form.elements.code.value.trim());
         await goi(DUONG.kyThi.themDe(kyThi.id), {
             method: 'POST',
             body: {
-                problemId: Number(form.problemId.value),
+                problemId,
                 label: form.label.value.trim(),
                 ordinal: Number(form.ordinal.value),
                 points: Number(form.points.value),

@@ -100,7 +100,8 @@ export const DS = {
     de:     { url: '/api/v1/problems',    khoaSize: 'size'  },
     baiNop: { url: '/api/v1/submissions', khoaSize: 'limit' },
     kyThi:  { url: '/api/v1/contests',    khoaSize: 'size'  },
-    nhatKy: { url: '/api/v1/admin/audit-log', khoaSize: 'size' },
+    nhatKy:    { url: '/api/v1/admin/audit-log', khoaSize: 'size' },
+    nguoiDung: { url: '/api/v1/admin/users',     khoaSize: 'size' },
 };
 
 /** Trạng thái kỳ thi — server suy, client chỉ hiển thị. Xem ListContestsUseCase.TrangThai. */

@@ -1,14 +1,19 @@
 package dev.oj.identity.api;
 
 import dev.oj.identity.api.dto.AdminUserRequests;
+import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.application.usecase.AnonymizeAccountUseCase;
+import dev.oj.identity.application.usecase.ListUsersUseCase;
 import dev.oj.identity.application.usecase.ManageUserUseCase;
+import dev.oj.platform.web.CursorPage;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,10 +45,30 @@ public class AccountAdminController {
 
     private final AnonymizeAccountUseCase anonymize;
     private final ManageUserUseCase quanLy;
+    private final ListUsersUseCase danhSach;
 
-    public AccountAdminController(AnonymizeAccountUseCase anonymize, ManageUserUseCase quanLy) {
+    public AccountAdminController(AnonymizeAccountUseCase anonymize, ManageUserUseCase quanLy,
+                                  ListUsersUseCase danhSach) {
+        this.danhSach = danhSach;
         this.anonymize = anonymize;
         this.quanLy = quanLy;
+    }
+
+    /**
+     * FR-ADM-03 — tìm người dùng để quản lý.
+     *
+     * <p>Không có {@code @RequiresRole} ở đây: nó nằm trên {@link ListUsersUseCase}
+     * (bất biến #11). Và <b>không trả về email</b> — xem javadoc của
+     * {@code UserRepository#danhSach}.
+     *
+     * @param tim chuỗi con của handle, không phân biệt hoa thường; bỏ trống = tất cả
+     */
+    @GetMapping
+    public CursorPage<UserRepository.TomTatNguoiDung> danhSach(
+            @RequestParam(required = false) String tim,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer size) {
+        return danhSach.thucHien(tim, cursor, size);
     }
 
     @PostMapping("/{userId}/anonymize")

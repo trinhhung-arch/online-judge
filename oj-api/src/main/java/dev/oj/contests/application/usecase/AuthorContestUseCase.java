@@ -67,6 +67,11 @@ public class AuthorContestUseCase {
      * import {@code problems}... đúng ra là cho phép ({@code problems ◀── contests}), nhưng
      * chốt thật vẫn nên là khoá ngoại {@code contest_problems.problem_id → problems(id)}. Nó
      * không quên được, và nó không lệch được với dữ liệu.
+     *
+     * <p><b>Nhưng khoá ngoại chỉ là một nửa.</b> Nó bắt được mọi id sai và không nói được id
+     * nào sai, nên phải có ai đó dịch nó ra tiếng người —
+     * {@code JdbcContestRepository.themDe} làm việc đó. Trước khi có bản dịch ấy, một id gõ
+     * nhầm ra HTTP 500 "lỗi phía hệ thống", và người dùng đi tìm lỗi ở đúng chỗ không có lỗi.
      */
     public void themDe(long contestId, long problemId, String nhan, int thuTu, int diem) {
         Contest contest = contests.timTheoId(contestId)

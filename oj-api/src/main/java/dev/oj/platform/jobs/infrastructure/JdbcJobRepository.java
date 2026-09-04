@@ -73,12 +73,27 @@ public class JdbcJobRepository implements JobRepository {
                AND (:laAdmin OR created_by = :requesterId)
             """;
 
+    /**
+     * ★ {@code CAST(:x AS bigint)} quanh cả hai tham số có thể {@code NULL}.
+     *
+     * <p>Bản đầu viết {@code (:createdBy IS NULL OR ...)} không kèm CAST, và Postgres không
+     * suy được kiểu của một tham số chỉ xuất hiện trong {@code IS NULL} — nó từ chối cả câu
+     * lệnh. {@code createdBy} là {@code null} <b>đúng khi người gọi là ADMIN</b>
+     * ({@code GetJobUseCase}: admin xem job của mọi người), nên endpoint này trả 500 cho mọi
+     * quản trị viên và chạy bình thường cho mọi người khác — cách hỏng khó thấy nhất, vì người
+     * thử nó nhiều nhất lại là người duy nhất gặp lỗi.
+     *
+     * <p>Cùng cái bẫy đã ghi ở {@code JdbcContestRepository} và {@code JdbcProblemRepository}.
+     * {@code JdbcSubmissionRepository} dùng cú pháp {@code :x::BIGINT} cho cùng một việc.
+     */
     private static final String GAN_DAY = """
             SELECT id, type, status, params, cursor_state, total_items, done_items,
                    lease_owner, lease_until, created_by, created_at, started_at,
                    finished_at, error_message
               FROM jobs
-             WHERE (:createdBy IS NULL OR created_by = :createdBy)
+             WHERE (CAST(:createdBy AS bigint) IS NULL
+                    OR created_by = CAST(:createdBy AS bigint))
+               AND (CAST(:sauId AS bigint) IS NULL OR id < CAST(:sauId AS bigint))
              ORDER BY id DESC
              LIMIT :gioiHan
             """;
@@ -197,9 +212,10 @@ public class JdbcJobRepository implements JobRepository {
     }
 
     @Override
-    public List<Job> ganDay(Long createdBy, int gioiHan) {
+    public List<Job> ganDay(Long createdBy, Long sauId, int gioiHan) {
         return jdbc.sql(GAN_DAY)
                 .param("createdBy", createdBy)
+                .param("sauId", sauId)
                 .param("gioiHan", gioiHan)
                 .query(mapper())
                 .list();

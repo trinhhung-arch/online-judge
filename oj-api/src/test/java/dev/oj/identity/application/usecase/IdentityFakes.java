@@ -66,6 +66,21 @@ final class IdentityFakes {
             return id;
         }
 
+        /** Bắt chước SQL thật: lọc theo chuỗi con của handle, id GIẢM DẦN, cắt theo gioiHan. */
+        @Override
+        public List<TomTatNguoiDung> danhSach(String tim, Long sauId, int gioiHan) {
+            return theoId.values().stream()
+                    .filter(u -> tim == null || tim.isBlank()
+                            || u.handle().toLowerCase(java.util.Locale.ROOT)
+                                    .contains(tim.trim().toLowerCase(java.util.Locale.ROOT)))
+                    .filter(u -> sauId == null || u.id() < sauId)
+                    .sorted((a, b) -> Long.compare(b.id(), a.id()))
+                    .limit(gioiHan)
+                    .map(u -> new TomTatNguoiDung(u.id(), u.handle(), u.displayName(),
+                            u.role().name(), u.status().name(), u.createdAt()))
+                    .toList();
+        }
+
         @Override
         public Optional<Credentials> timCredentials(String handleHoacEmail) {
             return theoId.values().stream()

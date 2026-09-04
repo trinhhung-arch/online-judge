@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -108,6 +109,26 @@ public class JdbcUserRepository implements UserRepository {
                    password_hash = NULL,
                    display_name = :displayName
              WHERE id = :id
+            """;
+
+    /**
+     * ★ {@code CAST(:x AS …)} quanh mỗi tham số có thể {@code NULL}.
+     *
+     * <p>Postgres không suy được kiểu của một tham số chỉ xuất hiện trong {@code :x IS NULL},
+     * và lỗi nó trả về — {@code could not determine data type of parameter} — không nhắc gì
+     * tới chỗ thiếu {@code CAST}. Cùng cái bẫy đã ghi ở {@code JdbcContestRepository}.
+     *
+     * <p>{@code ESCAPE '\'} không thừa: {@code handle} hợp lệ chứa được {@code _} và
+     * {@code -}, mà {@code _} là ký tự đại diện của {@code LIKE}. Không thoát thì tìm "a_b"
+     * ra cả "axb", và ADMIN đổi nhầm vai trò của người khác.
+     */
+    private static final String DANH_SACH = """
+            SELECT id, handle, display_name, role, status, created_at
+              FROM users
+             WHERE (CAST(:tim AS text) IS NULL OR lower(handle) LIKE CAST(:tim AS text) ESCAPE '\\')
+               AND (CAST(:sauId AS bigint) IS NULL OR id < CAST(:sauId AS bigint))
+             ORDER BY id DESC
+             LIMIT :gioiHan
             """;
 
     private final JdbcClient jdbc;
@@ -222,4 +243,33 @@ public class JdbcUserRepository implements UserRepository {
         return jdbc.sql(DOI_TRANG_THAI).param("trangThai", trangThaiMoi)
                 .param("id", userId).update() > 0;
     }
+
+    @Override
+    public List<TomTatNguoiDung> danhSach(String tim, Long sauId, int gioiHan) {
+        return jdbc.sql(DANH_SACH)
+                .param("tim", mauTim(tim))
+                .param("sauId", sauId)
+                .param("gioiHan", gioiHan)
+                .query((rs, i) -> new TomTatNguoiDung(
+                        rs.getLong("id"),
+                        rs.getString("handle"),
+                        rs.getString("display_name"),
+                        rs.getString("role"),
+                        rs.getString("status"),
+                        rs.getObject("created_at", java.time.OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /** Thoát ký tự đại diện của {@code LIKE} rồi bọc {@code %} — xem javadoc của DANH_SACH. */
+    private static String mauTim(String tim) {
+        if (tim == null || tim.isBlank()) {
+            return null;
+        }
+        String thoat = tim.trim().toLowerCase(java.util.Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + thoat + "%";
+    }
+
 }

@@ -72,6 +72,57 @@ class JobsIT extends PostgresIT {
     }
 
     @Nested
+    @DisplayName("★ Danh sách việc — bất biến #8")
+    class DanhSachViec {
+
+        private long taoViec(long deId) {
+            return jobs.tao(JobType.TESTDATA_IMPORT, Map.of("problemId", deId), ADMIN_ID);
+        }
+
+        @Test
+        @DisplayName("★ createdBy = null (ADMIN xem tất cả) KHÔNG làm vỡ câu SQL")
+        void admin_xem_tat_ca_khong_vo() {
+            taoViec(PROBLEM_ID);
+
+            // Đây là lỗi đã sống trên máy chủ thật: `(:createdBy IS NULL OR ...)` không CAST
+            // thì Postgres từ chối cả câu lệnh, và `createdBy` là null ĐÚNG khi người gọi là
+            // ADMIN. Endpoint trả 500 cho quản trị viên, chạy tốt cho mọi người khác.
+            assertThat(jobs.ganDay(null, null, 10))
+                    .as("ADMIN phải đọc được việc của mọi người")
+                    .isNotEmpty();
+        }
+
+        @Test
+        @DisplayName("lọc theo người tạo vẫn đúng")
+        void loc_theo_nguoi_tao() {
+            taoViec(PROBLEM_ID);
+
+            assertThat(jobs.ganDay(ADMIN_ID, null, 10)).isNotEmpty();
+            assertThat(jobs.ganDay(USER_ID, null, 10))
+                    .as("USER không tạo việc nào thì không thấy việc nào")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("★ có con trỏ trang — một trần KHÔNG phải là phân trang")
+        void con_tro_trang_di_tiep_duoc() {
+            long cu = taoViec(PROBLEM_ID);
+            jobs.ketThuc(cu, JobStatus.DONE, null, Instant.now());
+            long moi = taoViec(PROBLEM_ID);
+
+            var trangDau = jobs.ganDay(null, null, 1);
+            assertThat(trangDau).hasSize(1);
+            assertThat(trangDau.get(0).id()).as("thứ tự giảm dần: việc mới nhất trước")
+                    .isEqualTo(moi);
+
+            assertThat(jobs.ganDay(null, moi, 1))
+                    .as("trang sau phải ra việc CŨ hơn, không lặp lại việc vừa trả")
+                    .extracting(dev.oj.platform.jobs.Job::id)
+                    .containsExactly(cu);
+        }
+    }
+
+    @Nested
     @DisplayName("★ Claim và lease")
     class ClaimVaLease {
 

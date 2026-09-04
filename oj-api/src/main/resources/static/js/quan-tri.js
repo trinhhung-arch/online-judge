@@ -23,7 +23,8 @@
 import { goi, LoiApi } from './api.js';
 import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
-import { DUONG } from './duong-dan.js';
+import { DUONG, DS } from './duong-dan.js';
+import { taoPhanTrang } from './phan-trang.js';
 import { theoDoi } from './tien-do-job.js';
 
 const o = khoiDong({ doiDangNhap: true });
@@ -151,13 +152,96 @@ async function bam(duongDan, than, xong) {
     }
 }
 
-function soNguoiDung() {
-    const v = Number(document.getElementById('nguoi-dung-id').value);
-    if (!v) {
-        bao(o, 'Chưa nhập mã số người dùng.', 'loi');
-        return null;
+const VAI_TRO = ['USER', 'SETTER', 'ADMIN'];
+
+/**
+ * ★ Mỗi dòng mang thao tác của CHÍNH nó.
+ *
+ * Bản trước bắt gõ mã số vào một ô rồi bấm nút ở chỗ khác — nghĩa là mọi thao tác đều nhắm
+ * vào "con số đang nằm trong ô kia", và gõ nhầm một chữ số là đổi vai trò của người khác.
+ * Ở đây không có ô nào để gõ nhầm: nút nằm trên dòng của người ấy.
+ */
+function veNguoiDung(u) {
+    const tr = chu('tr');
+    tr.append(chu('td', u.id));
+    tr.append(chu('td', u.handle));
+    tr.append(chu('td', u.displayName));
+
+    const oVaiTro = chu('td');
+    const chon = document.createElement('select');
+    chon.setAttribute('aria-label', `Vai trò của ${u.handle}`);
+    for (const v of VAI_TRO) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        opt.selected = v === u.vaiTro;
+        chon.append(opt);
     }
-    return v;
+    oVaiTro.append(chon);
+    tr.append(oVaiTro);
+
+    const hoatDong = u.trangThai === 'ACTIVE';
+    // Không chỉ dùng màu: trạng thái luôn có chữ.
+    tr.append(chu('td', hoatDong ? 'Đang hoạt động' : u.trangThai,
+        hoatDong ? 'verdict AC' : 'verdict WA'));
+
+    const oNut = chu('td');
+    const hang = chu('div', null, 'hang');
+
+    const datVaiTro = chu('button', 'Đặt vai trò', 'phu');
+    datVaiTro.type = 'button';
+    datVaiTro.addEventListener('click', () => bam(DUONG.quanTri.vaiTro(u.id),
+        { vaiTro: chon.value }, `${u.handle} giờ là ${chon.value}.`).then(taiNguoiDung));
+    hang.append(datVaiTro);
+
+    const doiKhoa = chu('button', hoatDong ? 'Vô hiệu hoá' : 'Cho hoạt động', 'phu');
+    doiKhoa.type = 'button';
+    doiKhoa.addEventListener('click', () => bam(DUONG.quanTri.hoatDong(u.id),
+        { hoatDong: !hoatDong },
+        `${u.handle} ${hoatDong ? 'đã bị vô hiệu hoá' : 'đã hoạt động lại'}.`)
+        .then(taiNguoiDung));
+    hang.append(doiKhoa);
+
+    const anDanh = chu('button', 'Ẩn danh hoá', 'nguy-hiem');
+    anDanh.type = 'button';
+    anDanh.addEventListener('click', () => {
+        // Gõ lại tên đăng nhập, không phải bấm Đồng ý: một hộp thoại "Bạn chắc chứ?" là thứ
+        // người ta bấm qua theo phản xạ, còn gõ lại một cái tên thì buộc phải đọc cái tên ấy.
+        const traLoi = prompt(`Ẩn danh hoá KHÔNG hoàn tác được.\n`
+            + `Gõ lại tên đăng nhập "${u.handle}" để xác nhận:`);
+        if (traLoi === null) return;
+        if (traLoi.trim() !== u.handle) {
+            bao(o, 'Tên đăng nhập không khớp. Không làm gì cả.', 'loi');
+            return;
+        }
+        bam(DUONG.quanTri.anDanh(u.id), null, `Đã ẩn danh hoá tài khoản #${u.id}.`)
+            .then(taiNguoiDung);
+    });
+    hang.append(anDanh);
+
+    oNut.append(hang);
+    tr.append(oNut);
+    return tr;
+}
+
+const trangNguoiDung = taoPhanTrang({
+    ds: DS.nguoiDung,
+    boLoc: () => {
+        const q = new URLSearchParams();
+        const tim = document.getElementById('tim-nguoi').value.trim();
+        if (tim) q.set('tim', tim);
+        return q;
+    },
+    veDong: veNguoiDung,
+    vao: document.getElementById('bang-nguoi-dung'),
+    nutThem: document.getElementById('them-nguoi'),
+    o,
+    khiTrong: 'Không có người dùng nào khớp.',
+    loiChung: 'Không đọc được danh sách người dùng.',
+});
+
+function taiNguoiDung() {
+    trangNguoiDung.lamMoi();
 }
 
 // ---------------------------------------------------------------------------
@@ -198,41 +282,15 @@ if (o) {
             an ? `Đã ẩn bài nộp #${id}.` : `Đã hiện lại bài nộp #${id}.`);
     });
 
-    document.getElementById('doi-vai-tro').addEventListener('click', () => {
-        const id = soNguoiDung();
-        if (!id) return;
-        const vaiTro = document.getElementById('vai-tro').value;
-        bam(DUONG.quanTri.vaiTro(id), { vaiTro }, `Đã đặt #${id} thành ${vaiTro}.`);
-    });
-
-    document.getElementById('mo-khoa').addEventListener('click', () => {
-        const id = soNguoiDung();
-        if (id) bam(DUONG.quanTri.hoatDong(id), { hoatDong: true }, `#${id} đã hoạt động lại.`);
-    });
-
-    document.getElementById('khoa').addEventListener('click', () => {
-        const id = soNguoiDung();
-        if (id) bam(DUONG.quanTri.hoatDong(id), { hoatDong: false }, `#${id} đã bị vô hiệu hoá.`);
-    });
-
-    document.getElementById('an-danh').addEventListener('click', () => {
-        const id = soNguoiDung();
-        if (!id) return;
-        // Gõ lại mã số, không phải bấm Đồng ý: hộp thoại xác nhận là thứ người ta bấm qua
-        // theo phản xạ, còn gõ lại một con số thì buộc phải đọc con số ấy.
-        const traLoi = prompt(`Ẩn danh hoá KHÔNG hoàn tác được.\n`
-            + `Gõ lại mã số ${id} để xác nhận:`);
-        if (traLoi === null) return;
-        if (traLoi.trim() !== String(id)) {
-            bao(o, 'Mã số không khớp. Không làm gì cả.', 'loi');
-            return;
-        }
-        bam(DUONG.quanTri.anDanh(id), null, `Đã ẩn danh hoá tài khoản #${id}.`);
-    });
-
     window.addEventListener('pagehide', () => dangTheoDoi?.dung());
+
+    document.getElementById('form-tim-nguoi').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        taiNguoiDung();
+    });
 
     taiBangSo();
     taiBaoTri();
     taiCongTac();
+    taiNguoiDung();
 }

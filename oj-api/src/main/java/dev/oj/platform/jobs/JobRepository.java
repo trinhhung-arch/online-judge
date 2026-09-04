@@ -39,7 +39,12 @@ public interface JobRepository {
     Optional<Job> timChoNguoiGoi(long jobId, long requesterId, boolean laAdmin);
 
     /** Job của một người, mới nhất trước. ADMIN truyền {@code null} để thấy tất cả. */
-    List<Job> ganDay(Long createdBy, int gioiHan);
+    /**
+     * @param createdBy {@code null} = mọi người (ADMIN). <b>Hiện thực phải CAST tham số này</b>
+     *                  — xem javadoc của {@code JdbcJobRepository.GAN_DAY}
+     * @param sauId     con trỏ trang: chỉ lấy id NHỎ HƠN (thứ tự giảm dần); {@code null} = trang đầu
+     */
+    List<Job> ganDay(Long createdBy, Long sauId, int gioiHan);
 
     /**
      * Giành quyền chạy một job đang chờ, đặt {@code RUNNING} và một lease mới.

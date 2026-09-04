@@ -5,6 +5,7 @@ import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormats;
 import dev.oj.contests.domain.ContestsException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -183,8 +184,25 @@ public class JdbcContestRepository implements ContestRepository {
         } catch (DuplicateKeyException e) {
             // UNIQUE (contest_id, label) — hai đề cùng nhãn 'A' thì bảng xếp hạng có hai cột
             // trùng tên và không ai biết cột nào là đề nào.
+            //
+            // Trùng (contest_id, problem_id) KHÔNG tới được đây: THEM_DE có ON CONFLICT
+            // DO UPDATE, tức thêm lại cùng một đề là đổi nhãn/điểm của nó.
             throw ContestsException.khongHopLe("contest.nhan_de_trung",
                     "Nhãn đề này đã được dùng trong kỳ thi.");
+        } catch (DataIntegrityViolationException e) {
+            // ★ Khoá ngoại contest_problems.problem_id -> problems(id).
+            //
+            // Javadoc của AuthorContestUseCase.themDe chọn khoá ngoại làm chốt "đề có tồn
+            // tại không" thay vì một câu SELECT, vì khoá ngoại không quên được. Nhưng chốt
+            // ấy chỉ hoàn chỉnh khi có người DỊCH nó: chưa dịch thì một id gõ nhầm rơi ra
+            // ngoài như DataIntegrityViolationException và người dùng nhận HTTP 500 —
+            // "lỗi phía hệ thống" cho một lỗi hoàn toàn phía người gõ.
+            //
+            // Ca thật đã gặp: người ra đề đọc cột "Mã đề" trên trang danh sách (một CHUỖI,
+            // ví dụ A-PLUS-B) rồi gõ nó vào ô nhận id (một SỐ). Câu dưới đây nói thẳng ra
+            // sự nhầm lẫn đó, vì bản thân con số không tự nói được điều gì.
+            throw ContestsException.khongHopLe("contest.de_khong_ton_tai",
+                    "Không có đề nào mang id " + problemId + ".");
         }
     }
 

@@ -47,8 +47,26 @@
                 <h3>Thêm đề</h3>
 
                 <form id="form-them-de" novalidate>
-                    <label for="problem-id">Thêm đề — id</label>
-                    <input id="problem-id" name="problemId" type="number" min="1" required>
+                    <!-- ★ Ô này nhận MÃ ĐỀ (chuỗi), không phải id (số).
+
+                         Bản đầu nhận id, và đó là một cái bẫy: id không xuất hiện ở BẤT KỲ
+                         màn hình nào — trang Đề bài, bảng đề của kỳ thi ngay bên trái, và
+                         cả đường dẫn /problem.html?code=... đều nói bằng mã đề. Chỗ duy
+                         nhất id từng hiện ra là câu "Đã tạo đề #N. Ghi lại số này" ở
+                         ra-de.js, tức là người ra đề phải tự chép tay một con số.
+
+                         Người không chép thì gõ thứ họ nhìn thấy — mã đề — vào ô số, và
+                         nhận về "lỗi phía hệ thống". Sửa đúng chỗ là hỏi bằng cái định
+                         danh mà cả giao diện đang dùng, rồi để contest.js đổi nó ra id.
+
+                         KHÔNG đoán "toàn số thì là id": một đề hoàn toàn có thể mang mã
+                         "15", và ca đầu tiên gặp lỗi này chính là ca đó. -->
+                    <label for="ma-de">Mã đề</label>
+                    <input id="ma-de" name="code" required placeholder="A-PLUS-B"
+                           list="ds-ma-de" autocomplete="off" aria-describedby="goi-y-ma-de">
+                    <datalist id="ds-ma-de"></datalist>
+                    <p class="goi-y" id="goi-y-ma-de">Đúng chuỗi ở cột “Mã đề” của trang
+                        Đề bài. Đề phải đã xuất bản trước khi thêm vào kỳ thi.</p>
 
                     <label for="nhan-de-moi">Nhãn</label>
                     <input id="nhan-de-moi" name="label" required placeholder="A">

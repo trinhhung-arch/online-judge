@@ -3,6 +3,7 @@ package dev.oj.platform.jobs.api;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.jobs.application.usecase.CancelJobUseCase;
 import dev.oj.platform.jobs.application.usecase.GetJobUseCase;
+import dev.oj.platform.web.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 
 /**
  * Theo dõi job nền — Quy tắc 5 của {@code frplan.md}.
@@ -51,11 +51,13 @@ public class JobController {
      * không trả lỗi ({@code oj-api/CLAUDE.md} mục 3).
      */
     @GetMapping
-    public List<JobResponse> cuaToi(@RequestParam(required = false) Integer size) {
-        int gioiHan = Math.min(
-                size == null ? properties.page().defaultSize() : Math.max(1, size),
-                properties.page().maxSize());
-        return getJob.cuaToi(gioiHan).stream().map(JobResponse::tu).toList();
+    public CursorPage<JobResponse> cuaToi(@RequestParam(required = false) String cursor,
+                                          @RequestParam(required = false) Integer size) {
+        int gioiHan = CursorPage.clampSize(size,
+                properties.page().defaultSize(), properties.page().maxSize());
+        CursorPage<dev.oj.platform.jobs.Job> trang = getJob.cuaToi(cursor, gioiHan);
+        return new CursorPage<>(trang.items().stream().map(JobResponse::tu).toList(),
+                trang.nextCursor());
     }
 
     @PostMapping("/{jobId}/cancel")

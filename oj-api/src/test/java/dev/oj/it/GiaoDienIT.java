@@ -92,6 +92,34 @@ class GiaoDienIT extends HttpIT {
         }
     }
 
+    /**
+     * ★ Mỗi {@code list="X"} phải có một {@code <datalist id="X">} thật.
+     *
+     * <p>Cùng một họ lỗi với ca trên, nhưng im lặng hơn nhiều: một {@code list} trỏ tới id
+     * không tồn tại <b>không hỏng gì cả</b>. Trình duyệt chỉ đơn giản không gợi ý, ô nhập
+     * vẫn gõ tay được, và không có lỗi nào ở console. Người viết code nghĩ mình đã cho
+     * người dùng một danh sách chọn; người dùng thì chưa từng thấy danh sách ấy.
+     */
+    @Test
+    @DisplayName("★ mọi list= đều trỏ tới một <datalist> có thật")
+    void moi_datalist_deu_ton_tai() throws Exception {
+        Pattern thamChieu = Pattern.compile("\\blist=\"([^\"]+)\"");
+
+        try (var trang = Files.list(GOC)) {
+            for (Path p : trang.filter(f -> f.toString().endsWith(".html")).toList()) {
+                String html = Files.readString(p);
+                Matcher m = thamChieu.matcher(html);
+                while (m.find()) {
+                    assertThat(html)
+                            .describedAs("%s có list=\"%s\" nhưng không có <datalist> nào "
+                                    + "mang id đó — gợi ý sẽ im lặng biến mất",
+                                    p.getFileName(), m.group(1))
+                            .contains("<datalist id=\"" + m.group(1) + "\"");
+                }
+            }
+        }
+    }
+
     @Test
     @DisplayName("★ NFR M4 — thêm một ngôn ngữ chấm là 1 dòng config, 0 dòng code")
     void danh_sach_ngon_ngu_den_tu_database() {

@@ -224,7 +224,7 @@ class AdminJudgingUseCasesTest {
         }
 
         @Override
-        public List<Job> ganDay(Long createdBy, int gioiHan) {
+        public List<Job> ganDay(Long createdBy, Long sauId, int gioiHan) {
             return List.of();
         }
 

@@ -3,6 +3,8 @@ package dev.oj.identity.application.port;
 import dev.oj.identity.domain.Credentials;
 import dev.oj.identity.domain.User;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -82,4 +84,30 @@ public interface UserRepository {
      * @return {@code false} nếu không dòng nào khớp
      */
     boolean doiTrangThai(long userId, String trangThaiMoi);
+
+    /**
+     * ★ Danh sách người dùng cho ADMIN — FR-ADM-03.
+     *
+     * <h2>KHÔNG có {@code email}, và đó là một quyết định đã được ghi từ trước</h2>
+     * Javadoc của {@code ProfileResponse} nói thẳng: <i>"nếu sau này cần hồ sơ công khai của
+     * người khác thì đó là một record RIÊNG không có trường này — đừng thêm một cờ
+     * {@code boolean anGiau}, vì một cờ đặt sai là một lần rò rỉ toàn bộ danh sách email
+     * người dùng."</i>
+     *
+     * <p>Đây <b>chính là</b> cái endpoint mà câu ấy cảnh báo: nó trả về mọi người dùng, một
+     * trang một lần. Quản lý vai trò cần {@code handle} để nhận ra người, không cần email —
+     * nên email không có mặt, và không có cờ nào bật nó lên được.
+     *
+     * @param tim   chuỗi con của {@code handle}, không phân biệt hoa thường; {@code null} =
+     *              lấy tất cả. Ký tự {@code %} và {@code _} của người dùng đã được thoát —
+     *              {@code handle} hợp lệ chứa được {@code _}, nên không thoát là "a_b" khớp
+     *              cả "axb"
+     * @param sauId con trỏ trang: chỉ lấy id NHỎ HƠN (thứ tự giảm dần); {@code null} = trang đầu
+     */
+    List<TomTatNguoiDung> danhSach(String tim, Long sauId, int gioiHan);
+
+    /** Không có email — xem javadoc của {@link #danhSach}. */
+    record TomTatNguoiDung(long id, String handle, String displayName,
+                           String vaiTro, String trangThai, Instant taoLuc) {
+    }
 }

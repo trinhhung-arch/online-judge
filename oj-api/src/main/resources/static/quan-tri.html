@@ -63,33 +63,36 @@
 
     <section class="the" aria-labelledby="tieu-nguoi-dung">
         <h2 id="tieu-nguoi-dung">Người dùng</h2>
-        <!-- ★ Nhập bằng SỐ vì máy chủ không có endpoint liệt kê người dùng. Một ô tìm theo
-             handle ở đây sẽ là một endpoint mới, không phải một thay đổi giao diện. -->
-        <p class="goi-y">Máy chủ chưa có endpoint tra cứu người dùng, nên phải nhập mã số.
-            Lấy nó từ <a href="/nhat-ky.html">nhật ký</a> hoặc từ cơ sở dữ liệu.</p>
 
-        <form id="form-nguoi-dung">
-            <label for="nguoi-dung-id">Mã số người dùng</label>
-            <input id="nguoi-dung-id" name="userId" type="number" min="1" required
-                   inputmode="numeric" autocomplete="off">
-
-            <label for="vai-tro">Vai trò</label>
-            <select id="vai-tro" name="vaiTro">
-                <option value="USER">USER</option>
-                <option value="SETTER">SETTER</option>
-                <option value="ADMIN">ADMIN</option>
-            </select>
-            <p><button type="button" id="doi-vai-tro">Đặt vai trò</button></p>
-
-            <p>
-                <button type="button" id="mo-khoa" class="phu">Cho hoạt động</button>
-                <button type="button" id="khoa" class="phu">Vô hiệu hoá</button>
-            </p>
-
-            <p><button type="button" id="an-danh" class="nguy-hiem">Ẩn danh hoá tài khoản</button></p>
-            <p class="goi-y">Ẩn danh hoá là <strong>một chiều</strong>: handle, email và tên
-                hiển thị bị thay vĩnh viễn. Bài nộp và điểm giữ nguyên.</p>
+        <form id="form-tim-nguoi">
+            <label for="tim-nguoi">Tìm theo tên đăng nhập</label>
+            <input id="tim-nguoi" name="tim" autocomplete="off" placeholder="bỏ trống để xem tất cả">
+            <p><button type="submit">Tìm</button></p>
         </form>
+
+        <!-- ★ KHÔNG có cột email. Danh sách này liệt kê mọi người dùng, và javadoc của
+             ProfileResponse đã cảnh báo đúng về endpoint kiểu này: một trường email ở đây là
+             một lần rò rỉ toàn bộ danh sách email. Quản lý vai trò cần handle, không cần email. -->
+        <div class="cuon-ngang">
+            <table>
+                <caption class="goi-y">Mới nhất trước</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Mã số</th>
+                    <th scope="col">Tên đăng nhập</th>
+                    <th scope="col">Tên hiển thị</th>
+                    <th scope="col">Vai trò</th>
+                    <th scope="col">Trạng thái</th>
+                    <th scope="col">Thao tác</th>
+                </tr>
+                </thead>
+                <tbody id="bang-nguoi-dung"></tbody>
+            </table>
+        </div>
+
+        <p><button id="them-nguoi" class="phu" hidden>Tải thêm</button></p>
+        <p class="goi-y">Ẩn danh hoá là <strong>một chiều</strong>: tên đăng nhập, email và tên
+            hiển thị bị thay vĩnh viễn. Bài nộp và điểm giữ nguyên.</p>
     </section>
 
     <hr>
