@@ -2,15 +2,11 @@ package dev.oj.problems.application;
 
 import dev.oj.problems.domain.ProblemsException;
 import dev.oj.problems.domain.TestdataLimits;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -33,17 +29,9 @@ import java.util.zip.ZipInputStream;
  *       do người tạo file ghi và không ai kiểm — một zip bomb khai 1KB rồi giải nén ra 10GB.</li>
  *   <li><b>Tỉ lệ nén ≤ 100:1</b>, kiểm <i>trong lúc</i> đọc chứ không sau khi xong. Trần dung
  *       lượng một mình chỉ phát hiện sau khi đã đọc ngần ấy byte.</li>
- *   <li><b>{@code problem.yaml} bằng {@link SafeConstructor}</b> — xem mục dưới.</li>
+ *   <li><b>{@code problem.yaml}</b> — giao cho {@link TestdataManifest}, nơi ghi vì sao
+ *       SnakeYAML mặc định là một lỗ hổng RCE.</li>
  * </ol>
- *
- * <h2>★ SnakeYAML mặc định là một lỗ hổng thực thi mã từ xa</h2>
- * {@code new Yaml().load(...)} <b>khởi tạo được lớp Java bất kỳ</b> mà tài liệu YAML nêu tên
- * ({@code !!javax.script.ScriptEngineManager ...}). Với một file do người ngoài tải lên, đó là
- * RCE — trên chính tiến trình đang giữ đường nộp bài. {@link SafeConstructor} chỉ dựng các
- * kiểu nguyên thuỷ, {@code List} và {@code Map}, và đó là toàn bộ thứ mục lục này cần.
- *
- * <p>{@link LoaderOptions} chặn nốt hai đường còn lại: bom phình alias
- * ({@code setMaxAliasesForCollections}) và một tài liệu YAML khổng lồ trong một file nén nhỏ.
  *
  * <h2>★ Vì sao KHÔNG có phép kiểm symlink</h2>
  * {@code frplan.md} liệt kê "chặn symlink" cùng với {@code ..} và đường dẫn tuyệt đối. Ba thứ
@@ -135,7 +123,7 @@ public class ZipTestdataValidator {
             throw loi("problem.zip_thieu_manifest",
                     "Gói thiếu " + TestdataLimits.MANIFEST + " ở thư mục gốc.");
         }
-        Set<Integer> sample = docSample(manifestTho);
+        Set<Integer> sample = TestdataManifest.docSample(manifestTho);
         return new KetQua(ghepCap(byteTheoTen.keySet(), sample), tongByte);
     }
 
@@ -177,50 +165,6 @@ public class ZipTestdataValidator {
     }
 
     /** ★ {@link SafeConstructor} — xem javadoc của class. Đổi dòng này là mở lại một đường RCE. */
-    private static Set<Integer> docSample(byte[] manifestTho) {
-        LoaderOptions options = new LoaderOptions();
-        options.setMaxAliasesForCollections(50);
-        options.setCodePointLimit(TestdataLimits.MAX_SAMPLE_BYTES);
-
-        Object doc;
-        try {
-            doc = new Yaml(new SafeConstructor(options))
-                    .load(new String(manifestTho, StandardCharsets.UTF_8));
-        } catch (RuntimeException e) {
-            throw loi("problem.manifest_hong",
-                    TestdataLimits.MANIFEST + " không phải YAML hợp lệ.");
-        }
-        Set<Integer> sample = new TreeSet<>();
-        // Một manifest rỗng, hoặc chỉ có comment, parse ra null. Đó là "không khai gì", và
-        // mặc định của "không khai gì" phải là mức KÍN nhất: mọi test đều ẩn. Coi nó là lỗi
-        // thì một đề không có sample nào không nạp được, mà đó là một đề hoàn toàn hợp lệ.
-        if (doc == null) {
-            return sample;
-        }
-        if (!(doc instanceof Map<?, ?> map)) {
-            throw loi("problem.manifest_hong",
-                    TestdataLimits.MANIFEST + " phải là một ánh xạ khoá–giá trị.");
-        }
-
-        Object ds = map.get("samples");
-        if (ds == null) {
-            return sample;
-        }
-        if (!(ds instanceof List<?> list)) {
-            throw loi("problem.manifest_samples",
-                    "Trường 'samples' phải là một danh sách số thứ tự test, ví dụ [1, 2].");
-        }
-        for (Object o : list) {
-            if (!(o instanceof Number n) || n.intValue() < 1
-                    || n.intValue() > TestdataLimits.MAX_TEST) {
-                throw loi("problem.manifest_samples",
-                        "Trường 'samples' chỉ nhận số thứ tự test từ 1 tới "
-                                + TestdataLimits.MAX_TEST + ".");
-            }
-            sample.add(n.intValue());
-        }
-        return sample;
-    }
 
     /**
      * Đếm byte thật, <b>không tin {@code ZipEntry.getSize()}</b>: trường đó do người tạo file

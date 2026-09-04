@@ -18,7 +18,7 @@
  */
 
 import { goi, LoiApi, phien } from './api.js';
-import { chu, bao } from './khung.js';
+import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
 import { DUONG } from './duong-dan.js';
 import { gan as ganBangXepHang } from './bang-xep-hang.js';
@@ -31,7 +31,8 @@ const tomTat = document.getElementById('tom-tat');
 const bangDe = document.getElementById('bang-de');
 const viSaoTrong = document.getElementById('vi-sao-trong');
 const nutDangKy = document.getElementById('dang-ky');
-const khuAdmin = document.getElementById('khu-admin');
+const khuRaDe = document.getElementById('khu-ra-de');
+const khuCongBo = document.getElementById('khu-cong-bo');
 
 const NHAN_TRANG_THAI = {
     SAP_DIEN_RA: 'Sắp diễn ra',
@@ -92,9 +93,9 @@ async function tai() {
     veDanhSachDe();
     veDangKy();
 
-    if (phien()?.role === 'ADMIN') {
-        khuAdmin.hidden = false;
-    }
+    // Hai mức quyền khác nhau, hai lần hỏi khác nhau — xem chú thích ở contest.html.
+    khuRaDe.hidden = !vaiTroItNhat('SETTER');
+    khuCongBo.hidden = !vaiTroItNhat('ADMIN');
 
     ganBangXepHang(kyThi.id, { o });
 }

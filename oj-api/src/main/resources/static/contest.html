@@ -38,8 +38,13 @@
 
             <p><button id="dang-ky" hidden>Đăng ký tham gia</button></p>
 
-            <section id="khu-admin" class="the" hidden>
-                <h3>Điều hành</h3>
+            <!-- ★ TÁCH LÀM HAI vì hai hành động này đòi HAI mức quyền khác nhau:
+                 "Thêm đề" đi qua AuthorContestUseCase (@RequiresRole SETTER), còn
+                 "Công bố" đi qua RevealStandingsUseCase (@RequiresRole ADMIN).
+                 Gộp chúng vào một khối rồi chặn ở ADMIN là giấu mất phần việc mà một
+                 SETTER hoàn toàn được làm — và họ không nhận lỗi nào, chỉ là không thấy. -->
+            <section id="khu-ra-de" class="the" hidden>
+                <h3>Thêm đề</h3>
 
                 <form id="form-them-de" novalidate>
                     <label for="problem-id">Thêm đề — id</label>
@@ -57,6 +62,10 @@
                     <p><button type="submit">Thêm đề</button></p>
                 </form>
 
+            </section>
+
+            <section id="khu-cong-bo" class="the" hidden>
+                <h3>Điều hành</h3>
                 <p><button id="cong-bo" class="phu">Công bố bảng xếp hạng đầy đủ</button></p>
                 <p class="goi-y">Chỉ dùng sau khi kỳ thi kết thúc — nó mở bảng đã đóng băng
                     cho mọi người.</p>

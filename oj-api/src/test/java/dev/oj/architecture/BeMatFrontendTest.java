@@ -113,6 +113,60 @@ class BeMatFrontendTest {
                 .isEmpty();
     }
 
+    /**
+     * ★ Thứ bậc vai trò ở giao diện phải trùng {@link dev.oj.platform.security.Role}.
+     *
+     * <h2>Lỗi có thật mà hai ca này canh</h2>
+     * Server kiểm quyền bằng {@code Role.atLeast} — {@code @RequiresRole(SETTER)} chấp nhận
+     * cả ADMIN. Giao diện Đợt 2 viết {@code phien().role === 'ADMIN'} để bày biểu mẫu tạo kỳ
+     * thi, tức là <b>chặt hơn server</b>: một SETTER gọi thẳng API nhận 201, nhưng trên trang
+     * thì không có nút nào để bấm.
+     *
+     * <p>Sai theo hướng ấy không ai báo. Không có lỗi, không có 403, không có dòng log —
+     * người dùng chỉ đơn giản không thấy thứ họ được phép làm, và kết luận là tính năng chưa
+     * viết xong.
+     */
+    @Test
+    @DisplayName("★ thứ bậc vai trò trong khung.js trùng đúng enum Role của server")
+    void thu_bac_vai_tro_trung_server() throws IOException {
+        String ma = Files.readString(THU_MUC_JS.resolve("khung.js"));
+
+        Matcher m = Pattern.compile("THU_BAC\\s*=\\s*\\[([^\\]]*)]").matcher(ma);
+        assertThat(m.find()).as("không thấy hằng THU_BAC trong khung.js").isTrue();
+
+        List<String> oGiaoDien = Stream.of(m.group(1).split(","))
+                .map(x -> x.trim().replace("'", "").replace("\"", ""))
+                .filter(x -> !x.isEmpty())
+                .toList();
+
+        List<String> oServer = Stream.of(dev.oj.platform.security.Role.values())
+                .map(Enum::name)
+                .toList();
+
+        assertThat(oGiaoDien)
+                .as("thứ TỰ cũng phải khớp — atLeast so bằng ordinal, không bằng tên")
+                .isEqualTo(oServer);
+    }
+
+    @Test
+    @DisplayName("★ không file JS nào so vai trò bằng === — phải dùng vaiTroItNhat")
+    void khong_so_vai_tro_bang_dau_bang() throws IOException {
+        List<String> viPham = new ArrayList<>();
+        Pattern soBang = Pattern.compile("role\\s*[!=]==");
+
+        try (Stream<Path> tep = Files.list(THU_MUC_JS)) {
+            for (Path f : tep.filter(x -> x.toString().endsWith(".js")).sorted().toList()) {
+                if (soBang.matcher(boChuThich(Files.readString(f))).find()) {
+                    viPham.add(f.getFileName() + " — dùng vaiTroItNhat() thay cho ===");
+                }
+            }
+        }
+
+        assertThat(viPham)
+                .as("so bằng làm giao diện chặt hơn server, và không có gì báo khi nó sai")
+                .isEmpty();
+    }
+
     // -------------------------------------------------------------------------
 
     private static Set<String> docDuongDan(String ma) {

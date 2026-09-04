@@ -31,14 +31,25 @@
     <h2>Chưa có tài khoản?</h2>
     <form id="form-dang-ky" class="the" novalidate>
         <label for="handle">Tên đăng nhập</label>
-        <input id="handle" name="handle" autocomplete="username" required>
-        <p class="goi-y">3–32 ký tự, chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.</p>
+        <!-- ★ `pattern` là BẢN SAO THỨ BA của cùng một luật (Java, CHECK của V1, và đây).
+             `IdentityDomainTest` đối chiếu cả ba, nên sửa một nơi là ba nơi cùng đỏ. Nó nằm
+             ở HTML chứ không phải trong login.js để JavaScript đọc lại từ DOM — một bản sao
+             ít hơn là một chỗ ít hơn để lệch. -->
+        <input id="handle" name="handle" autocomplete="username" required
+               pattern="^[A-Za-z0-9_.-]{3,32}$" minlength="3" maxlength="32"
+               aria-describedby="goi-y-handle loi-handle">
+        <p class="goi-y" id="goi-y-handle">3–32 ký tự, <strong>không dấu, không khoảng
+            trắng</strong>: chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.
+            Tên thật có dấu thì điền ở ô <em>Tên hiển thị</em> bên dưới.</p>
+        <p class="thong-bao loi" id="loi-handle" role="alert" hidden></p>
 
         <label for="email">Email</label>
         <input id="email" name="email" type="email" autocomplete="email" required>
 
         <label for="ten-hien-thi">Tên hiển thị</label>
-        <input id="ten-hien-thi" name="displayName" autocomplete="name" required>
+        <input id="ten-hien-thi" name="displayName" autocomplete="name" required
+               aria-describedby="goi-y-ten">
+        <p class="goi-y" id="goi-y-ten">Tên người khác nhìn thấy. Có dấu thoải mái.</p>
 
         <label for="mat-khau-moi">Mật khẩu</label>
         <input id="mat-khau-moi" name="password" type="password" autocomplete="new-password" required>

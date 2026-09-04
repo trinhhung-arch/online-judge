@@ -147,6 +147,22 @@ public class JdbcStandingsRepository implements StandingsRepository {
             VALUES (:contestId, :soDongKiem, :soDongLech, CAST(:chiTiet AS jsonb))
             """;
 
+    /**
+     * {@code NOT EXISTS} thay vì {@code LEFT JOIN ... IS NULL}: kỳ thi có nhiều bản soát, và
+     * một phép nối sẽ nhân dòng lên rồi phải {@code DISTINCT} lại. Ở đây chỉ hỏi "có hay không".
+     */
+    private static final String CAN_SOAT_LECH = """
+            SELECT c.id
+              FROM contests c
+             WHERE c.starts_at <= :bayGio
+               AND c.ends_at > :ketThucSau
+               AND NOT EXISTS (SELECT 1
+                                 FROM standings_drift_checks d
+                                WHERE d.contest_id = c.id
+                                  AND d.checked_at > :chuaSoatTu)
+             ORDER BY c.id
+            """;
+
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
@@ -270,4 +286,15 @@ public class JdbcStandingsRepository implements StandingsRepository {
         long value = rs.getLong(cot);
         return rs.wasNull() ? null : value;
     }
+
+    @Override
+    public List<Long> canSoatLech(Instant bayGio, Instant ketThucSau, Instant chuaSoatTu) {
+        return jdbc.sql(CAN_SOAT_LECH)
+                .param("bayGio", luc(bayGio))
+                .param("ketThucSau", luc(ketThucSau))
+                .param("chuaSoatTu", luc(chuaSoatTu))
+                .query(Long.class)
+                .list();
+    }
+
 }

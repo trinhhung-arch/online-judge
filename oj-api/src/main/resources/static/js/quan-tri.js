@@ -20,8 +20,8 @@
  * tưởng là số bây giờ.
  */
 
-import { goi, LoiApi, phien } from './api.js';
-import { chu, bao } from './khung.js';
+import { goi, LoiApi } from './api.js';
+import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
 import { DUONG } from './duong-dan.js';
 import { theoDoi } from './tien-do-job.js';
@@ -163,7 +163,7 @@ function soNguoiDung() {
 // ---------------------------------------------------------------------------
 
 if (o) {
-    if (phien()?.role !== 'ADMIN') {
+    if (!vaiTroItNhat('ADMIN')) {
         // Không phải chốt bảo mật — mỗi use-case tự kiểm (bất biến #11). Nói trước cho đỡ mất công.
         bao(o, 'Trang này dành cho ADMIN. Máy chủ sẽ từ chối mọi thao tác ở đây.', 'loi');
     }

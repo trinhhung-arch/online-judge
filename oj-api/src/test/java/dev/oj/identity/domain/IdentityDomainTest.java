@@ -41,6 +41,31 @@ class IdentityDomainTest {
                     .contains(User.HANDLE_REGEX);
         }
 
+        /**
+         * ★ Bản sao THỨ BA: thuộc tính {@code pattern} của ô tên đăng nhập trong
+         * {@code login.html}.
+         *
+         * <p>Nó tồn tại vì câu của server liệt kê thứ được phép chứ không nói ô của người
+         * dùng sai ở đâu — một người gõ "Hùng" nhận về một danh sách quy tắc và phải tự đoán
+         * ra rằng vấn đề là dấu thanh. Trang kiểm trước và nói thẳng, nhưng cái giá là luật
+         * này giờ sống ở ba nơi.
+         *
+         * <p>Bản HTML là bản dễ mục nhất: nới regex ở Java và V1 mà quên nó thì form từ chối
+         * một cái tên server chấp nhận, và <b>không có gì báo</b> — người dùng chỉ thấy một
+         * ô không cho qua. {@code login.js} đọc {@code pattern} từ DOM chứ không tự viết
+         * regex, nên đúng một bản HTML là đủ cho cả frontend.
+         */
+        @Test
+        @DisplayName("★ regex ở Java trùng đúng pattern của ô tên đăng nhập trong login.html")
+        void trung_voi_form_dang_ky() throws Exception {
+            String html = Files.readString(
+                    Path.of("src/main/resources/static/login.html"), StandardCharsets.UTF_8);
+
+            assertThat(html)
+                    .describedAs("login.html phải chứa pattern=\"%s\"", User.HANDLE_REGEX)
+                    .contains("pattern=\"" + User.HANDLE_REGEX + "\"");
+        }
+
         @Test
         @DisplayName("nhận chữ, số, chấm, gạch dưới, gạch ngang — dài 3 tới 32")
         void chap_nhan_dang_hop_le() {

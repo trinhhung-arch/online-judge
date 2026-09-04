@@ -101,4 +101,22 @@ public interface StandingsRepository {
     /** FR-CON-09 — ghi kết quả đối soát vào {@code standings_drift_checks}. */
     void ghiDrift(long contestId, int soDongKiem, int soDongLech, Map<String, Object> chiTiet);
 
+    /**
+     * ★ Kỳ thi cần đối soát lại — nguồn việc của {@code StandingsDriftCheckScheduler}.
+     *
+     * <p>Điều kiện "chưa soát kể từ {@code chuaSoatTu}" là thứ giữ cho nhịp này an toàn khi bật
+     * suốt ngày. {@code StandingsDriftCheckJob} tính lại <b>toàn bộ</b> kỳ thi từ
+     * {@code submissions}; không có chốt ấy thì mỗi nhịp lại một lần quét đầy đủ cho mọi kỳ thi
+     * trong cửa sổ, và nó đổ tải lên đúng những bảng mà đường nộp bài → verdict đang dùng
+     * ({@code CLAUDE.md} mục 4, câu hỏi 4).
+     *
+     * @param bayGio     mốc "bây giờ" do chỗ gọi cấp — repository không được tự đọc đồng hồ,
+     *                   nếu không thì không test được với {@code Clock.fixed}
+     * @param ketThucSau chỉ lấy kỳ thi kết thúc sau mốc này — kỳ thi cũ đã chốt thì không soát
+     *                   lại mãi. Kỳ thi <b>đang chạy</b> cũng lọt vào, vì {@code ends_at} của
+     *                   nó nằm ở tương lai
+     * @param chuaSoatTu bỏ qua kỳ thi đã có bản soát muộn hơn mốc này
+     */
+    List<Long> canSoatLech(Instant bayGio, Instant ketThucSau, Instant chuaSoatTu);
+
 }

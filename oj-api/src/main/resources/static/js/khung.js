@@ -25,6 +25,32 @@ export function chu(the, vanBan, lop) {
     return el;
 }
 
+/**
+ * ★ Thứ bậc vai trò, phản chiếu {@code Role.atLeast} của server.
+ *
+ * Server không kiểm bằng phép so BẰNG: `@RequiresRole(SETTER)` chấp nhận cả ADMIN, vì
+ * `Role.atLeast` so theo thứ tự USER < SETTER < ADMIN. Giao diện viết `role === 'ADMIN'`
+ * thì chặt HƠN server — và cái sai theo hướng đó không ai báo, vì không có lỗi nào cả:
+ * người dùng chỉ đơn giản không thấy cái nút mà lẽ ra họ được bấm.
+ *
+ * Đó chính là lỗi đã xảy ra ở Đợt 2 — SETTER không tạo được kỳ thi trên giao diện dù
+ * `POST /api/v1/contests` trả 201 cho họ.
+ *
+ * Đây KHÔNG phải phân quyền. Chốt thật nằm ở use-case (bất biến #11); hàm này chỉ quyết
+ * định có bày ra một nút hay không, và bày ra một nút chắc chắn nhận 403 là nói dối về
+ * những gì người ta làm được.
+ */
+const THU_BAC = ['USER', 'SETTER', 'ADMIN'];
+
+export function vaiTroItNhat(canCo) {
+    const dangCo = phien()?.role;
+    if (!dangCo) return false;
+    const a = THU_BAC.indexOf(dangCo);
+    const b = THU_BAC.indexOf(canCo);
+    // Vai trò lạ (server thêm vai trò mới mà quên file này) → từ chối, không đoán.
+    return a >= 0 && b >= 0 && a >= b;
+}
+
 export function veThanh() {
     const p = phien();
     const thanh = chu('header');
@@ -43,8 +69,8 @@ export function veThanh() {
     // Trang theo vai trò. Đây KHÔNG phải phân quyền — mỗi use-case tự kiểm (bất biến #11).
     // Nó chỉ tránh bày ra một link mà bấm vào là 403: mời rồi từ chối là một cách nói dối
     // về những gì người ta làm được.
-    if (p?.role === 'SETTER' || p?.role === 'ADMIN') muc.push(['/ra-de.html', 'Soạn đề']);
-    if (p?.role === 'ADMIN') {
+    if (vaiTroItNhat('SETTER')) muc.push(['/ra-de.html', 'Soạn đề']);
+    if (vaiTroItNhat('ADMIN')) {
         muc.push(['/quan-tri.html', 'Vận hành']);
         muc.push(['/nhat-ky.html', 'Nhật ký']);
     }

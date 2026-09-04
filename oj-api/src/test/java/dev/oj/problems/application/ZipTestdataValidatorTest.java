@@ -133,6 +133,73 @@ class ZipTestdataValidatorTest {
     // =========================================================================
 
     @Nested
+    @DisplayName("★ Mục lục — khoá lạ là LỖI, không phải thứ bỏ qua trong im lặng")
+    class KhoaLaTrongManifest {
+
+        private Map<String, byte[]> voiManifest(String yaml) {
+            var m = goiTot();
+            m.put("problem.yaml", b(yaml));
+            return m;
+        }
+
+        @Test
+        @DisplayName("★ mục lục kiểu 'tests:' bị TỪ CHỐI, và nói thứ tự test lấy từ đâu")
+        void danh_sach_test_bi_tu_choi() {
+            // Đây là mục lục một người ra đề cẩn thận sẽ viết. Trước bản sửa này nó nạp
+            // THÀNH CÔNG và không test nào thành sample — sai mà không ai biết.
+            assertThatThrownBy(() -> kiem(voiManifest("""
+                    tests:
+                      - input: 1.in
+                        output: 1.out
+                        sample: true
+                    """)))
+                    .isInstanceOf(ProblemsException.class)
+                    .hasMessageContaining("tests")
+                    .hasMessageContaining("tên file")
+                    .hasMessageContaining("samples: [1, 2]");
+        }
+
+        @Test
+        @DisplayName("★ khoá của trang soạn đề bị từ chối — nạp testdata KHÔNG được đổi giới hạn")
+        void khoa_cua_trang_soan_de_bi_tu_choi() {
+            // Nếu khoá này đọc được thì nạp một gói là đổi được giới hạn thời gian của một đề
+            // đang thi, mà đường nạp testdata không ghi audit_log nào.
+            assertThatThrownBy(() -> kiem(voiManifest("time_limit_ms: 5000\n")))
+                    .isInstanceOf(ProblemsException.class)
+                    .hasMessageContaining("time_limit_ms")
+                    .hasMessageContaining("trang soạn đề");
+        }
+
+        @Test
+        @DisplayName("★ 'sample' thiếu chữ s cũng bị bắt — đó là lý do dùng danh sách TRẮNG")
+        void go_sai_chinh_ta_cung_bi_bat() {
+            // Một danh sách đen chỉ bắt được khoá ai đó đã nghĩ ra. Lỗi gõ thiếu một chữ cái
+            // là cách hỏng âm thầm nhất, và không danh sách đen nào liệt kê nó.
+            assertThatThrownBy(() -> kiem(voiManifest("sample: [1]\n")))
+                    .isInstanceOf(ProblemsException.class)
+                    .hasMessageContaining("'sample'")
+                    .hasMessageContaining("samples");
+        }
+
+        @Test
+        @DisplayName("mục lục chỉ có 'samples' vẫn chạy bình thường")
+        void chi_co_samples_thi_van_chay() {
+            assertThat(kiem(voiManifest("samples: [2]\n")).cacTest())
+                    .filteredOn(ZipTestdataValidator.CapTest::laSample)
+                    .extracting(ZipTestdataValidator.CapTest::ordinal)
+                    .containsExactly(2);
+        }
+
+        @Test
+        @DisplayName("mục lục rỗng vẫn chạy — 'không khai gì' là mọi test đều ẩn")
+        void muc_luc_rong_van_chay() {
+            assertThat(kiem(voiManifest("# chỉ có chú thích\n")).cacTest())
+                    .filteredOn(ZipTestdataValidator.CapTest::laSample)
+                    .isEmpty();
+        }
+    }
+
+    @Nested
     @DisplayName("★ Zip slip — ghi ra ngoài thư mục đích")
     class ZipSlip {
 

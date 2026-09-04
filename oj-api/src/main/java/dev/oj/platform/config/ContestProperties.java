@@ -20,7 +20,9 @@ public record ContestProperties(
         Duration standingsInterval,
         int standingsBatchSize,
         Duration standingsGrace,
-        int topSize) {
+        int topSize,
+        Duration driftCheckInterval,
+        Duration driftCheckWindow) {
 
 public ContestProperties {
         if (standingsInterval == null || standingsInterval.isZero()
@@ -37,6 +39,16 @@ public ContestProperties {
         }
         if (standingsGrace == null || standingsGrace.isNegative()) {
             throw new IllegalStateException("oj.contest.standings-grace không hợp lệ");
+        }
+        if (driftCheckInterval == null || driftCheckInterval.toMinutes() < 1) {
+            throw new IllegalStateException(
+                    "oj.contest.drift-check-interval = " + driftCheckInterval
+                            + ". Mỗi lần soát là một lần tính lại TOÀN BỘ kỳ thi từ "
+                            + "submissions; nhịp dưới một phút là đổ tải lên đúng bảng mà "
+                            + "đường nộp bài đang dùng");
+        }
+        if (driftCheckWindow == null || driftCheckWindow.isNegative()) {
+            throw new IllegalStateException("oj.contest.drift-check-window không hợp lệ");
         }
         if (topSize < 1 || topSize > 200) {
             throw new IllegalStateException(

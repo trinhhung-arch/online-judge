@@ -1,6 +1,7 @@
 package dev.oj.platform.jobs;
 
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.error.DomainException;
 import dev.oj.platform.trace.TraceIdFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,9 +151,26 @@ public class JobRunner {
             log.info("Job {} xong", job.id());
         } catch (JobsException e) {
             ketThucTheoLoiNghiepVu(job, e);
+        } catch (DomainException e) {
+            // ★ Mọi lỗi NGHIỆP VỤ khác — ProblemsException, ContestsException…
+            //
+            // Nhánh này từng không tồn tại, và thiếu nó thì câu chú thích ở nhánh dưới nói một
+            // đằng còn code làm một nẻo: `publicMessage()` được viết ĐỂ hiện ra, nhưng chỉ
+            // `JobsException` được hưởng, còn tất cả những exception khác rơi xuống nhánh
+            // "lỗi không lường trước" và bị vứt.
+            //
+            // Hậu quả cụ thể: `ZipTestdataValidator` ném một câu chỉ đúng tên file sai —
+            // "Gói chứa một mục không hợp lệ: '1.in'. Chỉ chấp nhận problem.yaml và
+            // tests/<tên>.in|.out." — và người dùng nhận lại "một lỗi không lường trước, xem
+            // log với traceId". Họ không có log. Một thông báo đã viết sẵn cho họ bị thay bằng
+            // một mã số chỉ người vận hành tra được.
+            log.warn("Job {} dừng vì lỗi nghiệp vụ [{}]: {}", job.id(), e.code(), e.getMessage());
+            jobs.ghiSuKien(job.id(), "ERROR", e.publicMessage());
+            jobs.ketThuc(job.id(), JobStatus.FAILED, e.publicMessage(), clock.instant());
         } catch (RuntimeException e) {
-            // publicMessage của DomainException an toàn để hiện; mọi thứ khác thì không —
-            // bảng jobs ADMIN đọc được, và một stack trace ở đó là bất biến #9 bị chạm.
+            // Tới đây là lỗi KHÔNG lường trước thật: NullPointerException, lỗi driver, v.v.
+            // Những thứ ấy không có publicMessage nào an toàn — bảng jobs thì ADMIN đọc được,
+            // và một stack trace ở đó là bất biến #9 bị chạm.
             log.error("Job {} hỏng", job.id(), e);
             jobs.ketThuc(job.id(), JobStatus.FAILED,
                     "Công việc dừng vì một lỗi không lường trước. Xem log với traceId "

@@ -38,6 +38,7 @@ class StandingsJobsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
     @Autowired StandingsReader standings;
+    @Autowired dev.oj.contests.application.port.StandingsRepository standingsRepo;
     @Autowired StandingsUpdater updater;
     @Autowired RebuildStandingsJob rebuild;
     @Autowired StandingsDriftCheckJob drift;
@@ -91,6 +92,52 @@ class StandingsJobsIT extends PostgresIT {
     }
 
     // =========================================================================
+
+    @Test
+    @DisplayName("★ FR-CON-09 — kỳ thi đang chạy lọt vào danh sách cần soát")
+    void ky_thi_dang_chay_can_soat() {
+        Instant bayGio = Instant.now();
+
+        assertThat(standingsRepo.canSoatLech(bayGio,
+                bayGio.minus(Duration.ofDays(7)), bayGio.minus(Duration.ofMinutes(15))))
+                .contains(contestId);
+    }
+
+    @Test
+    @DisplayName("★ vừa soát xong thì KHÔNG soát lại — chốt chống quét lặp")
+    void vua_soat_thi_thoi() {
+        Instant bayGio = Instant.now();
+        // Mỗi lần soát là một lần tính lại toàn bộ kỳ thi từ submissions. Không có chốt này
+        // thì cửa sổ bảy ngày với nhịp mười lăm phút là gần bảy trăm lần quét cho mỗi kỳ thi.
+        drift.chay(ctx());
+
+        assertThat(standingsRepo.canSoatLech(bayGio,
+                bayGio.minus(Duration.ofDays(7)), bayGio.minus(Duration.ofMinutes(15))))
+                .doesNotContain(contestId);
+    }
+
+    @Test
+    @DisplayName("bản soát CŨ hơn một nhịp thì phải soát lại — lệch tới muộn sau rejudge")
+    void ban_soat_cu_thi_soat_lai() {
+        drift.chay(ctx());
+        Instant bayGio = Instant.now();
+
+        // `chuaSoatTu` ở tương lai: mọi bản soát đều "cũ hơn" nó.
+        assertThat(standingsRepo.canSoatLech(bayGio,
+                bayGio.minus(Duration.ofDays(7)), bayGio.plus(Duration.ofMinutes(1))))
+                .contains(contestId);
+    }
+
+    @Test
+    @DisplayName("kỳ thi ngoài cửa sổ thì coi như đã chốt, không soát nữa")
+    void ngoai_cua_so_thi_thoi() {
+        Instant bayGio = Instant.now();
+
+        // `ketThucSau` ở tương lai: không kỳ thi nào kết thúc sau mốc ấy.
+        assertThat(standingsRepo.canSoatLech(bayGio,
+                bayGio.plus(Duration.ofDays(1)), bayGio.minus(Duration.ofMinutes(15))))
+                .doesNotContain(contestId);
+    }
 
     @Test
     @DisplayName("★ FR-CON-08 — xoá sạch rồi dựng lại cho ra ĐÚNG bảng cũ")

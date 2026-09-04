@@ -26,8 +26,8 @@
  * `docTuForm`. Thêm mỗi chỗ thứ hai là viết một cái nút xoá dữ liệu.
  */
 
-import { goi, LoiApi, phien } from './api.js';
-import { chu, bao } from './khung.js';
+import { goi, LoiApi } from './api.js';
+import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong } from './trang.js';
 import { DUONG } from './duong-dan.js';
 import { ganTestdata } from './testdata.js';
@@ -217,8 +217,7 @@ async function doiTrangThai(duongDan, hoi, xong) {
 // ---------------------------------------------------------------------------
 
 if (o) {
-    const vaiTro = phien()?.role;
-    if (vaiTro !== 'SETTER' && vaiTro !== 'ADMIN') {
+    if (!vaiTroItNhat('SETTER')) {
         // Không phải chốt bảo mật — `AuthorProblemUseCase` mới là nơi chặn (bất biến #11).
         // Nói trước để người ta không gõ xong cả đề rồi mới nhận 403.
         bao(o, 'Tài khoản của bạn không có quyền soạn đề. Máy chủ sẽ từ chối mọi thao tác ở '

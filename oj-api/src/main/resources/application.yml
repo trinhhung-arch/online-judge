@@ -76,7 +76,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 5
+        size: 6
 
 server:
   port: 8080
@@ -254,6 +254,13 @@ oj:
     standings-batch-size: 500     # bất biến #8 — mọi truy vấn đều có LIMIT
     standings-grace: 5m           # bài nộp giây cuối vẫn đang chấm khi chuông reo
     top-size: 50                  # FR-CON-04 — top 50 + vùng quanh mình
+
+    # FR-CON-09 — nhịp đối soát bảng xếp hạng đã denormalize.
+    # Cửa sổ RỘNG hơn nhiều so với standings-grace vì lệch thường tới MUỘN: một lần
+    # rejudge đổi verdict nhiều ngày sau khi kỳ thi kết thúc vẫn làm bảng sai, và id
+    # bài nộp thì không đổi nên watermark đã vượt qua nó.
+    drift-check-interval: 15m     # mỗi lần soát là một lần tính lại toàn bộ kỳ thi
+    drift-check-window: 7d        # kỳ thi cũ hơn thế coi như đã chốt
 
   ai:
     daily-quota: 5                # FR-AI-03 — tuần 14-15

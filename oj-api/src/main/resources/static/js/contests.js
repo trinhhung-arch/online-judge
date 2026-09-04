@@ -15,8 +15,8 @@
  * bấm vào sẽ nhận 403 — bày ra rồi từ chối là một cách nói dối về những gì họ làm được.
  */
 
-import { goi, LoiApi, phien } from './api.js';
-import { chu, bao } from './khung.js';
+import { goi, LoiApi } from './api.js';
+import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
 import { DS, DUONG, TRANG_THAI_KY_THI } from './duong-dan.js';
 import { taoPhanTrang } from './phan-trang.js';
@@ -74,7 +74,8 @@ function sangUtc(giaTriLocal) {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-if (phien()?.role === 'ADMIN') {
+// SETTER trở lên — `AuthorContestUseCase` là @RequiresRole(SETTER), không phải ADMIN.
+if (vaiTroItNhat('SETTER')) {
     document.getElementById('khu-tao').hidden = false;
 }
 
