@@ -1,24 +1,64 @@
 /* =============================================================================
-   Giao diện Online Judge — Bước 4.12.
+   Giao diện Online Judge — Bước 4.12, sửa mặt tiền (tham khảo DMOJ).
 
    Không build step, không framework CSS. Một file, biến CSS, và bố cục bằng
    flex/grid. Lý do ở README: một mốc đã kín lịch không chịu thêm được một
    toolchain thứ hai, và deploy vẫn phải là đúng một file jar.
 
+   Ngôn ngữ thị giác mượn từ DMOJ (`resources/base.scss`, `navbar.scss`,
+   `table.scss`, `vars-*.scss`) và dịch sang biến CSS thuần:
+     · thanh điều hướng nền than, chữ trắng, mục đang mở tô xanh nhấn
+     · trang nằm trên một tấm nền sáng — nội dung là một tấm giấy có viền
+     · bảng có hàng tiêu đề nền đậm, bo góc trên, sọc chẵn lẻ
+     · hộp thông báo bốn sắc: tin / được / chờ / lỗi
+
    Ba thứ được giữ nghiêm ngặt vì chúng là yêu cầu, không phải thẩm mỹ:
      · a11y mức A — tương phản >= 4.5:1, focus nhìn thấy được, chạm >= 44px
      · mobile-first — mọi thứ bày một cột trước, media query mới chia đôi
      · prefers-reduced-motion — không ai bị buộc phải xem hiệu ứng
+
+   ★ KHÔNG một tên lớp nào bị xoá hay đổi nghĩa so với bản trước. Mọi lớp mà
+   `js/*.js` gán (`the` · `goi-y` · `thong-bao` · `loi` · `on` · `verdict` ·
+   `cho` · `hang` · `so-lieu` · `tien-do` · `su-kien` · `phu` · `nut` ·
+   `nguy-hiem` · `cuon-ngang` · `hai-cot` · `thanh` · `hieu` · `phien`) vẫn ở
+   đây, cùng ý nghĩa. Đây là một lần sơn lại, không phải một lần đổi hợp đồng.
    ============================================================================= */
 
+/* --- Biến ----------------------------------------------------------------- */
+
 :root {
+    /* Bề mặt. `--nen-trang` là tấm nền của cả trang; `--nen` là tờ giấy nằm
+       trên nó. Tách hai thứ này ra là cách DMOJ tạo chiều sâu mà không cần
+       một cái bóng nào. */
+    --nen-trang: #eef0f4;
     --nen: #ffffff;
     --nen-phu: #f5f6f8;
     --vien: #d9dce3;
+    --vien-nhat: #e8eaef;
     --chu: #1b1e24;
     --chu-nhat: #5b6070;
+
     --nhan: #1f5fbf;
     --nhan-dam: #16468f;
+    --nhan-sang: #2980b9;   /* xanh nhấn của DMOJ — mục đang mở trên thanh nav */
+
+    /* Thanh điều hướng giữ nguyên một màu ở mọi chủ đề, đúng như DMOJ: nó là
+       khung của trang, không phải nội dung của trang. */
+    --thanh-nen: #2f3239;
+    --thanh-nen-dam: #24272d;
+    --thanh-chu: #f0f1f4;
+
+    /* Hàng tiêu đề bảng. Tách khỏi màu thanh nav vì ở chủ đề tối, một nền
+       #1f232b nằm trên nền thẻ #1b1d23 gần như không nhìn ra. */
+    --bang-dau-nen: #2f3239;
+    --bang-dau-chu: #f0f1f4;
+    --bang-dau-vien: #24272d;
+
+    /* Nút chính. Tách khỏi `--nhan` vì chữ trắng phải nằm trên một nền đủ
+       tối — link màu sáng ở chủ đề tối không dùng làm nền nút được. */
+    --nut-nen: #1f5fbf;
+    --nut-nen-hover: #16468f;
+    --nut-chu: #ffffff;
 
     /* Màu verdict. Không dùng riêng màu để truyền tin — mỗi verdict luôn kèm
        chữ viết tắt VÀ một câu giải thích. a11y mức A, và cũng vì 8% nam giới
@@ -27,33 +67,99 @@
     --sai: #b3261e;
     --cho: #8a6d00;
 
-    --ban-kinh: 8px;
+    /* Nền nhạt đi kèm ba màu trên, cho huy hiệu và hộp thông báo. Ghi thẳng
+       giá trị thay vì `color-mix()` để không phụ thuộc một tính năng trình
+       duyệt mới cho thứ cơ bản như màu nền. */
+    --ac-nen: #e7f5ec;
+    --sai-nen: #fdecea;
+    --cho-nen: #fbf3d6;
+    --tin-nen: #e9f1fc;
+
+    --nguy-nen: #b3261e;
+    --nguy-nen-hover: #8f1e17;
+    --nguy-chu: #ffffff;
+
+    --soc: rgba(0, 0, 0, .025);          /* sọc hàng chẵn */
+    --noi-bat: rgba(41, 128, 185, .09);  /* hàng đang rê chuột */
+    --bong: 0 1px 2px rgba(16, 20, 30, .06), 0 4px 16px rgba(16, 20, 30, .05);
+
+    --ban-kinh-nho: 4px;
+    --ban-kinh: 6px;
+    --ban-kinh-lon: 10px;
     --khoang: 16px;
+
+    --chu-may: Consolas, "Andale Mono", "DejaVu Sans Mono", "Liberation Mono",
+               Menlo, Monaco, "Courier New", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --nen: #16181d;
-        --nen-phu: #1e2128;
-        --vien: #333844;
+        --nen-trang: #121317;
+        --nen: #1b1d23;
+        --nen-phu: #23262e;
+        --vien: #353a46;
+        --vien-nhat: #2b2f39;
         --chu: #e9ebf0;
-        --chu-nhat: #a0a6b6;
-        --nhan: #6ba4f8;
-        --nhan-dam: #9ac2ff;
+        --chu-nhat: #a3aab9;
+
+        --nhan: #7fb2ff;
+        --nhan-dam: #a9cbff;
+        --nhan-sang: #3d95d6;
+
+        --thanh-nen: #1f232b;
+        --thanh-nen-dam: #171a20;
+        --thanh-chu: #eef0f5;
+
+        --bang-dau-nen: #313844;
+        --bang-dau-chu: #eef0f5;
+        --bang-dau-vien: #3f4756;
+
+        --nut-nen: #2f6fd0;
+        --nut-nen-hover: #3d81e8;
+        --nut-chu: #ffffff;
+
         --ac: #5cc98a;
         --sai: #ff8a80;
-        --cho: #e0b900;
+        --cho: #e5c04a;
+
+        --ac-nen: #14311f;
+        --sai-nen: #381916;
+        --cho-nen: #332c10;
+        --tin-nen: #17263a;
+
+        --nguy-nen: #c33d33;
+        --nguy-nen-hover: #d94e43;
+        --nguy-chu: #ffffff;
+
+        --soc: rgba(255, 255, 255, .03);
+        --noi-bat: rgba(127, 178, 255, .10);
+        --bong: 0 1px 2px rgba(0, 0, 0, .35), 0 4px 18px rgba(0, 0, 0, .28);
     }
 }
 
 * { box-sizing: border-box; }
 
+/* ★ BẮT BUỘC, không phải trang trí.
+   `hidden` là cách mọi trang ở đây giấu một khối: nút "Tải thêm", khu quản trị,
+   dòng cảnh báo đóng băng. Trình duyệt cài nó bằng `display: none` trong bảng
+   kiểu mặc định — độ ưu tiên thấp nhất — nên BẤT KỲ quy tắc `display` nào của
+   ta trên cùng phần tử (`button { display: inline-flex }` chẳng hạn) cũng thắng
+   nó và làm khối ấy hiện ra. Một `!important` ở đây rẻ hơn nhiều so với việc
+   phải nhớ luật này mỗi lần thêm một `display` mới. */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
 body {
     margin: 0;
-    background: var(--nen);
+    min-height: 100vh;
+    background: var(--nen-trang);
     color: var(--chu);
     font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
+
+::selection { background: var(--nhan); color: #fff; }
 
 /* ★ a11y mức A: bỏ qua thanh điều hướng bằng bàn phím. Hiện ra khi được focus. */
 .bo-qua {
@@ -63,7 +169,9 @@ body {
     background: var(--nhan);
     color: #fff;
     padding: 12px 16px;
+    border-radius: 0 0 var(--ban-kinh) 0;
     z-index: 100;
+    text-decoration: none;
 }
 .bo-qua:focus { left: 0; }
 
@@ -72,46 +180,223 @@ body {
 :focus-visible {
     outline: 3px solid var(--nhan);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--ban-kinh-nho);
 }
 
+/* --- Thanh điều hướng ----------------------------------------------------- */
+
+/* Dính đỉnh trang: trên một trang bảng dài, đường về trang khác không nên nằm
+   sau ba màn hình cuộn. `z-index` thấp hơn `.bo-qua` để link bỏ qua vẫn nổi. */
 header.thanh {
+    position: sticky;
+    top: 0;
+    z-index: 50;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--khoang);
+    gap: 4px 12px;
     align-items: center;
-    padding: 12px var(--khoang);
-    border-bottom: 1px solid var(--vien);
-    background: var(--nen-phu);
+    padding: 6px var(--khoang);
+    background: var(--thanh-nen);
+    border-bottom: 1px solid var(--thanh-nen-dam);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .22);
 }
-header.thanh .hieu { font-weight: 700; font-size: 1.1rem; text-decoration: none; color: var(--chu); }
-header.thanh nav { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
-header.thanh .phien { margin-left: auto; display: flex; gap: 12px; align-items: center; }
 
-main { max-width: 1100px; margin: 0 auto; padding: var(--khoang); }
+header.thanh .hieu {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 10px 0 0;
+    margin-right: 4px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: .01em;
+    text-decoration: none;
+    color: var(--thanh-chu);
+    white-space: nowrap;
+}
+header.thanh .hieu:hover { color: #fff; }
 
-a { color: var(--nhan); }
+header.thanh nav {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* 44px là ngưỡng vùng chạm của WCAG — kể cả với một link trên thanh nav. */
+header.thanh nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: var(--ban-kinh-nho);
+    color: var(--thanh-chu);
+    text-decoration: none;
+    font-size: .95rem;
+    white-space: nowrap;
+}
+header.thanh nav a:hover {
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+}
+/* ★ `aria-current="page"` do khung.js gán. Tô nó là cách duy nhất để người
+   NHÌN biết mình đang ở đâu — người dùng trình đọc màn hình đã được thuộc tính
+   ấy nói cho rồi. Hai nhóm, một nguồn sự thật. */
+header.thanh nav a[aria-current="page"] {
+    background: var(--nhan-sang);
+    color: #fff;
+    font-weight: 600;
+}
+
+header.thanh .phien {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+header.thanh .phien > a:not(.nut) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 8px;
+    color: var(--thanh-chu);
+    text-decoration: none;
+    font-weight: 600;
+}
+header.thanh .phien > a:not(.nut):hover { color: #fff; text-decoration: underline; }
+
+/* Nút "Đăng xuất" nằm trên nền than: viền và chữ phải sáng, không phải màu link. */
+header.thanh button.phu {
+    color: var(--thanh-chu);
+    border-color: rgba(255, 255, 255, .45);
+    background: transparent;
+}
+header.thanh button.phu:hover {
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+    border-color: rgba(255, 255, 255, .7);
+}
+
+/* Vòng focus xanh chìm nghỉm trên nền than — trên thanh nav nó phải là trắng. */
+header.thanh :focus-visible { outline-color: #fff; }
+
+/* --- Khung trang ---------------------------------------------------------- */
+
+/* Nội dung là một tờ giấy nằm trên nền trang, như `#page-container` của DMOJ. */
+main {
+    max-width: 1100px;
+    min-height: 60vh;
+    margin: 0 auto;
+    padding: var(--khoang);
+    background: var(--nen);
+    border: 1px solid var(--vien);
+    border-top: 0;
+    border-radius: 0 0 var(--ban-kinh-lon) var(--ban-kinh-lon);
+    box-shadow: var(--bong);
+}
+
+@media (min-width: 900px) {
+    main { padding: 28px 32px 40px; }
+}
+
+/* --- Chữ ------------------------------------------------------------------ */
+
+a { color: var(--nhan); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 a:hover { color: var(--nhan-dam); }
 
-h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 8px; }
-h2 { font-size: 1.2rem; margin: 24px 0 8px; }
+h1 {
+    font-size: 1.7rem;
+    line-height: 1.25;
+    letter-spacing: -.01em;
+    margin: 0 0 var(--khoang);
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--vien-nhat);
+}
+
+h2 {
+    font-size: 1.22rem;
+    line-height: 1.3;
+    margin: 28px 0 10px;
+}
+
+h3 { font-size: 1.05rem; margin: 20px 0 8px; }
+
+/* Trong một thẻ, tiêu đề đầu tiên không cần đẩy xuống — viền thẻ đã tách rồi. */
+.the > h2:first-child,
+.the > h3:first-child,
+section > h2:first-child { margin-top: 0; }
+
+p { margin: 0 0 12px; }
+
+hr {
+    height: 0;
+    border: 0;
+    border-top: 1px solid var(--vien-nhat);
+    margin: 28px 0;
+}
+
+code, kbd, samp, pre { font-family: var(--chu-may); }
+
+pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: var(--nen-phu);
+    border: 1px solid var(--vien-nhat);
+    border-radius: var(--ban-kinh);
+    padding: 12px;
+    margin: 0;
+    font-size: .88rem;
+    line-height: 1.5;
+    max-height: 60vh;
+    overflow: auto;
+}
 
 /* --- Nút và ô nhập -------------------------------------------------------- */
 
 button, .nut {
     /* 44px là ngưỡng vùng chạm của WCAG. Nút nhỏ hơn thì trên điện thoại người
        ta bấm trượt, và trên một trang nộp bài thì bấm trượt là mất thời gian thi. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 44px;
     padding: 10px 18px;
     font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
     border-radius: var(--ban-kinh);
-    border: 1px solid var(--nhan);
-    background: var(--nhan);
-    color: #fff;
+    border: 1px solid var(--nut-nen);
+    background: var(--nut-nen);
+    color: var(--nut-chu);
     cursor: pointer;
+    transition: background-color .12s ease, border-color .12s ease, color .12s ease;
 }
-button.phu { background: transparent; color: var(--nhan); }
-button[disabled] { opacity: .55; cursor: not-allowed; }
+button:hover, .nut:hover {
+    background: var(--nut-nen-hover);
+    border-color: var(--nut-nen-hover);
+    color: var(--nut-chu);
+}
+button:active, .nut:active { transform: translateY(1px); }
+
+button.phu {
+    background: transparent;
+    color: var(--nhan);
+    border-color: var(--nhan);
+}
+button.phu:hover {
+    background: var(--tin-nen);
+    color: var(--nhan-dam);
+    border-color: var(--nhan-dam);
+}
+
+button[disabled], button[disabled]:hover {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none;
+}
 
 input, select, textarea {
     min-height: 44px;
@@ -122,27 +407,134 @@ input, select, textarea {
     border: 1px solid var(--vien);
     border-radius: var(--ban-kinh);
     width: 100%;
+    transition: border-color .12s ease, box-shadow .12s ease;
+}
+input:hover, select:hover, textarea:hover { border-color: var(--chu-nhat); }
+input:focus, select:focus, textarea:focus {
+    border-color: var(--nhan);
+    box-shadow: 0 0 0 3px var(--tin-nen);
+}
+textarea { line-height: 1.55; resize: vertical; }
+textarea#statementMd { font-family: var(--chu-may); font-size: .92rem; }
+
+/* Ô đánh dấu KHÔNG phải ô nhập chữ: quy tắc `width:100%` ở trên biến nó thành
+   một dải xám dài suốt hàng. Trả nó về đúng kích thước của một ô đánh dấu. */
+input[type="checkbox"], input[type="radio"] {
+    width: auto;
+    min-width: 20px;
+    height: 20px;
+    min-height: 20px;
+    margin: 0;
+    accent-color: var(--nhan);
+    flex: none;
 }
 
-label { display: block; font-weight: 600; margin: 12px 0 4px; }
+input[type="file"] { padding: 9px 12px; background: var(--nen-phu); cursor: pointer; }
+
+label { display: block; font-weight: 600; margin: 14px 0 5px; }
+label:first-child { margin-top: 0; }
+
 .goi-y { color: var(--chu-nhat); font-size: .9rem; margin-top: 4px; }
 
-/* --- Thẻ và bảng ---------------------------------------------------------- */
+progress {
+    width: 100%;
+    max-width: 420px;
+    height: 12px;
+    accent-color: var(--nhan);
+    vertical-align: middle;
+}
+
+/* --- Thẻ ------------------------------------------------------------------ */
 
 .the {
     border: 1px solid var(--vien);
-    border-radius: var(--ban-kinh);
+    border-radius: var(--ban-kinh-lon);
     padding: var(--khoang);
-    margin-bottom: 12px;
+    margin-bottom: var(--khoang);
     background: var(--nen);
+    box-shadow: 0 1px 2px rgba(16, 20, 30, .04);
 }
 
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--vien); }
-th { color: var(--chu-nhat); font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; }
+@media (min-width: 900px) {
+    .the { padding: 20px 22px; }
+}
+
+/* Một thẻ lồng trong thẻ (khu điều hành trong contest.html) phải phân biệt
+   được với thẻ chứa nó — nếu không thì hai đường viền chỉ là nhiễu. */
+.the .the { background: var(--nen-phu); box-shadow: none; }
+
+/* --- Bảng ----------------------------------------------------------------- */
+
+/* `separate` thay cho `collapse` để bo được góc hàng tiêu đề (cách của DMOJ
+   trong `table.scss`). Viền vẫn vẽ một lần mỗi ô nhờ `border-spacing: 0`. */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 4px;
+    font-size: .95rem;
+}
+
+caption {
+    text-align: left;
+    padding: 0 2px 8px;
+    color: var(--chu-nhat);
+    font-size: .9rem;
+}
+
+thead th {
+    background: var(--bang-dau-nen);
+    color: var(--bang-dau-chu);
+    text-align: left;
+    padding: 11px 10px;
+    font-size: .82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--bang-dau-vien);
+}
+thead tr:first-child th:first-child { border-top-left-radius: var(--ban-kinh); }
+thead tr:first-child th:last-child { border-top-right-radius: var(--ban-kinh); }
+
+td {
+    text-align: left;
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--vien-nhat);
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Ô tiêu đề HÀNG (`<th scope="row">` ở submission.html và trang-thai.html) là
+   một nhãn, không phải một hàng tiêu đề bảng. Nó không được mang nền đậm. */
+tbody th {
+    text-align: left;
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--vien-nhat);
+    color: var(--chu-nhat);
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+tbody tr:nth-child(even) { background: var(--soc); }
+tbody tr:hover { background: var(--noi-bat); }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
 
 /* Bảng rộng cuộn trong khung của nó, KHÔNG làm cả trang cuộn ngang. */
-.cuon-ngang { overflow-x: auto; }
+.cuon-ngang {
+    overflow-x: auto;
+    margin-bottom: var(--khoang);
+    border: 1px solid var(--vien);
+    border-radius: var(--ban-kinh);
+    background: var(--nen);
+}
+.cuon-ngang > table { margin-bottom: 0; }
+.cuon-ngang > table > caption { padding: 10px 12px 8px; }
+/* Bảng đã nằm trong một khung có viền — góc bo của hàng tiêu đề bị khung cắt,
+   nên bỏ đi cho khỏi thừa một milimet trắng ở hai mép. */
+.cuon-ngang thead tr:first-child th:first-child,
+.cuon-ngang thead tr:first-child th:last-child { border-radius: 0; }
 
 /* Danh sách mô tả — phần chỉ đọc của hồ sơ (Bước G2). Hai cột trên màn hình
    rộng, xếp chồng trên điện thoại: nhãn ngắn, giá trị dài, không cần bảng. */
@@ -156,75 +548,239 @@ dl dd { margin: 0 0 8px; }
 
 /* --- Verdict -------------------------------------------------------------- */
 
-.verdict { font-weight: 700; }
-.verdict.AC { color: var(--ac); }
-.verdict.WA, .verdict.TLE, .verdict.MLE, .verdict.RE, .verdict.CE, .verdict.IE { color: var(--sai); }
-.verdict.cho { color: var(--cho); }
+/* Mỗi verdict mang theo hai biến: màu chữ và màu nền. Nhờ vậy huy hiệu bên
+   dưới chỉ cần một quy tắc, không phải bảy. */
+.verdict {
+    font-weight: 700;
+    --v-chu: var(--chu-nhat);
+    --v-nen: var(--nen-phu);
+    color: var(--v-chu);
+}
+.verdict.AC { --v-chu: var(--ac); --v-nen: var(--ac-nen); }
+.verdict.WA, .verdict.TLE, .verdict.MLE, .verdict.RE, .verdict.CE, .verdict.IE {
+    --v-chu: var(--sai);
+    --v-nen: var(--sai-nen);
+}
+.verdict.cho { --v-chu: var(--cho); --v-nen: var(--cho-nen); }
+
+/* Huy hiệu — CHỈ cho `<span>` và `<a>`, tức những chỗ verdict là một nhãn rời.
+   `<td class="verdict …">` (contests.js) và `<h2 class="verdict …">`
+   (trang-thai.js) giữ nguyên dạng chữ tô màu: một ô bảng hay một tiêu đề bị
+   bọc thành viên thuốc trông như lỗi bố cục. */
+a.verdict, span.verdict {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--v-chu);
+    background: var(--v-nen);
+    color: var(--v-chu);
+    font-size: .85rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-decoration: none;
+}
+a.verdict:hover { color: var(--v-chu); filter: brightness(.94); }
+
+/* submission.js gán lớp cả khi chưa có verdict — một viên thuốc rỗng là rác
+   thị giác, không phải thông tin. */
+a.verdict:empty, span.verdict:empty { display: none; }
+
+/* Tiêu đề trạng thái hệ thống (trang-thai.js gán `verdict AC` / `verdict cho`
+   thẳng lên `<h2>`) — chữ tô màu, cỡ tiêu đề. */
+h1.verdict, h2.verdict, h3.verdict { color: var(--v-chu); }
 
 /* --- Thông báo ------------------------------------------------------------ */
 
+/* Bốn sắc, mượn thang `info / success / warning / danger` của DMOJ. Dải màu
+   bên trái là thứ đọc được từ khoé mắt; chữ mới là thứ nói ra chuyện gì. */
 .thong-bao {
-    padding: 12px var(--khoang);
+    padding: 12px 14px;
     border-radius: var(--ban-kinh);
     border: 1px solid var(--vien);
+    border-left: 4px solid var(--nhan);
+    background: var(--tin-nen);
     margin: 12px 0;
 }
-.thong-bao.loi { border-color: var(--sai); color: var(--sai); }
-.thong-bao.on { border-color: var(--ac); color: var(--ac); }
+.thong-bao.loi {
+    border-color: var(--sai);
+    border-left-color: var(--sai);
+    background: var(--sai-nen);
+    color: var(--sai);
+}
+.thong-bao.on {
+    border-color: var(--ac);
+    border-left-color: var(--ac);
+    background: var(--ac-nen);
+    color: var(--ac);
+}
 .thong-bao:empty { display: none; }
+
+/* tien-do-job.js gắn lớp `loi` lên một `<p>` trần, ngoài mọi hộp thông báo. */
+.loi { color: var(--sai); }
 
 /* --- Trình soạn mã -------------------------------------------------------- */
 
-.khung-soan { border: 1px solid var(--vien); border-radius: var(--ban-kinh); overflow: hidden; }
+.khung-soan {
+    border: 1px solid var(--vien);
+    border-radius: var(--ban-kinh);
+    overflow: hidden;
+    background: var(--nen);
+}
+.khung-soan:focus-within { border-color: var(--nhan); box-shadow: 0 0 0 3px var(--tin-nen); }
 .cm-editor { height: 55vh; font-size: 14px; }
 .cm-editor.cm-focused { outline: none; }   /* khung ngoài đã có focus ring */
 
-.hang-nop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.hang-nop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
 .hang-nop select { width: auto; min-width: 180px; }
 
 /* --- Bố cục hai cột, mobile-first ----------------------------------------- */
 
-.hai-cot { display: grid; gap: var(--khoang); }
+/* ★ `minmax(0, 1fr)` KHÔNG phải thừa, kể cả ở cột đơn.
+   Một ô lưới mặc định có `min-width: auto` — nó không co nhỏ hơn nội dung của
+   nó. Một bảng có hàng tiêu đề `nowrap` nằm bên trong sẽ đẩy cột rộng ra, cột
+   đẩy `main` rộng ra, và cả trang cuộn ngang trên điện thoại — đúng thứ mà
+   `.cuon-ngang` sinh ra để tránh. `minmax(0, …)` cho phép ô co lại, và khung
+   cuộn bên trong nó mới làm được việc của mình. */
+.hai-cot { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--khoang); }
 @media (min-width: 900px) {
-    .hai-cot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .hai-cot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 }
 
 /* Đề bài render từ Markdown: bảng và khối mã không được làm vỡ bố cục. */
 .de-bai { overflow-wrap: anywhere; }
+.de-bai > :first-child { margin-top: 0; }
 .de-bai pre { background: var(--nen-phu); padding: 12px; border-radius: var(--ban-kinh); overflow-x: auto; }
-.de-bai code { background: var(--nen-phu); padding: 2px 5px; border-radius: 4px; }
+.de-bai code { background: var(--nen-phu); padding: 2px 5px; border-radius: var(--ban-kinh-nho); font-size: .92em; }
 .de-bai pre code { background: none; padding: 0; }
 .de-bai table { display: block; overflow-x: auto; }
+.de-bai blockquote {
+    margin: 12px 0;
+    padding: 4px 14px;
+    border-left: 4px solid var(--vien);
+    color: var(--chu-nhat);
+}
+.de-bai img { max-width: 100%; height: auto; }
 
 /* --- Đợt 3: soạn đề và vận hành ------------------------------------------ */
 
 /* Một hàng nút/nhãn xếp ngang, xuống dòng được trên màn hình hẹp. */
 .hang { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* `<label class="hang">` bọc một ô đánh dấu: chữ nhãn không nên đậm như một
+   nhãn ô nhập, và nó phải bấm được cả dòng. */
+label.hang { font-weight: 400; cursor: pointer; }
 
 /* Bảng số của trang vận hành. Nhãn và số phải đọc được thành cặp, kể cả khi
    đọc bằng trình đọc màn hình — nên nó là <dl>, không phải hai cột <div>. */
-.so-lieu { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; margin: 0; }
-.so-lieu dt { color: var(--chu-nhat); }
-.so-lieu dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.so-lieu {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 16px;
+    margin: 0 0 var(--khoang);
+    border: 1px solid var(--vien);
+    border-radius: var(--ban-kinh);
+    padding: 4px 14px;
+    background: var(--nen);
+}
+.so-lieu dt {
+    color: var(--chu-nhat);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--vien-nhat);
+}
+.so-lieu dd {
+    margin: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--vien-nhat);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-align: right;
+}
 @media (min-width: 700px) {
-    .so-lieu { grid-template-columns: repeat(2, 1fr auto); }
+    .so-lieu { grid-template-columns: repeat(2, 1fr auto); column-gap: 24px; }
 }
 
+/* Chưa tải được số liệu thì `#bang-so` rỗng — một khung viền trống là một câu
+   nói dối nhỏ ("có bảng, chỉ là trống"), trong khi sự thật là chưa có gì. */
+dl:empty { display: none; }
+
 /* Tiến độ việc nền. */
-.tien-do { margin-top: 12px; }
-.tien-do progress { width: 100%; max-width: 420px; vertical-align: middle; }
+.tien-do {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--vien);
+    border-left: 4px solid var(--nhan);
+    border-radius: var(--ban-kinh);
+    background: var(--nen-phu);
+}
+.tien-do > p:first-child { margin-top: 0; font-weight: 600; }
+.tien-do > :last-child { margin-bottom: 0; }
 .su-kien { margin: 8px 0 0; padding-left: 18px; color: var(--chu-nhat); font-size: 0.94em; }
 .su-kien li { margin: 2px 0; overflow-wrap: anywhere; }
 
 /* Nút cho việc không hoàn tác được. Màu KHÔNG phải thứ duy nhất báo hiệu:
    chữ trên nút và câu hỏi xác nhận mới là thứ nói ra hậu quả. */
-.nguy-hiem { background: var(--sai); border-color: var(--sai); color: #fff; }
-.nguy-hiem:hover { filter: brightness(0.92); }
+.nguy-hiem {
+    background: var(--nguy-nen);
+    border-color: var(--nguy-nen);
+    color: var(--nguy-chu);
+}
+.nguy-hiem:hover {
+    background: var(--nguy-nen-hover);
+    border-color: var(--nguy-nen-hover);
+    color: var(--nguy-chu);
+}
 
 /* Chi tiết nhật ký là JSON một dòng — cho phép ngắt ở bất kỳ đâu để không đẩy
    ngang cả bảng. */
-td code { overflow-wrap: anywhere; font-size: 0.92em; }
+td code {
+    overflow-wrap: anywhere;
+    font-size: 0.88em;
+    background: var(--nen-phu);
+    border-radius: var(--ban-kinh-nho);
+    padding: 2px 5px;
+}
+
+/* --- Điện thoại ----------------------------------------------------------- */
+
+/* Trên màn hình hẹp, bảy mục điều hướng xuống dòng thành bốn hàng và ăn mất
+   nửa màn hình đầu tiên. DMOJ giải bằng một nút hamburger — thứ đó cần JS và
+   cần sửa `khung.js`. Ở đây dùng cách không cần một dòng mã nào: nav thành MỘT
+   hàng cuộn ngang được. Mọi mục vẫn tới được, vẫn đủ 44px vùng chạm, và chiều
+   cao thanh trở về hai hàng.
+
+   Thanh cũng thôi dính đỉnh: trên 812px chiều cao thì 100px dính cứng là một
+   cái giá quá đắt cho một tiện ích. */
+@media (max-width: 760px) {
+    header.thanh {
+        position: static;
+        padding: 4px 8px 0;
+        column-gap: 8px;
+        row-gap: 0;
+    }
+    /* Tên site và khu phiên phải nằm CÙNG một hàng. Ở 375px chúng vừa khít,
+       nên mọi milimet đệm thừa ở đây đều đổi thành một hàng nữa của thanh. */
+    header.thanh .hieu { order: 1; font-size: 1rem; padding-right: 0; margin-right: 0; }
+    header.thanh .phien { order: 2; gap: 6px; }
+    header.thanh .phien > a:not(.nut) { padding: 0 4px; }
+    header.thanh .phien button, header.thanh .phien .nut { padding: 10px 12px; }
+    header.thanh nav {
+        order: 3;
+        flex: 0 0 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        margin: 0 -8px;
+        padding: 0 8px 2px;
+    }
+    header.thanh nav::-webkit-scrollbar { display: none; }
+    header.thanh nav a { flex: none; }
+
+    main { padding: 12px; border-left: 0; border-right: 0; border-radius: 0; }
+    h1 { font-size: 1.45rem; }
+}
 
 @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
+    button:active, .nut:active { transform: none; }
 }
