@@ -41,6 +41,10 @@
                 <th scope="col">Thời gian</th>
                 <th scope="col">Bộ nhớ</th>
                 <th scope="col">Đã giải</th>
+                <!-- Chỉ có nghĩa với người ra đề; js/list.js bỏ `hidden` khi đủ quyền.
+                     Ẩn bằng thuộc tính chứ không xoá khỏi DOM, để số ô của mỗi dòng luôn
+                     khớp số ô của tiêu đề. -->
+                <th scope="col" class="chi-ra-de" hidden>Sửa</th>
             </tr>
             </thead>
             <tbody id="bang"></tbody>

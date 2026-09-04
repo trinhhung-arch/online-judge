@@ -3,6 +3,7 @@ package dev.oj.problems.application.port;
 import dev.oj.platform.web.CursorPage;
 import dev.oj.problems.domain.Problem;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -40,8 +41,12 @@ public interface ProblemRepository {
     /**
      * @param daGiaiBoi lọc "đã giải" của FR-PROB-09. {@code null} = không lọc.
      *                  {@code true}/{@code false} cùng {@code requesterId} = chỉ đề đã/chưa giải
+     * @param idBiKhoa  FR-CON-03 — id các đề bị lịch thi khoá với người xem này, do
+     *                  {@code ContestWindowQuery} tính. <b>Không bao giờ rỗng</b>: người gọi
+     *                  luôn thêm một id canh {@code 0}, vì {@code NOT IN ()} là lỗi cú pháp
+     *                  SQL và {@code problems.id} bắt đầu từ 1 nên {@code 0} không loại ai
      */
-    record ListFilter(String tagSlug, Long requesterId, Boolean daGiaiBoi) {
+    record ListFilter(String tagSlug, Long requesterId, Boolean daGiaiBoi, List<Long> idBiKhoa) {
     }
 
     /**

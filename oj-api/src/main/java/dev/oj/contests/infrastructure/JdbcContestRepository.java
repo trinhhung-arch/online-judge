@@ -98,12 +98,23 @@ public class JdbcContestRepository implements ContestRepository {
             """;
 
     private static final String THEM_DE = """
-            INSERT INTO contest_problems (contest_id, problem_id, label, ordinal, points)
-            VALUES (:contestId, :problemId, :label, :ordinal, :points)
+            INSERT INTO contest_problems (contest_id, problem_id, label, ordinal, points,
+                                          created_for_contest)
+            VALUES (:contestId, :problemId, :label, :ordinal, :points, :soanRieng)
             ON CONFLICT (contest_id, problem_id) DO UPDATE
                SET label = EXCLUDED.label,
                    ordinal = EXCLUDED.ordinal,
-                   points = EXCLUDED.points
+                   points = EXCLUDED.points,
+                   -- Nguồn gốc DÍNH: gắn lại một đề đã soạn riêng không biến nó thành đề
+                   -- mượn, và ngược lại. Đây là dữ kiện lịch sử, không phải một thuộc tính
+                   -- người dùng chỉnh được bằng cách bấm lại nút.
+                   created_for_contest = contest_problems.created_for_contest
+                                      OR EXCLUDED.created_for_contest
+            """;
+
+    private static final String GO_DE = """
+            DELETE FROM contest_problems
+             WHERE contest_id = :contestId AND problem_id = :problemId
             """;
 
     /**
@@ -112,7 +123,8 @@ public class JdbcContestRepository implements ContestRepository {
      * {@code POST /submissions}.
      */
     private static final String DE_CUA = """
-            SELECT cp.problem_id, p.code, cp.label, cp.ordinal, cp.points
+            SELECT cp.problem_id, p.code, cp.label, cp.ordinal, cp.points,
+                   cp.created_for_contest
               FROM contest_problems cp
               JOIN problems p ON p.id = cp.problem_id
              WHERE cp.contest_id = :contestId
@@ -173,6 +185,17 @@ public class JdbcContestRepository implements ContestRepository {
 
     @Override
     public void themDe(long contestId, long problemId, String label, int ordinal, int points) {
+        gan(contestId, problemId, label, ordinal, points, false);
+    }
+
+    @Override
+    public void themDeSoanRieng(long contestId, long problemId, String label, int ordinal,
+                                int points) {
+        gan(contestId, problemId, label, ordinal, points, true);
+    }
+
+    private void gan(long contestId, long problemId, String label, int ordinal, int points,
+                     boolean soanRieng) {
         try {
             jdbc.sql(THEM_DE)
                     .param("contestId", contestId)
@@ -180,6 +203,7 @@ public class JdbcContestRepository implements ContestRepository {
                     .param("label", label)
                     .param("ordinal", ordinal)
                     .param("points", points)
+                    .param("soanRieng", soanRieng)
                     .update();
         } catch (DuplicateKeyException e) {
             // UNIQUE (contest_id, label) — hai đề cùng nhãn 'A' thì bảng xếp hạng có hai cột
@@ -207,12 +231,21 @@ public class JdbcContestRepository implements ContestRepository {
     }
 
     @Override
+    public boolean goDe(long contestId, long problemId) {
+        return jdbc.sql(GO_DE)
+                .param("contestId", contestId)
+                .param("problemId", problemId)
+                .update() == 1;
+    }
+
+    @Override
     public List<DeCuaContest> deCua(long contestId) {
         return jdbc.sql(DE_CUA)
                 .param("contestId", contestId)
                 .query((rs, i) -> new DeCuaContest(
                         rs.getLong("problem_id"), rs.getString("code"), rs.getString("label"),
-                        rs.getInt("ordinal"), rs.getInt("points")))
+                        rs.getInt("ordinal"), rs.getInt("points"),
+                        rs.getBoolean("created_for_contest")))
                 .list();
     }
 

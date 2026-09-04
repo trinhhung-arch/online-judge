@@ -47,6 +47,8 @@ export const DUONG = {
         soan:     (id) => `/api/v1/problems/${encodeURIComponent(id)}/edit`,
         xuatBan:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/publish`,
         goXuong:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/retire`,
+        // Xoá HẲN. Máy chủ từ chối nếu đề đã có bài nộp hoặc còn thuộc kỳ thi.
+        xoa:      (id) => `/api/v1/problems/${encodeURIComponent(id)}`,
         testdata: (id) => `/api/v1/problems/${encodeURIComponent(id)}/testdata`,
     },
 
@@ -82,6 +84,10 @@ export const DUONG = {
         dangKy:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/register`,
         tao:         '/api/v1/contests',
         themDe:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/problems`,
+        // V10 — soạn một đề SINH RA cho kỳ thi này, không mượn từ kho đề chung.
+        soanDe:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/problems/new`,
+        goDe:        (id, pid) => `/api/v1/contests/${encodeURIComponent(id)}`
+            + `/problems/${encodeURIComponent(pid)}`,
         congBo:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/reveal`,
     },
 

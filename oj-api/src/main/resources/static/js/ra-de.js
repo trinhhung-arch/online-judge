@@ -31,12 +31,27 @@ import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong } from './trang.js';
 import { DUONG } from './duong-dan.js';
 import { ganTestdata } from './testdata.js';
-
-const KHOA_GAN_DAY = 'oj.ra-de.gan-day';
+import { nhoLai, veGanDay as veDsGanDay } from './de-gan-day.js';
+import { ganXoaDe } from './xoa-de.js';
 
 const o = khoiDong({ doiDangNhap: true });
 
 const form = document.getElementById('form-de');
+const khuKyThi = document.getElementById('khu-ky-thi');
+const nhanKyThi = document.getElementById('nhan-ky-thi');
+
+/**
+ * ★ V10 — trang có HAI chế độ, khác nhau ở ĐÍCH ĐẾN của nút Lưu: `null` là kho đề chung
+ * (POST /problems), `<id>` là soạn riêng cho kỳ thi ấy (POST /contests/<id>/problems/new —
+ * một request làm cả hai việc trong một transaction).
+ *
+ * Chỉ áp dụng khi TẠO. Sửa đề đã có luôn là PUT /problems/<id>: đổi nội dung đề không phải
+ * là đổi quan hệ giữa đề với kỳ thi.
+ */
+const kyThiDich = (() => {
+    const v = new URLSearchParams(location.search).get('kyThi');
+    return v && /^[0-9]+$/.test(v) ? Number(v) : null;
+})();
 const tieuDeForm = document.getElementById('tieu-de-form');
 const nutLuu = document.getElementById('luu');
 const nutXuatBan = document.getElementById('xuat-ban');
@@ -49,52 +64,22 @@ const ganDay = document.getElementById('gan-day');
 /** `null` = đang soạn đề mới; một số = đang sửa đề đã có. */
 let deHienTai = null;
 
+/** Khối xoá đề (`xoa-de.js`). Khởi tạo trước mọi lời gọi `datCheDo`, thứ đẩy trạng thái sang nó. */
+const xoaDe = ganXoaDe({
+    o,
+    khiXong: () => {
+        form.reset();
+        datCheDo(null, null, null);
+        veGiaiThichPhanHoi();
+    },
+});
+
 const GIAI_THICH_PHAN_HOI = {
     NONE: 'Kín nhất. Thí sinh chỉ biết đúng hay sai — không rút trích được gì từ verdict.',
     TEST_INDEX: 'Mặc định. Nói sai ở test thứ mấy; đủ để gỡ lỗi, chưa đủ để dựng lại bộ test.',
     SAMPLE_DETAIL: 'Hở nhất. Chỉ hiện chi tiết của test VÍ DỤ — vốn đã công khai — nhưng hãy '
         + 'chắc rằng những test bạn đánh dấu "sample" thật sự là test bạn muốn cho xem.',
 };
-
-// ---------------------------------------------------------------------------
-// Danh sách gần đây — bộ nhớ của trình duyệt này
-// ---------------------------------------------------------------------------
-
-function docGanDay() {
-    try {
-        const ds = JSON.parse(localStorage.getItem(KHOA_GAN_DAY) || '[]');
-        return Array.isArray(ds) ? ds : [];
-    } catch {
-        return [];
-    }
-}
-
-function nhoLai(problemId, code) {
-    const ds = docGanDay().filter((x) => x.id !== problemId);
-    ds.unshift({ id: problemId, code });
-    try {
-        localStorage.setItem(KHOA_GAN_DAY, JSON.stringify(ds.slice(0, 12)));
-    } catch {
-        // Chế độ riêng tư hoặc hết dung lượng. Mất lối tắt, không mất đề — im lặng là đúng.
-    }
-    veGanDay();
-}
-
-function veGanDay() {
-    const ds = docGanDay();
-    ganDay.replaceChildren();
-    if (!ds.length) return;
-
-    ganDay.append(chu('p', 'Mở nhanh (nhớ trên máy này):', 'goi-y'));
-    const hang = chu('p', null, 'hang');
-    for (const x of ds) {
-        const nut = chu('button', `#${x.id} · ${x.code || 'chưa đặt mã'}`, 'phu');
-        nut.type = 'button';
-        nut.addEventListener('click', () => moDe(x.id));
-        hang.append(nut);
-    }
-    ganDay.append(hang);
-}
 
 // ---------------------------------------------------------------------------
 // Đổ dữ liệu vào form và đọc ngược ra
@@ -122,6 +107,8 @@ function datCheDo(id, code, trangThai) {
         khuTrangThai.className = 'thong-bao';
         khuTrangThai.textContent = NHAN_TRANG_THAI[trangThai] || trangThai || '';
     }
+
+    xoaDe.dat(id, code);
 }
 
 function doVaoForm(de) {
@@ -171,6 +158,7 @@ async function moDe(id) {
         doVaoForm(de);
         datCheDo(id, de.code, de.status);
         nhoLai(id, de.code);
+        veDsGanDay(ganDay, moDe);
         ganTestdata(id, { o });
         bao(o, `Đã mở đề #${id}.`, 'on');
     } catch (e) {
@@ -187,11 +175,30 @@ async function luu(ev) {
         if (deHienTai) {
             await goi(DUONG.de.sua(deHienTai), { method: 'PUT', body: than });
             nhoLai(deHienTai, than.code);
+            veDsGanDay(ganDay, moDe);
             bao(o, 'Đã lưu.', 'on');
+        } else if (kyThiDich !== null) {
+            const kq = await goi(DUONG.kyThi.soanDe(kyThiDich), {
+                method: 'POST',
+                body: {
+                    de: than,
+                    label: form.label.value.trim(),
+                    ordinal: Number(form.ordinal.value),
+                    points: Number(form.points.value),
+                },
+            });
+            datCheDo(kq.problemId, than.code, 'DRAFT');
+            nhoLai(kq.problemId, than.code);
+            veDsGanDay(ganDay, moDe);
+            ganTestdata(kq.problemId, { o });
+            bao(o, `Đã tạo đề #${kq.problemId} và gắn vào kỳ thi với nhãn `
+                + `${form.label.value.trim()}. Nạp bộ test rồi xuất bản thì thí sinh mới `
+                + 'mở được.', 'on');
         } else {
             const kq = await goi(DUONG.de.tao, { method: 'POST', body: than });
             datCheDo(kq.problemId, than.code, 'DRAFT');
             nhoLai(kq.problemId, than.code);
+            veDsGanDay(ganDay, moDe);
             ganTestdata(kq.problemId, { o });
             bao(o, `Đã tạo đề #${kq.problemId}. Ghi lại số này — máy chủ không có danh sách `
                 + 'bản nháp để tra lại.', 'on');
@@ -214,6 +221,41 @@ async function doiTrangThai(duongDan, hoi, xong) {
     }
 }
 
+/** Bật ba ô của `contest_problems` khi trang được mở từ một kỳ thi. */
+function batCheDoKyThi() {
+    if (kyThiDich === null) return;
+    khuKyThi.hidden = false;
+    form.label.required = true;
+    nhanKyThi.textContent = `Đề này sẽ được soạn RIÊNG cho kỳ thi #${kyThiDich}. `
+        + 'Nó không xuất hiện ở trang Đề bài cho tới khi kỳ thi kết thúc.';
+    document.getElementById('tieu-de-form').textContent = 'Đề mới cho kỳ thi';
+}
+
+/**
+ * Mở sẵn một đề nếu đường dẫn nói tên nó. `?id=<số>` là đường của bản nháp; `?ma=<mã>` là
+ * đường của nút Sửa ở trang Đề bài (mọi đề trong danh sách ấy đều đã xuất bản).
+ *
+ * <p>Hai tham số riêng thay vì một tham số đoán kiểu: một đề hoàn toàn có thể mang mã "15",
+ * và đoán sai ở đó cho ra 404 mà không ai hiểu vì sao.
+ */
+async function moTheoDuongDan() {
+    const q = new URLSearchParams(location.search);
+    const id = q.get('id');
+    if (id && /^[0-9]+$/.test(id)) {
+        await moDe(Number(id));
+        return;
+    }
+    const ma = q.get('ma');
+    if (!ma) return;
+    try {
+        const de = await goi(DUONG.de.theoMa(ma));
+        await moDe(de.problemId);
+    } catch (e) {
+        bao(o, e instanceof LoiApi ? e.message
+            : `Không mở được đề có mã \u201c${ma}\u201d.`, 'loi');
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 if (o) {
@@ -224,9 +266,11 @@ if (o) {
             + 'trang này.', 'loi');
     }
 
-    veGanDay();
+    veDsGanDay(ganDay, moDe);
     veGiaiThichPhanHoi();
     datCheDo(null, null, null);
+    batCheDoKyThi();
+    moTheoDuongDan();
 
     form.addEventListener('submit', luu);
     form.feedbackLevel.addEventListener('change', veGiaiThichPhanHoi);

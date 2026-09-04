@@ -1,5 +1,6 @@
 package dev.oj.platform.contest;
 
+import java.util.List;
 import java.util.OptionalLong;
 
 /**
@@ -80,4 +81,42 @@ public interface ContestWindowQuery {
      *         lộ trước giờ thi
      */
     boolean deBiKhoaBoiLichThi(long problemId, Long userId, boolean laNguoiRaDe);
+
+    /**
+     * FR-CON-03 + FR-CON-07 — <b>dạng danh sách</b> của {@link #deBiKhoaBoiLichThi}.
+     *
+     * <h2>Vì sao cần một phương thức riêng thay vì gọi cái trên cho từng dòng</h2>
+     * Trang danh sách đề trả 20–50 dòng. Hỏi từng dòng là N+1 truy vấn trên một trang ai cũng
+     * mở. Nhưng lý do quan trọng hơn là <b>phân trang</b>: lọc sau khi đã lấy đủ 20 dòng làm
+     * trang co lại còn 17, và con trỏ trang thì vẫn nhảy như thể đã trả 20 — người dùng mất
+     * ba đề mà không có dấu hiệu nào. Điều kiện phải nằm TRONG câu query.
+     *
+     * <h2>Vì sao trả về danh sách id chứ không nhận vào rồi lọc</h2>
+     * Luật thi thuộc về {@code contests}: đăng ký, khung giờ, {@code registration_required}.
+     * Chép ba dữ kiện ấy vào câu SQL của {@code problems} là chép luật vào module không sở
+     * hữu nó, và bản chép sẽ lệch vào ngày luật đổi — đúng điều javadoc của lớp này cảnh báo.
+     * Trả về id thì luật ở nguyên một chỗ, còn {@code problems} chỉ biết "loại các id này".
+     *
+     * <p>Tập trả về nhỏ theo bản chất: nó chỉ gồm đề của các kỳ thi <b>chưa kết thúc</b>.
+     * Kỳ thi đã xong không nằm trong đó — đó chính là FR-CON-07 "mở đề ra ngoài", và nó xảy
+     * ra tự động khi đồng hồ đi qua {@code ends_at}, không cần ai bấm nút.
+     *
+     * @param userId {@code null} nếu khách chưa đăng nhập
+     * @return id của mọi đề đang bị khoá với người xem này; rỗng là trường hợp thường gặp nhất
+     */
+    List<Long> deBiKhoaChoNguoiXem(Long userId);
+
+    /**
+     * Đề này có nằm trong <b>bất kỳ</b> kỳ thi nào không — kể cả kỳ thi đã kết thúc.
+     *
+     * <h2>Vì sao rộng hơn cả {@link #deDangTrongContestDangChay} lẫn {@link #deBiKhoaBoiLichThi}</h2>
+     * Hai câu kia hỏi <i>"bây giờ có được xem/sửa không"</i>, và câu trả lời đổi theo đồng hồ.
+     * Câu này hỏi <i>"có được XOÁ HẲN không"</i>, và câu trả lời không được đổi theo đồng hồ:
+     * một kỳ thi đã kết thúc từ năm ngoái vẫn có bảng xếp hạng, và bảng ấy vẫn có cột mang
+     * nhãn của đề này. Xoá đề đi là làm thủng một bảng xếp hạng không ai sửa lại được.
+     *
+     * <p>Đây là dữ kiện, không phải chính sách: nó chỉ nói đề có dòng trong
+     * {@code contest_problems} hay không, còn quyết định từ chối nằm ở {@code problems}.
+     */
+    boolean deNamTrongKyThiNaoDo(long problemId);
 }

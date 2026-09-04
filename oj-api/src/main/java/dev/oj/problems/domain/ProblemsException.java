@@ -51,6 +51,31 @@ public class ProblemsException extends DomainException {
                 "Từ chối sửa đề đang nằm trong contest đang chạy (FR-PROB-11)");
     }
 
+    /**
+     * ★ Không xoá được đề đã có bài nộp — và đây KHÔNG phải một giới hạn kỹ thuật.
+     *
+     * <p>"Không mất bài nộp" là điều thứ hai trong ba điều hệ thống này bán ({@code CLAUDE.md}
+     * mục 0). Một bài nộp trỏ tới đề đã biến mất là một dòng lịch sử không đọc được nữa: người
+     * nộp không biết mình đã giải bài gì, và bảng xếp hạng của kỳ thi cũ mất luôn cột ấy.
+     *
+     * <p>Khoá ngoại {@code submissions.problem_id} cố ý KHÔNG có {@code ON DELETE CASCADE},
+     * nên database cũng sẽ từ chối. Câu này tồn tại để người dùng biết vì sao, và biết mình
+     * nên làm gì thay thế.
+     */
+    public static ProblemsException daCoBaiNop() {
+        return new ProblemsException(Kind.CONFLICT, "problem.da_co_bai_nop",
+                "Đề này đã có bài nộp nên không xoá được — xoá nó là xoá cả lịch sử của "
+                        + "những người đã giải. Dùng \"Gỡ xuống\" để đề ngừng nhận bài mới.",
+                "Từ chối xoá đề có submissions (bất biến: không mất bài nộp)");
+    }
+
+    /** Xoá một đề đang được một kỳ thi dùng sẽ làm thủng bộ đề của kỳ thi ấy. */
+    public static ProblemsException dangThuocKyThi() {
+        return new ProblemsException(Kind.CONFLICT, "problem.dang_thuoc_ky_thi",
+                "Đề này đang thuộc một kỳ thi. Gỡ nó khỏi kỳ thi trước, rồi mới xoá được.",
+                "Từ chối xoá đề còn dòng trong contest_problems");
+    }
+
     public static ProblemsException chuaCoTestdata() {
         return new ProblemsException(Kind.CONFLICT, "problem.chua_co_testdata",
                 "Đề chưa có bộ test nào. Hãy nạp testdata trước khi xuất bản.",

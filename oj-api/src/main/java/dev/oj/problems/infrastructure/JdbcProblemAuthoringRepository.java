@@ -114,6 +114,22 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
                AND (:laAdmin OR owner_id = :requesterId)
             """;
 
+    private static final String CO_BAI_NOP = """
+            SELECT EXISTS (SELECT 1 FROM submissions WHERE problem_id = :problemId)
+            """;
+
+    /**
+     * Điều kiện chủ sở hữu nằm TRONG câu xoá, không ở một câu {@code if} phía trên — cùng
+     * khuôn chống IDOR với {@code CAP_NHAT} và {@code DOI_TRANG_THAI}
+     * ({@code oj-api/CLAUDE.md} mục 2). Một chốt đúng ở tầng trên vẫn là lỗ hổng nếu câu
+     * lệnh bên dưới xoá được bất kỳ dòng nào.
+     */
+    private static final String XOA = """
+            DELETE FROM problems
+             WHERE id = :id
+               AND (:laAdmin OR owner_id = :requesterId)
+            """;
+
     private final JdbcClient jdbc;
 
     public JdbcProblemAuthoringRepository(@Qualifier("appJdbcClient") JdbcClient jdbc) {
@@ -188,6 +204,23 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
         return jdbc.sql(DOI_TRANG_THAI)
                 .param("status", moi.name())
                 .param("luc", OffsetDateTime.ofInstant(luc, ZoneOffset.UTC))
+                .param("id", id)
+                .param("laAdmin", laAdmin)
+                .param("requesterId", requesterId)
+                .update() == 1;
+    }
+
+    @Override
+    public boolean coBaiNop(long problemId) {
+        return Boolean.TRUE.equals(jdbc.sql(CO_BAI_NOP)
+                .param("problemId", problemId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    @Override
+    public boolean xoa(long id, long requesterId, boolean laAdmin) {
+        return jdbc.sql(XOA)
                 .param("id", id)
                 .param("laAdmin", laAdmin)
                 .param("requesterId", requesterId)

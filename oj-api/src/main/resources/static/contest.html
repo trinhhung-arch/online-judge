@@ -30,6 +30,12 @@
                         <th scope="col">Nhãn</th>
                         <th scope="col">Mã đề</th>
                         <th scope="col">Điểm</th>
+                        <!-- Hai cột chỉ có nghĩa với người ra đề; js/contest.js bỏ `hidden`
+                             khi người xem đủ quyền. Ẩn bằng thuộc tính chứ không xoá khỏi
+                             DOM để `scope="col"` vẫn khớp số ô của mỗi dòng. -->
+                        <th scope="col" class="chi-ra-de" hidden>Nguồn</th>
+                        <th scope="col" class="chi-ra-de" hidden>Sửa</th>
+                        <th scope="col" class="chi-ra-de" hidden>Gỡ</th>
                     </tr>
                     </thead>
                     <tbody id="bang-de"></tbody>
@@ -44,7 +50,22 @@
                  Gộp chúng vào một khối rồi chặn ở ADMIN là giấu mất phần việc mà một
                  SETTER hoàn toàn được làm — và họ không nhận lỗi nào, chỉ là không thấy. -->
             <section id="khu-ra-de" class="the" hidden>
-                <h3>Thêm đề</h3>
+                <h3>Đề của kỳ thi</h3>
+
+                <!-- ★ V10 — HAI đường vào, và chúng khác nhau ở thứ chúng lấy đi.
+                     "Soạn đề riêng" tạo ra một đề chưa từng ở trong kho đề chung, nên nó
+                     không lấy đi của người luyện tập thứ gì.
+                     "Mượn đề" lấy một đề đang có sẵn — và đề ấy sẽ VẮNG khỏi trang Đề bài
+                     cho tới khi kỳ thi kết thúc (FR-CON-03). Câu gợi ý dưới nút nói thẳng
+                     cái giá đó, vì nó không hiển nhiên với người bấm. -->
+                <h4>Soạn đề riêng</h4>
+                <p><a id="soan-de-rieng" class="nut" href="#">Soạn đề mới cho kỳ thi này</a></p>
+                <p class="goi-y">Đề mới, chỉ thuộc kỳ thi này. Nó không xuất hiện ở trang
+                    Đề bài cho tới khi kỳ thi kết thúc — rồi vào kho như mọi đề khác.</p>
+
+                <h4>Mượn đề từ kho</h4>
+                <p class="goi-y">Đề đang có trong kho sẽ <b>tạm biến mất</b> khỏi trang Đề
+                    bài suốt thời gian kỳ thi chưa kết thúc.</p>
 
                 <form id="form-them-de" novalidate>
                     <!-- ★ Ô này nhận MÃ ĐỀ (chuỗi), không phải id (số).

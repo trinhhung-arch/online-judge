@@ -4,6 +4,7 @@ import dev.oj.problems.application.usecase.AuthorProblemUseCase;
 import dev.oj.problems.application.usecase.GetProblemUseCase;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -69,6 +70,20 @@ public class ProblemAuthoringController {
     }
 
     /** FR-PROB-08. Từ chối nếu đề chưa có testdata — xem {@link AuthorProblemUseCase#xuatBan}. */
+    /**
+     * Xoá hẳn một đề — chỉ được khi nó chưa có bài nộp và chưa thuộc kỳ thi nào.
+     *
+     * <p>{@code DELETE} chứ không phải {@code POST /{id}/delete}: nó thật sự xoá một tài
+     * nguyên, và động từ HTTP nói đúng điều đó thì người đọc log không phải đoán.
+     *
+     * <p>Hai lý do từ chối trả về 409 với câu chữ riêng — xem {@link AuthorProblemUseCase#xoa}.
+     */
+    @DeleteMapping("/{problemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void xoa(@PathVariable long problemId) {
+        authorProblem.xoa(problemId);
+    }
+
     @PostMapping("/{problemId}/publish")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void xuatBan(@PathVariable long problemId) {

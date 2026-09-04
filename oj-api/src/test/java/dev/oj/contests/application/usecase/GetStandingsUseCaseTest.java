@@ -184,6 +184,10 @@ class GetStandingsUseCaseTest {
         @Override public Optional<Contest> timTheoSlug(String slug) { throw chuaCan(); }
         @Override public long tao(ContestMoi contest) { throw chuaCan(); }
         @Override public void themDe(long c, long p, String l, int o, int d) { throw chuaCan(); }
+        @Override public void themDeSoanRieng(long c, long p, String l, int o, int d) {
+            throw chuaCan();
+        }
+        @Override public boolean goDe(long c, long p) { throw chuaCan(); }
         @Override public List<DeCuaContest> deCua(long contestId) { throw chuaCan(); }
         @Override public boolean daDangKy(long contestId, long userId) { throw chuaCan(); }
         @Override public void dangKy(long c, long u, Instant luc) { throw chuaCan(); }

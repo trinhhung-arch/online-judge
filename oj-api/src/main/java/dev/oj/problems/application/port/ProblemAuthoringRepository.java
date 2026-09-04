@@ -47,6 +47,28 @@ public interface ProblemAuthoringRepository {
      * <p>{@code publishedAt} chỉ đặt lần đầu ({@code COALESCE}): {@code ck_problems_published}
      * đòi nó khác NULL khi {@code PUBLISHED}, và một đề gỡ rồi đăng lại không phải một đề mới.
      */
+    /**
+     * Đề này đã có bài nộp nào chưa — chốt của {@code xoa}.
+     *
+     * <p>Câu này chạm {@code submissions}, bảng của module {@code judging}. Luật ArchUnit 3
+     * nói về phụ thuộc giữa các <b>package Java</b>, không về SQL, nên đây không phải vi
+     * phạm — cùng lý do và cùng tiền lệ với cột {@code daGiai} ở {@code JdbcProblemRepository}.
+     */
+    boolean coBaiNop(long problemId);
+
+    /**
+     * Xoá hẳn một đề. Chỉ gọi sau khi đã chắc không có bài nộp và không thuộc kỳ thi nào.
+     *
+     * <p>{@code problem_tags}, {@code testdata_versions} và {@code testcases} đi theo bằng
+     * {@code ON DELETE CASCADE}. Hai khoá ngoại còn lại — {@code submissions} và
+     * {@code contest_problems} — <b>cố ý không cascade</b>, nên database vẫn là chốt cuối
+     * nếu chốt ở use-case bị đi vòng.
+     *
+     * @return {@code false} nếu không có dòng nào bị xoá — đề không tồn tại, hoặc người gọi
+     *         không phải chủ đề. Hai trường hợp đó KHÔNG được phân biệt ra ngoài.
+     */
+    boolean xoa(long id, long requesterId, boolean laAdmin);
+
     boolean doiTrangThai(long id, ProblemStatus moi, long requesterId, boolean laAdmin,
                          Instant luc);
 

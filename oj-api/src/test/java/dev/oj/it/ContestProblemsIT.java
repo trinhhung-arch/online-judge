@@ -43,6 +43,7 @@ class ContestProblemsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
     @Autowired AuthorProblemUseCase authorProblem;
+    @Autowired dev.oj.contests.application.usecase.AuthorContestUseCase author;
 
     private static final Instant MOC = Instant.now();
 
@@ -103,6 +104,130 @@ class ContestProblemsIT extends PostgresIT {
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
     }
+
+    // =========================================================================
+
+    /**
+     * ★ V10 — soạn đề RIÊNG cho kỳ thi.
+     *
+     * <h2>Vấn đề nó giải</h2>
+     * Đường cũ chỉ có một lối: soạn đề ở kho chung rồi mượn vào kỳ thi. Lối ấy làm một đề
+     * luyện tập đang có người giải <b>biến mất</b> khỏi kho suốt thời gian kỳ thi chưa kết
+     * thúc (FR-CON-03) — hai mục dính vào nhau ở chỗ không ai muốn chúng dính.
+     */
+    @org.junit.jupiter.api.Nested
+    @DisplayName("Soạn đề riêng cho kỳ thi")
+    class SoanDeRieng {
+
+        private AuthorProblemUseCase.Command deMoi(String ma) {
+            return new AuthorProblemUseCase.Command(
+                    ma, "Đề " + ma, "Nội dung đề " + ma, 1000, 262_144,
+                    dev.oj.contract.CheckerType.TOKEN, (BigDecimal) null,
+                    dev.oj.contract.ScoringMode.ALL_OR_NOTHING,
+                    dev.oj.problems.domain.FeedbackLevel.TEST_INDEX, false);
+        }
+
+        @Test
+        @DisplayName("★ một lần gọi tạo đề VÀ gắn vào kỳ thi, có đánh dấu nguồn gốc")
+        void tao_de_va_gan_trong_mot_lan() {
+            long ky = kyThiChuaMo();
+            String ma = "rieng-" + System.nanoTime();
+
+            long problemId;
+            try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+                assertThat(phien).isNotNull();
+                problemId = author.soanDeRieng(ky, deMoi(ma), "A", 1, 100);
+            }
+
+            assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
+                assertThat(d.problemId()).isEqualTo(problemId);
+                assertThat(d.code()).isEqualTo(ma);
+                assertThat(d.soanRieng())
+                        .describedAs("đề sinh ra cho kỳ thi phải được đánh dấu là RIÊNG")
+                        .isTrue();
+            });
+        }
+
+        @Test
+        @DisplayName("đề mượn từ kho KHÔNG bị đánh dấu là soạn riêng")
+        void de_muon_khong_bi_danh_dau() {
+            long ky = kyThiChuaMo();
+            contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
+
+            assertThat(contests.deCua(ky)).singleElement()
+                    .satisfies(d -> assertThat(d.soanRieng()).isFalse());
+        }
+
+        /**
+         * Nguồn gốc là dữ kiện lịch sử, không phải một thuộc tính bấm lại được. Gắn đè lên
+         * một đề đã soạn riêng chỉ đổi nhãn và điểm.
+         */
+        @Test
+        @DisplayName("gắn đè bằng themDe không xoá được dấu 'soạn riêng'")
+        void nguon_goc_dinh() {
+            long ky = kyThiChuaMo();
+            long problemId;
+            try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+                assertThat(phien).isNotNull();
+                problemId = author.soanDeRieng(ky, deMoi("dinh-" + System.nanoTime()),
+                        "A", 1, 100);
+            }
+
+            contests.themDe(ky, problemId, "B", 2, 250);
+
+            assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
+                assertThat(d.label()).isEqualTo("B");
+                assertThat(d.soanRieng()).isTrue();
+            });
+        }
+
+        /**
+         * ★ Ca giữ {@code @Transactional}.
+         *
+         * <p>Nhãn "A" đã có, nên bước gắn đề nổ SAU khi bước tạo đề đã ghi xong. Không có
+         * ranh giới transaction thì đề vẫn nằm lại trong bảng {@code problems} — một bản
+         * nháp mồ côi mà không ai biết nó sinh ra để làm gì, và người ra đề thì vừa nhận
+         * một thông báo lỗi nên tin rằng chẳng có gì được tạo.
+         */
+        @Test
+        @DisplayName("★ gắn hỏng thì KHÔNG để lại đề mồ côi")
+        void gan_hong_thi_khong_de_lai_de_mo_coi() {
+            long ky = kyThiChuaMo();
+            contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
+            String ma = "mo-coi-" + System.nanoTime();
+
+            try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+                assertThat(phien).isNotNull();
+                assertThatThrownBy(() -> author.soanDeRieng(ky, deMoi(ma), "A", 1, 100))
+                        .isInstanceOf(DomainException.class)
+                        .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
+            }
+
+            assertThat(jdbc.sql("SELECT count(*) FROM problems WHERE code = :ma")
+                    .param("ma", ma).query(Integer.class).single())
+                    .describedAs("đề phải bị cuốn theo transaction, không nằm lại")
+                    .isZero();
+        }
+
+        @Test
+        @DisplayName("kỳ thi đã bắt đầu thì không soạn thêm đề được")
+        void ky_thi_da_bat_dau_thi_thoi() {
+            long ky = contests.tao(new ContestRepository.ContestMoi(
+                    "dang-chay-" + System.nanoTime(), "Thi thử", "ICPC",
+                    MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null,
+                    20, true, true, ADMIN_ID));
+
+            try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+                assertThat(phien).isNotNull();
+                assertThatThrownBy(() -> author.soanDeRieng(ky,
+                        deMoi("muon-" + System.nanoTime()), "A", 1, 100))
+                        .isInstanceOf(DomainException.class)
+                        .hasFieldOrPropertyWithValue("code", "contest.da_bat_dau");
+            }
+        }
+    }
+
+    // =========================================================================
 
     /**
      * Ghi lại hành vi {@code ON CONFLICT DO UPDATE} thành một khẳng định, vì nó là lý do

@@ -115,6 +115,47 @@ public class AuthorProblemUseCase {
     }
 
     /**
+     * ★ Xoá hẳn một đề — chỉ khi nó chưa để lại dấu vết nào.
+     *
+     * <h2>Hai chốt, và cả hai đều là chốt NGHIỆP VỤ chứ không phải kỹ thuật</h2>
+     * <ul>
+     *   <li><b>Đã có bài nộp</b> → từ chối. "Không mất bài nộp" là điều thứ hai trong ba điều
+     *       hệ thống này bán. Một bài nộp trỏ tới đề đã biến mất là một dòng lịch sử không
+     *       đọc được nữa.</li>
+     *   <li><b>Đang thuộc một kỳ thi</b> — kể cả kỳ thi đã kết thúc → từ chối. Bảng xếp hạng
+     *       cũ vẫn mang nhãn của đề ấy, và xoá đề là làm thủng một bảng không ai dựng lại
+     *       được.</li>
+     * </ul>
+     *
+     * <p>Còn lại là đúng một trường hợp: <b>bản nháp bỏ đi</b>. Đó cũng là trường hợp duy
+     * nhất người ta thật sự cần xoá — soạn nhầm, gõ sai mã, tạo trùng.
+     *
+     * <h2>Vì sao không thêm một lối "ADMIN xoá được tất"</h2>
+     * Vì hai chốt trên không bảo vệ đề, chúng bảo vệ <i>dữ liệu của người khác</i>. Một cái
+     * cờ bỏ qua được sẽ được bấm vào đúng lúc người ta đang vội, và thứ mất đi thì không ai
+     * lấy lại được. Đề không xoá được thì {@link #goXuong} là câu trả lời đúng: nó ngừng
+     * nhận bài mới mà không đụng gì tới bài cũ.
+     *
+     * <p>{@code audit_log} ghi cả {@code code} và {@code title}, vì sau lời gọi này dòng
+     * {@code problems} không còn để tra ngược.
+     */
+    public void xoa(long problemId) {
+        Problem de = doc(problemId);
+        if (problems.coBaiNop(problemId)) {
+            throw ProblemsException.daCoBaiNop();
+        }
+        if (lichThi.deNamTrongKyThiNaoDo(problemId)) {
+            throw ProblemsException.dangThuocKyThi();
+        }
+        var nguoiGoi = currentUser.current();
+        if (!problems.xoa(problemId, nguoiGoi.id(), nguoiGoi.isAdmin())) {
+            throw ProblemNotFoundException.byId(problemId);
+        }
+        auditLog.ghi("PROBLEM_DELETED", "problem", problemId,
+                Map.of("code", de.code(), "title", de.title()));
+    }
+
+    /**
      * ★ FR-PROB-11 — <b>cấm hoàn toàn</b> khi đề đang nằm trong một kỳ thi đang diễn ra.
      *
      * <p>Không phải "cảnh báo rồi cho qua", không phải "chỉ cấm sửa giới hạn". Cấm hẳn, kể cả

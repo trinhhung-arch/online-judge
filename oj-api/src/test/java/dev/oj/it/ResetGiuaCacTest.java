@@ -65,6 +65,20 @@ final class ResetGiuaCacTest {
         jdbc.sql("UPDATE problems SET feedback_level = 'TEST_INDEX', "
                 + "scoring_mode = 'ALL_OR_NOTHING'").update();
 
+        // ★ Lần thứ TƯ của đúng bài học ở javadoc lớp này — và lần này nó nằm im gần một
+        // milestone. `ProblemAuthoringIT` gỡ đề 1 xuống RETIRED để kiểm FR-PROB-08, còn dòng
+        // trên chỉ hoàn nguyên feedback_level và scoring_mode. Nên từ ca ấy trở đi, đề seed
+        // duy nhất của cả bộ test không còn PUBLISHED.
+        //
+        // Không ca nào đỏ, vì tới lúc đó chưa ca nào ĐỌC danh sách đề — chúng đọc đề theo id
+        // hoặc theo mã, và cả hai đường đó không lọc trạng thái giống danh sách. Ca đầu tiên
+        // đọc danh sách (ProblemListContestIT) thấy một danh sách rỗng và đỏ vì một lý do
+        // không liên quan gì tới thứ nó kiểm.
+        //
+        // Chỉ id = 1: đề do test tạo bị xoá ở cuối phương thức này, và "xuất bản hộ" chúng
+        // sẽ giấu mất đúng những ca kiểm rằng đề DRAFT không lộ ra ngoài.
+        jdbc.sql("UPDATE problems SET status = 'PUBLISHED' WHERE id = 1").update();
+
         // Gỡ tham chiếu từ `testcases` TRƯỚC rồi mới xoá `subtasks` — khoá ngoại đi theo chiều
         // đó. `judge_run_subtasks` tự biến mất theo `judge_runs` (ON DELETE CASCADE).
         jdbc.sql("UPDATE testcases SET subtask_id = NULL WHERE subtask_id IS NOT NULL").update();

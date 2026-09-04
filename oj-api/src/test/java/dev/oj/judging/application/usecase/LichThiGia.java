@@ -2,6 +2,7 @@ package dev.oj.judging.application.usecase;
 
 import dev.oj.platform.contest.ContestWindowQuery;
 
+import java.util.List;
 import java.util.OptionalLong;
 
 /**
@@ -41,5 +42,21 @@ final class LichThiGia implements ContestWindowQuery {
     @Override
     public boolean deBiKhoaBoiLichThi(long problemId, Long userId, boolean laNguoiRaDe) {
         return biKhoa && !laNguoiRaDe;
+    }
+
+    /** Danh sách đề bị khoá; mặc định rỗng, đúng nghĩa "không có kỳ thi nào". */
+    List<Long> idBiKhoa = List.of();
+
+    /** Đề có thuộc kỳ thi nào không — chốt của {@code AuthorProblemUseCase.xoa}. */
+    boolean thuocKyThiNaoDo;
+
+    @Override
+    public boolean deNamTrongKyThiNaoDo(long problemId) {
+        return thuocKyThiNaoDo;
+    }
+
+    @Override
+    public List<Long> deBiKhoaChoNguoiXem(Long userId) {
+        return idBiKhoa;
     }
 }

@@ -17,7 +17,25 @@ public interface ContestRepository {
 
     long tao(ContestMoi contest);
 
+    /** Gắn một đề <b>mượn từ kho đề chung</b> vào kỳ thi. */
     void themDe(long contestId, long problemId, String label, int ordinal, int points);
+
+    /**
+     * Gắn một đề <b>vừa được soạn riêng cho kỳ thi này</b> (V10).
+     *
+     * <p>Hai phương thức thay vì một tham số {@code boolean} vì đây là hai hành động khác
+     * nhau, không phải một hành động có hai chế độ: một bên lấy thứ đã có sẵn và có thể đang
+     * được người khác luyện tập, một bên tạo ra thứ chưa ai thấy. Người đọc chỗ gọi nên biết
+     * ngay mình đang làm cái nào mà không phải lần theo một cờ {@code true}.
+     */
+    void themDeSoanRieng(long contestId, long problemId, String label, int ordinal, int points);
+
+    /**
+     * Gỡ một đề khỏi kỳ thi. Không đụng tới bản thân đề.
+     *
+     * @return {@code false} nếu đề không nằm trong kỳ thi này
+     */
+    boolean goDe(long contestId, long problemId);
 
     List<DeCuaContest> deCua(long contestId);
 
@@ -76,6 +94,8 @@ public interface ContestRepository {
      *             lúc thi, danh sách đề — vốn LÀ thanh điều hướng của thí sinh — chỉ hiện
      *             được một con số không bấm được.
      */
-    record DeCuaContest(long problemId, String code, String label, int ordinal, int points) {
+    /** @param soanRieng V10 — đề sinh ra cho kỳ thi này, không phải mượn từ kho đề chung */
+    record DeCuaContest(long problemId, String code, String label, int ordinal, int points,
+                        boolean soanRieng) {
     }
 }

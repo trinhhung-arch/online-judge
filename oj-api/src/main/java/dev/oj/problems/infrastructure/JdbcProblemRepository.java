@@ -164,6 +164,7 @@ public class JdbcProblemRepository implements ProblemRepository {
                               AND s.verdict = 'AC') AS da_giai
               FROM problems p
              WHERE p.status = 'PUBLISHED'
+               AND (p.id NOT IN (:idBiKhoa) OR p.owner_id = :requesterId)
                AND (CAST(:cursor AS bigint) IS NULL OR p.id < CAST(:cursor AS bigint))
                AND (CAST(:tagSlug AS text) IS NULL OR EXISTS (
                         SELECT 1 FROM problem_tags pt
@@ -187,6 +188,7 @@ public class JdbcProblemRepository implements ProblemRepository {
                 // nên EXISTS luôn false và cột da_giai trả về false — đúng nghĩa "chưa giải".
                 .param("requesterId", loc.requesterId() == null ? 0L : loc.requesterId())
                 .param("daGiai", loc.daGiaiBoi())
+                .param("idBiKhoa", loc.idBiKhoa())
                 .param("limit", size + 1)
                 .query((rs, i) -> new ProblemListItem(
                         rs.getLong("id"),

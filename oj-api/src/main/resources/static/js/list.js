@@ -1,7 +1,7 @@
 /** Danh sách đề — FR-PROB-09. Bước 4.12. */
 
 import { goi, LoiApi, phien } from './api.js';
-import { veThanh, bao, chu } from './khung.js';
+import { veThanh, bao, chu, vaiTroItNhat } from './khung.js';
 import { DS } from './duong-dan.js';
 
 veThanh();
@@ -10,6 +10,15 @@ const bang = document.getElementById('bang');
 const o = document.getElementById('thong-bao');
 const nutThem = document.getElementById('them');
 let cursor = null;
+
+/**
+ * Người xem có phải người ra đề không — quyết định một lần, dùng cho mọi dòng.
+ *
+ * KHÔNG phải chốt bảo mật: `AuthorProblemUseCase` mới là nơi chặn (bất biến #11). Ẩn nút
+ * chỉ để người không có quyền khỏi bấm vào một trang sẽ từ chối họ.
+ */
+const laNguoiRaDe = vaiTroItNhat('SETTER');
+for (const th of document.querySelectorAll('th.chi-ra-de')) th.hidden = !laNguoiRaDe;
 
 function thamSoLoc() {
     const form = document.getElementById('loc');
@@ -39,6 +48,24 @@ function veDong(de) {
     dau.setAttribute('aria-label', de.daGiai ? 'Đã giải' : 'Chưa giải');
     td.append(dau);
     tr.append(td);
+
+    // ★ Sửa đề đi qua MÃ đề, không qua id.
+    //
+    // ProblemSummaryResponse cố ý không mang problemId, và không nên mang: id là định danh
+    // nội bộ, còn cả giao diện này nói bằng mã. `ra-de.html?ma=<mã>` tự đổi mã ra id bằng
+    // đúng endpoint công khai — mọi đề trong danh sách này đều đã xuất bản, nên đường ấy
+    // luôn tra được.
+    //
+    // Tên tham số nói rõ nó là mã, nên không có gì phải đoán: một đề mang mã "15" vẫn mở
+    // đúng, thay vì bị hiểu thành đề số 15.
+    const oSua = chu('td', null, 'chi-ra-de');
+    oSua.hidden = !laNguoiRaDe;
+    if (laNguoiRaDe) {
+        const a = chu('a', 'Sửa');
+        a.href = `/ra-de.html?ma=${encodeURIComponent(de.code)}`;
+        oSua.append(a);
+    }
+    tr.append(oSua);
 
     return tr;
 }

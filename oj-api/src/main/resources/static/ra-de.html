@@ -25,8 +25,14 @@
             <label for="mo-id">Mã số đề (problemId)</label>
             <input id="mo-id" name="problemId" type="number" min="1" inputmode="numeric"
                    required autocomplete="off">
+            <!-- ★ Ô này CỐ Ý chỉ nhận số, dù trang kỳ thi hỏi bằng mã đề.
+                 Không đoán "toàn số thì là id": một đề hoàn toàn có thể mang mã "15", và
+                 đó là ca thật đã gặp. Ai muốn mở đề đã xuất bản bằng mã thì bấm nút Sửa ở
+                 trang Đề bài — đường ấy đi qua ?ma=<mã>, nơi tên tham số nói rõ nó là mã
+                 chứ không phải số, nên không có gì để đoán. -->
             <p class="goi-y">Đây là số máy chủ trả về lúc tạo đề, không phải mã chữ như
-                <code>A-PLUS-B</code>.</p>
+                <code>A-PLUS-B</code>. Đề đã xuất bản thì mở nhanh hơn bằng nút <b>Sửa</b>
+                ở trang Đề bài.</p>
             <p><button type="submit">Mở</button>
                 <button type="button" id="de-moi" class="phu">Soạn đề mới</button></p>
         </form>
@@ -37,6 +43,30 @@
 
     <form id="form-de" class="the">
         <h2 id="tieu-de-form">Đề mới</h2>
+
+        <!-- ★ V10 — chế độ "soạn đề riêng cho kỳ thi".
+             Bật khi trang được mở bằng /ra-de.html?kyThi=<id> từ trang kỳ thi. Đề soạn ở
+             chế độ này sinh ra CHO kỳ thi ấy: nó chưa từng nằm trong kho đề chung, nên
+             không lấy đi của người luyện tập thứ gì. Sau khi kỳ thi kết thúc nó vào kho
+             như mọi đề khác (FR-CON-07).
+
+             Ba ô dưới đây là của contest_problems, không phải của problems — nên chúng
+             sống trong khối này chứ không lẫn vào phần thuộc tính đề. -->
+        <div id="khu-ky-thi" hidden>
+            <p class="thong-bao" id="nhan-ky-thi"></p>
+
+            <label for="nhan-de">Nhãn trong kỳ thi</label>
+            <input id="nhan-de" name="label" autocomplete="off" placeholder="A"
+                   pattern="^[A-Z]{1,2}$" maxlength="2">
+            <p class="goi-y">Một hoặc hai chữ cái in hoa — đây là tiêu đề cột của bảng
+                xếp hạng.</p>
+
+            <label for="thu-tu-de">Thứ tự</label>
+            <input id="thu-tu-de" name="ordinal" type="number" min="1" value="1">
+
+            <label for="diem-de">Điểm</label>
+            <input id="diem-de" name="points" type="number" min="1" value="100">
+        </div>
 
         <label for="code">Mã đề</label>
         <input id="code" name="code" required autocomplete="off" placeholder="A-PLUS-B">
@@ -97,6 +127,25 @@
             <button type="button" id="go-xuong" class="phu" hidden>Gỡ xuống</button>
         </p>
     </form>
+
+    <!-- ★ Xoá đề đứng RIÊNG, ngoài form soạn đề.
+         Nó không phải một lựa chọn ngang hàng với Lưu hay Gỡ xuống: hai cái kia hoàn tác
+         được, cái này thì không. Đặt nó chung một hàng nút là mời người ta bấm nhầm.
+
+         Ô gõ lại mã đề dùng đúng khuôn của thao tác ẩn danh hoá tài khoản ở quan-tri.html:
+         một hộp confirm() thì bấm OK theo phản xạ, còn gõ lại tên thứ mình sắp xoá thì
+         không gõ nhầm được. -->
+    <section class="the" id="khu-xoa" aria-labelledby="tieu-xoa" hidden>
+        <h2 id="tieu-xoa">Xoá đề</h2>
+        <p class="goi-y">Xoá hẳn, không hoàn tác được. Máy chủ <b>từ chối</b> nếu đề đã có
+            bài nộp hoặc còn thuộc một kỳ thi — khi đó dùng <b>Gỡ xuống</b>, hoặc gỡ đề khỏi
+            kỳ thi trước.</p>
+        <form id="form-xoa">
+            <label for="xac-nhan-xoa">Gõ lại mã đề để xác nhận</label>
+            <input id="xac-nhan-xoa" name="code" required autocomplete="off">
+            <p><button type="submit" id="xoa-de" class="nguy-hiem">Xoá đề này</button></p>
+        </form>
+    </section>
 
     <hr>
 

@@ -70,10 +70,17 @@ public final class ContestResponses {
         }
     }
 
-    public record De(long problemId, String code, String label, int ordinal, int points) {
+    /**
+     * @param soanRieng V10 — đề sinh ra cho kỳ thi này. Trang kỳ thi dùng nó để nói rõ đề nào
+     *                  là của riêng kỳ thi và đề nào mượn từ kho chung; đề mượn thì sửa nó là
+     *                  sửa thứ người khác đang luyện tập
+     */
+    public record De(long problemId, String code, String label, int ordinal, int points,
+                     boolean soanRieng) {
 
         static De tu(ContestRepository.DeCuaContest d) {
-            return new De(d.problemId(), d.code(), d.label(), d.ordinal(), d.points());
+            return new De(d.problemId(), d.code(), d.label(), d.ordinal(), d.points(),
+                    d.soanRieng());
         }
     }
 

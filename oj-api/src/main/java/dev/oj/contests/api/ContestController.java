@@ -1,6 +1,7 @@
 package dev.oj.contests.api;
 
 import dev.oj.contests.application.usecase.AuthorContestUseCase;
+import dev.oj.problems.api.ProblemAuthoringRequest;
 import dev.oj.contests.application.usecase.GetContestUseCase;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.contests.application.usecase.ListContestsUseCase;
@@ -9,6 +10,7 @@ import dev.oj.contests.application.usecase.RevealStandingsUseCase;
 import dev.oj.platform.web.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -99,6 +101,28 @@ public class ContestController {
                 body.points() == null ? 100 : body.points());
     }
 
+    /**
+     * ★ V10 — soạn đề riêng cho kỳ thi, một request cho cả hai việc.
+     *
+     * <p>Không tách thành "tạo đề" rồi "gắn đề" ở phía client: hỏng giữa chừng để lại một đề
+     * DRAFT mồ côi không ai biết nó sinh ra để làm gì. Xem
+     * {@link AuthorContestUseCase#soanDeRieng}.
+     */
+    @PostMapping("/{contestId}/problems/new")
+    public ResponseEntity<Map<String, Object>> soanDeRieng(
+            @PathVariable long contestId, @RequestBody SoanDeRequest body) {
+        long problemId = author.soanDeRieng(contestId, body.de().toCommand(),
+                body.label(), body.ordinal(), body.points() == null ? 100 : body.points());
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("problemId", problemId));
+    }
+
+    /** Gỡ một đề khỏi kỳ thi. Xem {@link AuthorContestUseCase#goDeKhoiKyThi}. */
+    @DeleteMapping("/{contestId}/problems/{problemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void goDe(@PathVariable long contestId, @PathVariable long problemId) {
+        author.goDeKhoiKyThi(contestId, problemId);
+    }
+
     /** FR-CON-05, FR-CON-07 — công bố bảng đầy đủ. Xem {@link RevealStandingsUseCase}. */
     @PostMapping("/{contestId}/reveal")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -121,5 +145,16 @@ public class ContestController {
     }
 
     public record ThemDeRequest(long problemId, String label, int ordinal, Integer points) {
+    }
+
+    /**
+     * ★ V10 — soạn một đề mới ngay trong kỳ thi.
+     *
+     * <p>{@code de} lồng nguyên {@link ProblemAuthoringRequest} thay vì trải phẳng mười ba
+     * trường ra đây. Trải phẳng thì hai bản mô tả cùng một thứ sẽ lệch nhau vào ngày trang
+     * soạn đề có thêm một trường — và bên lệch sẽ là bên này, vì nó ít được sờ tới hơn.
+     */
+    public record SoanDeRequest(ProblemAuthoringRequest de, String label, int ordinal,
+                                Integer points) {
     }
 }

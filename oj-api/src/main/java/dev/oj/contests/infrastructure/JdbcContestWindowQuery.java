@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.OptionalLong;
 
 /**
@@ -78,6 +79,37 @@ public class JdbcContestWindowQuery implements ContestWindowQuery {
                                            AND r.user_id = :userId))))
             """;
 
+    /**
+     * ★ Cùng một luật với {@link #BI_KHOA}, bỏ đúng một mệnh đề: {@code cp.problem_id = :problemId}.
+     *
+     * <p>Hai câu phải đi cùng nhau. Không ghép được thành một hằng chung — luật ArchUnit 5c
+     * cấm mọi phép {@code +} chạm vào text block trong {@code infrastructure}, và cấm có lý
+     * do. Nên chúng nằm cạnh nhau ở đây, nơi một người sửa câu này mà quên câu kia sẽ nhìn
+     * thấy ngay dòng bên dưới. Đặt chúng ở hai file là đặt một sự lệch vào chỗ khuất.
+     *
+     * <p>{@code DISTINCT} vì một đề có thể nằm trong nhiều kỳ thi.
+     */
+    private static final String BI_KHOA_CHO_NGUOI_XEM = """
+            SELECT DISTINCT cp.problem_id
+              FROM contest_problems cp
+              JOIN contests c ON c.id = cp.contest_id
+             WHERE c.ends_at > :bayGio
+               AND NOT (
+                    c.starts_at <= :bayGio
+                    AND (NOT c.registration_required
+                         OR EXISTS (SELECT 1 FROM contest_registrations r
+                                     WHERE r.contest_id = c.id
+                                       AND r.user_id = :userId)))
+            """;
+
+    /**
+     * KHÔNG lọc theo thời gian — xem javadoc của {@code deNamTrongKyThiNaoDo}. Một index scan
+     * trên {@code ix_contest_problems_problem}, dừng ở dòng đầu tiên.
+     */
+    private static final String NAM_TRONG_KY_THI_NAO_DO = """
+            SELECT EXISTS (SELECT 1 FROM contest_problems WHERE problem_id = :problemId)
+            """;
+
     private final JdbcClient jdbc;
     private final Clock clock;
 
@@ -118,6 +150,24 @@ public class JdbcContestWindowQuery implements ContestWindowQuery {
                 // Khách chưa đăng nhập: 0 không khớp users.id nào (GENERATED ALWAYS bắt đầu
                 // từ 1), nên EXISTS luôn false — đúng nghĩa "chưa đăng ký".
                 .param("userId", userId == null ? 0L : userId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    @Override
+    public List<Long> deBiKhoaChoNguoiXem(Long userId) {
+        return jdbc.sql(BI_KHOA_CHO_NGUOI_XEM)
+                .param("bayGio", bayGio())
+                // Cùng quy ước với deBiKhoaBoiLichThi: 0 không khớp users.id nào.
+                .param("userId", userId == null ? 0L : userId)
+                .query(Long.class)
+                .list();
+    }
+
+    @Override
+    public boolean deNamTrongKyThiNaoDo(long problemId) {
+        return Boolean.TRUE.equals(jdbc.sql(NAM_TRONG_KY_THI_NAO_DO)
+                .param("problemId", problemId)
                 .query(Boolean.class)
                 .single());
     }

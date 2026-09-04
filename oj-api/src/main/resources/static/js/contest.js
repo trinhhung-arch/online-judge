@@ -34,6 +34,7 @@ const nutDangKy = document.getElementById('dang-ky');
 const khuRaDe = document.getElementById('khu-ra-de');
 const khuCongBo = document.getElementById('khu-cong-bo');
 const dsMaDe = document.getElementById('ds-ma-de');
+const soanDeRieng = document.getElementById('soan-de-rieng');
 
 const NHAN_TRANG_THAI = {
     SAP_DIEN_RA: 'Sắp diễn ra',
@@ -42,6 +43,7 @@ const NHAN_TRANG_THAI = {
 };
 
 let kyThi = null;
+let laNguoiRaDe = false;
 
 function veDe(d) {
     const tr = chu('tr');
@@ -55,7 +57,73 @@ function veDe(d) {
     tr.append(oMa);
 
     tr.append(chu('td', d.points));
+
+    // ★ Hai ô chỉ dành cho người ra đề. Chúng luôn được TẠO, và bị ẩn bằng cùng một class
+    //   với hai <th> ở contest.html — nếu chỉ tạo khi đủ quyền thì số ô của dòng lệch số ô
+    //   của tiêu đề, và trình đọc màn hình đọc sai cột.
+    const oNguon = chu('td', d.soanRieng ? 'Riêng' : 'Mượn', 'chi-ra-de');
+    oNguon.hidden = !laNguoiRaDe;
+    tr.append(oNguon);
+
+    const oSua = chu('td', null, 'chi-ra-de');
+    oSua.hidden = !laNguoiRaDe;
+    if (laNguoiRaDe) oSua.append(nutSua(d));
+    tr.append(oSua);
+
+    const oGo = chu('td', null, 'chi-ra-de');
+    oGo.hidden = !laNguoiRaDe;
+    if (laNguoiRaDe) oGo.append(nutGo(d));
+    tr.append(oGo);
+
     return tr;
+}
+
+/**
+ * Gỡ một đề khỏi kỳ thi — KHÔNG xoá đề. Thiếu thao tác này thì gắn nhầm một đề là ngõ cụt:
+ * đề vừa không ra khỏi kỳ thi được, vừa không xoá được, vừa vắng khỏi trang Đề bài.
+ * Chỉ trước giờ bắt đầu — gỡ đề giữa kỳ thi là xoá điểm của những người đã giải nó.
+ */
+function nutGo(d) {
+    if (kyThi.trangThai !== 'SAP_DIEN_RA') return chu('span', '—', 'goi-y');
+
+    const nut = chu('button', 'Gỡ', 'phu');
+    nut.type = 'button';
+    nut.addEventListener('click', async () => {
+        if (!confirm(`Gỡ đề ${d.code} (nhãn ${d.label}) khỏi kỳ thi? `
+            + 'Đề không bị xoá — nó quay về kho đề chung.')) return;
+        nut.disabled = true;
+        bao(o, '');
+        try {
+            await goi(DUONG.kyThi.goDe(kyThi.id, d.problemId), { method: 'DELETE' });
+            bao(o, `Đã gỡ đề ${d.code} khỏi kỳ thi.`, 'on');
+            await tai();
+        } catch (e) {
+            bao(o, e instanceof LoiApi ? e.message : 'Không gỡ được đề.', 'loi');
+            nut.disabled = false;
+        }
+    });
+    return nut;
+}
+
+/**
+ * Nút Sửa của một đề trong kỳ thi.
+ *
+ * <p>Tắt sau giờ bắt đầu, kèm lý do. Đây KHÔNG phải chốt bảo mật —
+ * {@code AuthorProblemUseCase} mới là nơi chặn (FR-PROB-11, bất biến #11). Nó ở đây để
+ * người ra đề không gõ xong cả một bản sửa rồi mới nhận 409.
+ *
+ * <p>Sửa đề giữa kỳ thi tạo ra hai nhóm thí sinh — nhóm đọc bản cũ và nhóm đọc bản mới —
+ * và không có cách nào đền bù cho nhóm thứ nhất.
+ */
+function nutSua(d) {
+    if (kyThi.trangThai !== 'SAP_DIEN_RA') {
+        const p = chu('span', 'Khoá', 'goi-y');
+        p.title = 'Kỳ thi đã bắt đầu — đề không sửa được nữa (FR-PROB-11).';
+        return p;
+    }
+    const a = chu('a', 'Sửa');
+    a.href = `/ra-de.html?id=${encodeURIComponent(d.problemId)}`;
+    return a;
 }
 
 function veDanhSachDe() {
@@ -91,11 +159,18 @@ async function tai() {
         `${kyThi.format} · ${NHAN_TRANG_THAI[kyThi.trangThai] || kyThi.trangThai}`
         + ` · ${gio(kyThi.startsAt)} → ${gio(kyThi.endsAt)}`));
 
+    // ★ Quyền phải được xác định TRƯỚC khi vẽ bảng đề: veDe() đọc `laNguoiRaDe` để quyết
+    //   định hai ô cuối. Đặt sau thì lần vẽ đầu tiên luôn ẩn chúng, và chúng chỉ hiện ra
+    //   sau một lần tải lại — một lỗi chỉ thấy được khi bấm đúng thứ tự.
+    laNguoiRaDe = vaiTroItNhat('SETTER');
+    for (const th of document.querySelectorAll('th.chi-ra-de')) th.hidden = !laNguoiRaDe;
+
     veDanhSachDe();
     veDangKy();
 
     // Hai mức quyền khác nhau, hai lần hỏi khác nhau — xem chú thích ở contest.html.
-    khuRaDe.hidden = !vaiTroItNhat('SETTER');
+    khuRaDe.hidden = !laNguoiRaDe;
+    soanDeRieng.href = `/ra-de.html?kyThi=${encodeURIComponent(kyThi.id)}`;
     khuCongBo.hidden = !vaiTroItNhat('ADMIN');
     if (!khuRaDe.hidden) goiYMaDe();
 
