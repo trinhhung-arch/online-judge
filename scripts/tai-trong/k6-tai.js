@@ -173,10 +173,40 @@ export const options = {
  * quá 3, và mỗi bài còn bị chấm lại 2 lần nữa vì FR-SUB-12 coi IE là đáng thử lại — gấp ba
  * tải hàng đợi một cách vô ích. Cả cột "đường chấm" khi ấy đo tốc độ của việc không làm gì.
  */
-const NGUON = `// EXPECT: AC
+const NGUON_GOC = `// EXPECT: AC
 #include <bits/stdc++.h>
 int main(){long long a,b;if(!(std::cin>>a>>b))return 0;std::cout<<a+b<<"\\n";}
 `;
+
+/**
+ * ★ VÌ SAO MỖI BÀI NỘP PHẢI MANG MỘT SOURCE KHÁC NHAU
+ *
+ * Worker có `CompileCache`, khoá là `sha256(source + ngôn ngữ + lệnh biên dịch)`
+ * (`nfrplan.md` 2.3 mục 3). Nếu cả lượt chạy dùng CHUNG một chuỗi source thì đúng MỘT bài
+ * phải biên dịch, còn lại là cache hit — và cả cột "đường chấm" đo tốc độ của cache chứ
+ * không phải của máy chấm. Tệ hơn: cache nằm ở `/var/tmp/oj-worker` trong container, nên
+ * nó sống qua nhiều lượt chạy, và bài đầu tiên cũng hết phải biên dịch từ lượt thứ hai.
+ *
+ * Đo thật ngày 2026-09-05 (100 VU, worker chạy IsolateJudgeRunner thật, host_factor 1.000):
+ * verdict p95 = 350ms · `submissions.time_ms` = 1–2ms · judged_at − created_at = 30–520ms.
+ * Sàn 500ms của `ket-luan.js` báo động "worker đang giả lập" trong khi worker đang chấm
+ * bằng isolate thật — cảnh báo sai, và nó SẼ luôn sai chừng nào source còn trùng nhau.
+ *
+ * Không kỳ thi thật nào có hàng nghìn bài nộp trùng source, nên mặc định là DUY NHẤT: đó
+ * mới là workload phải dùng để trả lời "chịu được bao nhiêu người". Đặt `NGUON_DUY_NHAT=0`
+ * nếu muốn cố ý đo trường hợp cache đầy — biết mình đang đo cái gì thì đo cái đó được.
+ *
+ * Token nằm ở CUỐI file, không phải đầu: `// EXPECT: AC` phải giữ nguyên là dòng đầu tiên
+ * cho `ScriptedJudgeRunner`, và một comment thừa ở cuối thì C++ bỏ qua.
+ */
+const NGUON_DUY_NHAT = (__ENV.NGUON_DUY_NHAT || '1') !== '0';
+
+function nguon() {
+    if (!NGUON_DUY_NHAT) {
+        return NGUON_GOC;
+    }
+    return `${NGUON_GOC}// duy-nhat ${__VU}-${__ITER}-${Date.now()}-${Math.random()}\n`;
+}
 
 /** Token của từng người ảo, giữ qua các vòng lặp. `__VU` bắt đầu từ 1. */
 const phien = {};
@@ -214,7 +244,7 @@ function doc(token) {
 
 function nop(token) {
     const res = http.post(`${BASE}/api/v1/submissions`,
-        JSON.stringify({ problemId: DE_ID, languageCode: NGON_NGU, source: NGUON }),
+        JSON.stringify({ problemId: DE_ID, languageCode: NGON_NGU, source: nguon() }),
         { ...tieuDe(token), tags: { viec: 'nop' } });
 
     ti429.add(res.status === 429);

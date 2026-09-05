@@ -1,0 +1,49 @@
+# =============================================================================
+# Ảnh CHẠY 14 TEST TẤN CÔNG SANDBOX. Không phải ảnh chạy thật.
+#
+#   Dùng qua scripts/kiem-sandbox.sh, đừng gọi tay.
+#
+# ★ VÌ SAO PHẢI CÓ ẢNH RIÊNG
+# `isolate` cần cgroup v2 + namespace của kernel Linux; macOS không có cả hai. Chạy
+#     ./mvnw -pl oj-worker verify -Dit.test=SandboxAttackIT
+# trên host Mac thì WorkerFixtures.requireIsolate gọi Assumptions.abort(), JUnit huỷ cả
+# class, Surefire in "Tests run: 0" và Maven in BUILD SUCCESS. Đo thật ngày 2026-09-05:
+# một lượt chạy như thế đọc y hệt "14/14 xanh" với người đang vội. Đó là lý do file này
+# tồn tại — và là lý do kiem-sandbox.sh ĐẾM số test chứ không đọc mã thoát của Maven.
+#
+# ★ VÌ SAO FROM ẢNH CHẠY THẬT, KHÔNG PHẢI FROM maven:
+# 14 ca này chỉ có nghĩa khi chúng chạy trên ĐÚNG cái isolate, đúng cấu hình subuid, đúng
+# g++ và python3 mà máy chấm dùng thật. Dựng một môi trường thứ hai để test là tự chứng
+# minh cho một sandbox không ai chạy.
+#
+# ★ THỨ ẢNH NÀY THÊM, VÀ VÌ SAO NÓ KHÔNG ĐƯỢC LÊN MÁY THẬT
+# Maven + JDK đầy đủ (ảnh chạy chỉ có JRE, không có javac để biên dịch test), và USER root
+# để ghi được target/ trên bind mount. Cả hai thứ đó đều là lý do ảnh này KHÔNG BAO GIỜ
+# được dùng làm ảnh chạy: nó nằm ở Dockerfile riêng chứ không phải một stage của
+# infra/isolate/Dockerfile, để không ai lỡ tay build nhầm target cuối.
+# =============================================================================
+ARG ANH=oj-worker:arm64
+
+FROM maven:3.9-eclipse-temurin-21 AS mvn
+
+FROM ${ANH}
+
+# Ảnh chạy đặt USER ojworker (bất biến sandbox #7). Ở đây phải là root vì Maven ghi vào
+# target/ của thư mục nguồn được mount từ máy thật. kiem-sandbox.sh trả quyền sở hữu về
+# cho người dùng host ở bước cuối, đừng bỏ bước ấy.
+#
+# Chạy harness bằng root KHÔNG làm nhẹ đi ca nào: cả 14 ca khẳng định về thứ chương trình
+# BÊN TRONG box làm được, mà box thì do isolate (setuid root) dựng — uid của tiến trình
+# gọi isolate không đổi được vách ngăn ấy.
+USER root
+
+COPY --from=mvn /usr/share/maven /usr/share/maven
+COPY --from=mvn /opt/java/openjdk /opt/java/jdk21
+
+# JDK của harness nằm ở /opt/java/jdk21, CỐ Ý ngoài `oj.worker.sandbox.program-path`
+# ([/usr/bin, /bin, /usr/local/bin]) — y như JRE của worker ở ảnh chạy. Java không phải
+# thứ được phép chạy bên trong box.
+ENV JAVA_HOME=/opt/java/jdk21
+ENV PATH="/opt/java/jdk21/bin:/usr/share/maven/bin:/usr/local/bin:/usr/bin:/bin"
+
+WORKDIR /work

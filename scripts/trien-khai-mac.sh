@@ -280,11 +280,17 @@ cat <<'TIEP'
      Ra "Hiệu chuẩn máy ... host_factor = 1.000" nghĩa là đã xong từ trước.
 
   2. CHẠY LẠI 14 TEST TẤN CÔNG SANDBOX.
-     ./mvnw -pl oj-worker verify -Dit.test=SandboxAttackIT
+     ./scripts/kiem-sandbox.sh
      CLAUDE.md mục 6 đòi điều này mỗi khi đụng sandbox, và đổi kiến trúc máy
      CHÍNH LÀ đụng sandbox. Cái bẫy: khi nới/siết quyền container, vài ca chuyển
      từ "bị chặn" sang "không chạy được" — và hai kết quả đó nhìn giống hệt nhau
      trong log.
+
+     ★ ĐỪNG gọi thẳng `./mvnw -pl oj-worker verify -Dit.test=SandboxAttackIT`
+       trên máy Mac. isolate cần cgroup v2 + namespace Linux, nên trên macOS
+       JUnit huỷ cả class và Maven in "Tests run: 0" kèm BUILD SUCCESS. Đo thật
+       ngày 2026-09-05: lượt chạy ấy đọc y hệt "14/14 xanh". kiem-sandbox.sh
+       chạy chúng trong container và ĐẾM số ca, nên 0 ca là ĐỎ.
 
   Nhật ký worker:  docker logs -f oj-worker
   Dừng:            ./scripts/trien-khai-mac.sh --xoa

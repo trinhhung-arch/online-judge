@@ -153,8 +153,18 @@ function ve(metrics, nguong, boiCanh) {
         d.push(`  ⛔ verdict p95 = ${so(vMs)}ms, dưới sàn ${so(nguong.verdict_san_ms)}ms.`);
         d.push('     Không có gì được biên dịch — riêng biên dịch đã tốn <400ms (nfrplan 2.1),');
         d.push('     và hàm theo dõi ở đây ngủ 250ms trước khi hỏi lần đầu.');
-        d.push('     Gần như chắc chắn worker đang chạy ScriptedJudgeRunner (M1, giả lập,');
-        d.push('     `oj.worker.sandbox.enabled=false`) chứ không phải IsolateJudgeRunner.');
+        d.push('     HAI nguyên nhân, kiểm theo đúng thứ tự này:');
+        d.push('');
+        d.push('     1. NGUON_DUY_NHAT=0 ⇒ mọi bài nộp trùng source ⇒ CompileCache trả lời');
+        d.push('        thay máy chấm. Đây là nguyên nhân thường gặp hơn, và nó KHÔNG phải');
+        d.push('        lỗi của worker. Bỏ biến ấy đi rồi đo lại.');
+        d.push('     2. Worker đang chạy ScriptedJudgeRunner (M1, giả lập,');
+        d.push('        `oj.worker.sandbox.enabled=false`) chứ không phải IsolateJudgeRunner.');
+        d.push('');
+        d.push('     Phân biệt hai cái bằng SQL, không đoán:');
+        d.push('       SELECT host_factor, tests_run, memory_kb FROM judge_runs');
+        d.push('       ORDER BY submission_id DESC LIMIT 5;');
+        d.push('     memory_kb khác nhau từng dòng = isolate thật đang đo cgroup.');
         d.push('     ➜ CẢ NHÓM "ĐƯỜNG CHẤM" Ở TRÊN KHÔNG DÙNG ĐƯỢC. Nhóm "đường API" vẫn đúng.');
     }
     d.push('');
