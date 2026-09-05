@@ -2,7 +2,11 @@ package dev.oj.worker.sandbox;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,12 +26,34 @@ class CommandTemplateTest {
                 .first().asString().endsWith("/g++").startsWith("/");
     }
 
+    /**
+     * ★ Ca này KHÔNG được tra {@code java} trên máy đang chạy test.
+     *
+     * <p>{@code resolveProgram} tra bằng {@code Files.isExecutable} trên hệ thống tệp thật,
+     * mà ảnh chạy CỐ Ý không có {@code java} trong {@code program-path}: JRE của worker nằm
+     * ở {@code /opt/java/openjdk} vì Java của worker không phải thứ được phép chạy trong box
+     * ({@code infra/isolate/Dockerfile}). macOS thì có {@code /usr/bin/java}. Nên bản cũ
+     * xanh trên máy dev và ĐỎ trong chính ảnh máy chấm — đo thật ngày 2026-09-05, nó làm
+     * surefire chết trước khi failsafe kịp chạy ca tấn công nào.
+     *
+     * <p>Thứ ca này đo là phép thay {@code dir} và {@code mem} (KB -&gt; MB), không phải máy
+     * nào có sẵn {@code java}. Nên dựng một {@code java} giả rồi tra trong thư mục ấy. Mẫu
+     * lệnh vẫn chép nguyên văn từ {@code R__seed_du_lieu_tham_chieu.sql}.
+     *
+     * <p>Việc ảnh chạy không có {@code java} vẫn là thật và vẫn đúng: dòng {@code java21}
+     * trong seed đang {@code enabled = FALSE}. Ai bật lại nó phải thêm JDK vào ảnh trước.
+     */
     @Test
     @DisplayName("mẫu Java của seed: {dir} và {mem} (KB -> MB)")
-    void mauJava() {
+    void mauJava(@TempDir Path thuMucBin) throws IOException {
+        Path java = Files.createFile(thuMucBin.resolve("java"));
+        assertThat(java.toFile().setExecutable(true))
+                .as("không đặt được cờ thực thi cho %s", java)
+                .isTrue();
+
         assertThat(CommandTemplate.expand(
                 "java -Xmx{mem}m -Xss64m -XX:+UseSerialGC -cp {dir} Main",
-                "Main.java", 262_144, PATH))
+                "Main.java", 262_144, List.of(thuMucBin.toString())))
                 .contains("-Xmx256m", "-cp", "/box", "Main");
     }
 

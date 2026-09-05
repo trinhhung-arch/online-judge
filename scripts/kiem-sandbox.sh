@@ -65,6 +65,8 @@ for c in cpuset cpu memory pids; do
 done
 grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control || { echo "khong bat duoc controller memory cho /sys/fs/cgroup/boxes" >&2; exit 1; }
 echo /sys/fs/cgroup/boxes > /run/isolate/cgroup
+# Bao cao cu tu luot truoc doc y het bao cao that. Xoa truoc khi chay.
+rm -rf /work/oj-worker/target/failsafe-reports
 mvn -B -pl oj-worker -am verify -Dit.test=SandboxAttackIT
 ma=$?
 # Tra lai quyen so huu target/ cho nguoi dung host — Maven vua ghi bang root tren bind mount.
@@ -93,16 +95,32 @@ docker run --rm --name oj-sandbox-test \
 echo
 echo "── Kết luận ──"
 
-# Failsafe in một dòng tổng kết cho phần integration-test. Lấy dòng CUỐI dạng
-# "Tests run: N, Failures: F, Errors: E, Skipped: S" trong khối Results của failsafe.
-tong=$(grep -oE '^\[INFO\] Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+, Skipped: [0-9]+' "$NHAT_KY" | tail -1)
-[ -n "$tong" ] || loi "Không tìm thấy dòng tổng kết của Failsafe trong nhật ký.
-     Nghĩa là build chết TRƯỚC khi chạy được ca nào. Đọc nhật ký phía trên."
+# ★ ĐỌC BÁO CÁO CỦA FAILSAFE, KHÔNG ĐỌC CONSOLE.
+# Bản đầu bắt dòng "[INFO] Tests run: ..." cuối cùng trong nhật ký. Nó sai: surefire in
+# một dòng như thế cho MỖI class unit test, mà khối tổng kết cuối lại mang tiền tố
+# [ERROR] khi có ca đỏ. Đo thật ngày 2026-09-05: surefire chết ở CommandTemplateTest,
+# failsafe không chạy ca nào, script vẫn in "đã chạy 4" — con số của WorkerArchitectureTest.
+# Nó báo đỏ đúng, nhưng vì lý do sai, và một con số sai trong dòng kết luận thì lần sau
+# sẽ dẫn người đọc đi sai đường.
+#
+# File XML của Failsafe không có chỗ cho nhầm lẫn ấy: nó chỉ tồn tại khi failsafe thật sự
+# chạy, và thuộc tính tests= là số ca của ĐÚNG class này.
+BAO_CAO="$GOC/oj-worker/target/failsafe-reports/TEST-dev.oj.worker.sandbox.SandboxAttackIT.xml"
+if [ ! -f "$BAO_CAO" ]; then
+    echo "  (không có $BAO_CAO)" >&2
+    loi "Failsafe chưa chạy được ca nào — build chết TRƯỚC nó.
+     Gần như luôn là một ca unit test đỏ ở bước surefire. Tìm trong nhật ký phía trên:
+       [ERROR] Tests run: ... in dev.oj.worker....
+     Sửa ca đó rồi chạy lại. Ca tấn công CHƯA chứng minh gì trong lượt này."
+fi
 
-chay=$(echo "$tong"   | sed -E 's/.*Tests run: ([0-9]+).*/\1/')
-hong=$(echo "$tong"   | sed -E 's/.*Failures: ([0-9]+).*/\1/')
-loi_ca=$(echo "$tong" | sed -E 's/.*Errors: ([0-9]+).*/\1/')
-bo=$(echo "$tong"     | sed -E 's/.*Skipped: ([0-9]+).*/\1/')
+dong=$(grep -m1 '<testsuite ' "$BAO_CAO")
+lay() { printf '%s' "$dong" | sed -nE "s/.*[[:space:]]$1=\"([0-9]+)\".*/\1/p"; }
+chay=$(lay tests)
+hong=$(lay failures)
+loi_ca=$(lay errors)
+bo=$(lay skipped)
+[ -n "$chay$hong$loi_ca$bo" ] || loi "Không đọc được số liệu trong $BAO_CAO."
 
 echo "  đã chạy $chay · hỏng $hong · lỗi $loi_ca · bỏ $bo"
 
