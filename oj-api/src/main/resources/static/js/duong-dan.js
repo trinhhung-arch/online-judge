@@ -25,6 +25,7 @@
 
 export const DUONG = {
     auth: {
+        captcha:  '/api/v1/auth/captcha',
         dangKy:   '/api/v1/auth/register',
         dangNhap: '/api/v1/auth/login',
         lamMoi:   '/api/v1/auth/refresh',

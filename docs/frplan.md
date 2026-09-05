@@ -105,7 +105,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 | ID | Yêu cầu | Ràng buộc NFR | Ưu tiên |
 |---|---|---|---|
-| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12. **Giới hạn 10 tài khoản/giờ/IP**, đếm cả lượt hỏng | SEC2, A (chống tạo hàng loạt) | Must |
+| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12. **Giới hạn 10 tài khoản/giờ/IP** (đếm cả lượt hỏng) + **Cloudflare Turnstile** | SEC2, A (chống tạo hàng loạt) | Must |
 | FR-AUTH-02 | Đăng nhập trả JWT (15 phút) + refresh token (7 ngày). **Không dùng session in-memory** | S2, S1 | Must |
 | FR-AUTH-03 | Đăng xuất — thu hồi refresh token | — | Must |
 | FR-AUTH-04 | Đổi mật khẩu (yêu cầu mật khẩu cũ), thu hồi mọi refresh token | SEC2 | Must |
@@ -115,6 +115,12 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP, khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
 | FR-AUTH-09 | Quên mật khẩu qua email | — | **Won't (v1.1)** — cần SMTP, thêm một điểm hỏng, không đáng cho v1.0 |
 | FR-AUTH-10 | Xác thực hai lớp TOTP (RFC 6238) + 10 mã dự phòng dùng một lần. **Bắt buộc với ADMIN**: chưa bật thì không dùng được quyền ADMIN | SEC2, SEC3 (ADMIN đọc được testdata mọi đề) | Must |
+
+> **FR-AUTH-01 chọn Turnstile chứ không chọn xác minh email, và đó là hai mục tiêu khác nhau.** Mục tiêu ở đây là chặn **bot tạo tài khoản hàng loạt**. Xác minh email gần như không làm được việc đó: dịch vụ mail dùng-một-lần có hàng nghìn tên miền, một script lấy hộp thư tạm mất vài trăm mili-giây — nó chặn người lười, không chặn bot có chủ đích. Turnstile thì chặn đúng thứ ấy, không cần SMTP, và hệ thống đằng nào cũng đứng sau Cloudflare.
+>
+> Xác minh email vẫn đáng làm, nhưng cho mục tiêu **có một kênh liên lạc đã xác minh** — quên mật khẩu, báo kết quả kỳ thi. Đó là FR-AUTH-09, vẫn hoãn sang v1.1.
+>
+> Hai chi tiết của thiết kế: captcha kiểm **sau** rate limit theo IP (đặt trước thì một đợt dội 1 000 request biến thành 1 000 lượt gọi ra Cloudflare — ta tự khuếch đại đòn tấn công), và **trước** phần kiểm định dạng lẫn BCrypt. Cloudflare không trả lời thì **từ chối**, cùng lập trường với rate limit đăng ký: cho qua nghĩa là một bot chỉ cần làm nghẽn đường ra internet là vô hiệu hoá cả hàng rào.
 
 > **FR-AUTH-08 nới rộng vì một phép đo, không vì lo xa.** Bản đầu chỉ khoá các lượt **sai**. Nhưng BCrypt cost 12 tốn ~250ms CPU *mỗi lần*, kể cả khi mật khẩu đúng — nên một bot có 1 000 tài khoản hợp lệ chỉ cần đăng nhập **đúng** liên tục là làm nghẽn cả máy, và nó không phải đoán gì vì chính nó đặt mật khẩu lúc đăng ký. Đo trên máy chấm chuẩn ngày 2026-09-05: **17,5 lượt/giây là trần của cả máy**, và lúc ấy chấm bài đứng.
 >

@@ -10,6 +10,7 @@ import dev.oj.platform.security.ClientIp;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,12 +39,16 @@ public class AuthController {
     private final RefreshSessionUseCase refresh;
     private final LogoutUseCase logout;
 
+    private final dev.oj.platform.config.AppProperties properties;
+
     public AuthController(RegisterUserUseCase register, LoginUseCase login,
-                          RefreshSessionUseCase refresh, LogoutUseCase logout) {
+                          RefreshSessionUseCase refresh, LogoutUseCase logout,
+                          dev.oj.platform.config.AppProperties properties) {
         this.register = register;
         this.login = login;
         this.refresh = refresh;
         this.logout = logout;
+        this.properties = properties;
     }
 
     /**
@@ -53,11 +58,25 @@ public class AuthController {
      * sẽ tách ra (xác minh email ở v1.1, FR-AUTH-09). Tách sẵn từ bây giờ thì client không
      * phải sửa gì vào ngày đó.
      */
+    /**
+     * Cấu hình captcha cho giao diện — công khai, không cần đăng nhập.
+     *
+     * <p>Chỉ trả {@code siteKey} (khoá công khai) và cờ bật/tắt. Giao diện dùng nó để quyết
+     * định có dựng widget hay không: máy dev tắt captcha thì trang đăng ký không hiện ô nào,
+     * và không phải sửa file tĩnh nào cả.
+     */
+    @GetMapping("/captcha")
+    public Map<String, Object> captcha() {
+        var t = properties.auth().turnstile();
+        return Map.of("enabled", t.enabled(), "siteKey", t.siteKey() == null ? "" : t.siteKey());
+    }
+
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> dangKy(@RequestBody AuthRequests.Register body,
                                                      HttpServletRequest request) {
         long id = register.thucHien(body.handle(), body.email(),
-                body.displayName(), body.password(), ClientIp.cua(request));
+                body.displayName(), body.password(), ClientIp.cua(request),
+                body.captchaToken());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("userId", id));
     }
 

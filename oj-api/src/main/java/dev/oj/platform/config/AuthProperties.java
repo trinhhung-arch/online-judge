@@ -69,6 +69,7 @@ import java.time.Duration;
  * @param bcryptWait        chờ tối đa ngần này để xin một suất, hết thì trả 429
  * @param loginMinInterval  khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của
  *                          cùng một tài khoản
+ * @param turnstile         chống bot ở cửa đăng ký — xem {@link TurnstileProperties}
  */
 public record AuthProperties(
         String jwtSecret,
@@ -84,7 +85,8 @@ public record AuthProperties(
         boolean requireAdminTwoFactor,
         int bcryptConcurrency,
         Duration bcryptWait,
-        Duration loginMinInterval) {
+        Duration loginMinInterval,
+        TurnstileProperties turnstile) {
 
 public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -156,6 +158,9 @@ public AuthProperties {
         }
         if (loginMinInterval == null || loginMinInterval.isNegative()) {
             throw new IllegalStateException("oj.auth.login-min-interval không hợp lệ");
+        }
+        if (turnstile == null) {
+            throw new IllegalStateException("Thiếu khối oj.auth.turnstile");
         }
         if (totpKey.equals(jwtSecret)) {
             throw new IllegalStateException(

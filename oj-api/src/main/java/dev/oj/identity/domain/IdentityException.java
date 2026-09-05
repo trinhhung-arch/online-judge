@@ -97,6 +97,18 @@ public class IdentityException extends DomainException {
                 "Chạm trần oj.auth.bcrypt-concurrency", conLai);
     }
 
+    /**
+     * Captcha thiếu, sai, đã dùng, hoặc không hỏi lại được Cloudflare — cùng một câu cho cả bốn.
+     *
+     * <p>Phân biệt "thiếu" với "sai" là nói cho người viết bot biết trường nào server thật sự
+     * đọc, và phân biệt "Cloudflare không trả lời" là chỉ cho họ một cửa để nhắm vào.
+     */
+    public static IdentityException captchaKhongHopLe() {
+        return new IdentityException(Kind.INVALID, "identity.captcha_khong_hop_le",
+                "Xác minh chống bot không thành công. Hãy thử lại.",
+                "Turnstile từ chối hoặc không hỏi lại được");
+    }
+
     /** Cùng một tài khoản đăng nhập lại quá nhanh — chỉ áp cho lượt THÀNH CÔNG. */
     public static IdentityException dangNhapQuaNhanh(Duration conLai) {
         return new IdentityException(Kind.RATE_LIMITED, "identity.dang_nhap_qua_nhanh",

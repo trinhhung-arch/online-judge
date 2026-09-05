@@ -49,7 +49,20 @@ public final class AppPropertiesGia {
         var auth = new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                soSuat, cho, Duration.ofSeconds(2));
+                soSuat, cho, Duration.ofSeconds(2),
+                new TurnstileProperties(false, "", "",
+                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)));
+        return voi(internalMacDinh(), auth, submissionMacDinh());
+    }
+
+    /** Cho {@code TurnstileVerifierTest} — nó bật/tắt captcha và đổi URL siteverify. */
+    public static AppProperties voiTurnstile(TurnstileProperties turnstile) {
+        var a = authMacDinh();
+        var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),
+                a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
+                a.maxRegistrationsPerIp(), a.registrationWindow(), a.totpKey(),
+                a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
+                a.loginMinInterval(), turnstile);
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
@@ -57,7 +70,9 @@ public final class AppPropertiesGia {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                4, Duration.ofMillis(150), Duration.ofSeconds(2));
+                4, Duration.ofMillis(150), Duration.ofSeconds(2),
+                new TurnstileProperties(false, "", "",
+                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)));
     }
 
     private static AppProperties.Submission submissionMacDinh() {

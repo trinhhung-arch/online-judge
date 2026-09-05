@@ -23,8 +23,14 @@ public final class AuthRequests {
     private AuthRequests() {
     }
 
-    /** FR-AUTH-01. */
-    public record Register(String handle, String email, String displayName, String password) {
+    /**
+     * FR-AUTH-01.
+     *
+     * @param captchaToken giá trị {@code cf-turnstile-response} do widget sinh ra. Dùng MỘT
+     *                     lần, nên nó cũng là thông tin xác thực — không lọt vào toString
+     */
+    public record Register(String handle, String email, String displayName, String password,
+                           String captchaToken) {
 
         @Override
         public String toString() {

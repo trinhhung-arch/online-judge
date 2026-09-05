@@ -169,6 +169,59 @@ document.getElementById('form-dang-nhap').addEventListener('submit', (ev) => {
     });
 });
 
+/**
+ * ★ CHỐNG BOT — Cloudflare Turnstile (FR-AUTH-01).
+ *
+ * Widget chỉ được dựng khi server nói captcha đang BẬT. Máy dev tắt thì trang đăng ký không
+ * hiện gì và không tải script nào — không phải sửa file tĩnh nào cả.
+ *
+ * ★ Dựng TƯỜNG MINH (`render=explicit`) chứ không để Turnstile tự quét trang: tự quét cần
+ * `data-sitekey` nhúng cứng trong HTML, mà mỗi môi trường một khoá. Lấy khoá từ server rồi
+ * dựng bằng tay giữ file tĩnh giống hệt nhau ở mọi nơi.
+ *
+ * ★ Hỏng thì KHÔNG ẩn form đi. Người dùng thật vẫn gõ được và bấm được; server là nơi từ
+ * chối. Ẩn form nghĩa là một trục trặc của Cloudflare biến thành "trang đăng ký biến mất",
+ * và không có gì trên màn hình nói vì sao.
+ */
+let veLaiCaptcha = () => {};
+
+async function dungCaptcha() {
+    let cauHinh;
+    try {
+        cauHinh = await goi(DUONG.auth.captcha);
+    } catch (e) {
+        return;                     // không hỏi được thì thôi, server vẫn là chốt
+    }
+    if (!cauHinh.enabled || !cauHinh.siteKey) return;
+
+    await new Promise((xong, hong) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        sc.async = true;
+        sc.onload = xong;
+        sc.onerror = hong;
+        document.head.appendChild(sc);
+    }).catch(() => null);
+
+    if (typeof window.turnstile !== 'function' && typeof window.turnstile !== 'object') return;
+
+    const oToken = document.getElementById('captcha-token');
+    const id = window.turnstile.render('#captcha-dang-ky', {
+        sitekey: cauHinh.siteKey,
+        callback: (token) => { oToken.value = token; },
+        // Token sống có hạn và dùng MỘT lần. Hết hạn mà vẫn để giá trị cũ trong ô ẩn thì
+        // lần gửi sau chắc chắn hỏng, với một thông báo không nói ra vì sao.
+        'expired-callback': () => { oToken.value = ''; },
+        'error-callback': () => { oToken.value = ''; },
+    });
+    veLaiCaptcha = () => {
+        oToken.value = '';
+        window.turnstile.reset(id);
+    };
+}
+
+dungCaptcha();
+
 document.getElementById('form-dang-ky').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const form = ev.target;
@@ -191,5 +244,11 @@ document.getElementById('form-dang-ky').addEventListener('submit', (ev) => {
         dn.password.value = form.password.value;
         bao(o, 'Đã tạo tài khoản. Đang đăng nhập…', 'on');
         dn.requestSubmit();
+    }, () => {
+        // Token Turnstile dùng MỘT lần. Đăng ký hỏng vì bất cứ lý do gì — trùng handle,
+        // mật khẩu ngắn — thì token đã tiêu, và lần bấm thứ hai sẽ hỏng vì captcha thay vì
+        // vì lý do thật. Vẽ lại widget để lần sau có token mới.
+        veLaiCaptcha();
+        return false;               // vẫn hiện thông báo lỗi như thường
     });
 });

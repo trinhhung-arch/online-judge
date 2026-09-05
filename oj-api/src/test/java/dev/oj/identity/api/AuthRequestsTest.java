@@ -30,7 +30,7 @@ class AuthRequestsTest {
     @DisplayName("★ mọi record trong AuthRequests đều không in trường bí mật")
     void khong_record_nao_lo_bi_mat() throws Exception {
         var records = List.of(
-                new AuthRequests.Register("nguoi", "a@oj.test", "Người", BI_MAT),
+                new AuthRequests.Register("nguoi", "a@oj.test", "Người", BI_MAT, BI_MAT),
                 new AuthRequests.Login("nguoi", BI_MAT, BI_MAT),
                 new AuthRequests.XacNhanHaiLop(BI_MAT),
                 new AuthRequests.TatHaiLop(BI_MAT, BI_MAT),
@@ -62,7 +62,7 @@ class AuthRequestsTest {
     @Test
     @DisplayName("tên trường mật khẩu không lọt vào toString dưới dạng nào khác")
     void khong_lo_qua_ten_truong() {
-        String s = new AuthRequests.Register("nguoi", "a@oj.test", "Người", BI_MAT)
+        String s = new AuthRequests.Register("nguoi", "a@oj.test", "Người", BI_MAT, BI_MAT)
                 .toString().toLowerCase(Locale.ROOT);
 
         assertThat(s).doesNotContain("password", "matkhau", "mat_khau");

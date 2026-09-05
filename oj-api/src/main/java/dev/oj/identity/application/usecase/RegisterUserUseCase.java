@@ -1,5 +1,6 @@
 package dev.oj.identity.application.usecase;
 
+import dev.oj.identity.application.port.CaptchaVerifier;
 import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.RegistrationRateLimiter;
 import dev.oj.identity.application.port.UserRepository;
@@ -36,13 +37,15 @@ public class RegisterUserUseCase {
     private final PasswordHasher hasher;
     private final AuditLog auditLog;
     private final RegistrationRateLimiter rateLimiter;
+    private final CaptchaVerifier captcha;
 
     public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, AuditLog auditLog,
-                               RegistrationRateLimiter rateLimiter) {
+                               RegistrationRateLimiter rateLimiter, CaptchaVerifier captcha) {
         this.users = users;
         this.hasher = hasher;
         this.auditLog = auditLog;
         this.rateLimiter = rateLimiter;
+        this.captcha = captcha;
     }
 
     /**
@@ -50,7 +53,7 @@ public class RegisterUserUseCase {
      * @return {@code users.id} vừa tạo
      */
     public long thucHien(String handle, String email, String tenHienThi, String matKhau,
-                         String clientIp) {
+                         String clientIp, String captchaToken) {
         // ★ ĐẾM TRƯỚC MỌI THỨ, kể cả trước khi kiểm định dạng.
         //
         // Đặt sau phần kiểm sẽ biến chính phần kiểm thành cửa miễn phí: một bot dò xem handle
@@ -58,6 +61,16 @@ public class RegisterUserUseCase {
         // trả lời "handle này đã có người dùng". Lượt hỏng cũng tốn tài nguyên và cũng rò rỉ
         // thông tin, nên lượt hỏng cũng phải trả giá.
         rateLimiter.kiemVaGhiNhan(clientIp);
+
+        // ★ CAPTCHA SAU rate limit, TRƯỚC mọi thứ khác — thứ tự này là chủ ý.
+        //
+        // Sau rate limit: kiểm captcha là một lượt gọi HTTPS ra ngoài. Đặt nó trước thì một
+        // đợt dội 1 000 request biến thành 1 000 lượt gọi ra Cloudflare — ta tự khuếch đại
+        // đòn tấn công. Bộ đếm cục bộ chặn trước thì chỉ 10 lượt đi ra.
+        //
+        // Trước phần kiểm định dạng và trước BCrypt: cả hai đều tốn hơn, và không có lý do
+        // gì tiêu chúng cho một request chưa chứng minh được nó do người gửi.
+        captcha.kiem(captchaToken, clientIp);
 
         User.kiemTraHandle(handle);
         User.kiemTraEmail(email);

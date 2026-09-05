@@ -244,13 +244,14 @@ oj:
     #   cdn.jsdelivr.net — KaTeX, đã có integrity= (SRI) ở cả bốn thẻ trong problem.html.
     content-security-policy: >-
       default-src 'none';
-      script-src 'self' https://cdn.jsdelivr.net;
+      script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com;
       style-src 'self' https://cdn.jsdelivr.net;
       style-src-attr 'unsafe-inline';
       font-src https://cdn.jsdelivr.net;
       img-src 'self' data:;
       connect-src 'self';
       form-action 'self';
+      frame-src https://challenges.cloudflare.com;
       base-uri 'none';
       frame-ancestors 'none';
       object-src 'none'
@@ -293,6 +294,22 @@ oj:
     # Chỉ áp cho lượt thành công, cố ý: áp cho lượt sai thì ai cũng khoá được người khác
     # ra ngoài bằng cách gõ sai mật khẩu của họ liên tục.
     login-min-interval: 2s
+
+    # Cloudflare Turnstile — chặn bot ở cửa đăng ký (FR-AUTH-01).
+    #
+    # ★ MẶC ĐỊNH TẮT vì máy dev và bộ IT không có khoá. TurnstileVerifier ghi một dòng WARN
+    # lúc khởi động khi nó tắt, để một máy công khai quên bật không im lặng trôi qua.
+    #
+    # Bật mà thiếu secret thì CRASH lúc boot: một hàng rào bật-nhưng-không-cấu-hình là hàng
+    # rào tệ nhất, vì nó trông như đang bảo vệ.
+    turnstile:
+      enabled: ${OJ_TURNSTILE_ENABLED:false}
+      # Công khai — nó nằm trong HTML của mọi trang đăng ký.
+      site-key: ${OJ_TURNSTILE_SITE_KEY:}
+      secret: ${OJ_TURNSTILE_SECRET:}
+      # Tham số hoá để test trỏ vào máy chủ giả thay vì gọi ra internet.
+      verify-url: ${OJ_TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+      timeout: 3s
 
   jobs:
     # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của

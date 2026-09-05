@@ -66,6 +66,15 @@
         <input id="mat-khau-moi" name="password" type="password" autocomplete="new-password" required>
         <p class="goi-y">Ít nhất 8 ký tự.</p>
 
+        <!-- ★ Chống bot (FR-AUTH-01). Widget chỉ được dựng khi server nói captcha đang
+             BẬT — máy dev tắt thì khối này rỗng và không ai thấy gì.
+
+             Ô ẩn bên dưới là cầu nối: Turnstile trả token qua callback, JS ghi vào đây, và
+             hàm gửi form chung nhặt nó cùng mọi trường khác. Không có nó thì token mang tên
+             `cf-turnstile-response` của Cloudflare, lệch với tên trường mà API đọc. -->
+        <div id="captcha-dang-ky"></div>
+        <input type="hidden" name="captchaToken" id="captcha-token">
+
         <p><button type="submit">Tạo tài khoản</button></p>
     </form>
 </main>
