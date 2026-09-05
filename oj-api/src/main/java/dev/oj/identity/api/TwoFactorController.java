@@ -4,6 +4,7 @@ import dev.oj.identity.api.dto.AuthRequests;
 import dev.oj.identity.application.usecase.TwoFactorUseCase;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,12 @@ public class TwoFactorController {
 
     public TwoFactorController(TwoFactorUseCase useCase) {
         this.useCase = useCase;
+    }
+
+    /** Giao diện hỏi trước khi vẽ: đang bật thì hiện khối tắt, chưa bật thì hiện nút bật. */
+    @GetMapping
+    public Map<String, Boolean> trangThai() {
+        return Map.of("daBat", useCase.daBat());
     }
 
     /**

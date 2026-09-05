@@ -62,8 +62,85 @@
                 <p><button type="submit">Đổi mật khẩu</button></p>
             </form>
         </section>
+
+        <section class="the">
+            <h2>Xác thực hai lớp</h2>
+
+            <!-- ★ Nói TRƯỚC vì sao lại có mục này. Người dùng thường coi 2FA là phiền toái
+                 cho tới lúc hiểu nó bảo vệ cái gì. Với tài khoản quản trị, nó KHÔNG phải
+                 tuỳ chọn: server từ chối mọi thao tác quản trị khi chưa bật. -->
+            <p class="goi-y">Sau khi bật, mỗi lần đăng nhập bạn sẽ cần thêm mã 6 chữ số từ
+                ứng dụng xác thực (Google Authenticator, Authy, 1Password…).
+                <strong>Tài khoản quản trị bắt buộc phải bật</strong> mới dùng được quyền
+                quản trị.</p>
+
+            <p id="hai-lop-trang-thai" class="goi-y" role="status" aria-live="polite">Đang tải…</p>
+
+            <!-- Chưa bật -->
+            <div id="hai-lop-tat" hidden>
+                <p><button type="button" id="nut-bat-hai-lop">Bật xác thực hai lớp</button></p>
+            </div>
+
+            <!-- Đang đăng ký thiết bị -->
+            <div id="hai-lop-dang-ky" hidden>
+                <p>Quét mã dưới đây bằng ứng dụng xác thực:</p>
+                <p><img id="hai-lop-qr" alt="Mã QR để thêm tài khoản vào ứng dụng xác thực"
+                        width="200" height="200"></p>
+
+                <!-- Quét hụt là chuyện thường: máy ảnh mờ, màn hình chói, hoặc dùng máy tính
+                     bàn không có camera. Luôn có đường nhập tay bên cạnh. -->
+                <p class="goi-y">Không quét được? Nhập tay khoá này vào ứng dụng:</p>
+                <p><code id="hai-lop-bi-mat"></code></p>
+
+                <form id="form-hai-lop-xac-nhan" novalidate>
+                    <label for="hai-lop-ma">Mã 6 chữ số từ ứng dụng</label>
+                    <input id="hai-lop-ma" name="ma" inputmode="numeric" autocomplete="one-time-code"
+                           pattern="[0-9]{6}" maxlength="6" required>
+                    <p class="goi-y">Nhập mã đang hiện để chứng minh ứng dụng đã thêm đúng.</p>
+                    <p><button type="submit">Xác nhận và bật</button></p>
+                </form>
+            </div>
+
+            <!-- Mã dự phòng — hiện ĐÚNG MỘT LẦN -->
+            <div id="hai-lop-ma-du-phong" hidden>
+                <h3>Mã dự phòng</h3>
+                <!-- ★ Cảnh báo phải đứng TRƯỚC danh sách. Đứng sau thì người ta đã đóng tab
+                     mất rồi mới đọc tới. -->
+                <p class="goi-y"><strong>Lưu ngay bây giờ.</strong> Đây là lần duy nhất
+                    chúng được hiện — máy chủ chỉ giữ bản băm. Mỗi mã dùng được một lần, và
+                    chúng là thứ duy nhất cứu bạn khi mất điện thoại.</p>
+                <ul id="hai-lop-danh-sach-ma"></ul>
+                <p><button type="button" id="nut-da-luu-ma">Tôi đã lưu</button></p>
+            </div>
+
+            <!-- Đang bật -->
+            <div id="hai-lop-bat" hidden>
+                <form id="form-hai-lop-tat" novalidate>
+                    <p class="goi-y">Tắt cần <strong>cả</strong> mật khẩu lẫn mã hiện tại —
+                        để một phiên bị chiếm không tự tắt được lớp bảo vệ này.</p>
+
+                    <label for="hai-lop-tat-mat-khau">Mật khẩu hiện tại</label>
+                    <input id="hai-lop-tat-mat-khau" name="password" type="password"
+                           autocomplete="current-password" required>
+
+                    <label for="hai-lop-tat-ma">Mã 6 chữ số (hoặc một mã dự phòng)</label>
+                    <input id="hai-lop-tat-ma" name="ma" autocomplete="one-time-code" required>
+
+                    <p><button type="submit">Tắt xác thực hai lớp</button></p>
+                </form>
+            </div>
+        </section>
     </div>
 </main>
+<!-- ★ Thư viện QR, GHIM BẰNG SRI.
+     Trang này hiện bí mật TOTP, nên một script lạ ở đây đọc được nó. `integrity` khoá đúng
+     bộ byte của phiên bản 1.4.4: CDN bị chiếm thì trình duyệt TỪ CHỐI chạy file, chứ không
+     chạy một file khác. CSP đã cho phép cdn.jsdelivr.net (KaTeX dùng chung).
+     Không có nó thì phần nhập tay vẫn chạy — QR chỉ là đường tắt. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+        integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
+        crossorigin="anonymous"></script>
 <script type="module" src="/js/ho-so.js"></script>
+<script type="module" src="/js/hai-lop.js"></script>
 </body>
 </html>

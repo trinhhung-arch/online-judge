@@ -128,7 +128,7 @@ oHandle.addEventListener('input', () => {
     if (!oLoiHandle.hidden && !loiHandle(oHandle.value.trim())) veLoiHandle(null);
 });
 
-async function gui(form, duongDan, sauKhiXong) {
+async function gui(form, duongDan, sauKhiXong, khiLoi = null) {
     const nut = form.querySelector('button[type=submit]');
     nut.disabled = true;
     bao(o, '');
@@ -139,6 +139,12 @@ async function gui(form, duongDan, sauKhiXong) {
     } catch (e) {
         // Câu chữ đến thẳng từ server. GlobalExceptionHandler đã bảo đảm nó an toàn và
         // bằng tiếng Việt — dịch lại ở đây là tạo bản dịch thứ hai sẽ lạc hậu trước.
+        // `khiLoi` được gọi TRƯỚC khi vẽ thông báo, và được quyền nuốt lỗi: đăng nhập
+        // thiếu mã 2FA không phải một thất bại mà là bước kế tiếp của cùng một luồng.
+        if (khiLoi && e instanceof LoiApi && khiLoi(e)) {
+            nut.disabled = false;
+            return;
+        }
         bao(o, e instanceof LoiApi ? e.message : 'Không kết nối được máy chủ.', 'loi');
         nut.disabled = false;
     }
@@ -149,6 +155,17 @@ document.getElementById('form-dang-nhap').addEventListener('submit', (ev) => {
     gui(ev.target, DUONG.auth.dangNhap, (phien) => {
         luuPhien(phien);
         location.href = tiepTuc();
+    }, (e) => {
+        // ★ identity.can_totp KHÔNG phải lỗi: mật khẩu đã đúng, server đang hỏi yếu tố thứ
+        // hai. Hiện ô mã, đưa con trỏ vào đó, và giữ nguyên những gì người dùng đã gõ.
+        if (e.code !== 'identity.can_totp') return false;
+        const nhom = document.getElementById('nhom-hai-lop');
+        nhom.hidden = false;
+        const oMa = document.getElementById('ma-hai-lop');
+        oMa.required = true;
+        oMa.focus();
+        bao(o, 'Tài khoản này bật xác thực hai lớp. Nhập mã từ ứng dụng.', '');
+        return true;    // đã xử lý — đừng vẽ nó như một lỗi đỏ
     });
 });
 

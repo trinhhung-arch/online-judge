@@ -71,6 +71,17 @@ public class TwoFactorUseCase {
     }
 
     /**
+     * Trạng thái hiện tại, để giao diện biết vẽ nút "bật" hay khối "tắt".
+     *
+     * <p>Không gộp vào {@code GET /api/v1/me}: hồ sơ là dữ liệu hiển thị, còn đây là một
+     * câu hỏi về bảo mật. Gộp lại thì mọi chỗ đọc hồ sơ đều mang theo câu trả lời ấy, kể
+     * cả những chỗ không cần — và mỗi chỗ mang theo là một chỗ có thể lỡ log ra.
+     */
+    public boolean daBat() {
+        return checker.dangBat(currentUser.current().id());
+    }
+
+    /**
      * Bước 1 — sinh bí mật mới, chưa bật.
      *
      * @throws IdentityException {@code 2fa_da_bat} nếu đã bật rồi. Không âm thầm ghi đè:

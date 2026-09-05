@@ -34,6 +34,9 @@ export const DUONG = {
     toi: {
         hoSo:    '/api/v1/me',
         matKhau: '/api/v1/me/password',
+        haiLop:  '/api/v1/me/2fa',
+        haiLopBatDau:  '/api/v1/me/2fa/bat-dau',
+        haiLopXacNhan: '/api/v1/me/2fa/xac-nhan',
     },
 
     de: {

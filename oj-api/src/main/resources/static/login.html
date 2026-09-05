@@ -25,6 +25,17 @@
         <label for="mat-khau">Mật khẩu</label>
         <input id="mat-khau" name="password" type="password" autocomplete="current-password" required>
 
+        <!-- ★ ẨN cho tới khi server nói tài khoản này cần mã (identity.can_totp).
+             Hiện sẵn ô này cho mọi người là nói với cả internet rằng hệ thống có 2FA và
+             mời họ đoán xem tài khoản nào bật — trong khi phần lớn người dùng không bật
+             và sẽ bối rối trước một ô họ không có gì để điền. -->
+        <div id="nhom-hai-lop" hidden>
+            <label for="ma-hai-lop">Mã xác thực</label>
+            <input id="ma-hai-lop" name="maHaiLop" autocomplete="one-time-code"
+                   inputmode="numeric" maxlength="10">
+            <p class="goi-y">6 chữ số từ ứng dụng xác thực, hoặc một mã dự phòng.</p>
+        </div>
+
         <p><button type="submit">Đăng nhập</button></p>
     </form>
 
