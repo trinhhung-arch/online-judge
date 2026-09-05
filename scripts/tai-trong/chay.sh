@@ -44,6 +44,23 @@ curl -fsS "$BASE/api/v1/status" >/dev/null || {
     exit 1
 }
 
+# ★ TÀI KHOẢN ẢO PHẢI CÒN SỐNG — KIỂM TRƯỚC, ĐỪNG ĐỂ PHÁT HIỆN SAU 40 PHÚT
+#
+# `don-dep.sql` XOÁ các tài khoản `tai-*`. Nó với `seed-nguoi-dung.sql` là một cặp, và thứ tự
+# đúng là: dọn -> seed -> đo. Bỏ bước seed thì mọi người ảo rơi vào nhánh `sleep(5); return;`
+# của k6-tai.js, và lượt chạy vẫn kết thúc BÌNH THƯỜNG với một bảng toàn ✅ — vì không request
+# nào hỏng cả, chỉ là chẳng có request nào được gửi.
+#
+# Đo thật ngày 2026-09-05, một lượt như thế: doc_ms = 0ms, nop_ms = 0ms, ti_le_429 = —, và
+# iteration_duration p95 = 5 016ms (đúng bằng sleep(5)). Bốn ô ✅ trên một phép đo rỗng.
+MAT_KHAU=${MAT_KHAU:-matkhau-dev-123}
+curl -fsS -X POST "$BASE/api/v1/auth/login" -H "Content-Type: application/json" -d '{"dinhDanh":"tai-1","password":"'"$MAT_KHAU"'"}' 2>/dev/null | grep -q accessToken || {
+    echo "Không đăng nhập được tài khoản ảo 'tai-1' — chưa seed, hoặc vừa chạy don-dep.sql."
+    echo "  Seed lại rồi chạy lại:"
+    echo "    docker exec -i oj-postgres psql -U ojuser -d ojdb -v so_nguoi=1000 < $HERE/seed-nguoi-dung.sql"
+    exit 1
+}
+
 MUC_MAX=0
 for n in $CAC_MUC; do [ "$n" -gt "$MUC_MAX" ] && MUC_MAX=$n; done
 
@@ -168,7 +185,7 @@ khoi_dong
 for n in $CAC_MUC; do
     echo
     echo "══════════ $n người ảo ══════════"
-    k6 run -e BASE="$BASE" -e NGUOI="$n" -e THOI_LUONG="$THOI_LUONG" \
+    k6 run -e BASE="$BASE" -e NGUOI="$n" -e THOI_LUONG="$THOI_LUONG" -e MAT_KHAU="$MAT_KHAU" \
            -e RA_JSON="$RA/tom-tat-$n.json" \
            "$HERE/k6-tai.js" 2>&1 | tee "$RA/$n.log"
     ma=${PIPESTATUS[0]}

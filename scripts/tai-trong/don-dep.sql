@@ -51,3 +51,11 @@ SELECT (SELECT count(*) FROM users WHERE handle LIKE 'tai-%')       AS con_tai_k
          WHERE u.handle LIKE 'tai-%')                                AS con_bai_nop;
 
 COMMIT;
+
+\echo ''
+\echo '★ File này vừa XOÁ các tài khoản tai-*. Chúng là sân đấu của k6, không phải rác.'
+\echo '  Trước khi đo lại PHẢI seed lại, nếu không mọi người ảo sẽ không đăng nhập được'
+\echo '  và lượt chạy sẽ ra một bảng toàn dấu tích trên một phép đo rỗng:'
+\echo ''
+\echo '    docker exec -i oj-postgres psql -U ojuser -d ojdb -v so_nguoi=1000 < seed-nguoi-dung.sql'
+\echo ''
