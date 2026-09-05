@@ -55,14 +55,43 @@ COPY oj-worker oj-worker
 # -pl: không build oj-api, worker không cần nó (và nó cần Postgres để chạy test).
 RUN mvn -B -q -pl oj-contract,oj-worker -am -DskipTests package
 
+# ---------- stage 2b: JRE 21 cho CHÍNH worker ----------
+#
+# ★ VÌ SAO KHÔNG `apt-get install openjdk-21-jre-headless`
+# Vì Debian bookworm KHÔNG CÓ gói đó. Bookworm dừng ở OpenJDK 17; openjdk-21 chỉ có từ
+# trixie trở đi, và bookworm-backports cũng không có (kiểm trên packages.debian.org ngày
+# 2026-09-05). Dòng cũ làm `docker buildx build` chết ngay tại đây với
+#     E: Package 'openjdk-21-jre-headless' has no installation candidate
+#
+# ★ VÌ SAO KHÔNG NÂNG CẢ ẢNH LÊN trixie
+# Trixie có openjdk-21 thật, nhưng nó kéo theo g++ 12 -> 14 và python3 3.11 -> 3.13. Hai
+# thứ đó nằm TRONG box — đổi chúng là đổi môi trường chấm bài: đổi thời gian chạy (phải
+# hiệu chuẩn lại host_factor), đổi nhãn `languages.version_label`, và bắt bộ 14 test tấn
+# công phải chứng minh lại trên một toolchain khác với toolchain mà CI đã xanh.
+#
+# Worker chỉ cần Java 21 cho CHÍNH NÓ. Nên lấy JRE từ Temurin, giữ nguyên mọi thứ khác.
+# glibc của jammy là 2.35, của bookworm là 2.36 — binary dựng cho 2.35 chạy trên 2.36 được,
+# chiều ngược lại thì không. Đó là lý do KHÔNG dùng bản `-noble` (glibc 2.39).
+FROM eclipse-temurin:21-jre-jammy AS jre
+
 # ---------- stage 3: ảnh chạy ----------
 FROM debian:bookworm-slim
 
+# `default-jdk-headless` đã được gỡ. Nó ở đây để biên dịch bài nộp Java, nhưng trên bookworm
+# nó là JDK 17 — không bao giờ khớp nhãn "OpenJDK 21" của bảng `languages`. Và dòng `java21`
+# trong R__seed_du_lieu_tham_chieu.sql đang `enabled = FALSE` với các lý do đã ghi ở đó
+# (`processes=1`, `/etc/alternatives` không mount trong box). Đây là lý do nữa, và nó phải
+# được gỡ TRƯỚC khi ai đó bật lại `java21`: ảnh này không có `javac`.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        openjdk-21-jre-headless \
-        g++ python3 default-jdk-headless \
+        g++ python3 \
         libcap2 libseccomp2 libsystemd0 \
     && rm -rf /var/lib/apt/lists/*
+
+# JVM của worker nằm ở /opt, CỐ Ý ngoài `oj.worker.sandbox.program-path` ([/usr/bin, /bin,
+# /usr/local/bin]). Java của worker không phải là thứ được phép chạy bên trong box.
+COPY --from=jre /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="/opt/java/openjdk/bin:${PATH}"
 
 COPY --from=isolate-build /opt/isolate/ /usr/local/
 
