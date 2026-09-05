@@ -147,6 +147,16 @@ function ve(metrics, nguong, boiCanh) {
         d.push(veHangQuanSat(r));
         if (r.chuThich) xuongDong(r.chuThich, '            ', 64).forEach((l) => d.push(l));
     });
+    const vMs = docSo(metrics, 'verdict_ms', 'p(95)');
+    if (vMs !== null && vMs < nguong.verdict_san_ms) {
+        d.push('');
+        d.push(`  ⛔ verdict p95 = ${so(vMs)}ms, dưới sàn ${so(nguong.verdict_san_ms)}ms.`);
+        d.push('     Không có gì được biên dịch — riêng biên dịch đã tốn <400ms (nfrplan 2.1),');
+        d.push('     và hàm theo dõi ở đây ngủ 250ms trước khi hỏi lần đầu.');
+        d.push('     Gần như chắc chắn worker đang chạy ScriptedJudgeRunner (M1, giả lập,');
+        d.push('     `oj.worker.sandbox.enabled=false`) chứ không phải IsolateJudgeRunner.');
+        d.push('     ➜ CẢ NHÓM "ĐƯỜNG CHẤM" Ở TRÊN KHÔNG DÙNG ĐƯỢC. Nhóm "đường API" vẫn đúng.');
+    }
     d.push('');
     d.push('LƯU LƯỢNG');
     d.push('');

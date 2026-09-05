@@ -93,21 +93,68 @@ echo
 echo "⚠ Load test GHI DỮ LIỆU THẬT vào database sau $BASE."
 echo "  Nó tạo hàng nghìn bài nộp và làm bẩn bảng xếp hạng. Dọn bằng don-dep.sql."
 echo "  Các mức: $CAC_MUC · mỗi mức $THOI_LUONG · nghỉ ${NGHI}s giữa các mức."
+echo "  Trước đó có một lượt khởi động ${KHOI_DONG:-45s}, kết quả bỏ đi (KHOI_DONG=0 để tắt)."
 read -r -p "  Gõ 'dong y' để chạy: " tra_loi
 [ "$tra_loi" = "dong y" ] || { echo "Đã huỷ."; exit 1; }
 
 mkdir -p "$RA"
 
+# Trần chờ phải rộng: mức 1000 để lại hàng nghìn bài. Trần cũ 6 phút hết giờ
+# trước khi hàng đợi về 0, nên mức sau bị đo TRÊN phần thừa của mức trước —
+# đúng thứ vòng chờ này sinh ra để tránh.
+#
+# Và nó phải in TỐC ĐỘ RÚT, không chỉ dấu chấm. Lượt quét ngày 2026-09-05 để lại
+# 5 755 bài và hàng đợi KHÔNG nhúc nhích suốt 6 phút — nhưng màn hình chỉ có một
+# hàng dấu chấm, nên chuyện đó chỉ lộ ra ở dòng cuối cùng. Một hàng đợi đứng yên
+# và một hàng đợi đang rút chậm là hai sự cố khác nhau, và phải phân biệt được
+# chúng ngay từ phút đầu.
 cho_rut_can() {
+    han=${CHO_RUT_CAN:-1200}
+    t=0; n=; truoc=; moc=0
     printf '  chờ hàng đợi rút cạn'
-    for _ in $(seq 1 180); do
-        n=$(curl -fsS "$BASE/api/v1/status" 2>/dev/null \
-            | grep -o '"dangCho":[0-9]*' | cut -d: -f2) || true
-        [ "${n:-1}" = "0" ] && { echo " → rỗng"; return; }
-        printf '.'
-        sleep 2
+    while [ "$t" -lt "$han" ]; do
+        n=$(curl -fsS "$BASE/api/v1/status" 2>/dev/null | grep -o '"dangCho": *[0-9][0-9]*' | tr -cd '0-9') || true
+        [ "${n:-1}" = "0" ] && { echo " → rỗng sau ${t}s"; return; }
+        if [ "$t" = 0 ] || [ $((t - moc)) -ge 30 ]; then
+            if [ -n "$truoc" ] && [ -n "${n:-}" ] && [ $((t - moc)) -gt 0 ]; then
+                rut=$(( (truoc - n) * 60 / (t - moc) ))
+                printf ' [còn %s · %s bài/phút]' "$n" "$rut"
+                [ "$rut" -le 0 ] && printf ' ⚠ ĐỨNG YÊN'
+            else
+                printf ' [còn %s]' "${n:-?}"
+            fi
+            truoc=$n; moc=$t
+        else
+            printf '.'
+        fi
+        sleep 3
+        t=$((t + 3))
     done
-    echo " → VẪN CÒN ${n:-?} bài. Con số của mức sau sẽ bị nhiễu."
+    echo
+    echo "  ⚠ Sau ${han}s vẫn còn ${n:-?} bài. Mức sau sẽ đo TRÊN phần thừa này."
+    echo "    Nới trần:  CHO_RUT_CAN=2400 ./chay.sh"
+}
+
+# -----------------------------------------------------------------------------
+# ★ MỘT LƯỢT CHẠY BỎ ĐI TRƯỚC KHI ĐO — VÌ JVM ĐO LẦN ĐẦU LÀ JVM CHƯA JIT
+#
+# Đo thật ngày 2026-09-05, năm mức theo thứ tự tăng dần:
+#     doc_ms p95:  9ms → 6ms → 3ms → 3ms → 3ms
+# Bảng nói "càng đông càng nhanh". Câu đó vô lý, và nó vô lý vì THỨ TỰ CHẠY chứ
+# không vì tải: mức chạy đầu gánh toàn bộ phần JIT, nạp cache Postgres và mở
+# connection pool cho mọi mức sau. Mức 100 bị thiệt gấp ba lần chỉ vì nó đi trước.
+#
+# Một lượt bỏ đi trả lại sân phẳng. Nó vẫn ghi dữ liệu thật, và don-dep.sql vẫn
+# dọn được (cùng tiền tố handle `tai-`).
+# -----------------------------------------------------------------------------
+khoi_dong() {
+    [ "${KHOI_DONG:-45s}" = "0" ] && return 0
+    muc_dau=${CAC_MUC%% *}
+    echo
+    echo "══════════ khởi động $muc_dau người ảo · ${KHOI_DONG:-45s} · KẾT QUẢ BỎ ĐI ══════════"
+    k6 run --quiet -e BASE="$BASE" -e NGUOI="$muc_dau" -e THOI_LUONG="${KHOI_DONG:-45s}" \
+           -e DOC_LEN=15s "$HERE/k6-tai.js" >/dev/null 2>&1
+    cho_rut_can
 }
 
 # -----------------------------------------------------------------------------
@@ -116,6 +163,8 @@ cho_rut_can() {
 # tiên không đạt sẽ giết cả vòng quét — tức là kịch bản tự huỷ đúng vào lúc nó
 # bắt đầu có ích. Trượt ngưỡng ở đây là DỮ LIỆU, không phải sự cố.
 # -----------------------------------------------------------------------------
+khoi_dong
+
 for n in $CAC_MUC; do
     echo
     echo "══════════ $n người ảo ══════════"

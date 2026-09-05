@@ -162,9 +162,19 @@ export const options = {
     summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
 
-// Đủ để biên dịch và AC bài A+B — nếu DE_ID trỏ đề khác thì verdict sẽ là WA,
-// và điều đó KHÔNG ảnh hưởng phép đo: ta đo thời gian, không đo tính đúng.
-const NGUON = `#include <bits/stdc++.h>
+/**
+ * Bài A+B. Dòng đầu `// EXPECT: AC` là một chỉ thị CỐ Ý, phục vụ CẢ HAI runner của worker:
+ * với `IsolateJudgeRunner` (M2, thật) nó chỉ là comment C++ vô hại và bài vẫn AC vì cộng
+ * đúng; với `ScriptedJudgeRunner` (M1, giả lập — được cắm khi `sandbox.enabled=false`, bắt
+ * buộc trên macOS vì isolate cần cgroup v2 của Linux) thì nó là thứ duy nhất được đọc.
+ *
+ * Thiếu dòng này, mọi bài nhận `IE` tức thì. Đo thật ngày 2026-09-05 trên host M1 Max:
+ * verdict p95 = 252ms ở cả bốn mức 100–500 (đúng bằng sàn đo 250ms), hàng đợi không bao giờ
+ * quá 3, và mỗi bài còn bị chấm lại 2 lần nữa vì FR-SUB-12 coi IE là đáng thử lại — gấp ba
+ * tải hàng đợi một cách vô ích. Cả cột "đường chấm" khi ấy đo tốc độ của việc không làm gì.
+ */
+const NGUON = `// EXPECT: AC
+#include <bits/stdc++.h>
 int main(){long long a,b;if(!(std::cin>>a>>b))return 0;std::cout<<a+b<<"\\n";}
 `;
 

@@ -73,6 +73,15 @@
     { "metric": "iteration_duration", "thong_ke": "p(95)", "nhan": "một vòng lặp p95", "don_vi": "ms" }
   ],
 
+  "_san_do": [
+    "Hàm theo dõi verdict trong k6-tai.js NGỦ 250ms trước lần hỏi đầu tiên, nên 250ms là",
+    "SÀN của phép đo chứ không phải kết quả. Ngân sách nfrplan 2.1 cho chấm thật: riêng biên",
+    "dịch đã < 400ms, cộng 20 test là ~1.4s. Một verdict p95 dưới `verdict_san_ms` nghĩa là",
+    "không có gì được biên dịch — gần như luôn là ScriptedJudgeRunner (sandbox.enabled=false)",
+    "chứ không phải một máy chấm nhanh."
+  ],
+  "verdict_san_ms": 500,
+
   "muc_mac_dinh": [100, 200, 400, 500, 1000],
 
   "may_chuan": {
