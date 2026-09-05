@@ -1,0 +1,48 @@
+# =============================================================================
+# Danh sách này phỏng theo robots.txt của DMOJ — Online Judge mã nguồn mở chạy thật
+# nhiều năm. Nó chặn đúng bốn nhóm, và cả bốn đều là bài học đắt của họ:
+#
+#   1. Bài nộp và source     /submission /src /user/*/submissions
+#   2. Dữ liệu test          /problem/*/data /problem/*/test_data
+#   3. Trang trong kỳ thi    /contest/*/submissions /contest/*/rank
+#   4. API và trang quản trị /api /admin /accounts
+#
+# ★ robots.txt KHÔNG phải bảo mật, và nhầm chỗ này là nhầm nguy hiểm.
+# Nó là lời đề nghị với con bot lịch sự. Nó KHÔNG chặn ai cả, và nó còn CÔNG BỐ danh
+# sách đường dẫn đáng chú ý cho người tò mò. Thứ chặn thật là phân quyền ở use-case
+# (CLAUDE.md điều 11) — file này chỉ để Google khỏi đưa trang riêng tư lên kết quả
+# tìm kiếm. Vì thế ở đây chỉ liệt kê những đường dẫn vốn đã được bảo vệ ở tầng dưới.
+# =============================================================================
+
+User-agent: *
+
+# --- Bề mặt máy móc, không có gì để đọc -------------------------------------
+Disallow: /api/
+Disallow: /internal/
+
+# --- Dữ liệu của từng người ---------------------------------------------------
+# Vỏ HTML của các trang này rỗng (dữ liệu nạp bằng JS sau khi có token), nên Google
+# index chúng chỉ tạo ra những kết quả tìm kiếm trống dẫn tới màn hình đăng nhập.
+Disallow: /bai-nop.html
+Disallow: /submission.html
+Disallow: /ho-so.html
+
+# --- Trang quản trị và ra đề --------------------------------------------------
+Disallow: /quan-tri.html
+Disallow: /ra-de.html
+Disallow: /nhat-ky.html
+
+# --- Kỳ thi -------------------------------------------------------------------
+# Trang một kỳ thi cụ thể mang bảng xếp hạng và danh sách bài nộp trong lúc thi.
+# Danh sách kỳ thi (/contests.html) thì để mở — nó là thứ đáng tìm thấy.
+Disallow: /contest.html
+
+# --- Cho index ----------------------------------------------------------------
+# /index.html      danh sách đề đã xuất bản
+# /problem.html    một đề đã xuất bản
+# /contests.html   danh sách kỳ thi
+# /trang-thai.html trạng thái hệ thống
+# /login.html      trang đăng nhập
+
+# Sau khi có tên miền, bỏ ghi chú dòng dưới và thay <TEN_MIEN>:
+# Sitemap: https://<TEN_MIEN>/sitemap.xml
