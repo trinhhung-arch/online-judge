@@ -92,6 +92,25 @@ fi
 [ ${#OJ_INTERNAL_SHARED_SECRET} -ge 32 ] || loi "OJ_INTERNAL_SHARED_SECRET chỉ ${#OJ_INTERNAL_SHARED_SECRET} ký tự, cần ≥ 32."
 ok "OJ_INTERNAL_SHARED_SECRET (${#OJ_INTERNAL_SHARED_SECRET} ký tự)"
 
+# Con số này đi thẳng vào `reference-cpu-ms` — một `int` của Spring. Giá trị không phải số
+# làm JVM chết ngay lúc bind properties, container thoát 1, rồi CẢ BẢY ca kiểm bên dưới
+# cùng báo "KHÔNG đạt" vì `docker exec` vào một container đã chết. Bảy dòng sai vì một lý
+# do trông y hệt một máy chấm hỏng toàn diện — đó là kiểu lỗi tốn nhiều giờ nhất.
+# Đo thật ngày 2026-09-05: dán nguyên chữ 'NNN' từ câu hướng dẫn ở cuối chính script này.
+ref_cpu=${OJ_HOST_REFERENCE_CPU_MS:-0}
+case "$ref_cpu" in
+    ''|*[!0-9]*)
+        loi "OJ_HOST_REFERENCE_CPU_MS='$ref_cpu' không phải số nguyên ≥ 0.
+     Đây là số mili-giây CPU ĐO ĐƯỢC TRÊN CHÍNH MÁY NÀY, không phải chữ để dán.
+     Lấy nó ra bằng:  docker logs $TEN 2>&1 | grep 'Đo máy'
+     Chưa có số thì BỎ HẲN biến đi — mặc định 0 nghĩa là chưa hiệu chuẩn, vẫn chạy được." ;;
+esac
+if [ "$ref_cpu" = 0 ]; then
+    luu_y "OJ_HOST_REFERENCE_CPU_MS=0 — CHƯA hiệu chuẩn. Giới hạn thời gian vẫn quy chiếu máy cũ."
+else
+    ok "OJ_HOST_REFERENCE_CPU_MS=${ref_cpu}ms"
+fi
+
 if curl -fsS --max-time 3 "${API/host.docker.internal/localhost}/api/v1/status" >/dev/null 2>&1; then
     ok "API trả lời tại ${API/host.docker.internal/localhost}"
 else
@@ -184,9 +203,37 @@ docker run -d --name "$TEN" \
     -e OJ_WORKER_HOST_NAME="$HOST_NAME" \
     -e OJ_WORKER_ARCH=arm64 \
     -e OJ_WORKER_SLOTS="$SLOTS" \
-    -e OJ_HOST_REFERENCE_CPU_MS="${OJ_HOST_REFERENCE_CPU_MS:-0}" \
+    -e OJ_HOST_REFERENCE_CPU_MS="$ref_cpu" \
     "$ANH" -c "$KHOI_DONG" >/dev/null
-ok "container đã chạy"
+# `docker run -d` chạy xong chỉ nghĩa là container ĐƯỢC TẠO. Nó không nói gì về việc
+# container còn sống một giây sau đó. Bản trước in "✓ container đã chạy" ngay tại đây, nên
+# một JVM chết lúc bind properties vẫn được báo XANH — rồi bảy ca kiểm bên dưới đồng loạt
+# đỏ vì cùng một lý do, và không dòng nào nói ra lý do ấy. Chờ đến khi JVM báo Started,
+# hoặc đến khi nó chết; chết thì in nhật ký rồi DỪNG, đừng kiểm tiếp.
+len_jvm=0
+printf '  đợi JVM lên'
+for _ in $(seq 40); do
+    if [ "$(docker inspect -f '{{.State.Running}}' "$TEN" 2>/dev/null)" != true ]; then
+        ma=$(docker inspect -f '{{.State.ExitCode}}' "$TEN" 2>/dev/null || echo '?')
+        printf '\n'
+        echo "── 30 dòng cuối nhật ký $TEN ──" >&2
+        docker logs --tail 30 "$TEN" 2>&1 | sed 's/^/  /' >&2
+        echo >&2
+        loi "container thoát với mã $ma trước khi JVM lên.
+     Không kiểm gì thêm: mọi ca kiểm bên dưới sẽ hỏng vì đúng một lý do này."
+    fi
+    if docker logs "$TEN" 2>&1 | grep -q "Started OjWorkerApplication"; then len_jvm=1; break; fi
+    printf '.'
+    sleep 1
+done
+printf '\n'
+if [ "$len_jvm" -eq 1 ]; then
+    ok "container đã chạy — JVM đã lên"
+else
+    luu_y "container còn sống nhưng sau 40s chưa thấy 'Started OjWorkerApplication'."
+    luu_y "Ca kiểm dưới đây vẫn chạy, nhưng 'JVM chạy dưới ojworker' hỏng thì nhiều khả năng"
+    luu_y "là vì JVM chưa kịp lên, KHÔNG phải vì sai quyền. Đọc: docker logs $TEN"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
@@ -221,8 +268,16 @@ cat <<'TIEP'
      ADR 006: "Giới hạn thời gian của đề phải hiệu chuẩn lại nếu đổi máy chấm
      chuẩn." Worker tự chạy benchmark 15 phút một lần, nhưng OJ_HOST_REFERENCE_CPU_MS
      mặc định là 0 = CHƯA hiệu chuẩn — nó đo và cảnh báo throttle, nhưng không
-     đổi giới hạn. Đọc con số đo được rồi đặt lại biến ấy.
-     Bỏ qua bước này = mọi giới hạn thời gian vẫn đang tính theo máy WSL x86.
+     đổi giới hạn. Bỏ qua bước này = mọi giới hạn thời gian vẫn tính theo máy WSL x86.
+
+     Hai lệnh, đúng thứ tự. Lệnh đầu IN RA một con số; lệnh sau dán chính con
+     số ấy vào — không phải chữ trong dấu ngoặc:
+
+       docker logs oj-worker 2>&1 | grep -E "Đo máy|Hiệu chuẩn máy" | tail -2
+       . scripts/.secrets-dev && OJ_HOST_REFERENCE_CPU_MS=<số vừa in> \
+           ./scripts/trien-khai-mac.sh --khong-build
+
+     Ra "Hiệu chuẩn máy ... host_factor = 1.000" nghĩa là đã xong từ trước.
 
   2. CHẠY LẠI 14 TEST TẤN CÔNG SANDBOX.
      ./mvnw -pl oj-worker verify -Dit.test=SandboxAttackIT
