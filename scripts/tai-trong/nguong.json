@@ -1,0 +1,84 @@
+{
+  "_doc": [
+    "Nguồn sự thật DUY NHẤT của mọi ngưỡng trong bộ đo tải. `ket-luan.js` (chạy trong k6,",
+    "kết luận từng mức) và `tong-hop.py` (so các mức với nhau) đều đọc file này. Sửa một",
+    "con số ở đây là sửa cho cả hai — viết ngưỡng thẳng vào code là cách chắc chắn để hai",
+    "chỗ lệch nhau sau ba tháng.",
+    "Mọi con số dưới đây chép từ docs/nfrplan.md Phần 1. Đừng chỉnh để báo cáo đẹp hơn:",
+    "một ngưỡng nới ra là một SLO bị hạ mà không ai ghi ADR."
+  ],
+
+  "_vi_sao_hai_nhom": [
+    "`cung` là ĐƯỜNG API — nó trả lời đúng câu hỏi 'chịu được bao nhiêu người'. Đạt hay",
+    "không đạt ở đây là nhị phân.",
+    "`quan_sat` là ĐƯỜNG CHẤM. Nó KHÔNG được chấm đạt/không đạt, vì rate limit 10s/người",
+    "cho phép N người chào N/10 bài mỗi giây, còn năng lực chấm chỉ ~5 bài/s. Nghĩa là ngay",
+    "ở 100 người ảo hàng đợi ĐÃ dài, và đó là số học chứ không phải hỏng hóc. Chấm nhóm này",
+    "đạt/không đạt sẽ cho ra một bảng toàn màu đỏ ở mọi mức, và một bảng như thế dạy người",
+    "ta bỏ qua màu đỏ."
+  ],
+
+  "cung": [
+    { "metric": "doc_ms", "thong_ke": "p(95)", "toi_da": 200,
+      "ma": "P1", "nhan": "đọc danh sách đề p95", "don_vi": "ms" },
+
+    { "metric": "nop_ms", "thong_ke": "p(95)", "toi_da": 300,
+      "ma": "P2", "nhan": "POST /submissions p95", "don_vi": "ms" },
+
+    { "metric": "http_req_failed{scenario:nguoi_dung}", "thong_ke": "rate", "toi_da": 0.01,
+      "ma": "R3", "nhan": "tỉ lệ request hỏng", "don_vi": "ti_le",
+      "chu_thich": "429 KHÔNG tính là hỏng — xem http.setResponseCallback trong k6-tai.js" },
+
+    { "metric": "dropped_iterations", "thong_ke": "count", "toi_da": 0, "mac_dinh": 0,
+      "ma": "—", "nhan": "vòng lặp k6 bị bỏ", "don_vi": "so",
+      "chu_thich": "khác 0 = MÁY ĐO hụt hơi, cả lượt chạy bỏ đi. Với executor ramping-vus nó gần như luôn bằng 0 — k6 chỉ bỏ vòng lặp ở các executor arrival-rate. Giữ lại làm lưới an toàn, ĐỪNG coi ô xanh ở đây là bằng chứng máy đo khoẻ; xem http_req_blocked bên dưới." }
+  ],
+
+  "quan_sat": [
+    { "metric": "verdict_ms", "thong_ke": "p(95)", "moc": 2000,
+      "ma": "P3", "nhan": "nộp → verdict p95", "don_vi": "ms",
+      "chu_thich": "mốc 2s chỉ có nghĩa khi hàng đợi RỖNG. Dưới tải nó là thời gian xếp hàng, không phải thời gian chấm." },
+
+    { "metric": "cho_lau_nhat_ms", "thong_ke": "p(95)", "moc": 5000,
+      "ma": "P6", "nhan": "bài chờ lâu nhất p95", "don_vi": "ms" },
+
+    { "metric": "hang_doi", "thong_ke": "max",
+      "ma": "P4/P5", "nhan": "độ sâu hàng đợi lớn nhất", "don_vi": "so",
+      "chu_thich": "tăng tuyến tính suốt lượt chạy = năng lực chấm đã vỡ. Đó là giới hạn của 6 judge slot, KHÔNG phải của API." },
+
+    { "metric": "ti_le_429", "thong_ke": "rate",
+      "ma": "FR-SUB-08", "nhan": "tỉ lệ chạm rate limit", "don_vi": "ti_le",
+      "chu_thich": "cao là ĐÚNG. Nó là cái van, và cái van đang đóng nghĩa là nó còn hoạt động." },
+
+    { "metric": "verdict_khong_kip", "thong_ke": "count", "mac_dinh": 0,
+      "ma": "—", "nhan": "bỏ cuộc chờ verdict sau 60s", "don_vi": "so" },
+
+    { "metric": "http_req_blocked", "thong_ke": "p(95)",
+      "ma": "máy đo", "nhan": "chờ lấy được connection p95", "don_vi": "ms",
+      "chu_thich": "thời gian k6 chờ một socket TRƯỚC khi kịp gửi byte đầu tiên. Vài chục ms là bình thường (bắt tay TCP). Hàng trăm ms trở lên nghĩa là chính MÁY ĐO nghẽn — hết file descriptor, hết cổng tạm, hoặc k6 đang tranh CPU với máy chủ. Khi ô này lớn, mọi con số phía trên đều bi quan hơn sự thật." },
+
+    { "metric": "dang_nhap_ms", "thong_ke": "p(95)",
+      "ma": "—", "nhan": "đăng nhập p95", "don_vi": "ms",
+      "chu_thich": "bcrypt cost 12 ≈ 250ms là ĐÚNG, không phải chậm. Nó không nằm trong SLO nào; in ra chỉ để thấy lúc dốc lên có nghẽn CPU không." }
+  ],
+
+  "luu_luong": [
+    { "metric": "http_reqs",          "thong_ke": "count", "nhan": "tổng request" },
+    { "metric": "http_reqs",          "thong_ke": "rate",  "nhan": "request mỗi giây" },
+    { "metric": "iterations",         "thong_ke": "count", "nhan": "vòng lặp hoàn tất" },
+    { "metric": "iteration_duration", "thong_ke": "p(95)", "nhan": "một vòng lặp p95", "don_vi": "ms" }
+  ],
+
+  "muc_mac_dinh": [100, 200, 400, 500, 1000],
+
+  "may_chuan": {
+    "ten": "mac-m1max-host",
+    "cpu": "Apple M1 Max — 8 P-core + 2 E-core, 64 GB RAM",
+    "judge_slot": 6,
+    "throughput_cham_uoc_tinh": 5.0,
+    "rate_limit_giay": 10,
+    "hikari_app_pool": 20,
+    "hikari_judge_pool": 6,
+    "_nguon": "docs/nfrplan.md 2.2 · oj-api/src/main/resources/application.yml · oj-worker/.../application.yml"
+  }
+}

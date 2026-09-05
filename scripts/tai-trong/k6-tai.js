@@ -29,16 +29,15 @@
  *   # 1. seed tài khoản (một lần, cho số người lớn nhất bạn định chạy)
  *   psql "$OJ_DB_URL" -v so_nguoi=1000 -f seed-nguoi-dung.sql
  *
- *   # 2. đo
- *   k6 run -e NGUOI=100  k6-tai.js
- *   k6 run -e NGUOI=500  k6-tai.js
- *   k6 run -e NGUOI=1000 k6-tai.js
+ *   # 2. đo một mức
+ *   k6 run -e NGUOI=100 k6-tai.js
  *
- *   # hoặc cả ba, có nghỉ giữa các mức để hàng đợi rút cạn:
+ *   # hoặc cả năm mức 100 → 200 → 400 → 500 → 1000, có nghỉ giữa các mức để
+ *   # hàng đợi rút cạn và để máy nguội (xem ghi chú nhiệt trong chay.sh):
  *   ./chay.sh
  *
  * Biến môi trường: BASE · NGUOI · DE_ID · NGON_NGU · TI_LE_NOP · TI_LE_THEO_DOI
- *                  THOI_LUONG · MAT_KHAU
+ *                  THOI_LUONG · DOC_LEN · MAT_KHAU · RA_JSON
  *
  * ════════════════════════════════════════════════════════════════════════════
  * ĐỌC KẾT QUẢ
@@ -59,6 +58,12 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
+import exec from 'k6/execution';
+import { tomTat } from './ket-luan.js';
+
+// Ngưỡng ở một chỗ duy nhất, dùng chung với tong-hop.py. `open()` chỉ gọi được
+// trong init context — đó là lý do dòng này nằm ở đây chứ không trong hàm.
+const NGUONG = JSON.parse(open('./nguong.json'));
 
 // ★ 429 KHÔNG phải request hỏng — nó là rate limit đang làm đúng việc của nó
 // (FR-SUB-08). Mặc định k6 coi mọi mã ≥ 400 là hỏng, nên không khai báo dòng
@@ -76,9 +81,22 @@ const TI_LE_THEO_DOI = Number(__ENV.TI_LE_THEO_DOI || 0.1);
 const THOI_LUONG = __ENV.THOI_LUONG || '3m';
 
 /**
+ * ★ ĐOẠN DỐC LÊN PHẢI DÀI RA THEO SỐ NGƯỜI, VÀ LÝ DO LÀ bcrypt.
+ *
+ * `bcrypt-cost: 12` tốn ~250ms CPU mỗi lần băm (application.yml, FR-AUTH-01). Mỗi người ảo
+ * đăng nhập đúng một lần, ở vòng lặp đầu của nó. Dốc 1000 người trong 30 giây nghĩa là ép
+ * máy chủ làm 1000 × 250ms = 250 giây CPU trong 30 giây — cần 8.3 core, tức là NHIỀU HƠN
+ * toàn bộ 8 P-core của M1 Max. Máy sẽ nghẽn ở đoạn dốc, và cái nghẽn đó không nói gì về
+ * đường đọc/nộp mà ta định đo; nó chỉ nói rằng ta đã tự dựng sân sai.
+ *
+ * Nên: ~10 người mỗi giây, tức là ~2.5 core cho bcrypt bất kể mức nào. 1000 người ⇒ dốc 100s.
+ */
+const DOC_LEN = __ENV.DOC_LEN || `${Math.max(30, Math.ceil(NGUOI / 10))}s`;
+
+/**
  * Người ảo giám sát phải sống ĐÚNG BẰNG cả lượt chạy, nếu không đường cong hàng
  * đợi sẽ cụt ở đúng đoạn thú vị nhất — lúc tải đã lên đỉnh. k6 đòi mỗi scenario
- * một khoảng thời gian cố định, nên phải tự cộng: 30s dốc lên + THOI_LUONG +
+ * một khoảng thời gian cố định, nên phải tự cộng: DOC_LEN + THOI_LUONG +
  * 15s dốc xuống.
  */
 function giay(d) {
@@ -87,8 +105,22 @@ function giay(d) {
     const he = { ms: 0.001, s: 1, m: 60, h: 3600 }[m[2]];
     return Number(m[1]) * he;
 }
-const TONG_GIAY = 30 + giay(THOI_LUONG) + 15;
+const DOC_LEN_MS = giay(DOC_LEN) * 1000;
+const TONG_GIAY = giay(DOC_LEN) + giay(THOI_LUONG) + 15;
 
+/**
+ * ★ p95 CHỈ ĐƯỢC TÍNH TỪ LÚC ĐÃ ĐỦ NGƯỜI.
+ *
+ * Trong đoạn dốc lên, số người ảo đi từ 0 tới NGUOI. Những request ở giây thứ 5 gặp một máy
+ * chủ gần như rỗng và trả về rất nhanh. Gộp chúng vào p95 là pha loãng — và pha loãng theo
+ * hướng LÀM ĐẸP: mức càng đông thì đoạn dốc càng dài, càng nhiều số đẹp được cộng vào. Một
+ * phép đo tự thưởng cho mình khi tải tăng thì không dùng được để trả lời câu hỏi nào cả.
+ *
+ * `http_req_failed` thì KHÔNG lọc: một request hỏng lúc đang dốc lên vẫn là một request hỏng.
+ */
+function dangDo() {
+    return exec.instance.currentTestRunDuration >= DOC_LEN_MS;
+}
 const docMs = new Trend('doc_ms', true);
 const nopMs = new Trend('nop_ms', true);
 const dangNhapMs = new Trend('dang_nhap_ms', true);
@@ -107,7 +139,7 @@ export const options = {
             exec: 'nguoiDung',
             startVUs: 0,
             stages: [
-                { duration: '30s', target: NGUOI },   // dốc lên, không dựng đứng
+                { duration: DOC_LEN, target: NGUOI },  // dốc lên, không dựng đứng
                 { duration: THOI_LUONG, target: NGUOI },
                 { duration: '15s', target: 0 },
             ],
@@ -166,7 +198,7 @@ function tieuDe(token) {
 function doc(token) {
     const res = http.get(`${BASE}/api/v1/problems?size=20`,
         { ...tieuDe(token), tags: { viec: 'doc' } });
-    docMs.add(res.timings.duration);
+    if (dangDo()) docMs.add(res.timings.duration);
     check(res, { 'đọc danh sách đề 200': (r) => r.status === 200 });
 }
 
@@ -178,7 +210,7 @@ function nop(token) {
     ti429.add(res.status === 429);
     if (res.status === 429) return;              // chạm rate limit: đúng như thiết kế
 
-    nopMs.add(res.timings.duration);
+    if (dangDo()) nopMs.add(res.timings.duration);
     const ok = check(res, { 'nộp bài 202': (r) => r.status === 202 });
     if (!ok) return;
 
@@ -206,7 +238,7 @@ function theoToiVerdict(token, id, batDau) {
         if (res.status !== 200) return;
         const tt = res.json('status');
         if (tt !== 'QUEUED' && tt !== 'JUDGING') {
-            verdictMs.add(Date.now() - batDau);
+            if (dangDo()) verdictMs.add(Date.now() - batDau);
             return;
         }
     }
@@ -237,4 +269,22 @@ export function giamSat() {
         mayChamSong.add(res.json('mayChamSong'));
     }
     sleep(1);
+}
+
+/**
+ * Kết luận cuối lượt chạy — nội dung do `ket-luan.js` dựng, xem javadoc ở đó.
+ *
+ * Giá trị trả về KHÔNG quyết định mã thoát của k6; `options.thresholds` mới quyết định. Hai
+ * chỗ ấy phải khớp nhau, nên cả hai cùng nhìn về `nguong.json`: `thresholds` ở trên chép tay
+ * ba dòng đầu của `nguong.cung`. Sửa `nguong.json` thì sửa cả đó.
+ */
+export function handleSummary(data) {
+    return tomTat(data, NGUONG, {
+        nguoi: NGUOI,
+        thoiLuong: THOI_LUONG,
+        docLen: DOC_LEN,
+        base: BASE,
+        tiLeNop: TI_LE_NOP,
+        raJson: __ENV.RA_JSON,
+    });
 }
