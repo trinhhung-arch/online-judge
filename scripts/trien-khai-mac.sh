@@ -133,11 +133,37 @@ docker rm -f "$TEN" >/dev/null 2>&1 || true
 #
 # KHÔNG ghi vào cgroup.subtree_control ở đây: cgroup gốc của container đang chứa tiến trình,
 # nên cgroup v2 trả EBUSY (luật 'no internal processes'). isolate tự lo phần đó trong --init.
+# ★ BA CGROUP, MỖI CÁI MỘT VAI. Đây là hình dạng bắt buộc của cgroup v2, không phải sở thích:
+#
+#   /sys/fs/cgroup/         controller đã bật, KHÔNG chứa tiến trình
+#   ├── init/               chứa shell + JVM          ← mọi tiến trình ở đây
+#   └── boxes/              controller đã bật, KHÔNG tiến trình ← nhà của box
+#       └── box-N/          isolate tạo, có memory.max
+#
+# Luật 'no internal processes' của cgroup v2: không bật được controller trên một cgroup còn
+# chứa tiến trình. Nên cgroup làm nhà cho box BẮT BUỘC phải rỗng tiến trình — và đó là lý do
+# không dùng được isolate-cg-keeper ở đây: keeper lấy cgroup của CHÍNH NÓ làm cg_root, mà
+# cgroup ấy đương nhiên chứa nó. Đo được lần lượt trên host Mac ngày 2026-09-05:
+#     keeper ở gốc  -> Cannot write /sys/fs/cgroup//box-1/memory.max: No such file or directory
+#     keeper ở /init -> Cannot write /sys/fs/cgroup/init/box-91/memory.max: ...
+#
+# Việc duy nhất keeper làm là ghi đường dẫn cgroup vào /run/isolate/cgroup (nơi `cg_root =
+# auto:` trỏ tới). Ta tự ghi được. Không có systemd thì cũng không ai dọn cgroup ấy đi, nên
+# phần 'keeper' của nó không cần thiết.
+#
+# Dòng `grep -q memory` là cái chốt: thà container không lên còn hơn lên mà --cg-mem không
+# ép gì — một sandbox không giới hạn RAM trông y hệt một sandbox bình thường cho tới lúc
+# có người khai thác nó.
 KHOI_DONG='set -e
 mount -o remount,rw /sys/fs/cgroup
-/usr/local/sbin/isolate-cg-keeper &
-for _ in $(seq 1 50); do [ -e /run/isolate/cgroup ] && break; sleep 0.1; done
-[ -e /run/isolate/cgroup ] || { echo "isolate-cg-keeper không dựng được /run/isolate/cgroup" >&2; exit 1; }
+mkdir -p /sys/fs/cgroup/init /sys/fs/cgroup/boxes /run/isolate
+for p in $(cat /sys/fs/cgroup/cgroup.procs); do echo $p > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true; done
+for c in cpuset cpu memory pids; do
+  echo +$c > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
+  echo +$c > /sys/fs/cgroup/boxes/cgroup.subtree_control 2>/dev/null || true
+done
+grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control || { echo "khong bat duoc controller memory cho /sys/fs/cgroup/boxes" >&2; exit 1; }
+echo /sys/fs/cgroup/boxes > /run/isolate/cgroup
 exec setpriv --reuid=1500 --regid=1500 --init-groups java -jar /app/oj-worker.jar'
 
 docker run -d --name "$TEN" \
@@ -146,7 +172,7 @@ docker run -d --name "$TEN" \
     --cgroupns=private \
     --security-opt seccomp=unconfined \
     --security-opt apparmor=unconfined \
-    --cap-add SYS_ADMIN --cap-add SYS_RESOURCE --cap-add SYS_CHROOT \
+    --cap-add SYS_ADMIN --cap-add SYS_RESOURCE --cap-add SYS_CHROOT --cap-add NET_ADMIN \
     --tmpfs "/var/local/lib/isolate:size=$TMPFS,mode=755" \
     --add-host host.docker.internal:host-gateway \
     -e OJ_INTERNAL_SHARED_SECRET="$OJ_INTERNAL_SHARED_SECRET" \
@@ -175,10 +201,10 @@ kiem "isolate chạy được"             '/usr/local/bin/isolate --version'
 # (xem chú thích PREFIX/DESTDIR trong infra/isolate/Dockerfile). Ca dưới đây dựng một box
 # THẬT rồi dọn — nó buộc isolate phải đọc được config VÀ mượn được cgroup. Box 90 nằm ngoài
 # dải judge slot (0..slots-1) nên không giẫm lên bài đang chấm.
-kiem "isolate dựng được box thật (config + cgroup)" '/usr/local/bin/isolate --cg -b 90 --init >/dev/null 2>&1; r=$?; /usr/local/bin/isolate --cg -b 90 --cleanup >/dev/null 2>&1; exit $r'
+kiem "isolate dựng được box CÓ giới hạn RAM" '/usr/local/bin/isolate --cg -b 90 --init >/dev/null 2>&1 && [ -f /sys/fs/cgroup/boxes/box-90/memory.max ]; r=$?; /usr/local/bin/isolate --cg -b 90 --cleanup >/dev/null 2>&1; exit $r'
 kiem "isolate là setuid root"        '[ -u /usr/local/bin/isolate ]'
 kiem "/etc/subuid có dòng isolate"   'grep -q "^isolate:" /etc/subuid'
-kiem "keeper đã dựng cgroup"         '[ -e /run/isolate/cgroup ]'
+kiem "cgroup boxes có controller memory+pids" 'grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control && grep -q pids /sys/fs/cgroup/boxes/cgroup.subtree_control'
 # Không dùng pgrep/ps: `debian:bookworm-slim` KHÔNG có procps (đã đo). Một ca
 # kiểm gọi lệnh không tồn tại sẽ báo hỏng oan, và báo hỏng oan còn tệ hơn không
 # kiểm — nó dạy người đọc bỏ qua dòng cảnh báo.
