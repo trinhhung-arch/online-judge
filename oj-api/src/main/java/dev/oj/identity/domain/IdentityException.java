@@ -86,6 +86,58 @@ public class IdentityException extends DomainException {
     }
 
     // -------------------------------------------------------------------------
+    // Xác thực hai lớp — V11
+    // -------------------------------------------------------------------------
+
+    /**
+     * Mật khẩu ĐÚNG nhưng còn thiếu mã 2FA.
+     *
+     * <p>Đây là lần duy nhất hệ thống nói ra rằng một tài khoản có bật 2FA — và nó chỉ nói
+     * sau khi mật khẩu đã đúng, nên không dùng để dò tài khoản nào có 2FA được.
+     */
+    public static IdentityException canTotp() {
+        return new IdentityException(Kind.UNAUTHENTICATED, "identity.can_totp",
+                "Tài khoản này bật xác thực hai lớp. Nhập mã 6 chữ số từ ứng dụng.",
+                "Đăng nhập đúng mật khẩu, chờ mã TOTP");
+    }
+
+    /**
+     * Mã sai, hết hạn, hoặc ĐÃ DÙNG RỒI — cùng một câu cho cả ba.
+     *
+     * <p>Phân biệt "sai" với "đã dùng" là nói cho kẻ phát lại biết rằng mã họ bắt được từng
+     * đúng, tức là xác nhận họ bắt đúng chỗ.
+     */
+    public static IdentityException totpSai() {
+        return new IdentityException(Kind.UNAUTHENTICATED, "identity.totp_sai",
+                "Mã xác thực không đúng hoặc đã được dùng.",
+                "Mã TOTP không khớp (không ghi mã đã thử vào đây — bất biến #9)");
+    }
+
+    public static IdentityException daBatHaiLop() {
+        return new IdentityException(Kind.CONFLICT, "identity.2fa_da_bat",
+                "Tài khoản đã bật xác thực hai lớp. Tắt trước rồi bật lại nếu muốn đổi thiết bị.",
+                "Gọi bắt đầu đăng ký 2FA khi đã bật");
+    }
+
+    public static IdentityException chuaBatHaiLop() {
+        return new IdentityException(Kind.INVALID, "identity.2fa_chua_bat",
+                "Tài khoản chưa bắt đầu đăng ký xác thực hai lớp.",
+                "Gọi xác nhận/tắt 2FA khi chưa có bản nháp");
+    }
+
+    /**
+     * ADMIN chưa bật 2FA thì không dùng được quyền ADMIN.
+     *
+     * <p>KHÔNG chặn đăng nhập, và đó là điểm quan trọng: chặn đăng nhập thì họ không vào
+     * được để mà bật, còn ở đây họ vẫn vào như một người dùng thường và bật được ngay.
+     */
+    public static IdentityException adminPhaiBatHaiLop() {
+        return new IdentityException(Kind.FORBIDDEN, "identity.admin_can_2fa",
+                "Tài khoản quản trị phải bật xác thực hai lớp mới dùng được quyền quản trị.",
+                "ADMIN chưa bật 2FA — oj.auth.require-admin-two-factor đang bật");
+    }
+
+    // -------------------------------------------------------------------------
     // Phiên
     // -------------------------------------------------------------------------
 

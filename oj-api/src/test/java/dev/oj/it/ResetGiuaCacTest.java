@@ -110,6 +110,12 @@ final class ResetGiuaCacTest {
      * đúng lúc rằng test cần một vai trò riêng, chứ không phải rằng V9 sai.
      */
     private static void danhTinh(JdbcClient jdbc) {
+        // V11 — hai bảng 2FA. Không dọn thì một test bật 2FA cho `dev` sẽ làm mọi test
+        // sau đó nhận 401 can_totp ở lượt đăng nhập, với một thông báo không nhắc gì tới
+        // 2FA. Đo thật ngày 2026-09-05: nó làm `dang_nhap_bang_email` đỏ.
+        // PostgresIT bật lại 2FA cho ADMIN ngay sau khi hàm này chạy xong.
+        jdbc.sql("DELETE FROM user_scratch_code").update();
+        jdbc.sql("DELETE FROM user_two_factor").update();
         jdbc.sql("DELETE FROM refresh_tokens").update();
         jdbc.sql("DELETE FROM login_attempts").update();
         jdbc.sql("DELETE FROM login_lockouts").update();

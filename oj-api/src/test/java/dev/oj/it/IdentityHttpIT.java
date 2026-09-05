@@ -181,4 +181,90 @@ class IdentityHttpIT extends HttpIT {
     }
 
     // =========================================================================
+    // =========================================================================
+
+    @org.springframework.beans.factory.annotation.Autowired
+    dev.oj.identity.application.port.SecretCipher cipher;
+
+    /**
+     * ★ V11 · FR-AUTH-09 — đường đăng nhập 2FA THẬT, qua HTTP.
+     *
+     * <p>{@code TwoFactorUseCaseTest} đã đo logic bằng fake; ca ở đây đo phần mà fake không
+     * chạm tới: {@code AuthRequests.Login} có thêm trường {@code maHaiLop}, Jackson phải bind
+     * được nó, và client CŨ không gửi trường ấy vẫn phải đăng nhập được như trước.
+     */
+    @Nested
+    @DisplayName("★ V11 · đăng nhập hai lớp qua HTTP")
+    class DangNhapHaiLop {
+
+        /** Hạt giống RFC 6238 — cùng chuỗi mà TotpTest dùng, nên mã tính ra đối chiếu được. */
+        private static final String BI_MAT = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+        private void batHaiLopChoDev() {
+            jdbc.sql("""
+                    INSERT INTO user_two_factor (user_id, secret_enc, enabled, confirmed_at)
+                    VALUES (:id, :bi, TRUE, now())
+                    ON CONFLICT (user_id) DO UPDATE
+                       SET secret_enc = EXCLUDED.secret_enc, enabled = TRUE,
+                           last_step = NULL, confirmed_at = now()
+                    """)
+                    .param("id", USER_ID).param("bi", cipher.maHoa(BI_MAT)).update();
+        }
+
+        private String maBayGio() {
+            long giay = java.time.Instant.now().getEpochSecond();
+            for (int i = 0; i < 1_000_000; i++) {
+                String ma = String.format("%06d", i);
+                Long buoc = dev.oj.identity.domain.Totp.kiem(BI_MAT, ma, giay);
+                if (buoc != null
+                        && buoc == Math.floorDiv(giay, dev.oj.identity.domain.Totp.BUOC_GIAY)) {
+                    return ma;
+                }
+            }
+            throw new AssertionError("không dò được mã");
+        }
+
+        @Test
+        @DisplayName("client cũ không gửi maHaiLop vẫn đăng nhập được khi chưa bật 2FA")
+        void client_cu_van_chay() {
+            assertThat(login("dev", MAT_KHAU_DEV).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        @Test
+        @DisplayName("★ bật 2FA rồi: đúng mật khẩu nhưng thiếu mã → 401 identity.can_totp")
+        void thieu_ma_thi_401() {
+            batHaiLopChoDev();
+
+            var res = login("dev", MAT_KHAU_DEV);
+
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(res.getBody()).containsEntry("code", "identity.can_totp");
+            assertThat(res.getBody().get("accessToken"))
+                    .as("không được phát token khi mới qua một yếu tố")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("★ gửi kèm mã đúng thì vào được — và DÙNG LẠI mã ấy thì KHÔNG")
+        void ma_dung_roi_phat_lai() {
+            batHaiLopChoDev();
+            String ma = maBayGio();
+
+            var lanMot = goi(http.post().uri("/api/v1/auth/login")
+                    .body(java.util.Map.of("dinhDanh", "dev", "password", MAT_KHAU_DEV,
+                            "maHaiLop", ma)));
+            assertThat(lanMot.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(lanMot.getBody().get("accessToken")).isNotNull();
+
+            var lanHai = goi(http.post().uri("/api/v1/auth/login")
+                    .body(java.util.Map.of("dinhDanh", "dev", "password", MAT_KHAU_DEV,
+                            "maHaiLop", ma)));
+            assertThat(lanHai.getStatusCode())
+                    .as("chống phát lại: ai đọc được một request cũ trong 30 giây "
+                            + "vẫn không vào được")
+                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(lanHai.getBody()).containsEntry("code", "identity.totp_sai");
+        }
+    }
+
 }

@@ -45,6 +45,17 @@ class AccountManagementUseCasesTest {
     private IdentityFakes.LanThuGia lanThu;
     private IdentityFakes.NhatKyGia nhatKy;
     private IdentityFakes.BamGia hasher;
+    private IdentityFakes.HaiLopGia haiLop;
+
+    /**
+     * Không bật 2FA cho ai trong các ca cũ, nên nó là một cổng luôn mở — trừ ca 2FA
+     * riêng bên dưới, nơi test tự nạp dữ liệu vào `haiLop`.
+     */
+    private dev.oj.identity.application.TotpChecker totpChecker() {
+        return new dev.oj.identity.application.TotpChecker(
+                haiLop, new IdentityFakes.MaHoaGia(), hasher,
+                java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
+    }
     private SessionIssuer phatPhien;
     private AppProperties props;
 
@@ -53,6 +64,7 @@ class AccountManagementUseCasesTest {
         users = new IdentityFakes.UsersGia();
         tokens = new IdentityFakes.TokensGia();
         lanThu = new IdentityFakes.LanThuGia();
+        haiLop = new IdentityFakes.HaiLopGia();
         nhatKy = new IdentityFakes.NhatKyGia();
         hasher = new IdentityFakes.BamGia();
         props = IdentityFakes.properties();
@@ -63,7 +75,7 @@ class AccountManagementUseCasesTest {
 
     private LoginUseCase dangNhap() {
         return new LoginUseCase(users, hasher, lanThu, phatPhien, props,
-                Clock.fixed(BAY_GIO, ZoneOffset.UTC));
+                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
     }
 
     private long themNguoiDung(String handle, Role role) {
@@ -82,8 +94,8 @@ class AccountManagementUseCasesTest {
         @DisplayName("★ đổi xong thì MỌI phiên bị thu hồi, kể cả phiên vừa gọi")
         void thu_hoi_moi_phien() {
             long id = themNguoiDung("nguoi-f", Role.USER);
-            var mot = dangNhap().thucHien("nguoi-f", "matkhau-tot-123", "curl", IP);
-            var hai = dangNhap().thucHien("nguoi-f", "matkhau-tot-123", "firefox", IP);
+            var mot = dangNhap().thucHien("nguoi-f", "matkhau-tot-123", "curl", IP, null);
+            var hai = dangNhap().thucHien("nguoi-f", "matkhau-tot-123", "firefox", IP, null);
 
             new ChangePasswordUseCase(IdentityFakes.nguoiGoi(id, Role.USER), users, hasher,
                     tokens, nhatKy).thucHien("matkhau-tot-123", "mat-khau-moi-456");
@@ -211,7 +223,7 @@ class AccountManagementUseCasesTest {
         void doi_vai_tro_thi_thu_hoi_phien() {
             long admin = themNguoiDung("quan-tri-6", Role.ADMIN);
             long nanNhan = themNguoiDung("bi-ha-6", Role.SETTER);
-            var phien = dangNhap().thucHien("bi-ha-6", "matkhau-tot-123", "curl", IP);
+            var phien = dangNhap().thucHien("bi-ha-6", "matkhau-tot-123", "curl", IP, null);
 
             useCase(admin).doiVaiTro(nanNhan, Role.USER);
 
@@ -226,7 +238,7 @@ class AccountManagementUseCasesTest {
         void vo_hieu_hoa_thi_khong_dang_nhap_duoc() {
             long admin = themNguoiDung("quan-tri-7", Role.ADMIN);
             long nanNhan = themNguoiDung("gian-lan-7", Role.USER);
-            var phien = dangNhap().thucHien("gian-lan-7", "matkhau-tot-123", "curl", IP);
+            var phien = dangNhap().thucHien("gian-lan-7", "matkhau-tot-123", "curl", IP, null);
 
             useCase(admin).datHoatDong(nanNhan, false);
 
@@ -235,7 +247,7 @@ class AccountManagementUseCasesTest {
                     .get().extracting("revokedAt").isNotNull();
             // Chặn cả đường vào mới: Credentials.canLogIn() đọc status.
             assertThatThrownBy(() ->
-                    dangNhap().thucHien("gian-lan-7", "matkhau-tot-123", "curl", IP))
+                    dangNhap().thucHien("gian-lan-7", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
         }
 
@@ -249,7 +261,7 @@ class AccountManagementUseCasesTest {
             useCase(admin).datHoatDong(nanNhan, true);
 
             assertThat(users.theoId.get(nanNhan).status()).isEqualTo(UserStatus.ACTIVE);
-            assertThat(dangNhap().thucHien("quay-lai-8", "matkhau-tot-123", "curl", IP))
+            assertThat(dangNhap().thucHien("quay-lai-8", "matkhau-tot-123", "curl", IP, null))
                     .isNotNull();
         }
 

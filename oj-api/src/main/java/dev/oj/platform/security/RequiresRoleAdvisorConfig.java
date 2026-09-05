@@ -4,6 +4,7 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.aop.Advisor;
 import org.springframework.aop.support.DefaultPointcutAdvisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,6 +49,23 @@ import java.lang.reflect.Method;
 public class RequiresRoleAdvisorConfig {
 
     /**
+     * ★ {@code ObjectProvider<TwoFactorGate>} chứ KHÔNG phải {@code TwoFactorGate} — bắt buộc.
+     *
+     * <p>Advisor này là bean hạ tầng, nên Spring dựng nó <b>trước mọi bean thường</b>. Nhận
+     * thẳng {@code TwoFactorGate} nghĩa là kéo cả chuỗi {@code TotpChecker →
+     * JdbcTwoFactorRepository → appJdbcClient → DataSource} lên cùng thời điểm ấy — tức là
+     * {@code DataSource} được tạo TRƯỚC khi các {@code BeanPostProcessor} kịp đăng ký, và
+     * không còn cái nào bọc được nó.
+     *
+     * <p>Đo thật ngày 2026-09-05: {@code DemQuery} (bộ đếm truy vấn chống N+1, chính là một
+     * {@code BeanPostProcessor}) im lặng đếm ra 0 ở mọi test. Triệu chứng là một ca tự kiểm
+     * bộ đếm đỏ với "expecting 0 to be greater than 0" — không có chữ nào nhắc tới thứ tự
+     * khởi tạo, và mọi ngưỡng chống N+1 khác thì vẫn XANH vì 0 luôn nhỏ hơn mọi trần.
+     *
+     * <p>{@code ObjectProvider} hoãn việc tra bean tới lúc GỌI, nên chuỗi trên chỉ được dựng
+     * khi có người thật sự gọi một use-case ADMIN.
+     */
+    /**
      * {@code @Role} ở đây là {@code org.springframework.context.annotation.Role} — viết đầy đủ
      * vì trong package này {@code Role} là {@link dev.oj.platform.security.Role}, vai trò
      * người dùng. Hai khái niệm hoàn toàn khác nhau, và import nhầm thì trình biên dịch báo
@@ -55,14 +73,16 @@ public class RequiresRoleAdvisorConfig {
      */
     @Bean
     @org.springframework.context.annotation.Role(BeanDefinition.ROLE_INFRASTRUCTURE)
-    public Advisor requiresRoleAdvisor(CurrentUserProvider currentUser) {
+    public Advisor requiresRoleAdvisor(CurrentUserProvider currentUser,
+                                       ObjectProvider<TwoFactorGate> gate) {
         var pointcut = new AnnotationMatchingPointcut(RequiresRole.class, true);
-        var advisor = new DefaultPointcutAdvisor(pointcut, kiemQuyen(currentUser));
+        var advisor = new DefaultPointcutAdvisor(pointcut, kiemQuyen(currentUser, gate));
         advisor.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return advisor;
     }
 
-    private static MethodInterceptor kiemQuyen(CurrentUserProvider currentUser) {
+    private static MethodInterceptor kiemQuyen(CurrentUserProvider currentUser,
+                                               ObjectProvider<TwoFactorGate> gate) {
         return invocation -> {
             Method method = invocation.getMethod();
             // equals/hashCode/toString cũng đi qua proxy. Bắt chúng ném "chưa đăng nhập" sẽ
@@ -71,7 +91,7 @@ public class RequiresRoleAdvisorConfig {
                 RequiresRole yeuCau = AnnotationUtils.findAnnotation(
                         invocation.getThis().getClass(), RequiresRole.class);
                 if (yeuCau != null) {
-                    kiem(currentUser, yeuCau.value());
+                    kiem(currentUser, yeuCau.value(), gate);
                 }
             }
             return invocation.proceed();
@@ -86,10 +106,24 @@ public class RequiresRoleAdvisorConfig {
      * buộc trong {@code CLAUDE.md} mục 6. Trả về một danh sách rỗng cho người không có quyền
      * là nói dối họ rằng không có dữ liệu, và người viết frontend sẽ tin.
      */
-    private static void kiem(CurrentUserProvider currentUser, Role canCo) {
+    private static void kiem(CurrentUserProvider currentUser, Role canCo,
+                             ObjectProvider<TwoFactorGate> gate) {
         var nguoiGoi = currentUser.current();   // ném 401 nếu không có danh tính
         if (!nguoiGoi.role().atLeast(canCo)) {
             throw AuthorizationException.thieuQuyen(canCo, nguoiGoi.role());
+        }
+
+        // ★ CHỈ hỏi cổng 2FA cho bề mặt ADMIN, và chỉ SAU khi vai trò đã đủ.
+        //
+        // Hai điều kiện ấy giữ cho đường đăng ký 2FA không tự khoá chính nó: các endpoint
+        // /api/v1/me/** mang @RequiresRole mức USER, nên `canCo` là USER và cổng không được
+        // hỏi. Một ADMIN chưa bật 2FA vẫn đăng nhập được, vẫn vào được trang cá nhân, và
+        // vẫn bật được 2FA — chỉ quyền ADMIN là chưa dùng được.
+        //
+        // Hỏi trước khi kiểm vai trò thì một người dùng thường gọi nhầm endpoint ADMIN sẽ
+        // nhận thông báo "cần bật 2FA" thay vì "thiếu quyền" — sai và gây hiểu lầm.
+        if (canCo == Role.ADMIN && !gate.getObject().duocDungQuyenAdmin(nguoiGoi.id())) {
+            throw AuthorizationException.canHaiLop();
         }
     }
 }

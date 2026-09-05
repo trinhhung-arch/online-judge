@@ -3,11 +3,14 @@ package dev.oj.identity.application.usecase;
 import dev.oj.identity.application.port.LoginAttemptRepository;
 import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.RegistrationRateLimiter;
+import dev.oj.identity.application.port.SecretCipher;
+import dev.oj.identity.application.port.TwoFactorRepository;
 import dev.oj.identity.application.port.RefreshTokenRepository;
 import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.domain.Credentials;
 import dev.oj.identity.domain.IdentityException;
 import dev.oj.identity.domain.RefreshToken;
+import dev.oj.identity.domain.TwoFactor;
 import dev.oj.identity.domain.User;
 import dev.oj.identity.domain.UserStatus;
 import dev.oj.platform.audit.AuditLog;
@@ -259,6 +262,78 @@ final class IdentityFakes {
             if (moi > toiDa) {
                 throw IdentityException.quaNhieuDangKy(java.time.Duration.ofHours(1));
             }
+        }
+    }
+
+    /** Không mã hoá gì cả — test cần đọc được bí mật để tự tính mã TOTP đúng. */
+    static final class MaHoaGia implements SecretCipher {
+        @Override
+        public String maHoa(String roThô) {
+            return "enc:" + roThô;
+        }
+
+        @Override
+        public String giaiMa(String daMaHoa) {
+            return daMaHoa.substring("enc:".length());
+        }
+    }
+
+    static final class HaiLopGia implements TwoFactorRepository {
+
+        final Map<Long, TwoFactor> theoUser = new LinkedHashMap<>();
+        final Map<Long, List<MaDuPhong>> maDuPhong = new LinkedHashMap<>();
+        private long idKe = 1;
+
+        @Override
+        public Optional<TwoFactor> tim(long userId) {
+            return Optional.ofNullable(theoUser.get(userId));
+        }
+
+        @Override
+        public boolean luuBanNhap(long userId, String secretEnc) {
+            TwoFactor cu = theoUser.get(userId);
+            if (cu != null && cu.enabled()) {
+                return false;
+            }
+            theoUser.put(userId, new TwoFactor(userId, secretEnc, false, null));
+            return true;
+        }
+
+        @Override
+        public void bat(long userId, long buocDaDung) {
+            TwoFactor cu = theoUser.get(userId);
+            theoUser.put(userId, new TwoFactor(userId, cu.secretEnc(), true, buocDaDung));
+        }
+
+        @Override
+        public void ghiBuoc(long userId, long buoc) {
+            TwoFactor cu = theoUser.get(userId);
+            theoUser.put(userId, new TwoFactor(userId, cu.secretEnc(), cu.enabled(), buoc));
+        }
+
+        @Override
+        public void xoa(long userId) {
+            theoUser.remove(userId);
+            maDuPhong.remove(userId);
+        }
+
+        @Override
+        public void thayMaDuPhong(long userId, List<String> banBam) {
+            List<MaDuPhong> ds = new ArrayList<>();
+            for (String b : banBam) {
+                ds.add(new MaDuPhong(idKe++, b));
+            }
+            maDuPhong.put(userId, ds);
+        }
+
+        @Override
+        public List<MaDuPhong> maDuPhongChuaDung(long userId) {
+            return new ArrayList<>(maDuPhong.getOrDefault(userId, List.of()));
+        }
+
+        @Override
+        public void danhDauDaDung(long maDuPhongId) {
+            maDuPhong.values().forEach(ds -> ds.removeIf(m -> m.id() == maDuPhongId));
         }
     }
 

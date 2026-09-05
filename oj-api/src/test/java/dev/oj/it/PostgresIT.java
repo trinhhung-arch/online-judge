@@ -117,6 +117,9 @@ public abstract class PostgresIT {
         // Bước 4.5: không có mặc định trong application.yml, cố ý. Thiếu dòng này thì mọi IT
         // đỏ ngay lúc dựng context, với đúng thông báo mà một host cấu hình thiếu sẽ thấy.
         registry.add("oj.auth.jwt-secret", () -> "khoa-ky-chi-dung-trong-test-1234567890");
+        // V11: cùng lý do với jwt-secret, và PHẢI KHÁC nó — AuthProperties crash lúc boot
+        // nếu hai chuỗi bằng nhau, đúng như trên máy thật.
+        registry.add("oj.auth.totp-key", () -> "khoa-ma-hoa-totp-chi-dung-trong-test-123");
         // Reaper chạy nền mỗi 15s sẽ chen vào giữa các test đang dựng trạng thái hàng đợi.
         // Đặt sát dưới lease (AppProperties ép reaper-interval < lease) để nó chỉ chạy đúng
         // một lần lúc khởi động rồi im. Test nào cần reaper thì GỌI THẲNG use-case.
@@ -175,6 +178,27 @@ public abstract class PostgresIT {
         phien = GiaLapDanhTinh.dongVai(USER_ID, "dev", Role.USER);
     }
 
+    /**
+     * ★ V11 — tài khoản ADMIN của fixture LUÔN đã bật 2FA.
+     *
+     * <p>{@code oj.auth.require-admin-two-factor} bật mặc định, nên một ADMIN chưa bật 2FA
+     * không dùng được quyền ADMIN. Đó là trạng thái ĐÚNG của một hệ thống đã cấu hình xong,
+     * và mọi IT gọi endpoint ADMIN đều giả định trạng thái ấy.
+     *
+     * <p>Đặt ở đây chứ không ở dev-seed vì nó là điều kiện của <i>bộ test</i>: seed dùng
+     * chung với máy dev, mà trên máy dev thì việc admin phải tự bật 2FA chính là hành vi
+     * cần thấy.
+     *
+     * <p>{@code AuthorizationIT} xoá hàng này khi nó cần đo chính cái cổng ấy.
+     */
+    private void adminDaBatHaiLop() {
+        jdbc.sql("""
+                INSERT INTO user_two_factor (user_id, secret_enc, enabled, confirmed_at)
+                VALUES (:id, 'fixture-khong-can-giai-ma', TRUE, now())
+                ON CONFLICT (user_id) DO UPDATE SET enabled = TRUE, confirmed_at = now()
+                """).param("id", ADMIN_ID).update();
+    }
+
     @AfterEach
     void thoiDongVai() {
         if (phien != null) {
@@ -231,6 +255,11 @@ public abstract class PostgresIT {
         congTac.dat(dev.oj.platform.settings.SystemSettings.NHAN_BAI_NOP, true, null);
         congTac.dat(dev.oj.platform.settings.SystemSettings.REJUDGE, true, null);
         congTac.dat(dev.oj.platform.settings.SystemSettings.AI_REVIEW, false, null);
+        // ★ GỌI TƯỜNG MINH, không phải một @BeforeEach thứ hai: JUnit KHÔNG bảo đảm thứ tự
+        // giữa nhiều @BeforeEach trong cùng một lớp. Một thứ tự không xác định trong phần
+        // dựng sân là nguồn của những ca đỏ không tái hiện được — đúng thứ javadoc của
+        // ResetGiuaCacTest đã cảnh báo về <runOrder>.
+        adminDaBatHaiLop();
     }
 
     /**

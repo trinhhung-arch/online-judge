@@ -3,6 +3,7 @@ package dev.oj.it;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import dev.oj.platform.security.Role;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
@@ -67,8 +68,24 @@ public abstract class HttpIT extends PostgresIT {
                         .body(res.bodyTo(THAN_JSON)), false);
     }
 
-    /** Access token thật, lấy qua đường đăng nhập thật — BCrypt cost 12 và tất cả. */
+    /**
+     * Access token thật, lấy qua đường đăng nhập thật — BCrypt cost 12 và tất cả.
+     *
+     * <h2>★ V11 — tài khoản ADMIN đi đường khác, và lý do là chống phát lại</h2>
+     * {@code PostgresIT} bật sẵn 2FA cho ADMIN (hệ thống công khai bắt buộc thế), nên đăng
+     * nhập bằng mật khẩu không thôi trả 401 {@code can_totp}. Không thể vá bằng cách tính
+     * một mã TOTP ở đây: mã ấy chỉ dùng được MỘT lần trong 30 giây, mà một IT gọi
+     * {@code tokenCua("admin")} nhiều lần trong cùng một giây — lần thứ hai sẽ nhận
+     * {@code totp_sai} và người đọc sẽ đi tìm một lỗi không tồn tại.
+     *
+     * <p>Nên ở đây ký thẳng một token cho ADMIN. Đường đăng nhập 2FA THẬT vẫn được đo, ở
+     * {@code IdentityHttpIT} — một chỗ, đo kỹ, thay vì rải khắp nơi rồi hỏng vì chống phát
+     * lại của chính nó.
+     */
     protected String tokenCua(String handle) {
+        if ("admin".equals(handle)) {
+            return bearer(ADMIN_ID, "admin", Role.ADMIN).substring("Bearer ".length());
+        }
         return (String) login(handle, MAT_KHAU_DEV).getBody().get("accessToken");
     }
 

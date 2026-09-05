@@ -37,8 +37,23 @@ if [ ! -f "$kho" ]; then
     {
         echo "export OJ_JWT_SECRET='$(openssl rand -base64 48)'"
         echo "export OJ_INTERNAL_SHARED_SECRET='$(openssl rand -hex 32)'"
+        echo "export OJ_TOTP_KEY='$(openssl rand -base64 48)'"
     } > "$kho"
     echo "Đã sinh secret mới cho máy dev: scripts/.secrets-dev (đã gitignore)"
+fi
+
+# ★ BỔ SUNG KHOÁ CÒN THIẾU CHO FILE ĐÃ CÓ SẴN — không chỉ cho máy mới.
+#
+# V11 thêm OJ_TOTP_KEY. Mọi máy dev đang chạy đều đã có .secrets-dev từ trước, nên nhánh
+# "if [ ! -f ]" ở trên không chạm tới chúng. Không có đoạn này thì lần `git pull` tiếp theo
+# làm API chết lúc dựng context với đúng một dòng "Thiếu OJ_TOTP_KEY", và người ta phải tự
+# đoán ra rằng sửa ở file nào.
+#
+# Đo thật ngày 2026-09-05: chính máy dev của dự án này chết đúng như thế.
+if ! grep -q '^export OJ_TOTP_KEY=' "$kho"; then
+    umask 077
+    echo "export OJ_TOTP_KEY='$(openssl rand -base64 48)'" >> "$kho"
+    echo "Đã bổ sung OJ_TOTP_KEY vào scripts/.secrets-dev (V11 — xác thực hai lớp)."
 fi
 
 # shellcheck source=/dev/null
@@ -47,6 +62,11 @@ fi
 # Kiểm ngay, đừng để Spring báo "quá ngắn" sau 40 giây khởi động.
 if [ "${#OJ_INTERNAL_SHARED_SECRET}" -lt 32 ]; then
     echo "OJ_INTERNAL_SHARED_SECRET trong $kho ngắn hơn 32 ký tự. Xoá file đó rồi chạy lại." >&2
+    exit 1
+fi
+if [ "${#OJ_TOTP_KEY}" -lt 32 ] || [ "$OJ_TOTP_KEY" = "$OJ_JWT_SECRET" ]; then
+    echo "OJ_TOTP_KEY trong $kho không hợp lệ: cần >= 32 ký tự và KHÁC OJ_JWT_SECRET." >&2
+    echo "Xoá dòng đó trong $kho rồi chạy lại — script sẽ sinh khoá mới." >&2
     exit 1
 fi
 

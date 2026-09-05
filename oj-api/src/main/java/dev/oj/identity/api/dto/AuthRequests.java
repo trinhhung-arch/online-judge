@@ -32,12 +32,37 @@ public final class AuthRequests {
         }
     }
 
-    /** FR-AUTH-02. Một ô nhập duy nhất — người dùng không phải khai họ vừa gõ loại nào. */
-    public record Login(String dinhDanh, String password) {
+    /**
+     * FR-AUTH-02. Một ô nhập duy nhất — người dùng không phải khai họ vừa gõ loại nào.
+     *
+     * @param maHaiLop mã TOTP hoặc mã dự phòng. {@code null} ở lần gọi đầu là bình thường:
+     *                 client chưa biết tài khoản này có bật 2FA. Server trả
+     *                 {@code identity.can_totp} rồi client hỏi lại kèm mã
+     */
+    public record Login(String dinhDanh, String password, String maHaiLop) {
 
         @Override
         public String toString() {
             return "Login[dinhDanh=" + dinhDanh + "]";
+        }
+    }
+
+    /** FR-AUTH-09 — xác nhận bật 2FA bằng một mã đúng. */
+    public record XacNhanHaiLop(String ma) {
+
+        // Mã TOTP sống 30 giây. Ba mươi giây là thừa đủ để một dòng log bị đọc.
+        @Override
+        public String toString() {
+            return "XacNhanHaiLop[]";
+        }
+    }
+
+    /** FR-AUTH-09 — tắt 2FA: đòi cả mật khẩu lẫn mã hiện tại. */
+    public record TatHaiLop(String password, String ma) {
+
+        @Override
+        public String toString() {
+            return "TatHaiLop[]";
         }
     }
 

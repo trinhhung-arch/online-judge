@@ -31,7 +31,9 @@ class AuthRequestsTest {
     void khong_record_nao_lo_bi_mat() throws Exception {
         var records = List.of(
                 new AuthRequests.Register("nguoi", "a@oj.test", "Người", BI_MAT),
-                new AuthRequests.Login("nguoi", BI_MAT),
+                new AuthRequests.Login("nguoi", BI_MAT, BI_MAT),
+                new AuthRequests.XacNhanHaiLop(BI_MAT),
+                new AuthRequests.TatHaiLop(BI_MAT, BI_MAT),
                 new AuthRequests.Refresh(BI_MAT),
                 new AuthRequests.ChangePassword(BI_MAT, BI_MAT));
 

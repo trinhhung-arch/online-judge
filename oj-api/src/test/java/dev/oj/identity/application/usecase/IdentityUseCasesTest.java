@@ -37,6 +37,17 @@ class IdentityUseCasesTest {
     private IdentityFakes.LanThuGia lanThu;
     private IdentityFakes.NhatKyGia nhatKy;
     private IdentityFakes.BamGia hasher;
+    private IdentityFakes.HaiLopGia haiLop;
+
+    /**
+     * Không bật 2FA cho ai trong các ca cũ, nên nó là một cổng luôn mở — trừ ca 2FA
+     * riêng bên dưới, nơi test tự nạp dữ liệu vào `haiLop`.
+     */
+    private dev.oj.identity.application.TotpChecker totpChecker() {
+        return new dev.oj.identity.application.TotpChecker(
+                haiLop, new IdentityFakes.MaHoaGia(), hasher,
+                java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
+    }
     private IdentityFakes.ChanDangKyGia chanDangKy;
     private SessionIssuer phatPhien;
     private AppProperties props;
@@ -46,6 +57,7 @@ class IdentityUseCasesTest {
         users = new IdentityFakes.UsersGia();
         tokens = new IdentityFakes.TokensGia();
         lanThu = new IdentityFakes.LanThuGia();
+        haiLop = new IdentityFakes.HaiLopGia();
         chanDangKy = new IdentityFakes.ChanDangKyGia();
         nhatKy = new IdentityFakes.NhatKyGia();
         hasher = new IdentityFakes.BamGia();
@@ -57,7 +69,7 @@ class IdentityUseCasesTest {
 
     private LoginUseCase dangNhap() {
         return new LoginUseCase(users, hasher, lanThu, phatPhien, props,
-                Clock.fixed(BAY_GIO, ZoneOffset.UTC));
+                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
     }
 
     private long themNguoiDung(String handle, Role role) {
@@ -163,8 +175,8 @@ class IdentityUseCasesTest {
         void handle_hoac_email() {
             themNguoiDung("nguoi-a", Role.USER);
 
-            assertThat(dangNhap().thucHien("nguoi-a", "matkhau-tot-123", "curl", IP)).isNotNull();
-            assertThat(dangNhap().thucHien("nguoi-a@oj.test", "matkhau-tot-123", "curl", IP))
+            assertThat(dangNhap().thucHien("nguoi-a", "matkhau-tot-123", "curl", IP, null)).isNotNull();
+            assertThat(dangNhap().thucHien("nguoi-a@oj.test", "matkhau-tot-123", "curl", IP, null))
                     .isNotNull();
         }
 
@@ -182,7 +194,7 @@ class IdentityUseCasesTest {
                     {"co-that", "sai-mat-khau-roi"},        // mật khẩu sai
                     {"bi-khoa", "matkhau-tot-123"}}) {      // tài khoản bị vô hiệu hoá
                 try {
-                    dangNhap().thucHien(ca[0], ca[1], "curl", IP);
+                    dangNhap().thucHien(ca[0], ca[1], "curl", IP, null);
                     throw new AssertionError("đáng lẽ phải ném với " + ca[0]);
                 } catch (IdentityException e) {
                     assertThat(e.kind()).isEqualTo(DomainException.Kind.UNAUTHENTICATED);
@@ -215,9 +227,9 @@ class IdentityUseCasesTest {
                 }
             };
             var uc = new LoginUseCase(users, hasherDem, lanThu, phatPhien, props,
-                    Clock.fixed(BAY_GIO, ZoneOffset.UTC));
+                    Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
 
-            assertThatThrownBy(() -> uc.thucHien("khong-ai-ca", "matkhau-tot-123", "curl", IP))
+            assertThatThrownBy(() -> uc.thucHien("khong-ai-ca", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
 
             // Nếu use-case thoát sớm khi không tìm thấy thì con số này là 0, và thời gian phản
@@ -231,13 +243,13 @@ class IdentityUseCasesTest {
             themNguoiDung("nan-nhan", Role.USER);
 
             for (int i = 0; i < 5; i++) {
-                assertThatThrownBy(() -> dangNhap().thucHien("nan-nhan", "sai-roi", "curl", IP))
+                assertThatThrownBy(() -> dangNhap().thucHien("nan-nhan", "sai-roi", "curl", IP, null))
                         .hasFieldOrPropertyWithValue("kind", DomainException.Kind.UNAUTHENTICATED);
             }
             assertThat(lanThu.khoaToi).isEqualTo(BAY_GIO.plus(Duration.ofMinutes(15)));
 
             // Lần thứ 6: khoá chặn TRƯỚC cả khi mật khẩu đúng.
-            assertThatThrownBy(() -> dangNhap().thucHien("nan-nhan", "matkhau-tot-123", "curl", IP))
+            assertThatThrownBy(() -> dangNhap().thucHien("nan-nhan", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.RATE_LIMITED)
                     .hasFieldOrPropertyWithValue("retryAfter", Duration.ofMinutes(15));
@@ -248,9 +260,9 @@ class IdentityUseCasesTest {
         void moi_lan_thu_deu_duoc_ghi() {
             themNguoiDung("nguoi-b", Role.USER);
 
-            assertThatThrownBy(() -> dangNhap().thucHien("nguoi-b", "sai", "curl", IP))
+            assertThatThrownBy(() -> dangNhap().thucHien("nguoi-b", "sai", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
-            dangNhap().thucHien("nguoi-b", "matkhau-tot-123", "curl", IP);
+            dangNhap().thucHien("nguoi-b", "matkhau-tot-123", "curl", IP, null);
 
             assertThat(lanThu.ghiNhan).containsExactly("nguoi-b:false", "nguoi-b:true");
         }
@@ -271,7 +283,7 @@ class IdentityUseCasesTest {
         @DisplayName("làm mới trả token MỚI và thu hồi token cũ")
         void xoay_vong_thu_hoi_cai_cu() {
             themNguoiDung("nguoi-c", Role.USER);
-            SessionIssuer.Session cu = dangNhap().thucHien("nguoi-c", "matkhau-tot-123", "curl", IP);
+            SessionIssuer.Session cu = dangNhap().thucHien("nguoi-c", "matkhau-tot-123", "curl", IP, null);
 
             SessionIssuer.Session moi = useCase().thucHien(cu.refreshToken(), "curl", IP);
 
@@ -284,7 +296,7 @@ class IdentityUseCasesTest {
         @DisplayName("★ token cũ dùng lại → THU HỒI TOÀN BỘ phiên, vì nó nghĩa là có bản sao")
         void dung_lai_token_cu_thi_thu_hoi_het() {
             long id = themNguoiDung("bi-trom", Role.USER);
-            SessionIssuer.Session mot = dangNhap().thucHien("bi-trom", "matkhau-tot-123", "curl", IP);
+            SessionIssuer.Session mot = dangNhap().thucHien("bi-trom", "matkhau-tot-123", "curl", IP, null);
             SessionIssuer.Session hai = useCase().thucHien(mot.refreshToken(), "curl", IP);
 
             // Kẻ tấn công trình lại bản đã bị thu hồi.
@@ -316,7 +328,7 @@ class IdentityUseCasesTest {
         void tai_khoan_bi_khoa_thi_khong_lam_moi_duoc() {
             long id = themNguoiDung("se-bi-khoa", Role.USER);
             SessionIssuer.Session phien = dangNhap()
-                    .thucHien("se-bi-khoa", "matkhau-tot-123", "curl", IP);
+                    .thucHien("se-bi-khoa", "matkhau-tot-123", "curl", IP, null);
 
             users.anDanhHoa(id, "[đã xoá #" + id + "]");
 
@@ -336,7 +348,7 @@ class IdentityUseCasesTest {
         @DisplayName("thu hồi token đang dùng")
         void thu_hoi() {
             themNguoiDung("nguoi-d", Role.USER);
-            var phien = dangNhap().thucHien("nguoi-d", "matkhau-tot-123", "curl", IP);
+            var phien = dangNhap().thucHien("nguoi-d", "matkhau-tot-123", "curl", IP, null);
 
             new LogoutUseCase(tokens).thucHien(phien.refreshToken());
 
@@ -349,7 +361,7 @@ class IdentityUseCasesTest {
         void idempotent() {
             var uc = new LogoutUseCase(tokens);
             themNguoiDung("nguoi-e", Role.USER);
-            var phien = dangNhap().thucHien("nguoi-e", "matkhau-tot-123", "curl", IP);
+            var phien = dangNhap().thucHien("nguoi-e", "matkhau-tot-123", "curl", IP, null);
 
             uc.thucHien(null);
             uc.thucHien("");

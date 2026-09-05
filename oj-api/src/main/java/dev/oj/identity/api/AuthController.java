@@ -66,7 +66,8 @@ public class AuthController {
     public SessionResponse dangNhap(@RequestBody AuthRequests.Login body,
                                     HttpServletRequest request) {
         return SessionResponse.tu(login.thucHien(body.dinhDanh(), body.password(),
-                request.getHeader("User-Agent"), ClientIp.cua(request)));
+                request.getHeader("User-Agent"), ClientIp.cua(request),
+                body.maHaiLop()));
     }
 
     /** FR-AUTH-02 — xoay vòng refresh token, xem {@link RefreshSessionUseCase}. */

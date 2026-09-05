@@ -113,6 +113,84 @@ class AuthorizationIT extends PostgresIT {
         }
     }
 
+    /**
+     * Gỡ 2FA mà {@code PostgresIT} bật sẵn cho ADMIN, để đo chính cái cổng ấy.
+     *
+     * <p>Chỉ ba ca trong file này cần trạng thái "ADMIN chưa bật 2FA"; mọi IT khác giả định
+     * ngược lại. Nên gỡ tại chỗ chứ không gỡ ở {@code @BeforeEach} chung — bộ IT dùng CHUNG
+     * một database và không truncate giữa các test, nên trạng thái rò ra ngoài là rò thật.
+     * Đo ngày 2026-09-05: một lần rò như thế làm {@code SubmissionRateLimitIT} đỏ với
+     * "expected 202 but was 401", một thông báo không có chữ nào nhắc tới 2FA.
+     */
+    private void goHaiLopCuaAdmin() {
+        jdbc.sql("DELETE FROM user_two_factor WHERE user_id = :id")
+                .param("id", ADMIN_ID).update();
+    }
+
+    /**
+     * Chèn thẳng một hàng {@code user_two_factor} đã bật.
+     *
+     * <p>Bí mật ở đây không cần giải mã được: {@code TwoFactorGate} chỉ hỏi "có bật không",
+     * và không có ca nào trong file này kiểm mã. Ca kiểm mã nằm ở
+     * {@code TwoFactorUseCaseTest}, nơi có fake cipher.
+     */
+    private void batHaiLopCho(long userId) {
+        jdbc.sql("""
+                INSERT INTO user_two_factor (user_id, secret_enc, enabled, confirmed_at)
+                VALUES (:id, 'khong-can-giai-ma-duoc', TRUE, now())
+                ON CONFLICT (user_id) DO UPDATE SET enabled = TRUE, confirmed_at = now()
+                """).param("id", userId).update();
+    }
+
+    @Nested
+    @DisplayName("★ V11 · ADMIN chưa bật 2FA thì không dùng được quyền ADMIN")
+    class CongHaiLop {
+
+        @Test
+        @DisplayName("★ vai trò ĐỦ nhưng chưa bật 2FA → 403 auth.can_hai_lop, không phải thiếu quyền")
+        void admin_chua_bat_2fa_bi_chan() {
+            goHaiLopCuaAdmin();
+            try (var phien = GiaLapDanhTinh.dongVai(ADMIN_ID, "admin", Role.ADMIN)) {
+                assertThatThrownBy(() -> anonymize.thucHien(USER_ID))
+                        .isInstanceOf(DomainException.class)
+                        .hasFieldOrPropertyWithValue("kind", DomainException.Kind.FORBIDDEN)
+                        .hasFieldOrPropertyWithValue("code", "auth.can_hai_lop");
+                assertThat(phien).isNotNull();
+            }
+
+            assertThat(jdbc.sql("SELECT status FROM users WHERE id = :id")
+                    .param("id", USER_ID).query(String.class).single())
+                    .as("bị chặn nghĩa là KHÔNG chạm dữ liệu, không phải im lặng không làm gì")
+                    .isEqualTo("ACTIVE");
+        }
+
+        @Test
+        @DisplayName("★ đường BẬT 2FA phải nằm dưới cổng — nếu không thì ADMIN tự khoá mình vĩnh viễn")
+        void duong_bat_2fa_khong_bi_chan() {
+            goHaiLopCuaAdmin();
+            try (var phien = GiaLapDanhTinh.dongVai(ADMIN_ID, "admin", Role.ADMIN)) {
+                // getProfile mang @RequiresRole mức USER. Cổng chỉ được hỏi khi canCo là
+                // ADMIN, nên mọi endpoint /api/v1/me/** — kể cả /me/2fa — vẫn vào được.
+                assertThat(getProfile.thucHien().handle()).isEqualTo("admin");
+                assertThat(phien).isNotNull();
+            }
+        }
+
+        @Test
+        @DisplayName("bật 2FA rồi thì quyền ADMIN dùng được")
+        void bat_roi_thi_qua() {
+            goHaiLopCuaAdmin();
+            batHaiLopCho(ADMIN_ID);
+            try (var phien = GiaLapDanhTinh.dongVai(ADMIN_ID, "admin", Role.ADMIN)) {
+                anonymize.thucHien(USER_ID);
+                assertThat(phien).isNotNull();
+            }
+            assertThat(jdbc.sql("SELECT status FROM users WHERE id = :id")
+                    .param("id", USER_ID).query(String.class).single())
+                    .isEqualTo("ANONYMIZED");
+        }
+    }
+
     @Nested
     @DisplayName("★ Chưa đăng nhập → 401, không phải dữ liệu rỗng")
     class ChuaDangNhap {

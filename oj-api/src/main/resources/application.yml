@@ -276,6 +276,13 @@ oj:
     # hằng số hệ thống. Xem javadoc AuthProperties.
     max-registrations-per-ip: ${OJ_MAX_REGISTRATIONS_PER_IP:10}
     registration-window: 1h
+    # Xác thực hai lớp — V10. Khoá RIÊNG, không dùng chung với jwt-secret: xoay khoá ký
+    # token là việc nên làm định kỳ, dùng chung thì mỗi lần xoay làm hỏng đăng ký 2FA
+    # của tất cả mọi người. AuthProperties crash lúc boot nếu hai chuỗi này bằng nhau.
+    totp-key: ${OJ_TOTP_KEY}
+    # Mặc định BẬT: ADMIN đọc được testdata mọi đề, nên một mật khẩu ADMIN bị lộ là mất
+    # chính thứ hệ thống này bán. Tắt được để chạy thử, đừng tắt trên máy công khai.
+    require-admin-two-factor: ${OJ_REQUIRE_ADMIN_2FA:true}
 
   jobs:
     # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của

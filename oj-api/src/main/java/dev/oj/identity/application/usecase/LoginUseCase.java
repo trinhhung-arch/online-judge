@@ -1,6 +1,7 @@
 package dev.oj.identity.application.usecase;
 
 import dev.oj.identity.application.SessionIssuer;
+import dev.oj.identity.application.TotpChecker;
 import dev.oj.identity.application.port.LoginAttemptRepository;
 import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.UserRepository;
@@ -43,23 +44,29 @@ public class LoginUseCase {
     private final UserRepository users;
     private final PasswordHasher hasher;
     private final LoginAttemptRepository attempts;
+    private final TotpChecker totp;
     private final SessionIssuer sessions;
     private final AppProperties properties;
     private final Clock clock;
 
     public LoginUseCase(UserRepository users, PasswordHasher hasher,
                         LoginAttemptRepository attempts, SessionIssuer sessions,
-                        AppProperties properties, Clock clock) {
+                        AppProperties properties, Clock clock, TotpChecker totp) {
         this.users = users;
         this.hasher = hasher;
         this.attempts = attempts;
+        this.totp = totp;
         this.sessions = sessions;
         this.properties = properties;
         this.clock = clock;
     }
 
+    /**
+     * @param maHaiLop mã TOTP hoặc mã dự phòng. {@code null} là bình thường ở lần gọi đầu —
+     *                 client chưa biết tài khoản này có bật 2FA hay không
+     */
     public SessionIssuer.Session thucHien(String handleHoacEmail, String matKhau,
-                                          String userAgent, String clientIp) {
+                                          String userAgent, String clientIp, String maHaiLop) {
         kiemKhoa(clientIp);
 
         Optional<Credentials> tim = handleHoacEmail == null
@@ -70,15 +77,43 @@ public class LoginUseCase {
         String bamDaLuu = tim.map(Credentials::passwordHash).orElse(null);
         boolean khop = hasher.khop(matKhau == null ? "" : matKhau, bamDaLuu);
 
-        boolean thanhCong = khop && tim.isPresent() && tim.get().coTheDangNhap();
-        attempts.ghiNhan(handleHoacEmail, clientIp, thanhCong);
-
-        if (!thanhCong) {
+        boolean matKhauDung = khop && tim.isPresent() && tim.get().coTheDangNhap();
+        if (!matKhauDung) {
+            attempts.ghiNhan(handleHoacEmail, clientIp, false);
             khoaNeuQuaNhieu(clientIp);
             throw IdentityException.saiThongTinDangNhap();
         }
 
         Credentials c = tim.get();
+
+        // ★ YẾU TỐ THỨ HAI — và ba chi tiết ở đây đều là bảo mật, không phải tiện dụng.
+        //
+        // 1. Lượt đăng nhập chỉ được ghi THÀNH CÔNG sau khi qua CẢ HAI yếu tố. Bản trước
+        //    ghi ngay sau khi mật khẩu khớp; giữ nguyên thì một người có mật khẩu nhưng
+        //    không có điện thoại vẫn để lại dấu vết "đăng nhập thành công" trong
+        //    login_attempts, và người trực đọc nhật ký sẽ tin là họ đã vào được.
+        //
+        // 2. Mã SAI phải tính là một lần đăng nhập hỏng. Không tính thì FR-AUTH-08 (5 lần
+        //    sai/phút/IP) không còn áp cho TOTP, và một mã sáu chữ số chỉ có một triệu khả
+        //    năng — dò được trong vài giờ.
+        //
+        // 3. THIẾU mã thì KHÔNG tính là hỏng. Đó là bước bình thường của luồng: client gọi
+        //    lần đầu chưa biết tài khoản này có 2FA. Tính nó là hỏng nghĩa là mọi người bật
+        //    2FA đều tự khoá IP của mình sau năm lần đăng nhập bình thường.
+        if (totp.dangBat(c.userId())) {
+            if (maHaiLop == null || maHaiLop.isBlank()) {
+                throw IdentityException.canTotp();
+            }
+            try {
+                totp.kiem(c.userId(), maHaiLop);
+            } catch (IdentityException e) {
+                attempts.ghiNhan(handleHoacEmail, clientIp, false);
+                khoaNeuQuaNhieu(clientIp);
+                throw e;
+            }
+        }
+
+        attempts.ghiNhan(handleHoacEmail, clientIp, true);
         return sessions.phat(c.userId(), c.handle(), c.role(), userAgent, clientIp, null);
     }
 

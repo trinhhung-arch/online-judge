@@ -70,4 +70,17 @@ public class AuthorizationException extends DomainException {
                 "Bạn không có quyền thực hiện thao tác này.",
                 "Cần vai trò " + canCo + " nhưng người gọi là " + dangCo);
     }
+
+    /**
+     * Vai trò đủ, nhưng tài khoản ADMIN chưa bật xác thực hai lớp.
+     *
+     * <p>403 chứ không phải 401: người gọi ĐÃ đăng nhập hợp lệ, và đăng nhập lại không sửa
+     * được gì. Thứ họ phải làm là bật 2FA — nên câu chữ nói thẳng điều đó thay vì đẩy họ
+     * vào vòng lặp đăng nhập.
+     */
+    public static AuthorizationException canHaiLop() {
+        return new AuthorizationException(Kind.FORBIDDEN, "auth.can_hai_lop",
+                "Tài khoản quản trị phải bật xác thực hai lớp mới dùng được quyền quản trị.",
+                "ADMIN chưa bật 2FA — oj.auth.require-admin-two-factor đang bật");
+    }
 }

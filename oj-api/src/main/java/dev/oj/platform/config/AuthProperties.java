@@ -39,6 +39,18 @@ import java.time.Duration;
  *
  * @param maxRegistrationsPerIp số tài khoản tối đa tạo được từ một IP trong một cửa sổ
  * @param registrationWindow    độ dài cửa sổ ấy
+ *
+ * <h2>★ Hai con số của xác thực hai lớp</h2>
+ * {@code totpKey} là khoá AES-256 mã hoá bí mật TOTP lúc lưu. Nó RIÊNG, không dùng chung
+ * với {@code jwtSecret}: xoay khoá ký token là việc vệ sinh nên làm định kỳ, mà dùng chung
+ * thì mỗi lần xoay sẽ làm hỏng đăng ký 2FA của tất cả mọi người.
+ *
+ * <p>{@code requireAdminTwoFactor} mặc định BẬT. Tài khoản ADMIN đọc được testdata mọi đề,
+ * nên một mật khẩu ADMIN bị lộ là mất toàn bộ bộ test — tức là mất chính thứ hệ thống này
+ * bán. DMOJ đặt {@code DMOJ_REQUIRE_STAFF_2FA = True} mặc định vì cùng lý do.
+ *
+ * @param totpKey               khoá mã hoá bí mật TOTP. Đọc từ env, tối thiểu 32 ký tự
+ * @param requireAdminTwoFactor ép ADMIN phải bật 2FA mới dùng được quyền ADMIN
  */
 public record AuthProperties(
         String jwtSecret,
@@ -49,7 +61,9 @@ public record AuthProperties(
         Duration loginWindow,
         Duration lockout,
         int maxRegistrationsPerIp,
-        Duration registrationWindow) {
+        Duration registrationWindow,
+        String totpKey,
+        boolean requireAdminTwoFactor) {
 
 public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -101,6 +115,21 @@ public AuthProperties {
                 || registrationWindow.isNegative()) {
             throw new IllegalStateException(
                     "oj.auth.registration-window = " + registrationWindow + " không hợp lệ");
+        }
+        if (totpKey == null || totpKey.isBlank()) {
+            throw new IllegalStateException(
+                    "Thiếu OJ_TOTP_KEY. Đây là khoá mã hoá bí mật TOTP lúc lưu — thiếu nó "
+                            + "thì hoặc không bật được 2FA, hoặc bí mật nằm trần trong "
+                            + "database. Cùng lý do với OJ_JWT_SECRET: không có mặc định");
+        }
+        if (totpKey.length() < 32) {
+            throw new IllegalStateException("OJ_TOTP_KEY quá ngắn (cần >= 32 ký tự)");
+        }
+        if (totpKey.equals(jwtSecret)) {
+            throw new IllegalStateException(
+                    "OJ_TOTP_KEY trùng OJ_JWT_SECRET. Một khoá một việc: dùng chung thì mỗi "
+                            + "lần xoay khoá ký token sẽ làm hỏng đăng ký 2FA của tất cả "
+                            + "mọi người, biến một thao tác vệ sinh thành một sự cố");
         }
     }
 }
