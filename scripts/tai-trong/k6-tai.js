@@ -81,6 +81,17 @@ const TI_LE_THEO_DOI = Number(__ENV.TI_LE_THEO_DOI || 0.1);
 const THOI_LUONG = __ENV.THOI_LUONG || '3m';
 
 /**
+ * ★ TRẦN CHỜ VERDICT — ĐÂY LÀ TRẦN CỦA PHÉP ĐO, KHÔNG PHẢI CỦA HỆ THỐNG.
+ *
+ * Người ảo chờ tối đa ngần này rồi thôi. Nâng nó lên thì đo được cái đuôi dài hơn, nhưng
+ * cũng giữ người ảo đứng im lâu hơn — mà một người ảo đang chờ thì không sinh tải, nên
+ * nâng quá tay là tự giảm tải của chính phép đo. 60s là chỗ đứng giữa.
+ *
+ * Xem `theoToiVerdict`: mẫu chạm trần được GHI LẠI ở đúng giá trị trần chứ không bị vứt.
+ */
+const HAN_VERDICT_MS = Number(__ENV.HAN_VERDICT_S || 60) * 1000;
+
+/**
  * ★ ĐOẠN DỐC LÊN PHẢI DÀI RA THEO SỐ NGƯỜI, VÀ LÝ DO LÀ bcrypt.
  *
  * `bcrypt-cost: 12` tốn ~250ms CPU mỗi lần băm (application.yml, FR-AUTH-01). Mỗi người ảo
@@ -130,6 +141,12 @@ const choLauNhat = new Trend('cho_lau_nhat_ms', true);
 const mayChamSong = new Trend('may_cham_song');
 const ti429 = new Rate('ti_le_429');
 const boCuoc = new Counter('verdict_khong_kip');
+/**
+ * Số mẫu `verdict_ms` chạm trần, tức là bị KIỂM DUYỆT (censored): giá trị thật của chúng
+ * lớn hơn cái được ghi, không ai biết lớn bao nhiêu. Lọc bằng `dangDo()` y như `verdict_ms`
+ * để `verdict_cham_tran / verdict_ms.count` là tỉ lệ đúng, không phải hai mẫu số khác nhau.
+ */
+const chamTran = new Counter('verdict_cham_tran');
 
 export const options = {
     discardResponseBodies: false,
@@ -159,7 +176,11 @@ export const options = {
         'nop_ms': ['p(95)<300'],
         'http_req_failed{scenario:nguoi_dung}': ['rate<0.01'],
     },
-    summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
+    // 'count' là BẮT BUỘC, không phải trang trí: `ket-luan.js` chia
+    // verdict_cham_tran / verdict_ms.count để ra tỉ lệ mẫu bị kiểm duyệt. Bỏ nó đi thì
+    // mẫu số bằng 0, tỉ lệ bằng 0, và cảnh báo "P3 không dùng được" im lặng biến mất —
+    // đúng cái im lặng mà nó sinh ra để phá.
+    summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max', 'count'],
 };
 
 /**
@@ -269,7 +290,7 @@ function nop(token) {
  */
 function theoToiVerdict(token, id, batDau) {
     let cho = 250;
-    const han = batDau + 60000;
+    const han = batDau + HAN_VERDICT_MS;
     while (Date.now() < han) {
         sleep(cho / 1000);
         cho = Math.min(cho * 1.6, 4000);
@@ -281,6 +302,23 @@ function theoToiVerdict(token, id, batDau) {
             if (dangDo()) verdictMs.add(Date.now() - batDau);
             return;
         }
+    }
+
+    // ★ HẾT HẠN THÌ GHI LẠI, ĐỪNG VỨT.
+    //
+    // Bản cũ `return` không ghi gì. Hậu quả: tải càng nặng, càng nhiều bài chậm bị loại
+    // khỏi mẫu, và p95 càng ĐẸP LÊN. Đo thật ngày 2026-09-05, ba mức liên tiếp:
+    //     100 người → P3 14 605ms · 200 người → 62 634ms · 400 người → 59 746ms
+    // Tải gấp đôi mà verdict nhanh hơn là chuyện không thể; nó là mẫu bị kiểm duyệt.
+    // Số thật từ `submissions.judged_at - created_at`: 14s · 117s · 375s — ô 400 người
+    // sai 6,3 lần, và sai theo hướng làm hệ thống trông khoẻ hơn thực tế.
+    //
+    // Ghi ở giá trị trần biến p95 thành CẬN DƯỚI đúng thay vì một con số bịa. `ket-luan.js`
+    // đọc `verdict_cham_tran` rồi in dấu ≥ và tỉ lệ kiểm duyệt, để không ai đọc nó như một
+    // phép đo đầy đủ.
+    if (dangDo()) {
+        verdictMs.add(Date.now() - batDau);
+        chamTran.add(1);
     }
     boCuoc.add(1);
 }
@@ -326,5 +364,6 @@ export function handleSummary(data) {
         base: BASE,
         tiLeNop: TI_LE_NOP,
         raJson: __ENV.RA_JSON,
+        hanVerdictMs: HAN_VERDICT_MS,
     });
 }

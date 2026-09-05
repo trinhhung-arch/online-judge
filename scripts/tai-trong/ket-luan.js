@@ -27,6 +27,8 @@ function dinhDang(giaTri, donVi) {
     if (giaTri === null || giaTri === undefined) return '—';
     if (donVi === 'ti_le') return `${so(giaTri * 100, 2)} %`;
     if (donVi === 'ms') return `${so(giaTri)} ms`;
+    if (donVi === 's') return `${so(giaTri)} s`;
+    if (donVi === 'bai_phut') return `${so(giaTri)}/phút`;
     return so(giaTri);
 }
 
@@ -81,6 +83,7 @@ export function chamCung(metrics, nguong) {
 /** Áp `nguong.quan_sat` — chỉ đọc, không chấm. */
 export function chamQuanSat(metrics, nguong) {
     return nguong.quan_sat.map((d) => ({
+        metric: d.metric,
         ma: d.ma,
         nhan: d.nhan,
         donVi: d.don_vi,
@@ -99,7 +102,10 @@ function veHang(r) {
 
 function veHangQuanSat(r) {
     const moc = r.moc === undefined ? '' : `   mốc ${dinhDang(r.moc, r.donVi)}`;
-    return `  ${dem(r.ma, 9)} ${dem(r.nhan, 30)} ${demTrai(dinhDang(r.giaTri, r.donVi), 12)}${moc}`;
+    // `canDuoi`: giá trị thật lớn hơn con số in ra. Dấu ≥ phải nằm ngay cạnh số, không
+    // phải trong một chú thích bên dưới — người đọc vội chỉ nhìn cột số.
+    const v = r.canDuoi ? `\u2265 ${dinhDang(r.giaTri, r.donVi)}` : dinhDang(r.giaTri, r.donVi);
+    return `  ${dem(r.ma, 9)} ${dem(r.nhan, 30)} ${demTrai(v, 12)}${moc}`;
 }
 
 /** Chú thích dài phải xuống dòng, nếu không nó đẩy bảng ra khỏi bề ngang terminal. */
@@ -143,12 +149,44 @@ function ve(metrics, nguong, boiCanh) {
     d.push('');
     d.push('ĐƯỜNG CHẤM — KHÔNG phải tiêu chí đạt/không đạt, đọc đường cong');
     d.push('');
+    // ★ ĐÁNH DẤU P3 LÀ CẬN DƯỚI TRƯỚC KHI VẼ HÀNG.
+    //
+    // `verdict_ms` gộp cả mẫu chạm trần (xem theoToiVerdict). Chừng nào còn một mẫu như
+    // thế thì p95 không phải giá trị thật mà là giá trị thật BỊ CẮT — luôn thấp hơn.
+    const soChamTran = docSo(metrics, 'verdict_cham_tran', 'count', 0);
+    const soMauVerdict = docSo(metrics, 'verdict_ms', 'count', 0);
+    const tiLeChan = soMauVerdict > 0 ? soChamTran / soMauVerdict : 0;
+    quanSat.forEach((r) => { if (r.metric === 'verdict_ms' && soChamTran > 0) r.canDuoi = true; });
+
     quanSat.forEach((r) => {
         d.push(veHangQuanSat(r));
         if (r.chuThich) xuongDong(r.chuThich, '            ', 64).forEach((l) => d.push(l));
     });
+    // ★ MẪU BỊ KIỂM DUYỆT QUÁ NHIỀU THÌ P3 KHÔNG DÙNG ĐƯỢC, VÀ PHẢI NÓI RA.
+    //
+    // Không phải "hơi kém chính xác" — nó sai có HỆ THỐNG và sai theo hướng đẹp lên, vì
+    // đúng những bài chậm nhất mới là những bài chạm trần. Đo thật 2026-09-05: ở 400 người
+    // 63% mẫu chạm trần, bảng in 59 746ms, số thật trong DB là 375 000ms.
+    if (tiLeChan > 0) {
+        d.push('');
+        const pct = so(tiLeChan * 100, 1);
+        if (tiLeChan >= 0.10) {
+            d.push(`  ⛔ P3 KHÔNG DÙNG ĐƯỢC: ${so(soChamTran)}/${so(soMauVerdict)} mẫu (${pct}%) chạm trần`);
+            d.push(`     ${so(boiCanh.hanVerdictMs || 60000)}ms rồi bị cắt. Càng tải nặng càng nhiều bài chậm`);
+            d.push('     bị cắt, nên con số ở trên thấp hơn sự thật một cách có hệ thống.');
+        } else {
+            d.push(`  ⚠️  P3 là CẬN DƯỚI: ${so(soChamTran)}/${so(soMauVerdict)} mẫu (${pct}%) chạm trần.`);
+        }
+        d.push('     Số thật lấy thẳng từ database, không qua k6:');
+        d.push('       SELECT round(percentile_cont(0.95) WITHIN GROUP (');
+        d.push('                ORDER BY EXTRACT(epoch FROM judged_at-created_at))*1000) AS p95_ms');
+        d.push("       FROM submissions WHERE created_at > now() - interval '30 minutes';");
+        d.push('     Nới trần đo:  HAN_VERDICT_S=180 ./chay.sh   (người ảo chờ lâu hơn thì');
+        d.push('     sinh ít tải hơn — nới vừa phải thôi.)');
+    }
+
     const vMs = docSo(metrics, 'verdict_ms', 'p(95)');
-    if (vMs !== null && vMs < nguong.verdict_san_ms) {
+    if (vMs !== null && tiLeChan === 0 && vMs < nguong.verdict_san_ms) {
         d.push('');
         d.push(`  ⛔ verdict p95 = ${so(vMs)}ms, dưới sàn ${so(nguong.verdict_san_ms)}ms.`);
         d.push('     Không có gì được biên dịch — riêng biên dịch đã tốn <400ms (nfrplan 2.1),');

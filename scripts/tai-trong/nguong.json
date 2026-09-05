@@ -26,8 +26,8 @@
       "ma": "P2", "nhan": "POST /submissions p95", "don_vi": "ms" },
 
     { "metric": "http_req_failed{scenario:nguoi_dung}", "thong_ke": "rate", "toi_da": 0.01,
-      "ma": "R3", "nhan": "tỉ lệ request hỏng", "don_vi": "ti_le",
-      "chu_thich": "429 KHÔNG tính là hỏng — xem http.setResponseCallback trong k6-tai.js" },
+      "ma": "—", "nhan": "tỉ lệ request HTTP hỏng", "don_vi": "ti_le",
+      "chu_thich": "429 KHÔNG tính là hỏng — xem http.setResponseCallback trong k6-tai.js. Ô này TỪNG mang mã R3, sai: R3 của nfrplan là tỉ lệ verdict IE (< 0.1%), mà một bài IE vẫn trả HTTP 200 nên nó không xuất hiện ở đây. Muốn R3 thật: SELECT count(*) FILTER (WHERE verdict='IE')::float/count(*) FROM judge_runs;" },
 
     { "metric": "dropped_iterations", "thong_ke": "count", "toi_da": 0, "mac_dinh": 0,
       "ma": "—", "nhan": "vòng lặp k6 bị bỏ", "don_vi": "so",
@@ -37,10 +37,15 @@
   "quan_sat": [
     { "metric": "verdict_ms", "thong_ke": "p(95)", "moc": 2000,
       "ma": "P3", "nhan": "nộp → verdict p95", "don_vi": "ms",
-      "chu_thich": "mốc 2s chỉ có nghĩa khi hàng đợi RỖNG. Dưới tải nó là thời gian xếp hàng, không phải thời gian chấm." },
+      "chu_thich": "mốc 2s chỉ có nghĩa khi hàng đợi RỖNG. Dưới tải nó là thời gian xếp hàng, không phải thời gian chấm. Khi ô 'mẫu verdict chạm trần' khác 0 thì đây là CẬN DƯỚI, in kèm dấu ≥." },
+
+    { "metric": "verdict_cham_tran", "thong_ke": "count", "mac_dinh": 0,
+      "ma": "—", "nhan": "mẫu verdict chạm trần", "don_vi": "so",
+      "chu_thich": "số mẫu chờ hết HAN_VERDICT_S (mặc định 60s) mà chưa có verdict. Chúng được ghi Ở ĐÚNG GIÁ TRỊ TRẦN, nên giá trị thật lớn hơn — không ai biết lớn bao nhiêu. Khác 0 nghĩa là P3 ở trên là cận dưới; vượt 10% mẫu thì P3 không dùng được, đọc DB." },
 
     { "metric": "cho_lau_nhat_ms", "thong_ke": "p(95)", "moc": 5000,
-      "ma": "P6", "nhan": "bài chờ lâu nhất p95", "don_vi": "ms" },
+      "ma": "P6", "nhan": "bài chờ lâu nhất p95", "don_vi": "ms",
+      "chu_thich": "CHỈ đo trong lúc còn tải. Luồng giám sát chết cùng lúc với người ảo, mà hàng đợi thì còn rút cạn thêm hàng phút nữa sau đó — đúng đoạn tệ nhất. Hai ô 'rút cạn' bên dưới mới là phần ấy." },
 
     { "metric": "may_cham_song", "thong_ke": "min", "mac_dinh": 0,
       "ma": "S1/A3", "nhan": "máy chấm còn sống (thấp nhất)", "don_vi": "so",
@@ -50,12 +55,17 @@
       "ma": "P4/P5", "nhan": "độ sâu hàng đợi lớn nhất", "don_vi": "so",
       "chu_thich": "tăng tuyến tính suốt lượt chạy = năng lực chấm đã vỡ. Đó là giới hạn của 6 judge slot, KHÔNG phải của API." },
 
+    { "metric": "rut_can_bai_phut", "thong_ke": "value",
+      "ma": "P4", "nhan": "tốc độ rút cạn", "don_vi": "bai_phut",
+      "chu_thich": "đo bởi chay.sh SAU khi k6 thoát, trên hàng đợi tồn. Đây là NĂNG LỰC CHẤM THẬT, không lẫn thời gian xếp hàng — con số đáng tin nhất ở nhóm này. Chia 60 ra bài/s để so với P4 (≥ 5 bài/s). Đọc nó ở MỨC CAO NHẤT: mức thấp để lại hàng đợi ngắn, cửa sổ đo vài giây, số nhiễu." },
+
+    { "metric": "rut_can_giay", "thong_ke": "value",
+      "ma": "P5", "nhan": "thời gian rút cạn", "don_vi": "s",
+      "chu_thich": "từ lúc người ảo cuối dừng tới lúc hàng đợi về 0. Bài nộp muộn nhất chờ khoảng ngần này." },
+
     { "metric": "ti_le_429", "thong_ke": "rate",
       "ma": "FR-SUB-08", "nhan": "tỉ lệ chạm rate limit", "don_vi": "ti_le",
       "chu_thich": "cao là ĐÚNG. Nó là cái van, và cái van đang đóng nghĩa là nó còn hoạt động." },
-
-    { "metric": "verdict_khong_kip", "thong_ke": "count", "mac_dinh": 0,
-      "ma": "—", "nhan": "bỏ cuộc chờ verdict sau 60s", "don_vi": "so" },
 
     { "metric": "http_req_blocked", "thong_ke": "p(95)",
       "ma": "máy đo", "nhan": "chờ lấy được connection p95", "don_vi": "ms",

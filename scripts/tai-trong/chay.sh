@@ -125,13 +125,31 @@ mkdir -p "$RA"
 # hàng dấu chấm, nên chuyện đó chỉ lộ ra ở dòng cuối cùng. Một hàng đợi đứng yên
 # và một hàng đợi đang rút chậm là hai sự cố khác nhau, và phải phân biệt được
 # chúng ngay từ phút đầu.
+# ★ VÀ NÓ PHẢI GHI LẠI SỐ, KHÔNG CHỈ IN RA MÀN HÌNH.
+#
+# Tốc độ rút cạn là NĂNG LỰC CHẤM THẬT: đo trên hàng đợi tồn, không lẫn thời gian
+# xếp hàng, không bị k6 cắt ở trần 60s. Nó là con số đáng tin nhất trong cả nhóm
+# đường chấm — mà trước đây nó chỉ chạy qua màn hình rồi mất. `ghi_rut_can` vá nó
+# vào tom-tat-<mức>.json, từ đó `nguong.json` lo phần hiển thị như mọi metric khác.
+#
+# Ba biến, mỗi biến một nghĩa cố định, để nhánh rút cạn xong và nhánh hết giờ dùng
+# chung một cách tính:
+#   RUT_CAN_DA_RUT  số bài đã rút được
+#   RUT_CAN_TRONG   số giây đã trôi
+#   RUT_CAN_XONG    hàng đợi có thật sự về 0 không
 cho_rut_can() {
     han=${CHO_RUT_CAN:-1200}
-    t=0; n=; truoc=; moc=0
+    t=0; n=; truoc=; moc=0; n0=
+    RUT_CAN_DA_RUT=; RUT_CAN_TRONG=; RUT_CAN_XONG=0
     printf '  chờ hàng đợi rút cạn'
     while [ "$t" -lt "$han" ]; do
         n=$(curl -fsS "$BASE/api/v1/status" 2>/dev/null | grep -o '"dangCho": *[0-9][0-9]*' | tr -cd '0-9') || true
-        [ "${n:-1}" = "0" ] && { echo " → rỗng sau ${t}s"; return; }
+        [ -z "$n0" ] && n0=${n:-0}
+        if [ "${n:-1}" = "0" ]; then
+            echo " → rỗng sau ${t}s"
+            RUT_CAN_DA_RUT=${n0:-0}; RUT_CAN_TRONG=$t; RUT_CAN_XONG=1
+            return
+        fi
         if [ "$t" = 0 ] || [ $((t - moc)) -ge 30 ]; then
             if [ -n "$truoc" ] && [ -n "${n:-}" ] && [ $((t - moc)) -gt 0 ]; then
                 rut=$(( (truoc - n) * 60 / (t - moc) ))
@@ -150,6 +168,19 @@ cho_rut_can() {
     echo
     echo "  ⚠ Sau ${han}s vẫn còn ${n:-?} bài. Mức sau sẽ đo TRÊN phần thừa này."
     echo "    Nới trần:  CHO_RUT_CAN=2400 ./chay.sh"
+    # Chưa về 0, nhưng phần đã rút vẫn cho một tốc độ đúng — giữ lại. Chỉ "thời gian
+    # rút cạn" là vô nghĩa ở nhánh này, và ghi-rut-can.py để nó vắng mặt chứ không bịa.
+    RUT_CAN_DA_RUT=$(( ${n0:-0} - ${n:-0} )); RUT_CAN_TRONG=$han; RUT_CAN_XONG=0
+}
+
+# Vá số liệu rút cạn vào JSON của mức vừa đo. Chỉ gọi cho các mức được đo — lượt khởi
+# động không có JSON, và cũng không nên có: kết quả của nó là kết quả bỏ đi.
+ghi_rut_can() {
+    [ -f "$1" ] || return 0
+    [ -n "${RUT_CAN_TRONG:-}" ] || return 0
+    python3 "$HERE/ghi-rut-can.py" "$1" \
+        "${RUT_CAN_DA_RUT:-0}" "$RUT_CAN_TRONG" "${RUT_CAN_XONG:-0}" \
+        || echo "  ⚠ Không ghi được số rút cạn vào $1 — bảng sẽ thiếu hai ô ấy."
 }
 
 # -----------------------------------------------------------------------------
@@ -191,8 +222,10 @@ for n in $CAC_MUC; do
     ma=${PIPESTATUS[0]}
     [ "$ma" -eq 0 ] || [ "$ma" -eq 99 ] \
         || echo "  ⚠ k6 thoát với mã $ma (không phải trượt ngưỡng) — xem $RA/$n.log"
+    muc=$n                      # cho_rut_can dùng $n làm biến đếm — giữ mức lại trước khi gọi
     cho_rut_can
-    [ "$n" = "${CAC_MUC##* }" ] || { echo "  nghỉ ${NGHI}s cho máy nguội"; sleep "$NGHI"; }
+    ghi_rut_can "$RA/tom-tat-$muc.json"
+    [ "$muc" = "${CAC_MUC##* }" ] || { echo "  nghỉ ${NGHI}s cho máy nguội"; sleep "$NGHI"; }
 done
 
 python3 "$HERE/tong-hop.py" "$RA" || {

@@ -22,6 +22,8 @@ import os
 import sys
 
 O_KEY = {'ms': lambda v: f'{v:,.0f} ms'.replace(',', ' '),
+         's': lambda v: f'{v:,.0f} s'.replace(',', ' '),
+         'bai_phut': lambda v: f'{v:,.0f}/phút'.replace(',', ' '),
          'ti_le': lambda v: f'{v * 100:.2f} %',
          'so': lambda v: f'{v:,.0f}'.replace(',', ' ')}
 
@@ -84,10 +86,20 @@ def main():
 
     print()
     # --- quan sát: in ra để đọc đường cong, không chấm ------------------------
+    #
+    # ★ Ô `verdict_ms` phải mang dấu ≥ khi có mẫu chạm trần. Bảng NHIỀU MỨC là chỗ
+    # cái sai lộ rõ nhất — mức 200 in 62 634ms còn mức 400 in 59 746ms, tức là tải
+    # gấp đôi mà verdict nhanh hơn. Không có dấu ≥ thì người đọc sẽ đi tìm lời giải
+    # cho một nghịch lý không tồn tại, thay vì thấy ngay rằng mẫu đã bị cắt.
     for d in nguong['quan_sat']:
-        o = [dinh_dang(doc_so(run['metrics'], d['metric'], d['thong_ke'],
-                              d.get('mac_dinh')), d.get('don_vi')).rjust(14)
-             for _, run in lan]
+        o = []
+        for _, run in lan:
+            v = doc_so(run['metrics'], d['metric'], d['thong_ke'], d.get('mac_dinh'))
+            chu = dinh_dang(v, d.get('don_vi'))
+            if d['metric'] == 'verdict_ms' and v is not None:
+                if doc_so(run['metrics'], 'verdict_cham_tran', 'count', 0):
+                    chu = '\u2265 ' + chu
+            o.append(chu.rjust(14))
         print('  ' + f'{d["ma"]} {d["nhan"]}'.ljust(32) + ''.join(o))
 
     # --- kết luận ------------------------------------------------------------
