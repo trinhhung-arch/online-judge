@@ -42,6 +42,10 @@
     { "metric": "cho_lau_nhat_ms", "thong_ke": "p(95)", "moc": 5000,
       "ma": "P6", "nhan": "bài chờ lâu nhất p95", "don_vi": "ms" },
 
+    { "metric": "may_cham_song", "thong_ke": "min", "mac_dinh": 0,
+      "ma": "S1/A3", "nhan": "máy chấm còn sống (thấp nhất)", "don_vi": "so",
+      "chu_thich": "0 nghĩa là KHÔNG có worker nào — mọi con số đường chấm bên dưới đo một hệ thống không chấm bài. Phải nhìn ô này TRƯỚC khi đọc bất cứ dòng nào khác trong nhóm này." },
+
     { "metric": "hang_doi", "thong_ke": "max",
       "ma": "P4/P5", "nhan": "độ sâu hàng đợi lớn nhất", "don_vi": "so",
       "chu_thich": "tăng tuyến tính suốt lượt chạy = năng lực chấm đã vỡ. Đó là giới hạn của 6 judge slot, KHÔNG phải của API." },
