@@ -39,9 +39,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libcap-dev libseccomp-dev libsystemd-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# ★ PREFIX PHẢI LÀ ĐƯỜNG DẪN LÚC CHẠY, KHÔNG PHẢI ĐƯỜNG DẪN ĐỂ COPY.
+#
+# Makefile của isolate nhúng đường dẫn config vào binary NGAY LÚC BIÊN DỊCH:
+#     CONFIG = $(PREFIX)/etc/isolate
+#     config.o: CFLAGS += -DCONFIG_FILE='"$(CONFIG)"'
+#
+# Nên `install PREFIX=/opt/isolate` rồi copy sang /usr/local là dựng ra một binary đi tìm
+# /opt/isolate/etc/isolate suốt đời. Triệu chứng đo được ngày 2026-09-05 trên host Mac:
+#     Cannot open /opt/isolate/etc/isolate: No such file or directory
+# rồi isolate-cg-keeper chết, /run/isolate/cgroup không bao giờ xuất hiện, và container tắt.
+# `isolate --version` VẪN chạy được vì nó không đọc config — nên ca kiểm nào chỉ gọi
+# --version sẽ báo xanh trên một cài đặt hỏng.
+#
+# Cách đúng: giữ PREFIX = đường dẫn thật (/usr/local, cũng là mặc định của Makefile) và
+# dùng DESTDIR để dựng cây file ở chỗ khác cho dễ COPY. `install` của isolate có hỗ trợ
+# DESTDIR: nó prepend $(DESTDIR) vào mọi đích, không đụng tới CONFIG đã biên dịch.
+#
 # `make install` tự build cả ba chương trình của $(PROGRAMS), gồm isolate-cg-keeper.
 RUN git clone --depth 1 --branch ${ISOLATE_VERSION} https://github.com/ioi/isolate.git /src \
-    && make -C /src install PREFIX=/opt/isolate
+    && make -C /src install PREFIX=/usr/local DESTDIR=/staging
 
 # ---------- stage 2: build worker ----------
 FROM maven:3.9-eclipse-temurin-21 AS worker-build
@@ -93,7 +110,7 @@ COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="/opt/java/openjdk/bin:${PATH}"
 
-COPY --from=isolate-build /opt/isolate/ /usr/local/
+COPY --from=isolate-build /staging/usr/local/ /usr/local/
 
 # ★ User `isolate` + dải subuid: config mặc định có `subid_user = isolate`, và cả `isolate`
 # lẫn `isolate-cg-keeper` CHẾT ngay lúc đọc config nếu /etc/subuid không có dòng ấy

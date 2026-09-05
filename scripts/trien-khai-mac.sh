@@ -156,6 +156,12 @@ kiem() {
 }
 kiem "cgroup v2 (unified hierarchy)" '[ "$(stat -fc %T /sys/fs/cgroup)" = cgroup2fs ]'
 kiem "isolate chạy được"             '/usr/local/bin/isolate --version'
+# ★ Ca kiểm trên KHÔNG đủ, và đã có lần báo xanh trên một cài đặt hỏng: `--version` không
+# đọc file config, nên nó vẫn chạy khi đường dẫn config nhúng trong binary trỏ sai chỗ
+# (xem chú thích PREFIX/DESTDIR trong infra/isolate/Dockerfile). Ca dưới đây dựng một box
+# THẬT rồi dọn — nó buộc isolate phải đọc được config VÀ mượn được cgroup. Box 90 nằm ngoài
+# dải judge slot (0..slots-1) nên không giẫm lên bài đang chấm.
+kiem "isolate dựng được box thật (config + cgroup)" '/usr/local/bin/isolate --cg -b 90 --init >/dev/null 2>&1; r=$?; /usr/local/bin/isolate --cg -b 90 --cleanup >/dev/null 2>&1; exit $r'
 kiem "isolate là setuid root"        '[ -u /usr/local/bin/isolate ]'
 kiem "/etc/subuid có dòng isolate"   'grep -q "^isolate:" /etc/subuid'
 kiem "keeper đã dựng cgroup"         '[ -e /run/isolate/cgroup ]'
