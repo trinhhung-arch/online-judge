@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Xác thực hai lớp cho chính mình — FR-AUTH-09.
+ * Xác thực hai lớp cho chính mình — FR-AUTH-10.
  *
  * <h2>Nằm dưới {@code /api/v1/me}, không phải {@code /api/v1/admin}</h2>
  * Ai cũng bật được 2FA cho tài khoản của mình; ADMIN thì <b>bắt buộc</b>. Đặt nó dưới

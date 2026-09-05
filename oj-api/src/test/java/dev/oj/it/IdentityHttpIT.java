@@ -187,7 +187,7 @@ class IdentityHttpIT extends HttpIT {
     dev.oj.identity.application.port.SecretCipher cipher;
 
     /**
-     * ★ V11 · FR-AUTH-09 — đường đăng nhập 2FA THẬT, qua HTTP.
+     * ★ V11 · FR-AUTH-10 — đường đăng nhập 2FA THẬT, qua HTTP.
      *
      * <p>{@code TwoFactorUseCaseTest} đã đo logic bằng fake; ca ở đây đo phần mà fake không
      * chạm tới: {@code AuthRequests.Login} có thêm trường {@code maHaiLop}, Jackson phải bind

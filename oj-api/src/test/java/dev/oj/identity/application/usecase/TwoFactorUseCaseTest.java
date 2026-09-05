@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** FR-AUTH-09 · V11 — xác thực hai lớp. */
+/** FR-AUTH-10 · V11 — xác thực hai lớp. */
 class TwoFactorUseCaseTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-05T10:00:00Z");

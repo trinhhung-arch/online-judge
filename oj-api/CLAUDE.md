@@ -120,6 +120,9 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 |---|---|---|
 | Nộp bài | 1 bài / 10s / user | UI hiện đếm ngược, trả 429 kèm `Retry-After` |
 | Đăng nhập sai | 5 lần / phút / IP | Khoá tạm 15 phút |
+| Đăng nhập **đúng** | 1 lượt / 2s / user | 429. Chỉ tính lượt thành công — tính lượt sai thì ai cũng khoá được người khác |
+| Băm BCrypt song song | 4 phép cùng lúc | 429 **ngay**, không xếp hàng. Xếp hàng là giữ luồng Tomcat và kéo mọi endpoint khác chết theo |
+| Đăng ký | 10 tài khoản / giờ / IP | 429. Đếm cả lượt hỏng, nếu không thì dò handle là miễn phí |
 | API chung | 100 req / phút / user | 429 |
 | Kích thước source | 64KB | Từ chối ở tầng validate, thông báo rõ |
 | AI review | 5 lượt / ngày / user | UI hiện số lượt còn lại |

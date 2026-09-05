@@ -1,5 +1,5 @@
 /**
- * Xác thực hai lớp trên trang hồ sơ — FR-AUTH-09 (V11).
+ * Xác thực hai lớp trên trang hồ sơ — FR-AUTH-10 (V11).
  *
  * ★ MỌI CHUỖI TỪ SERVER VÀO DOM QUA `textContent`.
  * Không một `innerHTML` nào trong file này. Đây là trang hiển thị bí mật TOTP và mã dự

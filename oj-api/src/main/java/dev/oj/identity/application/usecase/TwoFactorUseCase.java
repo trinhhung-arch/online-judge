@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Bật, xác nhận và tắt xác thực hai lớp — FR-AUTH-09 (V11).
+ * Bật, xác nhận và tắt xác thực hai lớp — FR-AUTH-10 (V11).
  *
  * <h2>★ Ba bước, và bước giữa là bước không được bỏ</h2>
  * <ol>

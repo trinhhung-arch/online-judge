@@ -105,15 +105,28 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 | ID | Yêu cầu | Ràng buộc NFR | Ưu tiên |
 |---|---|---|---|
-| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12 | SEC2 | Must |
+| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12. **Giới hạn 10 tài khoản/giờ/IP**, đếm cả lượt hỏng | SEC2, A (chống tạo hàng loạt) | Must |
 | FR-AUTH-02 | Đăng nhập trả JWT (15 phút) + refresh token (7 ngày). **Không dùng session in-memory** | S2, S1 | Must |
 | FR-AUTH-03 | Đăng xuất — thu hồi refresh token | — | Must |
 | FR-AUTH-04 | Đổi mật khẩu (yêu cầu mật khẩu cũ), thu hồi mọi refresh token | SEC2 | Must |
 | FR-AUTH-05 | Xem và sửa hồ sơ: tên hiển thị, ngôn ngữ ưa dùng | — | Must |
 | FR-AUTH-06 | Ba vai trò USER / SETTER / ADMIN. **Kiểm quyền ở tầng use-case** | SEC2, M-ArchUnit | Must |
 | FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên | R1, audit | Must |
-| FR-AUTH-08 | Giới hạn 5 lần đăng nhập sai/phút/IP, khoá tạm 15 phút | SEC2 | Must |
+| FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP, khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
 | FR-AUTH-09 | Quên mật khẩu qua email | — | **Won't (v1.1)** — cần SMTP, thêm một điểm hỏng, không đáng cho v1.0 |
+| FR-AUTH-10 | Xác thực hai lớp TOTP (RFC 6238) + 10 mã dự phòng dùng một lần. **Bắt buộc với ADMIN**: chưa bật thì không dùng được quyền ADMIN | SEC2, SEC3 (ADMIN đọc được testdata mọi đề) | Must |
+
+> **FR-AUTH-08 nới rộng vì một phép đo, không vì lo xa.** Bản đầu chỉ khoá các lượt **sai**. Nhưng BCrypt cost 12 tốn ~250ms CPU *mỗi lần*, kể cả khi mật khẩu đúng — nên một bot có 1 000 tài khoản hợp lệ chỉ cần đăng nhập **đúng** liên tục là làm nghẽn cả máy, và nó không phải đoán gì vì chính nó đặt mật khẩu lúc đăng ký. Đo trên máy chấm chuẩn ngày 2026-09-05: **17,5 lượt/giây là trần của cả máy**, và lúc ấy chấm bài đứng.
+>
+> Hai hàng rào mới mua hai thứ khác nhau, và đừng nhầm chúng với nhau. **Trần 4 phép băm song song** là thứ duy nhất chặn được CPU: nó từ chối ngay (429) thay vì xếp hàng, vì xếp hàng nghĩa là giữ luồng Tomcat và kéo mọi endpoint khác chết theo. Đo sau khi sửa: dội 300 lượt đăng nhập cùng lúc, `GET /problems` vẫn 5–6ms. **Giãn nhịp 2 giây** thì *không* cứu CPU — BCrypt đã chạy xong mới biết đăng nhập đúng — nó chỉ chặn phần sau, tức là số dòng `refresh_tokens` sinh ra.
+>
+> Giãn nhịp chỉ áp cho lượt **thành công**, cố ý: áp cho lượt sai thì bất kỳ ai cũng khoá được người khác ra ngoài bằng cách gõ sai mật khẩu của họ — đúng thứ mà FR-AUTH-08 tính theo IP để tránh.
+
+> **FR-AUTH-10 bắt buộc với ADMIN vì ADMIN đọc được testdata mọi đề.** Một mật khẩu ADMIN bị lộ không phải là mất một tài khoản, mà là mất **tính công bằng** — thứ đứng đầu danh sách không thể thoả hiệp của dự án. DMOJ đặt `DMOJ_REQUIRE_STAFF_2FA = True` mặc định vì cùng lý do.
+>
+> Ràng buộc quan trọng nhất của thiết kế: **đường bật 2FA phải nằm DƯỚI cổng mà nó mở**. Endpoint `/api/v1/me/2fa` mang `@RequiresRole` mức USER, nên một ADMIN chưa bật 2FA vẫn đăng nhập được, vẫn vào trang hồ sơ được, và vẫn bật được — chỉ quyền ADMIN là chưa dùng được. Đòi ADMIN ở chính endpoint ấy là khoá người quản trị ra ngoài vĩnh viễn, vì không còn ai đủ quyền để gỡ.
+>
+> Mã dự phòng băm bằng **SHA-256 chứ không BCrypt**: chúng do `SecureRandom` sinh (50 bit), không nằm trong từ điển nào nên làm chậm phép băm không mua thêm gì — mà nhập một mã sai thì server phải duyệt cả 10 mã, tức là 2,5 giây CPU với BCrypt. Cùng lý do `refresh_tokens` lưu SHA-256 của token.
 
 > **Quyết định FR-AUTH-02 là NFR trá hình.** "Đăng nhập" nghe như FR thuần, nhưng chọn JWT hay session quyết định API có scale ngang được không (S1, S2). Đây là lý do FR và NFR phải viết cùng nhau chứ không phải hai người viết hai lần.
 
@@ -361,7 +374,7 @@ Danh sách này quan trọng ngang danh sách FR được nhận. Mỗi dòng l�
 | **M1** | 1–2 | FR-SUB-02, 03, 04 · FR-PROB-01 (tối giản) | **Lõi. Không có FR nào khác được chen vào đây** |
 | M2 | 3–4 | (không có FR mới — toàn bộ là NFR sandbox) | Đây là mốc thuần chất lượng |
 | M3 | 3–6 | FR-SUB-05, 06 · FR-PROB-05, 06 | Realtime + checker + đa ngôn ngữ |
-| M4 | 7–9 | FR-AUTH-01→08 · FR-PROB-02, 03, 04, 07, 08, 09 · FR-SUB-01, 07, 08, 10, 11 | **Mốc nặng nhất — 19 FR** |
+| M4 | 7–9 | FR-AUTH-01→08, 10 · FR-PROB-02, 03, 04, 07, 08, 09 · FR-SUB-01, 07, 08, 10, 11 | **Mốc nặng nhất — 20 FR** |
 | M5 | 10–12 | FR-CON-01→09 | FR-CON-10 là cái cắt đầu tiên |
 | M6 | 10–12 | FR-ADM-01→06 · FR-SUB-09, 12 · FR-PROB-10, 11, 12 | |
 | — | 14–15 | FR-AI-01→09 | Chỉ khi chọn phương án C ở `nfrplan.md` 10.7 |

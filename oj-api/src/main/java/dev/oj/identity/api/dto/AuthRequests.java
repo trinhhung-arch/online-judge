@@ -47,7 +47,7 @@ public final class AuthRequests {
         }
     }
 
-    /** FR-AUTH-09 — xác nhận bật 2FA bằng một mã đúng. */
+    /** FR-AUTH-10 — xác nhận bật 2FA bằng một mã đúng. */
     public record XacNhanHaiLop(String ma) {
 
         // Mã TOTP sống 30 giây. Ba mươi giây là thừa đủ để một dòng log bị đọc.
@@ -57,7 +57,7 @@ public final class AuthRequests {
         }
     }
 
-    /** FR-AUTH-09 — tắt 2FA: đòi cả mật khẩu lẫn mã hiện tại. */
+    /** FR-AUTH-10 — tắt 2FA: đòi cả mật khẩu lẫn mã hiện tại. */
     public record TatHaiLop(String password, String ma) {
 
         @Override
