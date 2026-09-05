@@ -120,7 +120,21 @@ echo "── Chạy $TEN ──"
 docker rm -f "$TEN" >/dev/null 2>&1 || true
 
 # Vào bằng root để dựng keeper, rồi hạ quyền. Xem chú thích đầu file.
+# ★ REMOUNT /sys/fs/cgroup THÀNH GHI ĐƯỢC — dòng đầu tiên, trước cả keeper.
+#
+# Docker mount /sys/fs/cgroup READ-ONLY vào container, kể cả với --cgroupns=private.
+# `isolate --init` phải tạo một control group cho mỗi box, nên nó chết ngay ở box đầu tiên:
+#     Failed to create control group /sys/fs/cgroup//box-1: Read-only file system
+# Triệu chứng phía trên là MỌI bài nộp trả IE trong ~370ms — nhanh hơn cả ngân sách biên
+# dịch, vì nó hỏng trước khi kịp biên dịch. Đo trên host Mac (OrbStack) ngày 2026-09-05.
+#
+# Container đã có SYS_ADMIN nên remount được, và đây không phải nới thêm quyền: nó dùng
+# đúng cái quyền đã cấp có chủ ý ở --cap-add, để isolate siết được mã người dùng bên trong.
+#
+# KHÔNG ghi vào cgroup.subtree_control ở đây: cgroup gốc của container đang chứa tiến trình,
+# nên cgroup v2 trả EBUSY (luật 'no internal processes'). isolate tự lo phần đó trong --init.
 KHOI_DONG='set -e
+mount -o remount,rw /sys/fs/cgroup
 /usr/local/sbin/isolate-cg-keeper &
 for _ in $(seq 1 50); do [ -e /run/isolate/cgroup ] && break; sleep 0.1; done
 [ -e /run/isolate/cgroup ] || { echo "isolate-cg-keeper không dựng được /run/isolate/cgroup" >&2; exit 1; }
