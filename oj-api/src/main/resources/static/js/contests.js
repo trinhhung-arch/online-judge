@@ -74,9 +74,54 @@ function sangUtc(giaTriLocal) {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/**
+ * ★ CHẶN GIỜ VÔ LÝ NGAY Ở BỘ CHỌN, đừng để người dùng biết sau khi bấm gửi.
+ *
+ * Server đã kiểm đủ (`AuthorContestUseCase`) và nó vẫn là chốt thật — phần dưới đây KHÔNG
+ * thay thế nó, chỉ dời thời điểm phát hiện lên sớm hơn.
+ *
+ * Vì sao đáng làm: `datetime-local` không có `min` thì lịch của trình duyệt cho chọn bất kỳ
+ * ngày nào, kể cả tuần trước. Người dùng điền xong cả form, bấm gửi, rồi nhận một dòng đỏ ở
+ * ĐẦU trang — cách ô gây lỗi cả màn hình, không chỉ vào ô nào. Đo thật ngày 2026-09-05: một
+ * người chọn 01/09 trong khi hôm nay là 05/09 và không hiểu vì sao bị từ chối.
+ *
+ * Ba ràng buộc, phản chiếu đúng ba phép kiểm của server:
+ *   bắt đầu   ≥ bây giờ
+ *   kết thúc  > bắt đầu
+ *   đóng băng nằm trong [bắt đầu, kết thúc]
+ */
+function gioDiaPhuong(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function rangBuocGio() {
+    const oBatDau = document.getElementById('bat-dau');
+    const oKetThuc = document.getElementById('ket-thuc');
+    const oDongBang = document.getElementById('dong-bang');
+    if (!oBatDau) return;
+
+    // +1 phút: chọn đúng "bây giờ" thì tới lúc bấm gửi nó đã thành quá khứ.
+    oBatDau.min = gioDiaPhuong(new Date(Date.now() + 60000));
+
+    const dongBo = () => {
+        oKetThuc.min = oBatDau.value || oBatDau.min;
+        oDongBang.min = oBatDau.value || oBatDau.min;
+        // Chỉ đặt max khi đã có giờ kết thúc — đặt max rỗng là xoá ràng buộc, không phải
+        // đặt nó thành vô hạn.
+        if (oKetThuc.value) oDongBang.max = oKetThuc.value;
+    };
+    oBatDau.addEventListener('change', dongBo);
+    oKetThuc.addEventListener('change', dongBo);
+    // Sửa ô là gỡ dấu đỏ ngay. Giữ dấu đỏ trên một ô vừa được sửa đúng là nói dối người dùng.
+    [oBatDau, oKetThuc, oDongBang].forEach((el) =>
+        el.addEventListener('input', () => el.removeAttribute('aria-invalid')));
+    dongBo();
+}
+
 // SETTER trở lên — `AuthorContestUseCase` là @RequiresRole(SETTER), không phải ADMIN.
 if (vaiTroItNhat('SETTER')) {
     document.getElementById('khu-tao').hidden = false;
+    rangBuocGio();
 }
 
 document.getElementById('form-tao').addEventListener('submit', async (ev) => {
@@ -101,6 +146,17 @@ document.getElementById('form-tao').addEventListener('submit', async (ev) => {
         location.href = `/contest.html?slug=${encodeURIComponent(form.slug.value.trim())}`;
     } catch (e) {
         bao(o, e instanceof LoiApi ? e.message : 'Không tạo được kỳ thi.', 'loi');
+        // Chỉ thẳng vào ô gây lỗi. Một dòng đỏ ở đầu trang không nói được ô nào sai, và
+        // form này dài hơn một màn hình.
+        const oLoi = { 'contest.bat_dau_trong_qua_khu': 'bat-dau',
+                       'contest.khung_gio_khong_hop_le': 'ket-thuc',
+                       'contest.gio_dong_bang_khong_hop_le': 'dong-bang' }[e?.code];
+        if (oLoi) {
+            const el = document.getElementById(oLoi);
+            el.setAttribute('aria-invalid', 'true');
+            el.focus();
+            el.scrollIntoView({ block: 'center' });
+        }
         nut.disabled = false;
     }
 });

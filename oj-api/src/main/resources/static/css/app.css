@@ -615,6 +615,15 @@ h1.verdict, h2.verdict, h3.verdict { color: var(--v-chu); }
 }
 .thong-bao:empty { display: none; }
 
+/* ★ Ô nhập bị server từ chối. JS đặt aria-invalid — dùng chính thuộc tính trợ năng làm
+   móc CSS thay vì thêm một class song song, nên trình đọc màn hình và mắt thường nhận
+   cùng một tín hiệu, không thể lệch nhau. */
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+    border-color: var(--sai);
+    background: var(--sai-nen);
+}
+
 /* tien-do-job.js gắn lớp `loi` lên một `<p>` trần, ngoài mọi hộp thông báo. */
 .loi { color: var(--sai); }
 
