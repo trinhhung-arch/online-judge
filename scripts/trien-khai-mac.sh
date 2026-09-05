@@ -184,6 +184,7 @@ docker run -d --name "$TEN" \
     -e OJ_WORKER_HOST_NAME="$HOST_NAME" \
     -e OJ_WORKER_ARCH=arm64 \
     -e OJ_WORKER_SLOTS="$SLOTS" \
+    -e OJ_HOST_REFERENCE_CPU_MS="${OJ_HOST_REFERENCE_CPU_MS:-0}" \
     "$ANH" -c "$KHOI_DONG" >/dev/null
 ok "container đã chạy"
 
