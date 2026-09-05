@@ -2,6 +2,7 @@ package dev.oj.identity.application.usecase;
 
 import dev.oj.identity.application.port.LoginAttemptRepository;
 import dev.oj.identity.application.port.PasswordHasher;
+import dev.oj.identity.application.port.RegistrationRateLimiter;
 import dev.oj.identity.application.port.RefreshTokenRepository;
 import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.domain.Credentials;
@@ -16,6 +17,7 @@ import dev.oj.platform.security.Role;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -237,6 +239,26 @@ final class IdentityFakes {
         @Override
         public void khoa(String clientIp, Instant toi, String lyDo) {
             khoaToi = toi;
+        }
+    }
+
+    /**
+     * Đếm theo IP trong bộ nhớ — cùng ngữ nghĩa với bản Redis, không cần Redis.
+     *
+     * <p>{@code toiDa} đặt được để test vừa kiểm được đường thường (không chạm ngưỡng) vừa
+     * kiểm được đường chặn, mà không phải tạo mười tài khoản chỉ để thấy cái thứ mười một.
+     */
+    static final class ChanDangKyGia implements RegistrationRateLimiter {
+
+        final Map<String, Integer> dem = new HashMap<>();
+        int toiDa = 10;
+
+        @Override
+        public void kiemVaGhiNhan(String clientIp) {
+            int moi = dem.merge(clientIp, 1, Integer::sum);
+            if (moi > toiDa) {
+                throw IdentityException.quaNhieuDangKy(java.time.Duration.ofHours(1));
+            }
         }
     }
 

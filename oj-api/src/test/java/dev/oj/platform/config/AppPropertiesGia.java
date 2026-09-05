@@ -37,9 +37,15 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
+    /** Cho {@code SecurityHeadersFilterTest} — nó đổi chuỗi CSP và mốc HSTS. */
+    public static AppProperties voiSecurityHeaders(SecurityHeadersProperties headers) {
+        return voi(internalMacDinh(), authMacDinh(), submissionMacDinh(), headers);
+    }
+
     public static AuthProperties authMacDinh() {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
-                12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15));
+                12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
+                10, Duration.ofHours(1));
     }
 
     private static AppProperties.Submission submissionMacDinh() {
@@ -53,6 +59,14 @@ public final class AppPropertiesGia {
     private static AppProperties voi(AppProperties.Internal internal,
                                      AuthProperties auth,
                                      AppProperties.Submission submission) {
+        return voi(internal, auth, submission,
+                new SecurityHeadersProperties("default-src 'none'", Duration.ZERO));
+    }
+
+    private static AppProperties voi(AppProperties.Internal internal,
+                                     AuthProperties auth,
+                                     AppProperties.Submission submission,
+                                     SecurityHeadersProperties headers) {
         return new AppProperties(
                 submission,
                 new AppProperties.Judge(Duration.ofSeconds(120), Duration.ofSeconds(15),
@@ -62,6 +76,7 @@ public final class AppPropertiesGia {
                 new AppProperties.Page(20, 50),
                 internal,
                 new AppProperties.Sse(Duration.ofMinutes(5), Duration.ofSeconds(15)),
+                headers,
                 auth,
                 new AppProperties.Jobs(Duration.ofSeconds(120), Duration.ofSeconds(5)),
                 new ContestProperties(Duration.ofSeconds(2), 500,

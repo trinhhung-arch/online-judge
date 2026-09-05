@@ -72,6 +72,19 @@ public class IdentityException extends DomainException {
                 "IP bị khoá đăng nhập tạm thời", conLai);
     }
 
+    /**
+     * FR-AUTH-01 · chống tạo tài khoản hàng loạt.
+     *
+     * <p>Câu chữ công khai KHÔNG nói ngưỡng là bao nhiêu và đã dùng hết mấy lượt. Nói ra là
+     * đưa cho người viết bot đúng thông số họ cần để rải đều dưới ngưỡng.
+     */
+    public static IdentityException quaNhieuDangKy(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.dang_ky_qua_nhieu",
+                "Đã tạo quá nhiều tài khoản từ địa chỉ này. Thử lại sau "
+                        + Math.max(1, conLai.toMinutes()) + " phút.",
+                "IP chạm giới hạn đăng ký", conLai);
+    }
+
     // -------------------------------------------------------------------------
     // Phiên
     // -------------------------------------------------------------------------

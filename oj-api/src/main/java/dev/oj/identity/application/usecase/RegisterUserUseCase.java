@@ -1,6 +1,7 @@
 package dev.oj.identity.application.usecase;
 
 import dev.oj.identity.application.port.PasswordHasher;
+import dev.oj.identity.application.port.RegistrationRateLimiter;
 import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.domain.IdentityException;
 import dev.oj.identity.domain.PasswordPolicy;
@@ -34,15 +35,30 @@ public class RegisterUserUseCase {
     private final UserRepository users;
     private final PasswordHasher hasher;
     private final AuditLog auditLog;
+    private final RegistrationRateLimiter rateLimiter;
 
-    public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, AuditLog auditLog) {
+    public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, AuditLog auditLog,
+                               RegistrationRateLimiter rateLimiter) {
         this.users = users;
         this.hasher = hasher;
         this.auditLog = auditLog;
+        this.rateLimiter = rateLimiter;
     }
 
-    /** @return {@code users.id} vừa tạo */
-    public long thucHien(String handle, String email, String tenHienThi, String matKhau) {
+    /**
+     * @param clientIp {@code ClientIp.cua(request)} — dùng để đếm, không lưu vào bảng nào
+     * @return {@code users.id} vừa tạo
+     */
+    public long thucHien(String handle, String email, String tenHienThi, String matKhau,
+                         String clientIp) {
+        // ★ ĐẾM TRƯỚC MỌI THỨ, kể cả trước khi kiểm định dạng.
+        //
+        // Đặt sau phần kiểm sẽ biến chính phần kiểm thành cửa miễn phí: một bot dò xem handle
+        // nào còn trống chỉ cần gửi email sai định dạng là không bị đếm, mà vẫn nhận được câu
+        // trả lời "handle này đã có người dùng". Lượt hỏng cũng tốn tài nguyên và cũng rò rỉ
+        // thông tin, nên lượt hỏng cũng phải trả giá.
+        rateLimiter.kiemVaGhiNhan(clientIp);
+
         User.kiemTraHandle(handle);
         User.kiemTraEmail(email);
         User.kiemTraTenHienThi(tenHienThi);

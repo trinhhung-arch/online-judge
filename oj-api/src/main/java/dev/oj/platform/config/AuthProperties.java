@@ -26,6 +26,19 @@ import java.time.Duration;
  * @param maxLoginFailures FR-AUTH-08 — 5 lần sai
  * @param loginWindow      FR-AUTH-08 — trong 1 phút
  * @param lockout          FR-AUTH-08 — khoá 15 phút
+ *
+ * <h2>★ Hai con số đăng ký KHÔNG nằm trong bảng đã chốt — chúng mới, và chúng phải chỉnh được</h2>
+ * Bảy con số phía trên là hợp đồng: đổi là phải hỏi người. Hai con số dưới đây thì ngược lại,
+ * và lý do rất cụ thể: <b>một lớp học ngồi sau cùng một NAT là một IP duy nhất</b>. Ba mươi
+ * học sinh đăng ký trong mười phút là hành vi hoàn toàn bình thường và nhìn giống hệt một bot.
+ *
+ * <p>Không có con số nào đúng cho cả hai tình huống. Mặc định 10 lượt/giờ chặn được việc tạo
+ * tài khoản hàng loạt mà không phiền người dùng lẻ; buổi nào có lớp thì nâng bằng biến môi
+ * trường {@code OJ_MAX_REGISTRATIONS_PER_IP} rồi hạ lại. Đó là một quyết định vận hành, không
+ * phải một hằng số của hệ thống.
+ *
+ * @param maxRegistrationsPerIp số tài khoản tối đa tạo được từ một IP trong một cửa sổ
+ * @param registrationWindow    độ dài cửa sổ ấy
  */
 public record AuthProperties(
         String jwtSecret,
@@ -34,7 +47,9 @@ public record AuthProperties(
         int bcryptCost,
         int maxLoginFailures,
         Duration loginWindow,
-        Duration lockout) {
+        Duration lockout,
+        int maxRegistrationsPerIp,
+        Duration registrationWindow) {
 
 public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -74,6 +89,18 @@ public AuthProperties {
                             + "Nhận được " + maxLoginFailures + " lần / " + loginWindow
                             + " / khoá " + lockout + ". Đây là một dòng trong bảng giới hạn "
                             + "của oj-api/CLAUDE.md mục 8 — đổi là phải hỏi người");
+        }
+        if (maxRegistrationsPerIp < 1) {
+            throw new IllegalStateException(
+                    "oj.auth.max-registrations-per-ip = " + maxRegistrationsPerIp
+                            + ". Nhỏ hơn 1 nghĩa là không ai đăng ký được — muốn đóng hẳn cửa "
+                            + "đăng ký thì đó là một công tắc system_settings, không phải một "
+                            + "giới hạn tốc độ đặt bằng 0");
+        }
+        if (registrationWindow == null || registrationWindow.isZero()
+                || registrationWindow.isNegative()) {
+            throw new IllegalStateException(
+                    "oj.auth.registration-window = " + registrationWindow + " không hợp lệ");
         }
     }
 }

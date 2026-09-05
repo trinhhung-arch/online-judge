@@ -229,6 +229,36 @@ oj:
     # Thiếu biến môi trường này thì API không khởi động được — đó là hành vi đúng.
     shared-secret: ${OJ_INTERNAL_SHARED_SECRET}
 
+  security-headers:
+    # Gắn vào MỌI response. Xem SecurityHeadersProperties để biết vì sao từng directive
+    # có mặt — chuỗi này viết từ việc quét toàn bộ static/, không phải chép từ blog.
+    #
+    # ⚠️ Sửa nó là phải MỞ TRANG THẬT LÊN XEM CONSOLE. Một directive thiếu không làm
+    #    server báo lỗi: trang vẫn trả 200, tài nguyên bị chặn lặng lẽ.
+    #
+    #   script-src KHÔNG có 'unsafe-inline' — static/ không có script nội tuyến nào, và
+    #     giữ được điều đó là điều kiện để cả chính sách này có giá trị. Thêm một
+    #     <script> nội tuyến là buộc phải nới, và nới là mất tác dụng chặn XSS.
+    #   style-src-attr 'unsafe-inline' — KaTeX sinh thuộc tính style lúc chạy. Không có
+    #     dòng này thì công thức toán vỡ hình. Nó KHÔNG nới lỏng script-src.
+    #   cdn.jsdelivr.net — KaTeX, đã có integrity= (SRI) ở cả bốn thẻ trong problem.html.
+    content-security-policy: >-
+      default-src 'none';
+      script-src 'self' https://cdn.jsdelivr.net;
+      style-src 'self' https://cdn.jsdelivr.net;
+      style-src-attr 'unsafe-inline';
+      font-src https://cdn.jsdelivr.net;
+      img-src 'self' data:;
+      connect-src 'self';
+      form-action 'self';
+      base-uri 'none';
+      frame-ancestors 'none';
+      object-src 'none'
+    # 0 = TẮT, và đó là mặc định đúng cho máy dev. Trình duyệt NHỚ HSTS kể cả sau khi
+    # header biến mất, nên bật nhầm trên http://localhost là tự khoá mình khỏi máy dev.
+    # Chỉ đặt OJ_HSTS_MAX_AGE=31536000 khi đã có HTTPS thật trên tên miền thật.
+    hsts-max-age: ${OJ_HSTS_MAX_AGE:0s}
+
   auth:
     # Bước 4.5 — FR-AUTH-02, FR-AUTH-08.
     # Cùng lý do với shared-secret: không có giá trị mặc định. Một khoá ký mặc định
@@ -240,6 +270,12 @@ oj:
     max-login-failures: 5         # FR-AUTH-08 — bảng giới hạn, oj-api/CLAUDE.md mục 8
     login-window: 60s             # FR-AUTH-08
     lockout: 15m                  # FR-AUTH-08
+    # ★ HAI DÒNG NÀY CHỈNH ĐƯỢC, khác bảy dòng trên. Một lớp học sau NAT là MỘT IP:
+    # ba mươi học sinh đăng ký trong mười phút nhìn giống hệt một bot. Buổi nào có lớp
+    # thì nâng OJ_MAX_REGISTRATIONS_PER_IP rồi hạ lại — quyết định vận hành, không phải
+    # hằng số hệ thống. Xem javadoc AuthProperties.
+    max-registrations-per-ip: ${OJ_MAX_REGISTRATIONS_PER_IP:10}
+    registration-window: 1h
 
   jobs:
     # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của

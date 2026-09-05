@@ -43,6 +43,7 @@ public record AppProperties(
         Page page,
         Internal internal,
         Sse sse,
+        SecurityHeadersProperties securityHeaders,
         AuthProperties auth,
         Jobs jobs,
         ContestProperties contest,

@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -36,6 +37,7 @@ class IdentityUseCasesTest {
     private IdentityFakes.LanThuGia lanThu;
     private IdentityFakes.NhatKyGia nhatKy;
     private IdentityFakes.BamGia hasher;
+    private IdentityFakes.ChanDangKyGia chanDangKy;
     private SessionIssuer phatPhien;
     private AppProperties props;
 
@@ -44,6 +46,7 @@ class IdentityUseCasesTest {
         users = new IdentityFakes.UsersGia();
         tokens = new IdentityFakes.TokensGia();
         lanThu = new IdentityFakes.LanThuGia();
+        chanDangKy = new IdentityFakes.ChanDangKyGia();
         nhatKy = new IdentityFakes.NhatKyGia();
         hasher = new IdentityFakes.BamGia();
         props = IdentityFakes.properties();
@@ -69,13 +72,13 @@ class IdentityUseCasesTest {
     class DangKy {
 
         private RegisterUserUseCase useCase() {
-            return new RegisterUserUseCase(users, hasher, nhatKy);
+            return new RegisterUserUseCase(users, hasher, nhatKy, chanDangKy);
         }
 
         @Test
         @DisplayName("★ vai trò LUÔN là USER — không có tham số nào đổi được điều đó")
         void luon_la_user() {
-            long id = useCase().thucHien("nguoi-moi", "moi@oj.test", "Người mới", "matkhau-tot-123");
+            long id = useCase().thucHien("nguoi-moi", "moi@oj.test", "Người mới", "matkhau-tot-123", IP);
 
             assertThat(users.timTheoId(id)).get()
                     .extracting("role").isEqualTo(Role.USER);
@@ -84,7 +87,7 @@ class IdentityUseCasesTest {
         @Test
         @DisplayName("mật khẩu được băm, không bao giờ lưu nguyên văn")
         void mat_khau_duoc_bam() {
-            long id = useCase().thucHien("a-b-c", "abc@oj.test", "ABC", "matkhau-tot-123");
+            long id = useCase().thucHien("a-b-c", "abc@oj.test", "ABC", "matkhau-tot-123", IP);
 
             assertThat(users.bamMatKhau.get(id))
                     .isNotEqualTo("matkhau-tot-123")
@@ -95,26 +98,57 @@ class IdentityUseCasesTest {
         @DisplayName("handle sai định dạng, email sai, mật khẩu ngắn — đều là 400 với câu riêng")
         void dau_vao_sai_thi_400() {
             var uc = useCase();
-            assertThatThrownBy(() -> uc.thucHien("ab", "a@oj.test", "A", "matkhau-tot-123"))
+            assertThatThrownBy(() -> uc.thucHien("ab", "a@oj.test", "A", "matkhau-tot-123", IP))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.INVALID);
-            assertThatThrownBy(() -> uc.thucHien("hop-le", "khong-phai-email", "A", "matkhau-tot-123"))
+            assertThatThrownBy(() -> uc.thucHien("hop-le", "khong-phai-email", "A", "matkhau-tot-123", IP))
                     .isInstanceOf(IdentityException.class);
-            assertThatThrownBy(() -> uc.thucHien("hop-le", "a@oj.test", "A", "ngan"))
+            assertThatThrownBy(() -> uc.thucHien("hop-le", "a@oj.test", "A", "ngan", IP))
                     .isInstanceOf(IdentityException.class);
         }
 
         @Test
         @DisplayName("trùng handle → 409, và câu chữ nói rõ trùng cái gì")
         void trung_handle_thi_409() {
-            useCase().thucHien("trung", "mot@oj.test", "Một", "matkhau-tot-123");
+            useCase().thucHien("trung", "mot@oj.test", "Một", "matkhau-tot-123", IP);
 
             assertThatThrownBy(() ->
-                    useCase().thucHien("TRUNG", "hai@oj.test", "Hai", "matkhau-tot-123"))
+                    useCase().thucHien("TRUNG", "hai@oj.test", "Hai", "matkhau-tot-123", IP))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.CONFLICT)
                     .hasFieldOrPropertyWithValue("publicMessage",
                             "Tên đăng nhập này đã có người dùng. Hãy chọn Tên đăng nhập khác.");
+        }
+
+        @Test
+        @DisplayName("★ FR-AUTH-01 · quá nhiều lượt từ một IP → 429, kể cả khi lượt đó HỎNG")
+        void qua_nhieu_tu_mot_ip() {
+            chanDangKy.toiDa = 2;
+            var uc = useCase();
+
+            uc.thucHien("nguoi-1", "mot@oj.test", "Một", "matkhau-tot-123", IP);
+            // Lượt thứ hai hỏng vì handle sai định dạng — nhưng nó VẪN được đếm. Nếu không,
+            // một bot chỉ cần gửi handle rác là dò được handle nào còn trống mà không tốn gì.
+            assertThatThrownBy(() -> uc.thucHien("x", "hai@oj.test", "Hai", "matkhau-tot-123", IP))
+                    .isInstanceOf(IdentityException.class)
+                    .hasFieldOrPropertyWithValue("kind", DomainException.Kind.INVALID);
+
+            assertThatThrownBy(() ->
+                    uc.thucHien("nguoi-3", "ba@oj.test", "Ba", "matkhau-tot-123", IP))
+                    .isInstanceOf(IdentityException.class)
+                    .hasFieldOrPropertyWithValue("kind", DomainException.Kind.RATE_LIMITED);
+        }
+
+        @Test
+        @DisplayName("giới hạn tính THEO IP — người ở IP khác không bị vạ lây")
+        void ip_khac_khong_bi_va_lay() {
+            chanDangKy.toiDa = 1;
+            var uc = useCase();
+            uc.thucHien("nguoi-a", "a@oj.test", "A", "matkhau-tot-123", IP);
+
+            assertThatCode(() ->
+                    uc.thucHien("nguoi-b", "b@oj.test", "B", "matkhau-tot-123", "203.0.113.9"))
+                    .doesNotThrowAnyException();
         }
     }
 

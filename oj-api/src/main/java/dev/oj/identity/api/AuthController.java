@@ -54,9 +54,10 @@ public class AuthController {
      * phải sửa gì vào ngày đó.
      */
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> dangKy(@RequestBody AuthRequests.Register body) {
+    public ResponseEntity<Map<String, Object>> dangKy(@RequestBody AuthRequests.Register body,
+                                                     HttpServletRequest request) {
         long id = register.thucHien(body.handle(), body.email(),
-                body.displayName(), body.password());
+                body.displayName(), body.password(), ClientIp.cua(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("userId", id));
     }
 
