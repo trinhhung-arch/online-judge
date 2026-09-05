@@ -53,7 +53,7 @@ class AccountManagementUseCasesTest {
      */
     private dev.oj.identity.application.TotpChecker totpChecker() {
         return new dev.oj.identity.application.TotpChecker(
-                haiLop, new IdentityFakes.MaHoaGia(), hasher,
+                haiLop, new IdentityFakes.MaHoaGia(),
                 java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
     }
     private SessionIssuer phatPhien;
@@ -75,7 +75,7 @@ class AccountManagementUseCasesTest {
 
     private LoginUseCase dangNhap() {
         return new LoginUseCase(users, hasher, lanThu, phatPhien, props,
-                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
+                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker(), (id) -> { });
     }
 
     private long themNguoiDung(String handle, Role role) {

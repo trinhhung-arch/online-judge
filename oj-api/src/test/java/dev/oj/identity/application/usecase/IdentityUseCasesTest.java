@@ -39,13 +39,23 @@ class IdentityUseCasesTest {
     private IdentityFakes.BamGia hasher;
     private IdentityFakes.HaiLopGia haiLop;
 
+    /** Đếm được, và ném được — để đo cả hai nhánh của hàng rào giãn nhịp đăng nhập. */
+    private final java.util.List<Long> gioiHanDaGoi = new java.util.ArrayList<>();
+    private boolean gioiHanNem = false;
+    private final dev.oj.identity.application.port.LoginRateLimiter gioiHanDangNhap = (id) -> {
+        gioiHanDaGoi.add(id);
+        if (gioiHanNem) {
+            throw IdentityException.dangNhapQuaNhanh(java.time.Duration.ofSeconds(2));
+        }
+    };
+
     /**
      * Không bật 2FA cho ai trong các ca cũ, nên nó là một cổng luôn mở — trừ ca 2FA
      * riêng bên dưới, nơi test tự nạp dữ liệu vào `haiLop`.
      */
     private dev.oj.identity.application.TotpChecker totpChecker() {
         return new dev.oj.identity.application.TotpChecker(
-                haiLop, new IdentityFakes.MaHoaGia(), hasher,
+                haiLop, new IdentityFakes.MaHoaGia(),
                 java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
     }
     private IdentityFakes.ChanDangKyGia chanDangKy;
@@ -69,7 +79,7 @@ class IdentityUseCasesTest {
 
     private LoginUseCase dangNhap() {
         return new LoginUseCase(users, hasher, lanThu, phatPhien, props,
-                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
+                Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker(), gioiHanDangNhap);
     }
 
     private long themNguoiDung(String handle, Role role) {
@@ -227,7 +237,7 @@ class IdentityUseCasesTest {
                 }
             };
             var uc = new LoginUseCase(users, hasherDem, lanThu, phatPhien, props,
-                    Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker());
+                    Clock.fixed(BAY_GIO, ZoneOffset.UTC), totpChecker(), gioiHanDangNhap);
 
             assertThatThrownBy(() -> uc.thucHien("khong-ai-ca", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
@@ -339,6 +349,40 @@ class IdentityUseCasesTest {
     }
 
     // =========================================================================
+
+    @Nested
+    @DisplayName("★ Giãn nhịp đăng nhập theo tài khoản")
+    class GianNhipDangNhap {
+
+        @Test
+        @DisplayName("★ chỉ đếm lượt THÀNH CÔNG — nếu không thì ai cũng khoá được người khác")
+        void chi_dem_luot_thanh_cong() {
+            themNguoiDung("nguoi-g", Role.USER);
+
+            assertThatThrownBy(() -> dangNhap().thucHien("nguoi-g", "sai-mat-khau", "curl", IP, null))
+                    .isInstanceOf(IdentityException.class);
+            assertThat(gioiHanDaGoi)
+                    .as("gõ sai mật khẩu của người khác KHÔNG được chạm hàng rào của họ — "
+                            + "nếu chạm thì đây là một công cụ khoá tài khoản, không phải "
+                            + "một hàng rào")
+                    .isEmpty();
+
+            dangNhap().thucHien("nguoi-g", "matkhau-tot-123", "curl", IP, null);
+            assertThat(gioiHanDaGoi).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("hàng rào chặn thì KHÔNG phát phiên")
+        void chan_thi_khong_phat_phien() {
+            themNguoiDung("nguoi-h", Role.USER);
+            gioiHanNem = true;
+
+            assertThatThrownBy(() -> dangNhap().thucHien("nguoi-h", "matkhau-tot-123", "curl", IP, null))
+                    .isInstanceOf(IdentityException.class)
+                    .hasFieldOrPropertyWithValue("kind", DomainException.Kind.RATE_LIMITED)
+                    .hasFieldOrPropertyWithValue("code", "identity.dang_nhap_qua_nhanh");
+        }
+    }
 
     @Nested
     @DisplayName("FR-AUTH-03 · đăng xuất")

@@ -283,6 +283,16 @@ oj:
     # Mặc định BẬT: ADMIN đọc được testdata mọi đề, nên một mật khẩu ADMIN bị lộ là mất
     # chính thứ hệ thống này bán. Tắt được để chạy thử, đừng tắt trên máy công khai.
     require-admin-two-factor: ${OJ_REQUIRE_ADMIN_2FA:true}
+    # ★ Trần CỨNG cho số lần băm BCrypt chạy song song. FR-AUTH-08 chỉ khoá lượt SAI,
+    # nên một bot có tài khoản hợp lệ đăng nhập ĐÚNG liên tục là ăn hết CPU (đo được
+    # 17,5 lượt/giây là trần của cả máy). Vượt trần thì TỪ CHỐI NGAY, không xếp hàng —
+    # xếp hàng là giữ luồng Tomcat và kéo mọi endpoint khác chết theo.
+    bcrypt-concurrency: ${OJ_BCRYPT_CONCURRENCY:4}
+    bcrypt-wait: 150ms
+    # Khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản.
+    # Chỉ áp cho lượt thành công, cố ý: áp cho lượt sai thì ai cũng khoá được người khác
+    # ra ngoài bằng cách gõ sai mật khẩu của họ liên tục.
+    login-min-interval: 2s
 
   jobs:
     # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của

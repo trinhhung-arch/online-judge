@@ -42,10 +42,22 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), authMacDinh(), submissionMacDinh(), headers);
     }
 
+    /** Cho {@code BCryptPasswordHasherTest} — nó đổi cost và trần song song. */
+    public static AppProperties voiBcrypt(int soSuat, Duration cho) {
+        // cost GIỮ NGUYÊN 12: AuthProperties crash nếu khác, và guard đó bảo vệ toàn bộ mật
+        // khẩu đã băm trong database. Test này đo hàng rào, và nó chịu được 250ms mỗi lần băm.
+        var auth = new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
+                12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
+                10, Duration.ofHours(1), "t".repeat(32), true,
+                soSuat, cho, Duration.ofSeconds(2));
+        return voi(internalMacDinh(), auth, submissionMacDinh());
+    }
+
     public static AuthProperties authMacDinh() {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
-                10, Duration.ofHours(1), "t".repeat(32), true);
+                10, Duration.ofHours(1), "t".repeat(32), true,
+                4, Duration.ofMillis(150), Duration.ofSeconds(2));
     }
 
     private static AppProperties.Submission submissionMacDinh() {

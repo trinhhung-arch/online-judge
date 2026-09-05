@@ -6,6 +6,7 @@ import dev.oj.identity.application.port.SecretCipher;
 import dev.oj.identity.application.port.TwoFactorRepository;
 import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.domain.IdentityException;
+import dev.oj.identity.domain.MaDuPhong;
 import dev.oj.identity.domain.Totp;
 import dev.oj.platform.audit.AuditLog;
 import dev.oj.platform.security.CurrentUserProvider;
@@ -13,7 +14,6 @@ import dev.oj.platform.security.RequiresRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,12 +38,7 @@ import java.util.Map;
 @Service
 public class TwoFactorUseCase {
 
-    /** Đủ dài để không dò được, đủ ngắn để chép tay. Base32 nên không có ký tự dễ nhầm. */
     private static final int SO_MA_DU_PHONG = 10;
-    private static final int DO_DAI_MA_DU_PHONG = 10;
-    private static final char[] BANG = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".toCharArray();
-
-    private static final SecureRandom NGAU_NHIEN = new SecureRandom();
 
     private final CurrentUserProvider currentUser;
     private final UserRepository users;
@@ -121,7 +116,7 @@ public class TwoFactorUseCase {
 
         List<String> maDuPhong = sinhMaDuPhong();
         repository.thayMaDuPhong(nguoi.id(),
-                maDuPhong.stream().map(hasher::bam).toList());
+                maDuPhong.stream().map(MaDuPhong::bam).toList());
         auditLog.ghi("TWO_FACTOR_ENABLED", "user", nguoi.id(), Map.of());
         return maDuPhong;
     }
@@ -163,11 +158,7 @@ public class TwoFactorUseCase {
     private static List<String> sinhMaDuPhong() {
         List<String> ra = new ArrayList<>(SO_MA_DU_PHONG);
         for (int i = 0; i < SO_MA_DU_PHONG; i++) {
-            StringBuilder sb = new StringBuilder(DO_DAI_MA_DU_PHONG);
-            for (int j = 0; j < DO_DAI_MA_DU_PHONG; j++) {
-                sb.append(BANG[NGAU_NHIEN.nextInt(BANG.length)]);
-            }
-            ra.add(sb.toString());
+            ra.add(MaDuPhong.sinh());
         }
         return ra;
     }

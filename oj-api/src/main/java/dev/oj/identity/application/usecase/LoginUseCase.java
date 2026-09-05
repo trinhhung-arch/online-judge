@@ -3,6 +3,7 @@ package dev.oj.identity.application.usecase;
 import dev.oj.identity.application.SessionIssuer;
 import dev.oj.identity.application.TotpChecker;
 import dev.oj.identity.application.port.LoginAttemptRepository;
+import dev.oj.identity.application.port.LoginRateLimiter;
 import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.UserRepository;
 import dev.oj.identity.domain.Credentials;
@@ -45,17 +46,20 @@ public class LoginUseCase {
     private final PasswordHasher hasher;
     private final LoginAttemptRepository attempts;
     private final TotpChecker totp;
+    private final LoginRateLimiter gioiHan;
     private final SessionIssuer sessions;
     private final AppProperties properties;
     private final Clock clock;
 
     public LoginUseCase(UserRepository users, PasswordHasher hasher,
                         LoginAttemptRepository attempts, SessionIssuer sessions,
-                        AppProperties properties, Clock clock, TotpChecker totp) {
+                        AppProperties properties, Clock clock, TotpChecker totp,
+                        LoginRateLimiter gioiHan) {
         this.users = users;
         this.hasher = hasher;
         this.attempts = attempts;
         this.totp = totp;
+        this.gioiHan = gioiHan;
         this.sessions = sessions;
         this.properties = properties;
         this.clock = clock;
@@ -112,6 +116,16 @@ public class LoginUseCase {
                 throw e;
             }
         }
+
+        // ★ Giãn nhịp SAU khi đã qua cả hai yếu tố — xem javadoc LoginRateLimiter.
+        //
+        // Đặt ở đây chứ không ở đầu hàm là bắt buộc: đầu hàm ta chưa biết người gọi là ai,
+        // và chặn theo chuỗi họ GÕ VÀO nghĩa là bất kỳ ai cũng khoá được người khác ra ngoài
+        // bằng cách gõ handle của họ liên tục. Tới được dòng này thì người gọi đã chứng minh
+        // họ có mật khẩu — đó là tài khoản của chính họ, không có nạn nhân nào để khoá.
+        //
+        // Nó KHÔNG cứu CPU (bcrypt đã chạy xong); trần CPU nằm ở bcrypt-concurrency.
+        gioiHan.kiemVaGhiNhan(c.userId());
 
         attempts.ghiNhan(handleHoacEmail, clientIp, true);
         return sessions.phat(c.userId(), c.handle(), c.role(), userAgent, clientIp, null);

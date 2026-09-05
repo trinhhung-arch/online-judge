@@ -85,6 +85,25 @@ public class IdentityException extends DomainException {
                 "IP chạm giới hạn đăng ký", conLai);
     }
 
+    /**
+     * Quá nhiều lượt băm mật khẩu đang chạy cùng lúc — bỏ tải, không xếp hàng.
+     *
+     * <p>Đây là một câu nói về TẢI, không phải về người gọi: họ không làm gì sai. Nên câu
+     * chữ mời thử lại thay vì trách móc, và {@code retryAfter} ngắn.
+     */
+    public static IdentityException heThongBan(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.he_thong_ban",
+                "Hệ thống đang bận xử lý đăng nhập. Thử lại sau vài giây.",
+                "Chạm trần oj.auth.bcrypt-concurrency", conLai);
+    }
+
+    /** Cùng một tài khoản đăng nhập lại quá nhanh — chỉ áp cho lượt THÀNH CÔNG. */
+    public static IdentityException dangNhapQuaNhanh(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.dang_nhap_qua_nhanh",
+                "Bạn vừa đăng nhập xong. Thử lại sau vài giây.",
+                "Chạm oj.auth.login-min-interval", conLai);
+    }
+
     // -------------------------------------------------------------------------
     // Xác thực hai lớp — V11
     // -------------------------------------------------------------------------

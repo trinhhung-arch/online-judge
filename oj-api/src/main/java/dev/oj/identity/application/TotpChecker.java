@@ -1,9 +1,9 @@
 package dev.oj.identity.application;
 
-import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.SecretCipher;
 import dev.oj.identity.application.port.TwoFactorRepository;
 import dev.oj.identity.domain.IdentityException;
+import dev.oj.identity.domain.MaDuPhong;
 import dev.oj.identity.domain.Totp;
 import dev.oj.identity.domain.TwoFactor;
 import org.springframework.stereotype.Component;
@@ -31,14 +31,11 @@ public class TotpChecker {
 
     private final TwoFactorRepository repository;
     private final SecretCipher cipher;
-    private final PasswordHasher hasher;
     private final Clock clock;
 
-    public TotpChecker(TwoFactorRepository repository, SecretCipher cipher,
-                       PasswordHasher hasher, Clock clock) {
+    public TotpChecker(TwoFactorRepository repository, SecretCipher cipher, Clock clock) {
         this.repository = repository;
         this.cipher = cipher;
-        this.hasher = hasher;
         this.clock = clock;
     }
 
@@ -75,7 +72,7 @@ public class TotpChecker {
         }
 
         for (TwoFactorRepository.MaDuPhong m : repository.maDuPhongChuaDung(userId)) {
-            if (hasher.khop(gon, m.codeHash())) {
+            if (MaDuPhong.khop(gon, m.codeHash())) {
                 repository.danhDauDaDung(m.id());
                 return;
             }

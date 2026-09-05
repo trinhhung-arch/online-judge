@@ -43,7 +43,7 @@ class TwoFactorUseCaseTest {
     }
 
     private TotpChecker checker() {
-        return new TotpChecker(haiLop, maHoa, hasher, Clock.fixed(BAY_GIO, ZoneOffset.UTC));
+        return new TotpChecker(haiLop, maHoa, Clock.fixed(BAY_GIO, ZoneOffset.UTC));
     }
 
     private TwoFactorUseCase useCase() {
@@ -205,7 +205,7 @@ class TwoFactorUseCaseTest {
             // Bước tiếp theo nên cần một mã của bước khác — đẩy đồng hồ đi 30 giây.
             var ucSau = new TwoFactorUseCase(IdentityFakes.nguoiGoi(userId, Role.ADMIN), users,
                     haiLop, maHoa, hasher,
-                    new TotpChecker(haiLop, maHoa, hasher,
+                    new TotpChecker(haiLop, maHoa,
                             Clock.fixed(BAY_GIO.plusSeconds(60), ZoneOffset.UTC)),
                     nhatKy, Clock.fixed(BAY_GIO.plusSeconds(60), ZoneOffset.UTC));
 

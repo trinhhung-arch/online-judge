@@ -51,6 +51,24 @@ import java.time.Duration;
  *
  * @param totpKey               khoá mã hoá bí mật TOTP. Đọc từ env, tối thiểu 32 ký tự
  * @param requireAdminTwoFactor ép ADMIN phải bật 2FA mới dùng được quyền ADMIN
+ *
+ * <h2>★ Hai con số chống làm nghẽn CPU bằng chính đường đăng nhập</h2>
+ * BCrypt cost 12 tốn ~250ms CPU mỗi lần, và {@code FR-AUTH-08} chỉ khoá các lượt <b>SAI</b>.
+ * Một bot có 1 000 tài khoản hợp lệ chỉ cần đăng nhập ĐÚNG liên tục là ăn hết CPU — nó không
+ * phải đoán gì cả, vì chính nó đặt mật khẩu lúc đăng ký. Đo trên máy chấm chuẩn ngày
+ * 2026-09-05: <b>17,5 lượt/giây là trần của cả máy</b>, và lúc ấy chấm bài đứng.
+ *
+ * <p>{@code bcryptConcurrency} là trần CỨNG cho số lần băm chạy song song. Vượt trần thì
+ * request bị TỪ CHỐI NGAY (429) chứ không xếp hàng: xếp hàng nghĩa là giữ luồng Tomcat, và
+ * 200 luồng bị giữ thì mọi endpoint khác cũng chết theo — đúng thứ hàng rào này sinh ra để
+ * ngăn. Bỏ tải là cách duy nhất giữ cho đọc đề và chấm bài còn thở.
+ *
+ * <p>4 trên máy 8 P-core: đăng nhập không bao giờ chiếm quá nửa số core.
+ *
+ * @param bcryptConcurrency số lần băm BCrypt được chạy song song
+ * @param bcryptWait        chờ tối đa ngần này để xin một suất, hết thì trả 429
+ * @param loginMinInterval  khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của
+ *                          cùng một tài khoản
  */
 public record AuthProperties(
         String jwtSecret,
@@ -63,7 +81,10 @@ public record AuthProperties(
         int maxRegistrationsPerIp,
         Duration registrationWindow,
         String totpKey,
-        boolean requireAdminTwoFactor) {
+        boolean requireAdminTwoFactor,
+        int bcryptConcurrency,
+        Duration bcryptWait,
+        Duration loginMinInterval) {
 
 public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -124,6 +145,17 @@ public AuthProperties {
         }
         if (totpKey.length() < 32) {
             throw new IllegalStateException("OJ_TOTP_KEY quá ngắn (cần >= 32 ký tự)");
+        }
+        if (bcryptConcurrency < 1) {
+            throw new IllegalStateException(
+                    "oj.auth.bcrypt-concurrency = " + bcryptConcurrency + ". Nhỏ hơn 1 nghĩa "
+                            + "là không ai đăng nhập được");
+        }
+        if (bcryptWait == null || bcryptWait.isNegative()) {
+            throw new IllegalStateException("oj.auth.bcrypt-wait không hợp lệ");
+        }
+        if (loginMinInterval == null || loginMinInterval.isNegative()) {
+            throw new IllegalStateException("oj.auth.login-min-interval không hợp lệ");
         }
         if (totpKey.equals(jwtSecret)) {
             throw new IllegalStateException(

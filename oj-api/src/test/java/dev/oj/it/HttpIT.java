@@ -82,7 +82,31 @@ public abstract class HttpIT extends PostgresIT {
      * {@code IdentityHttpIT} — một chỗ, đo kỹ, thay vì rải khắp nơi rồi hỏng vì chống phát
      * lại của chính nó.
      */
+    /**
+     * ★ NHỚ token trong phạm vi một test, xoá giữa các test.
+     *
+     * <p>Hai lý do, và lý do thứ hai là lý do bắt buộc:
+     * <ol>
+     *   <li>Mỗi lượt đăng nhập tốn ~250ms BCrypt. Một IT gọi {@code tokenCua} cho từng
+     *       request thì phần lớn thời gian chạy là băm lại cùng một mật khẩu.</li>
+     *   <li>{@code oj.auth.login-min-interval} giãn hai lượt đăng nhập THÀNH CÔNG của cùng
+     *       một tài khoản. Đăng nhập lại cho mỗi request là chạm hàng rào ấy và nhận 429 —
+     *       đúng như một client thật sẽ nhận nếu nó cũng làm thế. Client thật đăng nhập một
+     *       lần rồi dùng lại token; test nên làm giống.</li>
+     * </ol>
+     */
+    private final java.util.Map<String, String> tokenDaLay = new java.util.HashMap<>();
+
+    @org.junit.jupiter.api.BeforeEach
+    void quenTokenCu() {
+        tokenDaLay.clear();
+    }
+
     protected String tokenCua(String handle) {
+        return tokenDaLay.computeIfAbsent(handle, this::layTokenMoi);
+    }
+
+    private String layTokenMoi(String handle) {
         if ("admin".equals(handle)) {
             return bearer(ADMIN_ID, "admin", Role.ADMIN).substring("Bearer ".length());
         }

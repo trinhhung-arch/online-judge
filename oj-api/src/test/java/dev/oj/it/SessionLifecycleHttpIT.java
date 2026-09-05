@@ -72,6 +72,12 @@ class SessionLifecycleHttpIT extends HttpIT {
 
             assertThat(login("dev", MAT_KHAU_DEV).getStatusCode())
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
+
+            // Ca này nén cả một luồng của người dùng vào chưa tới hai giây: đăng nhập, đổi
+            // mật khẩu, rồi đăng nhập lại. Người thật mất hàng phút cho đoạn ấy nên không
+            // chạm oj.auth.login-min-interval; test thì chạm. Tua đồng hồ, không nới chốt.
+            quenLuotDangNhapVuaRoi(USER_ID);
+
             assertThat(login("dev", "mat-khau-hoan-toan-moi").getStatusCode())
                     .isEqualTo(HttpStatus.OK);
         }

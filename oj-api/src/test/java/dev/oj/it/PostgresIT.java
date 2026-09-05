@@ -281,6 +281,18 @@ public abstract class PostgresIT {
         redis.delete(ResetGiuaCacTest.KHOA_RATE_LIMIT + userId);
     }
 
+    /**
+     * Xoá dấu vết lượt đăng nhập THÀNH CÔNG vừa rồi — đúng như thể
+     * {@code oj.auth.login-min-interval} đã trôi qua.
+     *
+     * <p>Cùng lý do với {@link #quenLuotNopVuaRoi}: chốt vẫn chạy với con số thật, chỉ có
+     * đồng hồ là được tua. Người thật không chạm hàng rào này (họ đăng nhập một lần rồi làm
+     * việc hàng phút), còn một IT thì nén cả luồng vào hai giây.
+     */
+    protected void quenLuotDangNhapVuaRoi(long userId) {
+        redis.delete("oj:ratelimit:login:" + userId);
+    }
+
     /** Id của đề {@code A-PLUS-B} trong {@code db/dev-seed}. */
     protected static final long PROBLEM_ID = 1L;
 
