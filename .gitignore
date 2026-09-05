@@ -45,3 +45,7 @@ bin/
 .env
 .env.local
 scripts/.secrets-dev
+
+# Credentials của Cloudflare Tunnel. File thật sống ở ~/.cloudflared/ và KHÔNG bao giờ
+# vào repo — nhưng người ta hay chép nó cạnh config.yml cho tiện. Chặn sẵn ở đây.
+infra/cloudflared/*.json

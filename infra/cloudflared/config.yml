@@ -1,0 +1,69 @@
+# =============================================================================
+# Cloudflare Tunnel — LỚP PHÒNG THỦ THỨ NHẤT của /internal/**
+#
+#   Điền ba chỗ <...> rồi chép tới ~/.cloudflared/config.yml
+#   Dựng xong BẮT BUỘC chạy:  ./scripts/kiem-tunnel.sh <tên-miền>
+#
+# ★ VÌ SAO FILE NÀY QUAN TRỌNG HƠN VẺ NGOÀI CỦA NÓ
+# `InternalSecretFilter` tự gọi mình là "lớp phòng thủ thứ HAI, không phải thứ nhất", và
+# lớp thứ nhất chính là file này. Ai qua được /internal/judge/result thì GHI ĐƯỢC VERDICT
+# CHO BẤT KỲ BÀI NỘP NÀO — đó là toàn bộ tính công bằng của hệ thống nằm sau một chuỗi
+# 64 ký tự.
+#
+# ★ THỨ TỰ LUẬT LÀ NGỮ NGHĨA, KHÔNG PHẢI THẨM MỸ
+# cloudflared khớp TỪ TRÊN XUỐNG và dừng ở luật đầu tiên trúng. Luật chặn phải nằm TRƯỚC
+# luật bắt-tất-cả. Đảo hai khối dưới đây là mở /internal ra internet, và không có gì báo
+# lỗi cả — tunnel vẫn lên, trang vẫn chạy, chỉ có một cánh cửa mở thêm mà không ai thấy.
+#
+# ★ KHÔNG BAO GIỜ CÓ MỘT DÒNG NÀO TRỎ VỀ localhost:8081
+# Đó là cổng actuator (`management.server.port`), và nó bật `show-details: always` +
+# `show-components: always` — an toàn CHỈ VÌ nó nghe nội bộ. Lộ ra là công bố tình trạng
+# từng thành phần hạ tầng cho người lạ.
+# =============================================================================
+
+tunnel: <TUNNEL_ID>
+credentials-file: <HOME>/.cloudflared/<TUNNEL_ID>.json
+
+# Nhật ký ở mức info để dòng "unregistered tunnel connection" nhìn thấy được khi mạng chập.
+loglevel: info
+
+ingress:
+  # ---------------------------------------------------------------------------
+  # 1 · CHẶN — phải đứng đầu
+  # ---------------------------------------------------------------------------
+
+  # Cửa của worker. Worker KHÔNG đi qua tunnel: nó chạy trên chính máy này và gọi
+  # http://localhost:8080 trực tiếp, nên chặn ở đây không cắt gì của nó.
+  #
+  # http_status:404 chứ không phải 403: 403 xác nhận "đường dẫn này có thật".
+  - hostname: <TEN_MIEN>
+    path: ^/internal(/|$)
+    service: http_status:404
+
+  # Actuator nghe ở cổng 8081 nên /actuator trên 8080 vốn đã 404. Luật này là để phòng
+  # ngày ai đó gỡ `management.server.port` — lúc ấy actuator rơi về 8080 và đi thẳng ra
+  # internet mà không ai sửa gì ở đây cả.
+  - hostname: <TEN_MIEN>
+    path: ^/actuator(/|$)
+    service: http_status:404
+
+  # ---------------------------------------------------------------------------
+  # 2 · CHO QUA — /api/v1/** và file tĩnh
+  # ---------------------------------------------------------------------------
+  #
+  # Đây cố ý là danh sách CHẶN chứ không phải danh sách CHO PHÉP, ngược với thói quen
+  # của dự án (xem ZipTestdataValidator). Lý do: phần công khai còn mọc thêm —
+  # robots.txt, sitemap.xml, favicon.ico cho SEO. Một allowlist sẽ lặng lẽ 404 chúng,
+  # và triệu chứng là "Google không index" — thứ mất hàng tuần mới nhận ra.
+  #
+  # Bề mặt thật trên cổng 8080 (grep '@RequestMapping' ngày 2026-09-05):
+  #   /api/v1/**          công khai, có JWT + @RequiresRole ở use-case
+  #   /internal/judge/**  đã chặn ở trên
+  #   /*.html /js /css    file tĩnh
+  - hostname: <TEN_MIEN>
+    service: http://localhost:8080
+
+  # ---------------------------------------------------------------------------
+  # 3 · Bắt buộc phải có, cloudflared từ chối khởi động nếu thiếu
+  # ---------------------------------------------------------------------------
+  - service: http_status:404
