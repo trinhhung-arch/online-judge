@@ -75,7 +75,7 @@ Giữa các module (một chiều, không có ngoại lệ):
 
     identity ──▶ problems ──▶ judging ──▶ contests
                                  ▲
-                              ai (AI review)
+                              ai (AI review)   ⚠️ CHƯA TỒN TẠI — tuần 14–15
 
     platform (config, error, security) ◀── ai cũng import được
 

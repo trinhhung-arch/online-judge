@@ -318,19 +318,27 @@ tầng biến mất khỏi mọi biểu đồ theo dõi.
 `nfrplan.md` 9.1 nói rõ: *một con số thời gian không kèm tên máy là một con số vô nghĩa*.
 Chúng dùng để **kiểm đúng/sai**, không dùng để đặt giới hạn thời gian cho đề.
 
-Máy chấm chuẩn là `mac-m1max-host` (arm64, 6 slot, `host_factor = 1.000` theo định nghĩa) —
-**chưa được deploy**, nên cột phải còn trống. Deploy xong thì chạy lại cùng phép đo, điền vào,
-và đặt `OJ_HOST_REFERENCE_CPU_MS` bằng con số ở dòng "tải chuẩn".
+Máy chấm chuẩn là `mac-m1max-host` (arm64, 6 slot, `host_factor = 1.000` theo định nghĩa).
+**Đã deploy và hiệu chuẩn ngày 2026-09-05** — container `oj-worker:arm64`, 7/7 ca kiểm bên
+trong container xanh, `OJ_HOST_REFERENCE_CPU_MS=461`.
 
-| Phép đo | Máy dev (WSL2, i7-9850H, 12 luồng, 7GB) | Máy chấm chuẩn (M1 Max, chưa đo) |
+| Phép đo | Máy dev (WSL2, i7-9850H, 12 luồng, 7GB) | **Máy chấm chuẩn** (M1 Max, arm64) |
 |---|---|---|
-| `isolate` | 2.6, cgroup v2, subuid | |
-| **Tải chuẩn `HostBenchmark`** (trung vị 5 lần) | **630 ms CPU** | |
-| Biên dịch A+B (`bits/stdc++.h`, `-O2 -static`) | 2,83 s CPU · đỉnh 229 MB | |
-| Chạy A+B | ~3 ms CPU · 1,6 MB | |
-| `--cleanup` + `--init` một box | ~5 ms | |
-| 14 test tấn công, cả bộ | 12,7 s | |
-| 9 ca đường chấm thật | 14,6 s | |
+| `isolate` | 2.6, cgroup v2, subuid | 2.6, cgroup v2, subuid ✔ |
+| **Tải chuẩn `HostBenchmark`** | **630 ms CPU** (trung vị 5 lần) | **461 ms CPU** (2 mẫu lạnh: 461 · 462, lệch 0,2%) |
+| Biên dịch A+B (`bits/stdc++.h`, `-O2 -static`) | 2,83 s CPU · đỉnh 229 MB | chưa đo riêng |
+| Chạy A+B | ~3 ms CPU · 1,6 MB | 1–2 ms (đọc từ `judge_runs.time_ms`) |
+| `--cleanup` + `--init` một box | ~5 ms | chưa đo riêng |
+| 14 test tấn công, cả bộ | 12,7 s | **5,6 s** (`kiem-sandbox.sh`, 14/14) |
+| 9 ca đường chấm thật | 14,6 s | chưa đo riêng |
+| Năng lực chấm (6 slot, source duy nhất) | chưa đo | **~350 bài/phút = 5,8 bài/s** |
+
+> **Vì sao mốc là 461 chứ không phải 462.** `host_factor = đo / mốc`, nên mốc thấp hơn cho hệ
+> số ≥ 1, tức giới hạn thời gian rộng hơn một chút — lệch về phía **không TLE oan**. Hai mẫu
+> chỉ cách nhau 0,2%, dưới xa ngưỡng cảnh báo trôi 8%.
+>
+> **Ô "chưa đo riêng" là thật, không phải quên.** Bốn con số ấy đo bằng tay trên máy dev; trên
+> máy chấm chúng chưa được tách ra khỏi phép đo tổng. Đừng điền số ước lượng vào đó.
 
 **Cách đo lại trên một máy bất kỳ:**
 

@@ -274,17 +274,21 @@ Tuần 12: chạy worker đồng thời trên **Mac host + WSL của người A 
 
 ### 5.2 — Bảng chaos test (chạy cuối mỗi mốc, không phải chỉ tuần 12)
 
-| Kịch bản | Kỳ vọng | Mốc bắt đầu test |
-|---|---|---|
-| Kill API giữa lúc submit | Đã commit thì còn; chưa commit thì user thấy lỗi rõ ràng và nộp lại được | M1 |
-| Kill worker giữa lúc chấm | Sau 120s bài về `QUEUED` và được chấm lại | M1 |
-| Chạy 2 worker, nộp 20 bài | Không bài nào bị chấm 2 lần | M1 |
-| **Kill RabbitMQ** | API vẫn nhận bài (ghi DB thành công), reaper nhặt lại khi queue sống lại | M6 |
-| **Kill Redis** | Leaderboard sai tạm thời → rebuild từ Postgres. Không mất bài, không sai verdict | M5 |
-| Kill Postgres | Toàn hệ thống dừng. **Chấp nhận** — SPOF duy nhất, đã ghi vào ADR | M6 |
-| Đầy disk trên Mac | Alert ở 80%, hệ thống từ chối nộp bài mới ở 95% thay vì hỏng dữ liệu | M6 |
-| Mất điện host | `pmset autorestart` + docker `restart: unless-stopped` → tự lên lại | M6 |
-| Mạng nhà đứt 5 phút | Tunnel tự reconnect, bài đang chấm không mất | M6 |
+| Kịch bản | Kỳ vọng | Mốc | Test tự động |
+|---|---|---|---|
+| Kill API giữa lúc submit | Đã commit thì còn; chưa commit thì user thấy lỗi rõ ràng và nộp lại được | M1 | ✅ `KillApiDuringSubmitIT` |
+| Kill worker giữa lúc chấm | Sau 120s bài về `QUEUED` và được chấm lại | M1 | ✅ `KillWorkerMidJudgeIT` |
+| Chạy 2 worker, nộp 20 bài | Không bài nào bị chấm 2 lần | M1 | ✅ `TwoWorkersNoDoubleJudgeIT` |
+| **Kill RabbitMQ** | API vẫn nhận bài (ghi DB thành công), reaper nhặt lại khi queue sống lại | M6 | ✅ `PublishFailsButReaperRecoversIT` |
+| **Kill Redis** | Leaderboard sai tạm thời → rebuild từ Postgres. Không mất bài, không sai verdict | M5 | ✅ `SuyGiamIT` |
+| Kill Postgres | Toàn hệ thống dừng. **Chấp nhận** — SPOF duy nhất, đã ghi vào ADR | M6 | ❌ diễn tập tay |
+| Đầy disk trên Mac | Alert ở 80%, hệ thống từ chối nộp bài mới ở 95% thay vì hỏng dữ liệu | M6 | ❌ **chưa làm** |
+| Mất điện host | `pmset autorestart` + docker `restart: unless-stopped` → tự lên lại | M6 | ❌ diễn tập tay |
+| Mạng nhà đứt 5 phút | Tunnel tự reconnect, bài đang chấm không mất | M6 | ❌ **chưa dựng tunnel** |
+
+> **Bốn dòng dưới là kịch bản vận hành, không phải test đơn vị** — không tự động hoá được
+> trong bộ IT. Ba trong bốn cần một buổi diễn tập có bấm giờ; riêng "đầy disk" là thứ **chưa
+> ai làm gì cả**, kể cả cảnh báo ở 80%.
 
 > Kịch bản "kill RabbitMQ" là bài test quan trọng nhất sau khi đổi sang RabbitMQ ở M6. Nó chứng minh queue chỉ là đường dẫn, không phải kho chứa.
 

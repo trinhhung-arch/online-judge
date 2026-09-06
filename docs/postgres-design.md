@@ -50,14 +50,18 @@ users ──┬──< submissions >──── problems ──< testdata_versi
         │        │            └──* judge_run_subtasks
         │        └──1 source_blobs          (khử trùng lặp theo sha256)
         │
-        ├──< refresh_tokens · login_attempts
+        ├──< refresh_tokens · login_attempts · login_lockouts
+        ├──1 user_two_factor ──< user_scratch_code       (V11 — 2FA, FR-AUTH-10)
         ├──< contest_registrations >── contests ──< contest_problems >── problems
         │                                   └──< contest_standings ──< contest_problem_standings
-        │                                   └──< contest_standings_frozen (ảnh chụp lúc freeze)
-        ├──< ai_reviews · ai_quota_usage
+        │                                   └──< contest_standings_frozen ──< contest_problem_standings_frozen
+        │                                   └──< standings_drift_checks
+        ├──< ai_reviews · ai_quota_usage                 ← ⚠️ CHƯA TỒN TẠI (tuần 14–15)
         └──< audit_log  (PARTITION BY RANGE theo tháng, append-only)
 
-languages · judge_hosts · host_benchmarks · system_settings · jobs · queue_metrics   (bảng nguội)
+problems ──< problem_tags >── tags               (gắn nhãn đề)
+
+languages · judge_hosts · host_benchmarks · system_settings · jobs · job_events · queue_metrics   (bảng nguội)
 ```
 
 **Đường một chiều cần nhớ:** `ai_reviews → submissions`, không có chiều ngược.
@@ -441,13 +445,25 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 | `V3__submissions_judge_queue_judge_runs.sql` | **M1 — lõi** | `source_blobs` · `submissions` · `judge_queue` · `judge_runs` |
 | `V4__subtasks_va_ket_qua_theo_nhom.sql` | M3 | `subtasks` · `subtask_dependencies` · `judge_run_subtasks` |
 | `V5__auth_refresh_token_va_audit_log.sql` | M4 | `refresh_tokens` · `login_attempts` · `login_lockouts` · `audit_log` (partition) |
-| `V6__contests_va_bang_xep_hang.sql` | M5 | `contests` · `contest_*` · bảng đóng băng · FK `submissions.contest_id` |
-| `V7__jobs_nen_va_van_hanh.sql` | M6 | `jobs` · `job_events` · `queue_metrics` |
-| `V8__ai_review.sql` | tuần 14–15 | `ai_reviews` · `ai_quota_usage` · `ai_usage_daily` |
-| `V9__phan_quyen_role_ung_dung.sql` | M6 | GRANT/REVOKE cho `oj_app` |
+| `V6__jobs_nen_va_van_hanh.sql` | M6 | `jobs` · `job_events` · `queue_metrics` |
+| `V7__contests_va_bang_xep_hang.sql` | M5 | `contests` · `contest_problems` · `contest_registrations` · `contest_standings` · `contest_problem_standings` · hai bảng đóng băng · `standings_drift_checks` |
+| `V8__phan_quyen_role_ung_dung.sql` | M6 | GRANT/REVOKE cho `oj_app` — không tạo bảng |
+| `V9__jobs_mot_job_moi_thuc_the.sql` | M6 | đổi mô hình `jobs` — không tạo bảng |
+| `V10__de_soan_rieng_cho_ky_thi.sql` | M5 | `contest_problems.soan_rieng` — đề sinh ra cho một kỳ thi |
+| `V11__xac_thuc_hai_lop.sql` | M4 (bổ sung) | `user_two_factor` · `user_scratch_code` |
 | `R__seed_du_lieu_tham_chieu.sql` | mọi lúc | 3 ngôn ngữ · máy chấm chuẩn · tag. Thêm ngôn ngữ = sửa file này |
 
 M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án".
+
+> **★ V6 và V7 KHÔNG theo thứ tự mốc, và đó là chuyện bình thường.** Bảng này từng ghi V6 là
+> contests và V7 là jobs — ngược với thực tế. Số hiệu migration theo **thứ tự viết**, không
+> theo thứ tự mốc: `jobs` được kéo lên sớm vì `TestdataImportJob` cần nó trước khi M5 bắt đầu.
+> Đừng sửa số hiệu cho "đẹp theo mốc" — sửa một file đã commit là điều cấm số 6 của
+> `CLAUDE.md`.
+
+> **`V8__ai_review.sql` chưa tồn tại.** Bảng này từng liệt kê nó ở hàng V8; số hiệu ấy đã bị
+> `phan_quyen_role_ung_dung` dùng mất. Khi làm AI review (tuần 14–15), migration đó sẽ mang
+> số kế tiếp còn trống, không phải V8.
 
 ---
 

@@ -43,7 +43,13 @@ rà chéo lịch với `CLAUDE.md`. Mỗi điểm ghi rõ **chốt muộn nhất
 > M1 vẫn chứng minh được đúng thứ nó cần chứng minh: `accept ≠ process`, reaper, khoá lạc quan,
 > 2 worker không chấm trùng, P2 < 300ms. Không thứ nào trong đó cần chạy mã người lạ.
 >
-> `IsolateJudgeRunner` thay chỗ vào **đúng ngày 14/14 test tấn công xanh trong CI**, không sớm hơn một giờ.
+> `IsolateJudgeRunner` thay chỗ vào **đúng ngày 14/14 test tấn công xanh**, không sớm hơn một giờ.
+>
+> **Xanh Ở ĐÂU:** CI Linux (`.github/workflows/sandbox-attack.yml`) **và** trên chính máy chấm
+> chuẩn qua `./scripts/kiem-sandbox.sh`. Hai chỗ, vì chúng chứng minh hai điều khác nhau: CI
+> chứng minh mã đúng, máy chấm chứng minh *cái ảnh đang chạy* đúng. Trên macOS thì
+> `./mvnw verify` KHÔNG chạy được bộ này — `Assumptions.abort()` huỷ cả class và Maven vẫn in
+> BUILD SUCCESS với 0 ca, đọc y hệt "14/14 xanh". Dùng `kiem-sandbox.sh`: nó ĐẾM số ca.
 
 Ngoài ra, **ba con số nằm trong schema, đổi là phải hỏi người**: lease reaper `120s` ·
 quota AI `5/ngày` · giới hạn source `64KB`. Đặt cả ba vào `application.yml` ngay ở M0
@@ -427,7 +433,7 @@ Không có FR mới. Đây là mốc thuần chất lượng, và là **rủi ro
 | **2.7** | `TestdataFetcher` — tải theo `sha256`, cache cục bộ. **Testdata không nằm trong box** — input vào bằng fd thừa hưởng (ADR 010 mục 1). Nguồn xa là `TestdataSource`; MinIO tới ở Bước 4.11 | xong |
 | **2.8** | `scripts/mount-box-tmpfs.sh` cho box dir (8GB RAM disk) | script xong, **chưa chạy** trên host |
 | **2.9** | `HostBenchmark` — chạy lúc khởi động + mỗi 15 phút → ghi `host_benchmarks`, cập nhật `host_factor`, alert khi drift > 8% | xong, qua `POST /internal/judge/benchmark` |
-| **2.10** | 🆕 Deploy thử lên Mac (nfrplan Phần 11 tuần 2) + ghi baseline vào README | baseline máy dev đã ghi; **deploy Mac chưa làm** — cột máy chấm chuẩn trong README còn trống |
+| **2.10** | 🆕 Deploy thử lên Mac (nfrplan Phần 11 tuần 2) + ghi baseline vào README | **xong 2026-09-05** — `trien-khai-mac.sh`, 7/7 ca kiểm trong container, `host_factor = 1.000` với mốc 461ms. Baseline máy chấm đã điền vào README (4 ô còn để trống có ghi rõ là chưa đo riêng) |
 
 > ⛔ **Cổng chuyển:** `IsolateJudgeRunner` chỉ được đăng ký thay `ScriptedJudgeRunner` khi
 > **14/14 test tấn công xanh trong CI**. Từ đó, mọi PR chạm sandbox chạy lại **toàn bộ 14 test**,

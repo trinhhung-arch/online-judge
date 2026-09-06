@@ -149,10 +149,10 @@ oj-api/src/main/java/dev/oj/
 ├── OjApiApplication.java
 ├── platform/          ← hạ tầng dùng chung, không thuộc nghiệp vụ nào
 ├── identity/          ┐
-├── problems/          │  5 module nghiệp vụ, mỗi module 4 tầng
+├── problems/          │  4 module nghiệp vụ đã có, mỗi module 4 tầng
 ├── judging/           │
-├── contests/          │
-└── ai/                ┘
+├── contests/          ┘
+└── ai/                ⚠️ CHƯA TỒN TẠI — tuần 14–15, xem docs/frplan.md 2.5
 ```
 
 Chiều phụ thuộc (ArchUnit ép, vi phạm = fail CI):
@@ -166,6 +166,13 @@ platform ◀── tất cả (kể cả ai)
 ```
 
 Đọc là: `contests` **được phép** import `judging`; `judging` **không biết** `contests` tồn tại.
+
+> **★ Cây thư mục dưới đây là BẢN THIẾT KẾ, không phải ảnh chụp.** Một số file đã đổi tên
+> khi viết — `RejudgeJobUseCase` thành `StartRejudgeUseCase`, `SchemaInvariantTest` thành
+> `SchemaInvariantsIT`, `QueueChaosTest` tách thành ba IT riêng
+> (`KillApiDuringSubmitIT`, `KillWorkerMidJudgeIT`, `TwoWorkersNoDoubleJudgeIT`). Dùng nó để
+> hiểu *hình dạng* và *chỗ đặt*, đừng dùng nó làm danh sách file. Danh sách thật là
+> `find oj-api/src/main/java -name '*.java'`.
 
 ### 3.2 · Bốn tầng trong mỗi module
 
@@ -485,9 +492,10 @@ phải `result`, `attempt` không phải `retry`. Tên class phải dùng đúng
 | **M2** | `oj-worker/{sandbox,compile,run}` · 14 test tấn công |
 | **M3** | `worker/{testdata,report,run/SubtaskScorer}` · `problems/domain/FeedbackPolicy` · `judging/{api/SubmissionSseController,infrastructure/RedisSubmissionEventBus}` · V4 |
 | **M4** | `identity/` đủ 4 tầng · `problems/` đầy đủ · `platform/{security,ratelimit,sse}` · V5 |
-| **M5** | `contests/` · `platform/messaging` (Redis pub/sub) · V6 |
-| **M6** | `platform/{jobs,audit,settings}` · các job cụ thể · V7, V9 |
-| **T14–15** | `ai/` · V8 · `prompts/` |
+| **M5** | `contests/` · `platform/messaging` (Redis pub/sub) · V7, V10 |
+| **M6** | `platform/{jobs,audit,settings}` · các job cụ thể · V6, V8, V9 |
+| **M4 bổ sung** | 2FA (`identity/domain/Totp`…) · header bảo mật · Turnstile · V11 |
+| **T14–15** | `ai/` · `prompts/` — **chưa làm** |
 
 Mỗi module chỉ ra đời khi có FR đầu tiên cần đến nó.
 

@@ -187,17 +187,33 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 ### 2.5 — FR-AI · AI Code Reviewer  *(tuần 14–15 nếu chọn phương án C)*
 
-| ID | Yêu cầu | Ràng buộc NFR | Ưu tiên |
-|---|---|---|---|
-| FR-AI-01 | Nút "Nhận góp ý AI" trên trang chi tiết bài nộp — **do người dùng bấm, không tự động** | **AI2** | Must |
-| FR-AI-02 | **Chỉ khả dụng ngoài thời gian contest.** Kiểm ở tầng use-case theo `contest.status` | Tính công bằng | Must |
-| FR-AI-03 | Quota 5 review/ngày/user, UI hiển thị số lượt còn lại | AI2 | Must |
-| FR-AI-04 | Review trả về dạng Markdown, hiển thị dần qua SSE | U, AI1 | Should |
-| FR-AI-05 | **Nội dung review: nhận xét độ phức tạp, phong cách, gợi ý hướng sửa. KHÔNG đưa mã giải hoàn chỉnh** | Giá trị sư phạm | Must |
-| FR-AI-06 | Review được lưu; xem lại **không gọi LLM, không trừ quota** | AI2, Quy tắc 4 | Must |
-| FR-AI-07 | Nút 👍/👎 cho mỗi review | M (cải thiện prompt) | Should |
-| FR-AI-08 | Khi LLM lỗi: hiện "tạm không khả dụng", **không trừ quota, verdict không ảnh hưởng** | AI1, A | Must |
-| FR-AI-09 | ADMIN có **kill switch** tắt toàn bộ AI review tức thì | AI2, A | Must |
+> ## ⚠️ TOÀN BỘ MỤC NÀY CHƯA ĐƯỢC LÀM
+>
+> Package `dev.oj.ai` **không tồn tại**. Không có `ai_reviews`, không có `ai_quota_usage`,
+> không có endpoint nào. Kiểm lại bất cứ lúc nào:
+> `ls oj-api/src/main/java/dev/oj/` — hiện có 4 module nghiệp vụ, không có `ai`.
+>
+> **Ba mảnh đã tồn tại sẵn, và chúng là móc chờ chứ không phải tính năng:**
+> - `SystemSettings.AI_REVIEW` (`platform/settings/SystemSettings.java`) — hằng số cho kill
+>   switch (FR-AI-09), đã có từ M6
+> - `oj.ai.daily-quota: 5` trong `application.yml` — con số đã chốt, chưa ai đọc nó
+> - `oj.ai.timeout: 30s` — cũng vậy. Ba dòng cấu hình không đọc bởi mã nào là ba dòng
+>   **không** được coi là bằng chứng tính năng tồn tại.
+>
+> Cột **Ưu tiên** dưới đây là ưu tiên *khi làm*, không phải trạng thái. Đừng đọc "Must" thành
+> "đã có".
+
+| ID | Yêu cầu | Ràng buộc NFR | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| FR-AI-01 | Nút "Nhận góp ý AI" trên trang chi tiết bài nộp — **do người dùng bấm, không tự động** | **AI2** | Must | ❌ chưa làm |
+| FR-AI-02 | **Chỉ khả dụng ngoài thời gian contest.** Kiểm ở tầng use-case theo `contest.status` | Tính công bằng | Must | ❌ chưa làm |
+| FR-AI-03 | Quota 5 review/ngày/user, UI hiển thị số lượt còn lại | AI2 | Must | ❌ chưa làm |
+| FR-AI-04 | Review trả về dạng Markdown, hiển thị dần qua SSE | U, AI1 | Should | ❌ chưa làm |
+| FR-AI-05 | **Nội dung review: nhận xét độ phức tạp, phong cách, gợi ý hướng sửa. KHÔNG đưa mã giải hoàn chỉnh** | Giá trị sư phạm | Must | ❌ chưa làm |
+| FR-AI-06 | Review được lưu; xem lại **không gọi LLM, không trừ quota** | AI2, Quy tắc 4 | Must | ❌ chưa làm |
+| FR-AI-07 | Nút 👍/👎 cho mỗi review | M (cải thiện prompt) | Should | ❌ chưa làm |
+| FR-AI-08 | Khi LLM lỗi: hiện "tạm không khả dụng", **không trừ quota, verdict không ảnh hưởng** | AI1, A | Must | ❌ chưa làm |
+| FR-AI-09 | ADMIN có **kill switch** tắt toàn bộ AI review tức thì | AI2, A | Must | ❌ chưa làm |
 
 ### 2.6 — FR-ADM · Quản trị và vận hành  *(M6, tuần 11–12)*
 
