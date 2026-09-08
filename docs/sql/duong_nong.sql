@@ -170,6 +170,12 @@ SELECT created_at
 -- 8. QUOTA AI 5 LƯỢT/NGÀY — FR-AI-03.
 --    MỘT câu, nguyên tử, không race. 0 dòng trả về = hết quota.
 --    Đừng làm bằng SELECT rồi IF rồi UPDATE — hai tab trình duyệt là đủ để lách.
+--
+--    ⚠️ CÂU DUY NHẤT TRONG FILE NÀY CHƯA CHẠY ĐƯỢC. `ai_quota_usage` chưa có
+--    migration nào tạo, và module `ai` chưa tồn tại (CLAUDE.md mục 3 — tuần
+--    14-15). Header của file nói "chép nguyên văn vào repository"; với riêng
+--    câu này thì chép xong sẽ nhận `relation "ai_quota_usage" does not exist`.
+--    Giữ lại vì hình dạng câu lệnh mới là thứ đáng giá: nó phải là MỘT câu.
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO ai_quota_usage (user_id, usage_date, used_count)
 VALUES (:userId, CURRENT_DATE, 1)

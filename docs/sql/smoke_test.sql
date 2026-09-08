@@ -5,10 +5,15 @@
 --    tồn tại. Không có phần bỏ qua đó thì ở M1 script chết ngay tại TEST 9
 --    (ON_ERROR_STOP đang bật), và TEST 12 — một ca quan trọng — không bao giờ chạy.
 --
---      TEST 1-8, 12   V1-V3   → chạy được ngay ở M1   (9/12 ca)
---      TEST 9         V8      → ai_quota_usage        (tuần 14-15)
---      TEST 10        V7      → jobs                  (M6)
+--      TEST 1-8, 12   V1-V3    → chạy được ngay ở M1   (9/12 ca)
+--      TEST 9         CHƯA CÓ → ai_quota_usage        (tuần 14-15)
+--      TEST 10        V6 + V9 → jobs, rồi chỉ mục một-job-một-thực-thể (M6)
 --      TEST 11        V5      → audit_log             (M4)
+--
+--    `ai_quota_usage` CHƯA có migration nào tạo — module `ai` chưa tồn tại
+--    (CLAUDE.md mục 3). Đừng ghi một số hiệu Vn cho nó ở đây: số ấy sẽ sai vào
+--    ngày ai đó thật sự viết migration, và không ai quay lại sửa một dòng chú
+--    thích. Ca 9 tự bỏ qua, và đó là toàn bộ điều cần biết.
 --
 -- Ba ca KỲ VỌNG BÁO LỖI — đó mới là kết quả đúng: TEST 1, TEST 10, TEST 12.
 -- =============================================================================
@@ -94,10 +99,15 @@ BEGIN
   END LOOP;
 END $$;
 \else
-\echo '>>> BO QUA — bang ai_quota_usage chua ton tai (can V8)'
+\echo '>>> BO QUA — bang ai_quota_usage chua ton tai (module ai, tuan 14-15)'
 \endif
 
-SELECT to_regclass('jobs') IS NOT NULL AS co_bang \gset
+-- ★ Canh theo CHỈ MỤC, không theo bảng.
+-- `jobs` có từ V6 nhưng `ux_jobs_one_active_per_entity` mãi V9 mới có. Canh theo
+-- bảng thì ở V6-V8 ca này VẪN CHẠY, câu INSERT thứ hai thành công, và không có
+-- lỗi nào — trong khi header nói đây là một trong ba ca KỲ VỌNG BÁO LỖI. Một ca
+-- kiểm im lặng đi qua là tệ hơn một ca kiểm bị bỏ: nó báo an toàn mà không kiểm gì.
+SELECT to_regclass('ux_jobs_one_active_per_entity') IS NOT NULL AS co_bang \gset
 \if :co_bang
 \echo '--- TEST 10: chi mot job REJUDGE dang song ---'
 INSERT INTO jobs (type,status,params) VALUES ('REJUDGE','RUNNING','{"problemId":1}');
@@ -105,7 +115,7 @@ INSERT INTO jobs (type,status,params) VALUES ('REJUDGE','RUNNING','{"problemId":
 INSERT INTO jobs (type,status,params) VALUES ('REJUDGE','PENDING','{"problemId":1}');
 \set ON_ERROR_STOP on
 \else
-\echo '>>> BO QUA — bang jobs chua ton tai (can V7)'
+\echo '>>> BO QUA — chua co ux_jobs_one_active_per_entity (can V6 tao bang + V9 tao chi muc)'
 \endif
 
 SELECT to_regclass('audit_log') IS NOT NULL AS co_bang \gset
