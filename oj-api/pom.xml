@@ -29,6 +29,46 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+
+		<!--
+			★ Ba giá trị này PHẢI khớp mặc định của `spring.flyway.*` trong
+			application.yml. HopDongVanHanhTest đối chiếu hai file và đỏ khi chúng lệch.
+
+			Vì sao đáng canh: `flyway:repair` sửa bảng `flyway_schema_history` của
+			DATABASE mà nó nối tới. Lệch một chữ trong URL là nó sửa đúng thao tác ấy
+			trên một database khác — thành công, im lặng, và cái đang hỏng thì vẫn hỏng.
+
+			Đổi DB của app bằng OJ_DB_URL thì phải truyền -Dflyway.url tương ứng:
+			Maven không có cú pháp ${BIEN:mac-dinh} như Spring, nên hai bên không tự
+			bám theo nhau được. Ca kiểm chỉ giữ được phần MẶC ĐỊNH.
+		-->
+		<flyway.url>jdbc:postgresql://localhost:5432/ojdb</flyway.url>
+		<flyway.user>ojuser</flyway.user>
+		<flyway.password>ojpass</flyway.password>
+
+		<!--
+			★ PHẢI liệt kê MỌI thư mục mà ứng dụng nạp, kể cả db/dev-seed của profile dev.
+			Thiếu một thư mục là `repair` GÂY RA hỏng chứ không sửa hỏng.
+
+			Đã xảy ra 2026-09-10, mất 20 phút để lần ra: bản đầu của khối này để mặc định
+			(chỉ db/migration). `flyway:repair` thấy R__seed_du_lieu_dev trong lịch sử mà
+			không có file tương ứng, kết luận file đã bị xoá, và ghi một dòng tombstone
+			type=DELETE. Từ đó Flyway coi seed ấy là CHƯA TỪNG CHẠY — nên lần khởi động kế
+			tiếp nó chạy lại từ đầu, đâm vào ck_users_anonymized, và API không lên được.
+
+			Nói cách khác: `repair` xoá lịch sử của mọi migration nó không nhìn thấy. Cho nó
+			nhìn thiếu là cho nó xoá nhầm.
+
+			`filesystem:` chứ không `classpath:` — plugin chỉ cần đọc file để tính checksum,
+			không cần target/classes đã được dựng.
+
+			★ `${project.basedir}` là BẮT BUỘC, đường dẫn tương đối KHÔNG chạy. Flyway giải
+			`filesystem:` theo thư mục làm việc của JVM — tức nơi bạn gõ `mvn`, thường là gốc
+			repo — chứ không theo thư mục module. Viết `filesystem:src/...` thì nó tìm
+			`<gốc-repo>/src/...`, không thấy gì, và tombstone SẠCH cả hai seed. Đã đo đúng
+			như vậy trước khi neo bằng basedir.
+		-->
+		<flyway.locations>filesystem:${project.basedir}/src/main/resources/db/migration,filesystem:${project.basedir}/src/main/resources/db/dev-seed</flyway.locations>
 	</properties>
 
 	<!--
@@ -307,6 +347,49 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.flywaydb</groupId>
+				<artifactId>flyway-maven-plugin</artifactId>
+				<!--
+					★ CỐ Ý KHÔNG ghi <version>. spring-boot-starter-parent quản lý nó bằng
+					${flyway.version} — đúng con số đang dùng cho flyway-core (12.4.0). Ghi
+					số ở đây là tạo ra một chỗ thứ hai để lệch, và lệch phiên bản Flyway
+					nghĩa là thuật toán băm khác: `repair` ghi vào một checksum mà Flyway
+					của ứng dụng không công nhận, rồi app vẫn đỏ y như trước khi repair.
+
+					★ KHÔNG chạy trong vòng đời build. Không có <executions>, nên `mvn
+					verify` không đụng tới nó. Đây là công cụ gọi tay khi có sự cố, không
+					phải một bước của quy trình dựng.
+
+					Việc duy nhất nó sinh ra để làm:
+
+					    ./mvnw -pl oj-api flyway:repair
+
+					dùng khi Flyway từ chối khởi động vì "checksum mismatch" — tức một file
+					V__ đã commit bị sửa (điều #6 của CLAUDE.md). `repair` tính lại checksum
+					từ file rồi ghi vào flyway_schema_history. Nó KHÔNG chạy lại migration.
+
+					⚠️ `repair` chỉ đúng khi phần SQL THỰC THI không đổi. Nếu DDL có đổi thật
+					thì repair là nói dối: nó tuyên bố "DB khớp file" trong khi DB thiếu đúng
+					phần vừa thêm. Ca ấy phải trả file về bản đã commit rồi viết V<n+1> mới.
+					Cách kiểm 30 giây: bỏ mọi dòng chú thích của hai bản rồi diff phần còn lại.
+				-->
+				<configuration>
+					<!--
+						★ Tắt `clean` VĨNH VIỄN, và đây là lý do plugin này suýt không đáng thêm.
+
+						`mvn flyway:clean` XOÁ TOÀN BỘ schema — mọi bảng, mọi bài nộp, mọi
+						verdict. Một lần gõ nhầm `clean` thay vì `repair` trên máy có dữ liệu
+						thật là phá thẳng vào lời hứa số hai của hệ thống này ("không mất bài
+						nộp"), và không có bước xác nhận nào chen vào giữa.
+
+						Flyway 10+ mặc định đã là true, nhưng viết ra ở đây để nó là một quyết
+						định đọc được, không phải một mặc định may mắn có thể đổi ở bản sau.
+					-->
+					<cleanDisabled>true</cleanDisabled>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
