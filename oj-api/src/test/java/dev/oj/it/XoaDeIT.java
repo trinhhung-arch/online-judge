@@ -128,7 +128,7 @@ class XoaDeIT extends PostgresIT {
     void de_thuoc_ky_thi_da_ket_thuc_van_khong_xoa_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.minus(Duration.ofHours(4)), MOC.minus(Duration.ofHours(1)));
-        contests.themDe(ky, id, "A", 1, 100);
+        contests.themDe(ky, id, "A", 100);
 
         assertThatThrownBy(() -> xoaBoi(id, SETTER_ID, "setter", Role.SETTER))
                 .isInstanceOf(DomainException.class)
@@ -201,7 +201,7 @@ class XoaDeIT extends PostgresIT {
     void go_khoi_ky_thi_roi_thi_xoa_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.plus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(4)));
-        contests.themDe(ky, id, "A", 1, 100);
+        contests.themDe(ky, id, "A", 100);
 
         try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
             assertThat(phien).isNotNull();
@@ -218,7 +218,7 @@ class XoaDeIT extends PostgresIT {
     void ky_thi_da_bat_dau_thi_khong_go_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)));
-        contests.themDe(ky, id, "A", 1, 100);
+        contests.themDe(ky, id, "A", 100);
 
         try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
             assertThat(phien).isNotNull();

@@ -17,8 +17,13 @@ public interface ContestRepository {
 
     long tao(ContestMoi contest);
 
-    /** Gắn một đề <b>mượn từ kho đề chung</b> vào kỳ thi. */
-    void themDe(long contestId, long problemId, String label, int ordinal, int points);
+    /**
+     * Gắn một đề <b>mượn từ kho đề chung</b> vào kỳ thi.
+     *
+     * <p>Không có tham số thứ tự: {@code label} vừa là tên đề trong kỳ thi vừa <b>là</b> thứ
+     * tự của nó (V12, ADR 015).
+     */
+    void themDe(long contestId, long problemId, String label, int points);
 
     /**
      * Gắn một đề <b>vừa được soạn riêng cho kỳ thi này</b> (V10).
@@ -28,7 +33,7 @@ public interface ContestRepository {
      * được người khác luyện tập, một bên tạo ra thứ chưa ai thấy. Người đọc chỗ gọi nên biết
      * ngay mình đang làm cái nào mà không phải lần theo một cờ {@code true}.
      */
-    void themDeSoanRieng(long contestId, long problemId, String label, int ordinal, int points);
+    void themDeSoanRieng(long contestId, long problemId, String label, int points);
 
     /**
      * Gỡ một đề khỏi kỳ thi. Không đụng tới bản thân đề.
@@ -37,6 +42,7 @@ public interface ContestRepository {
      */
     boolean goDe(long contestId, long problemId);
 
+    /** Đề của kỳ thi, <b>đã sắp theo nhãn</b>: A, B, ..., Z, AA. ADR 015. */
     List<DeCuaContest> deCua(long contestId);
 
     boolean daDangKy(long contestId, long userId);
@@ -95,7 +101,7 @@ public interface ContestRepository {
      *             được một con số không bấm được.
      */
     /** @param soanRieng V10 — đề sinh ra cho kỳ thi này, không phải mượn từ kho đề chung */
-    record DeCuaContest(long problemId, String code, String label, int ordinal, int points,
+    record DeCuaContest(long problemId, String code, String label, int points,
                         boolean soanRieng) {
     }
 }

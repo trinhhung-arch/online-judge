@@ -95,6 +95,78 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
+    /**
+     * ★ V12 chạy được trên một {@code contest_problems} <b>đang mâu thuẫn với chính nó</b>.
+     *
+     * <p>V12 bỏ cột {@code ordinal} vì nó và {@code label} cùng nói một chuyện mà không cột
+     * nào chịu trách nhiệm (ADR 015). Trạng thái đáng ngờ nhất lúc migration chạy là trạng
+     * thái mà cột ấy đã hỏng sẵn: hai đề cùng {@code ordinal}, nhãn thì {@code 'A'} và
+     * {@code 'D'} — đúng thứ có thật trong database dev trước khi V12 chạy.
+     *
+     * <p>Ca này chốt hai điều. Một: {@code DROP COLUMN} không cần dọn dữ liệu trước, nên
+     * không có bước backfill nào lỡ quên được. Hai — và đây mới là điều đáng ghi lại: đường
+     * còn lại (thêm {@code UNIQUE (contest_id, ordinal)}) sẽ <b>hỏng ngay tại đây</b>, giữa
+     * lúc deploy, trên một database đã áp một nửa số migration.
+     */
+    @Test
+    @DisplayName("★ V12 bỏ được cột ordinal kể cả khi dữ liệu đang có hai đề trùng ordinal")
+    void v12_chay_duoc_tren_du_lieu_ordinal_trung() throws SQLException {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
+            pg.start();
+
+            // 1. Chạy tới V11 — trạng thái ngay trước V12.
+            flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("11")).load()
+                    .migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, role)
+                        VALUES ('nguoi', 'n@oj.test', 'Người', 'x', 'ADMIN')
+                        """);
+                st.execute("""
+                        INSERT INTO problems (code, title, statement_md, statement_hash,
+                                              time_limit_ms, memory_limit_kb, owner_id)
+                        VALUES ('DE-A', 'Đề A', 'x', repeat('a', 64), 1000, 262144, 1),
+                               ('DE-D', 'Đề D', 'x', repeat('d', 64), 1000, 262144, 1)
+                        """);
+                st.execute("""
+                        INSERT INTO contests (slug, title, format, starts_at, ends_at,
+                                              created_by)
+                        VALUES ('ky-thi', 'Kỳ thi', 'ICPC', now() + INTERVAL '1 hour',
+                                now() + INTERVAL '4 hour', 1)
+                        """);
+                // Hai đề, HAI NHÃN KHÁC NHAU, nhưng CÙNG ordinal — hợp lệ trước V12 vì
+                // ordinal chưa từng có ràng buộc nào. Đây là cái làm ORDER BY bất định.
+                st.execute("""
+                        INSERT INTO contest_problems (contest_id, problem_id, label, ordinal,
+                                                      points)
+                        SELECT c.id, p.id, CASE WHEN p.code = 'DE-A' THEN 'A' ELSE 'D' END, 1, 100
+                          FROM contests c, problems p
+                         WHERE c.slug = 'ky-thi' AND p.code IN ('DE-A', 'DE-D')
+                        """);
+            }
+
+            // 2. Chạy nốt V12 trên database ĐÃ CÓ dữ liệu mâu thuẫn.
+            flyway(pg).load().migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                assertThat(chenDuocKhong(st, "SELECT ordinal FROM contest_problems"))
+                        .as("cột ordinal phải biến mất, không còn đường nào đọc nó")
+                        .isFalse();
+
+                var rs = st.executeQuery("""
+                        SELECT label FROM contest_problems
+                         ORDER BY length(label), label
+                        """);
+                var nhan = new java.util.ArrayList<String>();
+                while (rs.next()) nhan.add(rs.getString(1));
+                assertThat(nhan)
+                        .as("thứ tự giờ do nhãn quyết định, và nó xác định")
+                        .containsExactly("A", "D");
+            }
+        }
+    }
+
     private static org.flywaydb.core.api.configuration.FluentConfiguration flyway(
             PostgreSQLContainer pg) {
         return Flyway.configure()

@@ -289,8 +289,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 **NFR bị phá:** R1, `audit_log` append-only, và tính đúng đắn của mọi bảng xếp hạng lịch sử — xoá cứng một người từng đứng hạng 3 làm sai vĩnh viễn bảng xếp hạng contest đó.
 
-**Cách viết lại — FR-AUTH-07:** **ẩn danh hoá, không xoá.** Tên hiển thị → `[đã xoá #1234]`, email và mật khẩu bị xoá thật, bài nộp và thứ hạng giữ nguyên. Ghi vào `audit_log`. Đây cũng là cách các OJ lớn làm.
-
+**— FR-AUTH-07:** **ẩn danh hoá, không xoá.** Tên hiển thị → `[đã xoá #1234]`, email và mật khẩu bị xoá thật, bài nộp và thứ hạng giữ nguyên. Ghi vào `audit_log`.
 ### 3.6 — Hiển thị thời gian chạy chính xác ↔ P7 (độ lệch <5%) và C (ARM vs x86)
 
 **FR bản năng:** *"Hiển thị thời gian chạy của bài nộp, ví dụ 0.023s."*

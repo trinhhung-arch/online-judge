@@ -34,7 +34,14 @@ public class AuthorContestUseCase {
     /** Cùng khuôn với mã đề: xuất hiện trong URL và trong mọi liên kết đã chia sẻ. */
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,63}$");
 
-    /** Nhãn đề kiểu ICPC: A, B, ... hoặc AA. Ngắn vì nó là tiêu đề cột của bảng xếp hạng. */
+    /**
+     * Nhãn đề kiểu ICPC: A, B, ... hoặc AA. Ngắn vì nó là tiêu đề cột của bảng xếp hạng.
+     *
+     * <p>★ Từ V12 nó còn <b>là</b> thứ tự đề: danh sách đề sắp bằng
+     * {@code ORDER BY length(label), label}, và không còn cột thứ tự nào khác. Nới khuôn này
+     * ra chuỗi tự do — {@code 'Bài 10'} phải đứng sau {@code 'Bài 9'} — là phá luôn thứ tự,
+     * và lúc đó phải trả cột thứ tự về. ADR 015.
+     */
     private static final Pattern NHAN = Pattern.compile("^[A-Z]{1,2}$");
 
     private final CurrentUserProvider currentUser;
@@ -78,12 +85,12 @@ public class AuthorContestUseCase {
      * {@code JdbcContestRepository.themDe} làm việc đó. Trước khi có bản dịch ấy, một id gõ
      * nhầm ra HTTP 500 "lỗi phía hệ thống", và người dùng đi tìm lỗi ở đúng chỗ không có lỗi.
      */
-    public void themDe(long contestId, long problemId, String nhan, int thuTu, int diem) {
+    public void themDe(long contestId, long problemId, String nhan, int diem) {
         // Thêm đề sau khi kỳ thi đã bắt đầu là đổi luật giữa chừng: người vào sớm đã thấy một
         // bộ đề khác người vào muộn, và bảng xếp hạng so hai thứ không so được. Phép kiểm ấy
         // nằm trong kiemGanDe cùng hai phép kia.
         kiemGanDe(contestId, nhan, diem);
-        contests.themDe(contestId, problemId, nhan, thuTu, diem);
+        contests.themDe(contestId, problemId, nhan, diem);
         auditLog.ghi("CONTEST_PROBLEM_ADDED", "contest", contestId,
                 Map.of("problemId", problemId, "nhan", nhan));
     }
@@ -109,10 +116,10 @@ public class AuthorContestUseCase {
      */
     @Transactional
     public long soanDeRieng(long contestId, AuthorProblemUseCase.Command deMoi,
-                            String nhan, int thuTu, int diem) {
+                            String nhan, int diem) {
         kiemGanDe(contestId, nhan, diem);
         long problemId = authorProblem.tao(deMoi);
-        contests.themDeSoanRieng(contestId, problemId, nhan, thuTu, diem);
+        contests.themDeSoanRieng(contestId, problemId, nhan, diem);
         auditLog.ghi("CONTEST_PROBLEM_AUTHORED", "contest", contestId,
                 Map.of("problemId", problemId, "nhan", nhan));
         return problemId;

@@ -50,19 +50,19 @@
              không lấy đi của người luyện tập thứ gì. Sau khi kỳ thi kết thúc nó vào kho
              như mọi đề khác (FR-CON-07).
 
-             Ba ô dưới đây là của contest_problems, không phải của problems — nên chúng
-             sống trong khối này chứ không lẫn vào phần thuộc tính đề. -->
+             Hai ô dưới đây là của contest_problems, không phải của problems — nên chúng
+             sống trong khối này chứ không lẫn vào phần thuộc tính đề.
+
+             Không có ô "Thứ tự": từ V12 nhãn CHÍNH LÀ thứ tự (ADR 015). Một ô riêng cho
+             thứ tự là mời người ra đề đặt nhãn D cho đề đứng đầu. -->
         <div id="khu-ky-thi" hidden>
             <p class="thong-bao" id="nhan-ky-thi"></p>
 
             <label for="nhan-de">Nhãn trong kỳ thi</label>
             <input id="nhan-de" name="label" autocomplete="off" placeholder="A"
                    pattern="^[A-Z]{1,2}$" maxlength="2">
-            <p class="goi-y">Một hoặc hai chữ cái in hoa — đây là tiêu đề cột của bảng
-                xếp hạng.</p>
-
-            <label for="thu-tu-de">Thứ tự</label>
-            <input id="thu-tu-de" name="ordinal" type="number" min="1" value="1">
+            <p class="goi-y">Một hoặc hai chữ cái in hoa — đây vừa là tiêu đề cột của bảng
+                xếp hạng, vừa là thứ tự đề: A đứng trước B, và Z đứng trước AA.</p>
 
             <label for="diem-de">Điểm</label>
             <input id="diem-de" name="points" type="number" min="1" value="100">

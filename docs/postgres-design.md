@@ -451,6 +451,7 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 | `V9__jobs_mot_job_moi_thuc_the.sql` | M6 | đổi mô hình `jobs` — không tạo bảng |
 | `V10__de_soan_rieng_cho_ky_thi.sql` | M5 | `contest_problems.soan_rieng` — đề sinh ra cho một kỳ thi |
 | `V11__xac_thuc_hai_lop.sql` | M4 (bổ sung) | `user_two_factor` · `user_scratch_code` |
+| `V12__thu_tu_de_la_chinh_cai_nhan.sql` | M5 (bổ sung) | bỏ `contest_problems.ordinal` — nhãn LÀ thứ tự (ADR 015) |
 | `R__seed_du_lieu_tham_chieu.sql` | mọi lúc | 3 ngôn ngữ · máy chấm chuẩn · tag. Thêm ngôn ngữ = sửa file này |
 
 M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án".

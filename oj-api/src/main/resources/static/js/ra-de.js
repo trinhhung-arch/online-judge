@@ -183,7 +183,6 @@ async function luu(ev) {
                 body: {
                     de: than,
                     label: form.label.value.trim(),
-                    ordinal: Number(form.ordinal.value),
                     points: Number(form.points.value),
                 },
             });
@@ -221,7 +220,7 @@ async function doiTrangThai(duongDan, hoi, xong) {
     }
 }
 
-/** Bật ba ô của `contest_problems` khi trang được mở từ một kỳ thi. */
+/** Bật hai ô của `contest_problems` (nhãn, điểm) khi trang được mở từ một kỳ thi. */
 function batCheDoKyThi() {
     if (kyThiDich === null) return;
     khuKyThi.hidden = false;

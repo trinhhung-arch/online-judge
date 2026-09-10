@@ -98,12 +98,11 @@ public class JdbcContestRepository implements ContestRepository {
             """;
 
     private static final String THEM_DE = """
-            INSERT INTO contest_problems (contest_id, problem_id, label, ordinal, points,
+            INSERT INTO contest_problems (contest_id, problem_id, label, points,
                                           created_for_contest)
-            VALUES (:contestId, :problemId, :label, :ordinal, :points, :soanRieng)
+            VALUES (:contestId, :problemId, :label, :points, :soanRieng)
             ON CONFLICT (contest_id, problem_id) DO UPDATE
                SET label = EXCLUDED.label,
-                   ordinal = EXCLUDED.ordinal,
                    points = EXCLUDED.points,
                    -- Nguồn gốc DÍNH: gắn lại một đề đã soạn riêng không biến nó thành đề
                    -- mượn, và ngược lại. Đây là dữ kiện lịch sử, không phải một thuộc tính
@@ -121,14 +120,20 @@ public class JdbcContestRepository implements ContestRepository {
      * {@code JOIN problems} chỉ để lấy {@code code}. Rẻ và không nằm trên đường nóng:
      * {@code contest_problems} có vài chục dòng, và trang kỳ thi không phải
      * {@code POST /submissions}.
+     *
+     * <p>★ {@code length(cp.label)} đứng TRƯỚC trong {@code ORDER BY} và không được rút gọn
+     * đi: sắp theo chữ cái trần thì {@code 'AA' < 'B'}, tức đề AA chen vào giữa A và B — sai
+     * với thứ tự ICPC. Và thứ tự này là <b>toàn phần</b>: {@code UNIQUE (contest_id, label)}
+     * cấm hai đề cùng nhãn, nên không có hai dòng nào bằng khoá sắp xếp và không cần
+     * tiebreaker. Đó là lý do V12 bỏ được cột {@code ordinal} — ADR 015.
      */
     private static final String DE_CUA = """
-            SELECT cp.problem_id, p.code, cp.label, cp.ordinal, cp.points,
+            SELECT cp.problem_id, p.code, cp.label, cp.points,
                    cp.created_for_contest
               FROM contest_problems cp
               JOIN problems p ON p.id = cp.problem_id
              WHERE cp.contest_id = :contestId
-             ORDER BY cp.ordinal
+             ORDER BY length(cp.label), cp.label
             """;
 
     private static final String DA_DANG_KY = """
@@ -184,24 +189,22 @@ public class JdbcContestRepository implements ContestRepository {
     }
 
     @Override
-    public void themDe(long contestId, long problemId, String label, int ordinal, int points) {
-        gan(contestId, problemId, label, ordinal, points, false);
+    public void themDe(long contestId, long problemId, String label, int points) {
+        gan(contestId, problemId, label, points, false);
     }
 
     @Override
-    public void themDeSoanRieng(long contestId, long problemId, String label, int ordinal,
-                                int points) {
-        gan(contestId, problemId, label, ordinal, points, true);
+    public void themDeSoanRieng(long contestId, long problemId, String label, int points) {
+        gan(contestId, problemId, label, points, true);
     }
 
-    private void gan(long contestId, long problemId, String label, int ordinal, int points,
+    private void gan(long contestId, long problemId, String label, int points,
                      boolean soanRieng) {
         try {
             jdbc.sql(THEM_DE)
                     .param("contestId", contestId)
                     .param("problemId", problemId)
                     .param("label", label)
-                    .param("ordinal", ordinal)
                     .param("points", points)
                     .param("soanRieng", soanRieng)
                     .update();
@@ -244,8 +247,7 @@ public class JdbcContestRepository implements ContestRepository {
                 .param("contestId", contestId)
                 .query((rs, i) -> new DeCuaContest(
                         rs.getLong("problem_id"), rs.getString("code"), rs.getString("label"),
-                        rs.getInt("ordinal"), rs.getInt("points"),
-                        rs.getBoolean("created_for_contest")))
+                        rs.getInt("points"), rs.getBoolean("created_for_contest")))
                 .list();
     }
 

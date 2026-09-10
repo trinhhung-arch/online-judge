@@ -50,7 +50,7 @@ class ProblemListContestIT extends PostgresIT {
         long id = contests.tao(new ContestRepository.ContestMoi(
                 "ds-de-" + System.nanoTime(), "Thi thử", "ICPC",
                 batDau, ketThuc, null, 20, true, true, ADMIN_ID));
-        contests.themDe(id, problemId, "A", 1, 100);
+        contests.themDe(id, problemId, "A", 100);
         return id;
     }
 

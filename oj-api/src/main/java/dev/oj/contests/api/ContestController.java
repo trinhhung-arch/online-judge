@@ -97,7 +97,7 @@ public class ContestController {
     @PostMapping("/{contestId}/problems")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void themDe(@PathVariable long contestId, @RequestBody ThemDeRequest body) {
-        author.themDe(contestId, body.problemId(), body.label(), body.ordinal(),
+        author.themDe(contestId, body.problemId(), body.label(),
                 body.points() == null ? 100 : body.points());
     }
 
@@ -112,7 +112,7 @@ public class ContestController {
     public ResponseEntity<Map<String, Object>> soanDeRieng(
             @PathVariable long contestId, @RequestBody SoanDeRequest body) {
         long problemId = author.soanDeRieng(contestId, body.de().toCommand(),
-                body.label(), body.ordinal(), body.points() == null ? 100 : body.points());
+                body.label(), body.points() == null ? 100 : body.points());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("problemId", problemId));
     }
 
@@ -144,7 +144,11 @@ public class ContestController {
         }
     }
 
-    public record ThemDeRequest(long problemId, String label, int ordinal, Integer points) {
+    /**
+     * @param label vừa là tên đề trong kỳ thi vừa <b>là</b> thứ tự của nó — A đứng trước B.
+     *              Từ V12 không còn trường thứ tự riêng; ADR 015 nói vì sao
+     */
+    public record ThemDeRequest(long problemId, String label, Integer points) {
     }
 
     /**
@@ -154,7 +158,6 @@ public class ContestController {
      * trường ra đây. Trải phẳng thì hai bản mô tả cùng một thứ sẽ lệch nhau vào ngày trang
      * soạn đề có thêm một trường — và bên lệch sẽ là bên này, vì nó ít được sờ tới hơn.
      */
-    public record SoanDeRequest(ProblemAuthoringRequest de, String label, int ordinal,
-                                Integer points) {
+    public record SoanDeRequest(ProblemAuthoringRequest de, String label, Integer points) {
     }
 }

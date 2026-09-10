@@ -260,7 +260,6 @@ document.getElementById('form-them-de').addEventListener('submit', async (ev) =>
             body: {
                 problemId,
                 label: form.label.value.trim(),
-                ordinal: Number(form.ordinal.value),
                 points: Number(form.points.value),
             },
         });

@@ -75,12 +75,11 @@ public final class ContestResponses {
      *                  là của riêng kỳ thi và đề nào mượn từ kho chung; đề mượn thì sửa nó là
      *                  sửa thứ người khác đang luyện tập
      */
-    public record De(long problemId, String code, String label, int ordinal, int points,
+    public record De(long problemId, String code, String label, int points,
                      boolean soanRieng) {
 
         static De tu(ContestRepository.DeCuaContest d) {
-            return new De(d.problemId(), d.code(), d.label(), d.ordinal(), d.points(),
-                    d.soanRieng());
+            return new De(d.problemId(), d.code(), d.label(), d.points(), d.soanRieng());
         }
     }
 

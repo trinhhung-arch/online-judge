@@ -53,7 +53,7 @@ class StandingsJobsIT extends PostgresIT {
                 Instant.now().minus(Duration.ofHours(1)),
                 Instant.now().plus(Duration.ofHours(2)), null,
                 20, true, true, ADMIN_ID));
-        contests.themDe(contestId, PROBLEM_ID, "A", 1, 100);
+        contests.themDe(contestId, PROBLEM_ID, "A", 100);
         contests.dangKy(contestId, USER_ID, Instant.now());
 
         nopVaCham("WA", 0);

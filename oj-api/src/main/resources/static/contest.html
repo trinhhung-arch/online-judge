@@ -89,11 +89,15 @@
                     <p class="goi-y" id="goi-y-ma-de">Đúng chuỗi ở cột “Mã đề” của trang
                         Đề bài. Đề phải đã xuất bản trước khi thêm vào kỳ thi.</p>
 
+                    <!-- Nhãn LÀ thứ tự đề (V12, ADR 015) — không có ô "Thứ tự" riêng.
+                         Hai ô cùng nói một chuyện thì sớm muộn chúng cãi nhau, và đề mang
+                         nhãn D sẽ đứng đầu danh sách mà không ai sai cả. -->
                     <label for="nhan-de-moi">Nhãn</label>
-                    <input id="nhan-de-moi" name="label" required placeholder="A">
-
-                    <label for="thu-tu">Thứ tự</label>
-                    <input id="thu-tu" name="ordinal" type="number" min="1" value="1" required>
+                    <input id="nhan-de-moi" name="label" required placeholder="A"
+                           pattern="^[A-Z]{1,2}$" maxlength="2"
+                           aria-describedby="goi-y-nhan-de">
+                    <p class="goi-y" id="goi-y-nhan-de">Một hoặc hai chữ cái in hoa. Đây cũng
+                        là thứ tự đề: A đứng trước B, và Z đứng trước AA.</p>
 
                     <label for="diem">Điểm</label>
                     <input id="diem" name="points" type="number" min="1" value="100" required>

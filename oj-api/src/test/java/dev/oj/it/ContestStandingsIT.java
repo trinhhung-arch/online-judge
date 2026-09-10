@@ -52,7 +52,7 @@ class ContestStandingsIT extends PostgresIT {
         long id = contests.tao(new ContestRepository.ContestMoi(
                 "thi-thu-" + System.nanoTime(), "Thi thử", "ICPC",
                 batDau, ketThuc, dongBang, 20, true, true, ADMIN_ID));
-        contests.themDe(id, PROBLEM_ID, "A", 1, 100);
+        contests.themDe(id, PROBLEM_ID, "A", 100);
         return id;
     }
 

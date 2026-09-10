@@ -81,7 +81,7 @@ class ContestProblemsIT extends PostgresIT {
     void id_de_khong_co_that_khong_thanh_loi_he_thong() {
         long ky = kyThiChuaMo();
 
-        assertThatThrownBy(() -> contests.themDe(ky, 999_999L, "A", 1, 100))
+        assertThatThrownBy(() -> contests.themDe(ky, 999_999L, "A", 100))
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "contest.de_khong_ton_tai")
                 .hasMessageContaining("999999");
@@ -98,11 +98,42 @@ class ContestProblemsIT extends PostgresIT {
         long ky = kyThiChuaMo();
         long deKhac = deMoi("gan-de-" + System.nanoTime());
 
-        contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
+        contests.themDe(ky, PROBLEM_ID, "A", 100);
 
-        assertThatThrownBy(() -> contests.themDe(ky, deKhac, "A", 2, 100))
+        assertThatThrownBy(() -> contests.themDe(ky, deKhac, "A", 100))
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
+    }
+
+    /**
+     * ★ V12 — thứ tự đề LÀ thứ tự nhãn, và nó xác định.
+     *
+     * <h2>Cái nó chốt lại</h2>
+     * Trước V12 {@code contest_problems} có thêm một cột {@code ordinal} không ràng buộc, và
+     * câu liệt kê là {@code ORDER BY cp.ordinal} trần. Hai đề cùng {@code ordinal} thì SQL
+     * không hứa gì về thứ tự giữa chúng — giữa kỳ thi, "bài B" đổi nghĩa giữa hai lần tải
+     * trang, và đó là chuyện công bằng chứ không phải chuyện giao diện. Dữ liệu dev đã có sẵn
+     * đúng một cặp như thế trước khi V12 chạy.
+     *
+     * <p>Gắn đề theo thứ tự nhãn <b>đảo ngược</b>, để thứ tự trả về không thể là thứ tự chèn
+     * một cách tình cờ. Và có {@code 'AA'} để chốt phần {@code length(label)} đứng trước
+     * trong {@code ORDER BY}: sắp theo chữ cái trần thì {@code 'AA' < 'B'}, nên bỏ
+     * {@code length} đi là AA chen vào giữa A và B — ca này đỏ ngay.
+     */
+    @Test
+    @DisplayName("★ danh sách đề sắp theo nhãn A, B, Z rồi AA — không theo thứ tự chèn")
+    void thu_tu_de_la_thu_tu_nhan() {
+        long ky = kyThiChuaMo();
+
+        contests.themDe(ky, deMoi("thu-tu-aa-" + System.nanoTime()), "AA", 100);
+        contests.themDe(ky, deMoi("thu-tu-z-" + System.nanoTime()), "Z", 100);
+        contests.themDe(ky, PROBLEM_ID, "B", 100);
+        contests.themDe(ky, deMoi("thu-tu-a-" + System.nanoTime()), "A", 100);
+
+        assertThat(contests.deCua(ky))
+                .extracting(ContestRepository.DeCuaContest::label)
+                .describedAs("'AA' phải đứng SAU 'Z', không chen vào giữa 'A' và 'B'")
+                .containsExactly("A", "B", "Z", "AA");
     }
 
     // =========================================================================
@@ -136,7 +167,7 @@ class ContestProblemsIT extends PostgresIT {
             long problemId;
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
-                problemId = author.soanDeRieng(ky, deMoi(ma), "A", 1, 100);
+                problemId = author.soanDeRieng(ky, deMoi(ma), "A", 100);
             }
 
             assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
@@ -152,7 +183,7 @@ class ContestProblemsIT extends PostgresIT {
         @DisplayName("đề mượn từ kho KHÔNG bị đánh dấu là soạn riêng")
         void de_muon_khong_bi_danh_dau() {
             long ky = kyThiChuaMo();
-            contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
+            contests.themDe(ky, PROBLEM_ID, "A", 100);
 
             assertThat(contests.deCua(ky)).singleElement()
                     .satisfies(d -> assertThat(d.soanRieng()).isFalse());
@@ -170,10 +201,10 @@ class ContestProblemsIT extends PostgresIT {
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
                 problemId = author.soanDeRieng(ky, deMoi("dinh-" + System.nanoTime()),
-                        "A", 1, 100);
+                        "A", 100);
             }
 
-            contests.themDe(ky, problemId, "B", 2, 250);
+            contests.themDe(ky, problemId, "B", 250);
 
             assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
                 assertThat(d.label()).isEqualTo("B");
@@ -193,12 +224,12 @@ class ContestProblemsIT extends PostgresIT {
         @DisplayName("★ gắn hỏng thì KHÔNG để lại đề mồ côi")
         void gan_hong_thi_khong_de_lai_de_mo_coi() {
             long ky = kyThiChuaMo();
-            contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
+            contests.themDe(ky, PROBLEM_ID, "A", 100);
             String ma = "mo-coi-" + System.nanoTime();
 
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
-                assertThatThrownBy(() -> author.soanDeRieng(ky, deMoi(ma), "A", 1, 100))
+                assertThatThrownBy(() -> author.soanDeRieng(ky, deMoi(ma), "A", 100))
                         .isInstanceOf(DomainException.class)
                         .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
             }
@@ -220,7 +251,7 @@ class ContestProblemsIT extends PostgresIT {
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
                 assertThatThrownBy(() -> author.soanDeRieng(ky,
-                        deMoi("muon-" + System.nanoTime()), "A", 1, 100))
+                        deMoi("muon-" + System.nanoTime()), "A", 100))
                         .isInstanceOf(DomainException.class)
                         .hasFieldOrPropertyWithValue("code", "contest.da_bat_dau");
             }
@@ -239,8 +270,8 @@ class ContestProblemsIT extends PostgresIT {
     void them_lai_cung_de_la_cap_nhat() {
         long ky = kyThiChuaMo();
 
-        contests.themDe(ky, PROBLEM_ID, "A", 1, 100);
-        contests.themDe(ky, PROBLEM_ID, "B", 2, 250);
+        contests.themDe(ky, PROBLEM_ID, "A", 100);
+        contests.themDe(ky, PROBLEM_ID, "B", 250);
 
         assertThat(contests.deCua(ky))
                 .singleElement()
