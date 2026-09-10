@@ -15,9 +15,45 @@
 --    ngày ai đó thật sự viết migration, và không ai quay lại sửa một dòng chú
 --    thích. Ca 9 tự bỏ qua, và đó là toàn bộ điều cần biết.
 --
+-- ★ SỐ HIỆU MIGRATION KHÔNG THEO THỨ TỰ MỐC. `jobs` là V6 chứ không phải V7, vì
+--   nó được kéo lên sớm cho `TestdataImportJob`; contests mới là V7. Bản trước
+--   của file này ghi ngược. Danh sách thật:
+--   `ls oj-api/src/main/resources/db/migration/`.
+--
 -- Ba ca KỲ VỌNG BÁO LỖI — đó mới là kết quả đúng: TEST 1, TEST 10, TEST 12.
+--
+-- =============================================================================
+-- ★★ FILE NÀY CHỈ ĐÚNG TRÊN DATABASE RỖNG ★★
+--
+-- Mọi ca dưới đây tham chiếu khoá chính bằng số cứng: users 1 và 2, problems 1,
+-- testcases 1 và 2, submissions 1, judge_hosts 1. Chúng chỉ khớp nếu các bảng ấy
+-- đang trống trước khi chạy.
+--
+-- Chạy lần thứ hai thì chết ngay ở phần seed (`ux_users_handle_lower` là UNIQUE)
+-- — ồn ào, dễ hiểu, không nguy hiểm. Thứ NGUY HIỂM là chạy trên một database đã
+-- có sẵn đúng một tài khoản, ví dụ admin do ứng dụng tạo lúc khởi động: khi đó
+-- `setter1` nhận id 2, `hung` nhận id 3, và TEST 2 nộp bài dưới danh nghĩa
+-- setter chứ không phải `hung`. Mọi ca vẫn chạy, vẫn in ra thứ trông đúng, chỉ
+-- là đang đo trên dòng khác — một bài kiểm xanh mà không kiểm gì.
+--
+-- Nên có câu chặn ngay dưới đây. Nó dừng ở dòng đầu tiên thay vì để bạn đọc một
+-- bảng kết quả sai suốt 12 ca.
 -- =============================================================================
 \set ON_ERROR_STOP on
+
+DO $ktra$
+BEGIN
+    IF (SELECT count(*) FROM users)    > 0 THEN
+        RAISE EXCEPTION 'smoke_test.sql chi chay tren DB rong: bang users da co % dong. Dung DB moi, hoac chay lai Flyway tu dau.', (SELECT count(*) FROM users);
+    END IF;
+    IF (SELECT count(*) FROM problems) > 0 THEN
+        RAISE EXCEPTION 'smoke_test.sql chi chay tren DB rong: bang problems da co % dong.', (SELECT count(*) FROM problems);
+    END IF;
+    IF (SELECT count(*) FROM judge_hosts WHERE id = 1) = 0 THEN
+        RAISE EXCEPTION 'chua co judge_hosts id=1 — R__seed_du_lieu_tham_chieu.sql chua chay?';
+    END IF;
+END
+$ktra$;
 \echo '--- seed ---'
 INSERT INTO users (handle, display_name, role) VALUES ('setter1','Setter',  'SETTER');
 INSERT INTO users (handle, display_name)            VALUES ('hung','Hung');
@@ -129,7 +165,10 @@ SELECT tableoid::regclass AS partition, action FROM audit_log;
 \endif
 
 \echo '--- TEST 12: khong the danh dau DONE ma khong co verdict (CHECK) ---'
+-- Tra id ngon ngu bang code, y het TEST 2. Ban truoc viet cung so 1: `languages.id`
+-- la IDENTITY, nen 1 chi tinh co la cpp20 tren mot DB dung vua tao. Ca kiem nay do
+-- ck_submissions_done, khong do chuyen id nao ton tai.
 \set ON_ERROR_STOP off
 INSERT INTO submissions (user_id,problem_id,language_id,source_sha256,source_bytes,status)
-VALUES (2,1,1,repeat('c',64),12,'DONE');
+VALUES (2,1,(SELECT id FROM languages WHERE code='cpp20'),repeat('c',64),12,'DONE');
 \set ON_ERROR_STOP on

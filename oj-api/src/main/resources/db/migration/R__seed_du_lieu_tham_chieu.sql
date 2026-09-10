@@ -82,6 +82,25 @@ ON CONFLICT (name) DO UPDATE SET
     judge_slots = EXCLUDED.judge_slots,
     updated_at  = now();
 
+-- Máy chấm dev: CÙNG phần cứng vật lý, nhưng chạy từ source trong VM Lima `judge` và
+-- KHÔNG phải mốc quy chiếu (is_reference = FALSE — ux_judge_hosts_single_reference chỉ
+-- cho phép đúng một dòng TRUE).
+--
+-- Dòng này tồn tại vì API chỉ `UPDATE judge_hosts ... WHERE name` — máy không có ở đây thì
+-- phép đo bị bỏ (RecordHostBenchmarkUseCase) và judge_runs.host_id nhận NULL. Có tên riêng
+-- + có dòng riêng là điều kiện để `mayChamSong` đếm đúng và để truy được lần chấm nào của
+-- máy nào; trước đó cả hai worker cùng khai 'mac-m1max-host' và cả hai chỉ số ấy nói dối.
+--
+-- host_factor để mặc định 1.000 và KHÔNG cập nhật lúc ON CONFLICT: HostBenchmark của chính
+-- máy dev sẽ ghi đè bằng số đo thật, và seed chạy lại không được xoá phép đo ấy — cùng lý
+-- do khối máy chuẩn ở trên cũng không đụng vào cột này.
+INSERT INTO judge_hosts (name, arch, judge_slots, host_factor, is_reference)
+VALUES ('mac-m1max-dev', 'arm64', 6, 1.000, FALSE)
+ON CONFLICT (name) DO UPDATE SET
+    arch        = EXCLUDED.arch,
+    judge_slots = EXCLUDED.judge_slots,
+    updated_at  = now();
+
 INSERT INTO tags (slug, name) VALUES
     ('dp','Quy hoạch động'), ('graph','Đồ thị'), ('greedy','Tham lam'),
     ('math','Toán'), ('string','Xâu'), ('ds','Cấu trúc dữ liệu'),

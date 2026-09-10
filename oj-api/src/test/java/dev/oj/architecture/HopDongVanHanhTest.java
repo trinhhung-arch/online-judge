@@ -44,6 +44,8 @@ class HopDongVanHanhTest {
     private static final Path SEED = Path.of("src", "main", "resources", "db", "migration",
             "R__seed_du_lieu_tham_chieu.sql");
 
+    private static final Path COMPOSE = Path.of("..", "docker-compose.yml");
+
     @Test
     @DisplayName("★ tên hai hàng đợi ở oj-worker khớp hằng số của oj-api")
     void ten_hang_doi_khop() throws IOException {
@@ -115,6 +117,105 @@ class HopDongVanHanhTest {
                 .as("oj.judge.host-liveness (%s) phải ≥ 2 × oj.worker.sandbox.benchmark"
                         + ".interval (%s)", cuaSo, nhip)
                 .isGreaterThanOrEqualTo(nhip.multipliedBy(2));
+    }
+
+    /**
+     * ★ Ca này canh một lỗi <b>đã chạy im lặng sáu ngày</b> trên máy dev, không phải một lo xa.
+     *
+     * <h2>Triệu chứng, và vì sao không ai thấy</h2>
+     * {@code oj.worker.host-name} từng mặc định đúng bằng tên máy chấm chuẩn. Nên một worker
+     * thứ hai khởi động bằng {@code spring-boot:run} trần — không đặt biến nào — <i>sinh ra đã
+     * mang tên máy chuẩn</i>. Không bước nào sai, không log nào đỏ, và hai chỉ số hỏng cùng lúc:
+     * <ul>
+     *   <li>{@code mayChamSong} đếm <b>dòng</b> {@code judge_hosts} ({@code JdbcQueueStatusQuery})
+     *       nên hai worker vẫn ra 1 — và tắt một cái đi thì vẫn là 1, vì cái còn lại vẫn touch
+     *       chung một dòng. Chỉ số "máy chấm còn sống không" mất hẳn khả năng nói "không".</li>
+     *   <li>{@code judge_runs.host_id} tra theo tên, nên không lần chấm nào truy được về đúng
+     *       máy đã chấm — và {@code judge_hosts.host_factor} bị worker chưa hiệu chuẩn ghi đè
+     *       mỗi 15 phút.</li>
+     * </ul>
+     *
+     * <h2>Vì sao là ca kiểm chứ không phải một dòng bình luận</h2>
+     * Cái giá trị mặc định ấy trông hoàn toàn hợp lý khi đọc file — nó đúng tên máy đang chạy
+     * thật. Chỉ khi có worker <i>thứ hai</i> nó mới thành sai, mà worker thứ hai thì không xuất
+     * hiện trong bất kỳ file cấu hình nào để ai đó đọc ra. Chỉ có một ràng buộc kiểm được mới
+     * bắt được lần sau.
+     */
+    @Test
+    @DisplayName("★ worker không đặt tên KHÔNG được mặc định thành máy chấm chuẩn")
+    void worker_khong_duoc_mac_dinh_thanh_may_cham_chuan() throws IOException {
+        String macDinh = macDinhCuaEnv(chuoi(Files.readString(YML_WORKER), "host-name"));
+        String mayChuan = mayChamChuanTrongSeed(Files.readString(SEED));
+
+        assertThat(macDinh)
+                .as("oj.worker.host-name mặc định là '%s', đúng bằng máy chấm chuẩn trong "
+                        + "R__seed. Một worker quên đặt OJ_WORKER_HOST_NAME sẽ tự xưng là máy "
+                        + "chuẩn, và mayChamSong (đếm dòng judge_hosts) không còn phát hiện "
+                        + "được một máy chấm đã chết. Đặt mặc định thành một tên KHÔNG có "
+                        + "trong judge_hosts", macDinh)
+                .isNotEqualTo(mayChuan);
+    }
+
+    /**
+     * ★ Healthcheck của RabbitMQ <b>không được dựng một máy ảo Erlang</b>.
+     *
+     * <h2>Ca này canh một sự cố đã ăn 11 GiB, và một bản vá đã KHÔNG đủ</h2>
+     * {@code rabbitmq-diagnostics} (và {@code rabbitmqctl}) dựng một node Erlang phân tán
+     * trong dải cổng chỉ có 11 chỗ do chính CLI đặt. Chạy nó 15 giây một lần trong một
+     * healthcheck sinh ra hai tầng hỏng, cả hai đo thật ngày 2026-09-10:
+     * <ul>
+     *   <li><b>Chí mạng:</b> lần ping bị Docker SIGKILL để lại tiến trình beam giữ một cổng
+     *       trong dải ấy. Đủ 11 lần là dải cạn và MỌI lần ping sau đều hỏng — 460 tiến trình
+     *       treo, 11,2 GiB, {@code FailingStreak} 4118, trong khi broker vẫn phục vụ bình
+     *       thường suốt năm ngày.</li>
+     *   <li><b>Âm ỉ:</b> thêm {@code --timeout 5} chặn được tầng trên — epmd sạch, dải cổng
+     *       không còn bị giữ. Nhưng đo lại sau hai giờ vẫn có 17 beam mồ côi, và lần này
+     *       <i>ping đang thành công</i>. Bản vá ấy thu hẹp thiệt hại chứ không đóng được lỗ.</li>
+     * </ul>
+     *
+     * <h2>Vì sao ràng buộc là "cấm CLI" chứ không phải "phải có --timeout"</h2>
+     * Bản đầu của ca này ép {@code --timeout} nhỏ hơn {@code timeout} của Docker — tức nó
+     * canh đúng <b>bản vá đã tỏ ra không đủ</b>. Một ca kiểm canh một bản vá sai sẽ xanh mãi
+     * trong lúc lỗi vẫn chảy. Thứ đáng ép là tính chất gốc: đừng chạy một runtime nặng, có
+     * tài nguyên toàn cục hữu hạn, bốn nghìn lần một ngày, chỉ để hỏi "còn sống không".
+     */
+    @Test
+    @DisplayName("★ healthcheck RabbitMQ không được gọi CLI dựng node Erlang")
+    void healthcheck_rabbit_khong_dung_cli_erlang() throws IOException {
+        String lenh = lenhHealthcheckRabbit(Files.readString(COMPOSE));
+
+        assertThat(lenh)
+                .as("healthcheck RabbitMQ đang là `%s`. Mỗi lần chạy nó dựng một node Erlang "
+                        + "phân tán trong dải 11 cổng 35672–35682 và để lại tiến trình treo; "
+                        + "15 giây một lần thì dải ấy cạn và healthcheck đỏ vĩnh viễn. Dùng "
+                        + "thứ không dựng VM — `nc -z localhost 5672` đã đo là phân biệt được "
+                        + "cổng mở/đóng", lenh)
+                .doesNotContain("rabbitmq-diagnostics")
+                .doesNotContain("rabbitmqctl");
+    }
+
+    /** Dòng {@code test:} của khối healthcheck trong service {@code rabbitmq}. */
+    private static String lenhHealthcheckRabbit(String compose) {
+        int i = compose.indexOf("  rabbitmq:");
+        assertThat(i).as("không thấy service rabbitmq trong %s", COMPOSE).isNotNegative();
+        Matcher m = Pattern.compile("(?m)^\s*test:\s*(.+)$").matcher(compose.substring(i));
+        assertThat(m.find()).as("service rabbitmq không có healthcheck nào").isTrue();
+        return m.group(1).trim();
+    }
+
+    /** Giá trị sau dấu {@code :} của {@code ${TEN_BIEN:mac-dinh}}; chính chuỗi nếu không có. */
+    private static String macDinhCuaEnv(String v) {
+        Matcher m = Pattern.compile("^\\$\\{[A-Z_]+:(.*)}$").matcher(v);
+        return m.find() ? m.group(1) : v;
+    }
+
+    /** Tên ở dòng {@code judge_hosts} duy nhất có {@code is_reference = TRUE}. */
+    private static String mayChamChuanTrongSeed(String seed) {
+        Matcher m = Pattern.compile("VALUES \\('([^']+)',\\s*'[^']+',\\s*\\d+,\\s*[\\d.]+,\\s*TRUE\\)")
+                .matcher(seed);
+        assertThat(m.find()).as("không thấy dòng judge_hosts nào có is_reference = TRUE trong seed")
+                .isTrue();
+        return m.group(1);
     }
 
     /**

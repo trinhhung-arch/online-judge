@@ -11,6 +11,7 @@ import org.springframework.amqp.core.FanoutExchange;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -239,6 +240,20 @@ public class RabbitJudgeJobPublisher implements JudgeJobPublisher {
                     BindingBuilder.bind(hangLive).to(judgeExchange).with(HANG_LIVE),
                     BindingBuilder.bind(hangRejudge).to(judgeExchange).with(HANG_REJUDGE),
                     BindingBuilder.bind(hangChet).to(judgeDeadExchange));
+        }
+
+        /**
+         * Những khai báo ở trên chỉ có tác dụng khi một <b>kết nối được mở</b>, mà API nối
+         * lười — xem javadoc {@link RabbitTopologyDeclarer} về lần nó làm worker chết trong
+         * vòng lặp {@code NOT_FOUND}.
+         *
+         * <p>Bean nằm trong chính {@code Topology} để nó dùng lại đúng một điều kiện
+         * {@code @ConditionalOnProperty} ở trên: tắt transport là tắt cả hai, không có cách
+         * nào để hai chỗ lệch nhau.
+         */
+        @Bean
+        public RabbitTopologyDeclarer rabbitTopologyDeclarer(ConnectionFactory connectionFactory) {
+            return new RabbitTopologyDeclarer(connectionFactory);
         }
     }
 }

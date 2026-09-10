@@ -53,13 +53,19 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
      * {@code judge_hosts.id} tồn tại (bất biến #3). Máy chưa đăng ký thì cột nhận NULL và
      * worker vẫn chấm được ngay — đó là S2 ("worker mới join: 0 thao tác phía API").
      *
-     * <p><b>Một chỗ lệch có chủ ý so với {@code duong_nong.sql}:</b> tài liệu viết
-     * {@code (:leaseSeconds || ' seconds')::interval}. Ở đây dùng
-     * {@code make_interval(secs => :leaseSeconds)} — cùng kết quả, nhưng nhận thẳng số nguyên
-     * thay vì đi vòng qua chuỗi. Bản gốc dựa vào việc Postgres tự phân giải
+     * <p><b>{@code make_interval(secs => :leaseSeconds)}, không phải
+     * {@code (:leaseSeconds || ' seconds')::interval}.</b> Bản sau nhận thẳng số nguyên thay
+     * vì đi vòng qua chuỗi. Bản trước dựa vào việc Postgres tự phân giải
      * {@code int4 || unknown} thành {@code anynonarray || text}, và với một tham số bind thì
      * phép phân giải đó phụ thuộc kiểu mà driver gửi lên. {@code make_interval} không có chỗ
-     * nào để đoán.
+     * nào để đoán. Đo trên Postgres 16 (2026-09-08): cả hai đều {@code PREPARE} được, nhưng
+     * {@code pg_prepared_statements.parameter_types} cho {@code text} ở bản cũ và
+     * {@code double precision} ở bản này — giá trị lease đi qua đường số học thay vì đường
+     * nối chuỗi.
+     *
+     * <p>{@code docs/sql/duong_nong.sql} <b>từng</b> viết dạng nối chuỗi; nó đã được sửa theo
+     * câu này ngày 2026-09-08, nên hai bên hiện khớp nhau. Nếu bạn thấy chúng lệch trở lại
+     * thì code là bản đúng — nó là bản đã chạy qua test.
      */
     private static final String CLAIM = """
             WITH picked AS (

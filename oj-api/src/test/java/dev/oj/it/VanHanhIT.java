@@ -154,18 +154,34 @@ class VanHanhIT extends PostgresIT {
         }
 
         /**
-         * Máy chấm chuẩn trong seed chưa từng gọi {@code benchmark}, nên {@code last_seen_at}
-         * là {@code NULL} và nó <b>không</b> được tính là sống. Đó là hành vi đúng: một máy
+         * Máy chấm trong seed chưa từng gọi {@code benchmark}, nên {@code last_seen_at} là
+         * {@code NULL} và chúng <b>không</b> được tính là sống. Đó là hành vi đúng: một máy
          * chưa bao giờ báo danh không phải một máy đang chạy.
+         *
+         * <p><b>Chạm đúng một dòng, không phải cả bảng.</b> Bản trước
+         * {@code UPDATE judge_hosts} không có {@code WHERE} rồi khẳng định kết quả là 1 — tức
+         * nó ngầm kiểm "seed có đúng một máy chấm", một sự thật chẳng liên quan gì tới FR này.
+         * Nên khi seed thêm dòng máy dev, ca này đỏ mà không có lỗi nào thật sự. Thứ cần
+         * chứng minh là {@code mayChamSong} đếm <i>máy vừa báo danh</i>, và điều đó chỉ thấy
+         * được khi có máy báo danh còn máy khác thì không.
          */
         @Test
         @DisplayName("máy chấm chỉ tính là sống khi last_seen_at nằm trong cửa sổ")
         void may_cham_song() {
             assertThat(trangThai.doc().mayChamSong()).isZero();
 
+            jdbc.sql("UPDATE judge_hosts SET last_seen_at = now() WHERE is_reference").update();
+
+            assertThat(trangThai.doc().mayChamSong())
+                    .as("chỉ máy chấm chuẩn vừa báo danh; những máy còn lại vẫn NULL")
+                    .isEqualTo(1);
+
             jdbc.sql("UPDATE judge_hosts SET last_seen_at = now()").update();
 
-            assertThat(trangThai.doc().mayChamSong()).isEqualTo(1);
+            assertThat(trangThai.doc().mayChamSong())
+                    .as("mọi máy đang bật đều vừa báo danh")
+                    .isEqualTo(jdbc.sql("SELECT count(*) FROM judge_hosts WHERE enabled")
+                            .query(Integer.class).single());
         }
     }
 

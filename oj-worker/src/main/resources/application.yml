@@ -32,7 +32,23 @@ spring:
 # =============================================================================
 oj:
   worker:
-    host-name: ${OJ_WORKER_HOST_NAME:mac-m1max-host}   # khớp judge_hosts.name
+    # ★ Mặc định KHÔNG được là tên máy chấm chuẩn, và đây là lý do — đã xảy ra thật.
+    #
+    # `mayChamSong` đếm DÒNG judge_hosts (JdbcQueueStatusQuery), không đếm worker. Hai
+    # worker cùng tên thì con số ấy là 1, và — chỗ chết người — TẮT MỘT CÁI ĐI NÓ VẪN LÀ 1,
+    # vì cái còn lại vẫn touch chung một dòng. Chỉ số sinh ra để nói "máy chấm còn sống
+    # không" trả lời "còn" trong cả trường hợp một nửa năng lực đã chết. Kèm theo:
+    # judge_runs.host_id tra theo tên nên không lần chấm nào truy được về đúng máy đã chấm,
+    # và host_factor của máy chuẩn bị worker chưa hiệu chuẩn ghi đè mỗi 15 phút.
+    #
+    # Tên mặc định lạ thì phép đo bị RecordHostBenchmarkUseCase từ chối kèm một dòng warn
+    # nói đúng cách chữa, còn host_id/claimed_by_host nhận NULL (cả hai cột đều nullable,
+    # JdbcJudgeQueueRepository đã ghi rõ từ M1). Ồn ào và vô hại — thay vì im lặng và sai.
+    #
+    # KHÔNG bỏ hẳn mặc định để crash lúc boot: README "Cách đo lại trên một máy bất kỳ"
+    # dựa vào `./mvnw -pl oj-worker spring-boot:run` trần, và recipe ấy chỉ cần dòng log
+    # "Đo máy ... ms CPU" — nó vẫn in bình thường dưới tên này.
+    host-name: ${OJ_WORKER_HOST_NAME:worker-chua-dat-ten}   # khớp judge_hosts.name
     arch: ${OJ_WORKER_ARCH:arm64}
     slots: ${OJ_WORKER_SLOTS:6}          # CỐ ĐỊNH theo cấu hình, không theo số core (ADR 008)
     lease: 120s                          # bản sao của oj.judge.lease phía API, chỉ để cảnh báo

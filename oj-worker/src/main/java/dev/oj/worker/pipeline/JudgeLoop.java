@@ -58,6 +58,9 @@ public class JudgeLoop implements SmartLifecycle {
     private final JudgeDoorbell chuong;
     private final WorkerProperties properties;
 
+    /** Dùng chung cho mọi slot — xem javadoc {@link ClaimBackoff} về vì sao log phải chung. */
+    private final ClaimBackoff backoff;
+
     private ExecutorService slots;
     private volatile boolean running;
 
@@ -68,6 +71,7 @@ public class JudgeLoop implements SmartLifecycle {
         this.results = results;
         this.chuong = chuong;
         this.properties = properties;
+        this.backoff = new ClaimBackoff(properties.idlePoll());
     }
 
     @Override
@@ -94,9 +98,12 @@ public class JudgeLoop implements SmartLifecycle {
     private void pullLoop() {
         ClaimRequestDto request =
                 ClaimRequestDto.single(properties.hostName(), properties.arch());
+        int lienTiepHong = 0;
         while (running) {
             try {
                 Optional<JudgeJobDto> job = api.claim(request);
+                backoff.ghiNhanCoLai();
+                lienTiepHong = 0;
                 if (job.isEmpty()) {
                     // Hàng đợi rỗng: chờ tiếng chuông, tối đa idlePoll. Bước 6.4.
                     if (!chuong.cho(properties.idlePoll())) {
@@ -106,11 +113,12 @@ public class JudgeLoop implements SmartLifecycle {
                 }
                 judge(job.get());
             } catch (JudgeApiException e) {
-                // API đang xuống. Ngủ rồi thử lại — đừng quay vòng dội request vào một hệ
-                // thống đang có sự cố.
-                log.warn("Không xin được việc ({}) — thử lại sau {}",
-                        e.getMessage(), properties.idlePoll());
-                sleep(properties.idlePoll());
+                // API đang xuống. Giãn nhịp và ghi log MỘT lần — bản trước ngủ đúng idlePoll
+                // rồi ghi một dòng WARN mỗi lần, tức 12 dòng/giây với sáu slot, không đổi dù
+                // API đã chết một tiếng. Xem javadoc ClaimBackoff.
+                Duration cho = backoff.cho(++lienTiepHong);
+                backoff.ghiNhanMat(e.getMessage(), cho);
+                sleep(cho);
             } catch (Exception e) {
                 log.error("Lỗi ngoài dự kiến trong vòng lặp chấm — slot vẫn tiếp tục", e);
                 sleep(properties.idlePoll());

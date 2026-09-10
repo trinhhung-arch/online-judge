@@ -144,9 +144,17 @@ Cố ý **không** có index trên `status`, `verdict`, `contest_id`, `created_a
 HOT update nghĩa là Postgres không phải ghi lại bất kỳ index nào. Với 3 index trên bảng nóng,
 đó là chênh lệch 6 lần ghi index mỗi bài nộp — nhân với mọi bài nộp, mãi mãi.
 
-**`contest_id`** — dựng lại bảng xếp hạng chạy theo từng đề và chặn khoảng `id`
-(bài trong contest luôn nằm giữa id đầu và id cuối của khung giờ thi), nên
-`ix_submissions_problem_recent` đã đủ. Xem truy vấn 11 trong `duong_nong.sql`.
+**`contest_id`** — dựng lại bảng xếp hạng chạy **theo từng đề**, và trong câu truy vấn thì
+`problem_id` đứng **trước** `contest_id`. Nhờ vậy `ix_submissions_problem_recent` cắt gần hết
+bảng, còn `contest_id` chỉ là bộ lọc thêm trên phần đã cắt — không cần index riêng. Viết ngược
+thứ tự thì Postgres phải quét theo `contest_id`, và đó là lúc thiếu index thành ra tốn kém.
+Xem truy vấn 11 trong `duong_nong.sql`, hiện thực ở `JdbcJudgingQueries.CUA_DE`.
+
+> Bản trước của đoạn này nói việc chặn khoảng `id` (`BETWEEN` id đầu và id cuối của khung giờ
+> thi) là thứ làm cho index kia đủ dùng. Điều đó **không đúng với mã đang chạy**: câu thật
+> phân trang bằng con trỏ (`id > :sau ... LIMIT :gioiHan`), và hai tham số `minSubmissionId`
+> / `maxSubmissionId` chưa bao giờ tồn tại trong `oj-api`. Thứ làm index đủ dùng là **thứ tự
+> điều kiện**, không phải khoảng `id`. Sửa 2026-09-08.
 
 **`created_at`** — không cần: `id` tăng đơn điệu nên `ORDER BY id DESC` chính là thứ tự thời gian.
 Đây cũng là lý do khoá chính là `BIGINT IDENTITY` chứ không phải UUID.
@@ -462,6 +470,15 @@ M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án
 > Đừng sửa số hiệu cho "đẹp theo mốc" — sửa một file đã commit là điều cấm số 6 của
 > `CLAUDE.md`.
 
+> **★ V3 có một chú thích sai, và nó phải ở nguyên đó.** Trong
+> `V3__submissions_judge_queue_judge_runs.sql`, cột `contest_id` mang chú thích
+> `-- FK gắn ở V6 (NOT VALID rồi VALIDATE)`. Khoá ngoại ấy thật ra gắn ở **V7**
+> (`V7__contests_va_bang_xep_hang.sql` dòng 147) — cùng gốc với việc hoán đổi V6/V7 ở trên.
+> Sửa chú thích trong một file Flyway **đã commit** cũng đổi checksum và làm hỏng
+> `flyway validate` trên mọi máy đã migrate; đó là điều cấm số 6 của `CLAUDE.md`. Nên đính
+> chính nằm ở đây, và chú thích trong V3 được để nguyên. Ai đọc V3 rồi đi tìm FK ở V6 thì
+> quay lại dòng này.
+>
 > **`V8__ai_review.sql` chưa tồn tại.** Bảng này từng liệt kê nó ở hàng V8; số hiệu ấy đã bị
 > `phan_quyen_role_ung_dung` dùng mất. Khi làm AI review (tuần 14–15), migration đó sẽ mang
 > số kế tiếp còn trống, không phải V8.

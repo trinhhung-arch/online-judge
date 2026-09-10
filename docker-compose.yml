@@ -37,6 +37,20 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: oj-rabbitmq
+    # ★ KHÔNG được bỏ dòng này. Node name của RabbitMQ là `rabbit@$(hostname -s)`, và nếu
+    # không đặt `hostname` thì Docker lấy CONTAINER ID làm hostname. Hệ quả: mỗi lần container
+    # được tạo lại — đổi image, sửa healthcheck, `up -d` sau khi sửa compose — là một node
+    # name MỚI, tức mnesia rỗng: mọi hàng đợi durable biến mất, mọi message trong đó mất theo.
+    #
+    # Đã xảy ra 2026-09-10: một lần `docker compose up -d rabbitmq` để nhận healthcheck mới
+    # làm node đổi từ rabbit@098937e9b66b sang rabbit@0fe2b03d893e, judge.live/judge.rejudge/
+    # judge.dead biến sạch, và worker chết với `NOT_FOUND - no queue 'judge.live'` (nó khai
+    # báo THỤ ĐỘNG, chỉ oj-api tạo hàng đợi). Lần ấy hàng đợi rỗng nên không mất bài nộp —
+    # đó là may, không phải thiết kế. Với một hệ thống mà lời hứa số hai là "không mất bài
+    # nộp", một broker tự xoá mình theo container ID là thứ không được phép tồn tại.
+    #
+    # Đổi giá trị này = đổi node name = một lần reset nữa. Đặt rồi thì đừng đụng vào.
+    hostname: oj-rabbitmq
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ojuser
@@ -47,10 +61,36 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # ★ Healthcheck này KHÔNG được dựng một máy ảo Erlang. Đọc trước khi "nâng cấp" nó.
+      #
+      # Lệnh hiển nhiên ở đây là `rabbitmq-diagnostics -q ping` — tài liệu RabbitMQ khuyên thế,
+      # và nó từng nằm đúng chỗ này. Nó hỏng theo hai tầng, đo thật ngày 2026-09-10:
+      #
+      #   Tầng 1 — CHÍ MẠNG. CLI dựng một node Erlang phân tán trong dải cổng CHỈ 11 chỗ
+      #   (`inet_dist_listen_min 35672 … max 35682`, do chính CLI đặt). Lần ping bị Docker
+      #   SIGKILL khi hết `timeout` để lại tiến trình beam con giữ luôn một cổng trong dải ấy.
+      #   Đủ 11 lần là dải cạn, và từ đó MỌI lần ping đều hỏng — mỗi lần hỏng đẻ thêm một xác.
+      #   Kết quả: 460 tiến trình treo, 11,2 GiB, FailingStreak 4118, trong khi broker chạy tốt.
+      #
+      #   Tầng 2 — âm ỉ. Thêm `--timeout 5` (< `timeout` của Docker) chặn được tầng 1: epmd
+      #   sạch, dải cổng không còn bị giữ, healthcheck xanh trở lại. Nhưng ĐO LẠI SAU 2 GIỜ
+      #   vẫn thấy 17 tiến trình beam mồ côi (ppid=1, sleeping, 36 luồng) — ping THÀNH CÔNG
+      #   mà tiến trình vẫn không thoát. Nguyên nhân nằm trong CLI của RabbitMQ, không phải
+      #   ở cấu hình này, nên không vá được từ đây.
+      #
+      # `nc -z` không dựng VM nào: một tiến trình busybox vài chục KB, không đụng epmd, không
+      # đụng dải cổng dist. Đổi lại nó chỉ trả lời được "cổng AMQP có nhận kết nối không" —
+      # KHÔNG phát hiện được resource alarm (đĩa/bộ nhớ) khiến broker chặn publisher. Đó là
+      # đánh đổi có chủ đích: một chỉ số hẹp mà đúng, thay cho một chỉ số rộng mà tự phá hỏng
+      # chính thứ nó đo. Cần bắt cả alarm thì đường đi là một sidecar gọi HTTP management API,
+      # không phải mang CLI quay lại đây.
+      #
+      # Đã kiểm ca âm: `nc -z localhost 5672` trả 0, `nc -z localhost 5699` trả khác 0.
+      test: ["CMD", "nc", "-z", "localhost", "5672"]
       interval: 15s
       timeout: 10s
       retries: 5
+      start_period: 60s
 
   # Testdata content-addressed. Chưa ai gọi tới trước M4, nhưng nó nằm trong bộ bốn
   # service của build-order.md Bước 0.4 — dựng sẵn để "docker compose up là chạy được"

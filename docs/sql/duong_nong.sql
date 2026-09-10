@@ -1,6 +1,19 @@
 -- =============================================================================
 -- Các truy vấn trên đường nóng — chép nguyên văn vào repository, đừng viết lại.
 -- Tất cả dùng named parameter của JdbcClient (bất biến #5: không nối chuỗi SQL).
+--
+-- ★ ĐÃ ĐỐI CHIẾU VỚI CODE ĐANG CHẠY ngày 2026-09-08. Chỗ nào lệch thì file này
+--   đã được sửa theo CODE, không phải ngược lại — vì code là thứ đã chạy qua test.
+--   Bản trước của file này có hai chỗ nguy hiểm, ghi ra đây để không ai chép lại
+--   từ một bản cũ nào đó còn sót:
+--
+--     * Câu 9 thiếu điều kiện `hidden_at` -> chủ bài nộp vẫn xem được bài mà
+--       ADMIN đã ẩn (FR-SUB-09 hỏng một nửa).
+--     * Câu 11 không có LIMIT và dùng hai tham số không tồn tại trong mã nguồn
+--       -> nạp trọn một kỳ thi vào bộ nhớ.
+--
+--   Cách kiểm lại bất cứ lúc nào: mỗi câu dưới đây ghi tên hằng số và file Java
+--   tương ứng. `grep -n "<TEN_HANG>" -r oj-api/src/main` là ra.
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +46,27 @@ ON CONFLICT (submission_id) DO NOTHING;
 --    và không job nào bị giao hai lần trong cùng thời điểm.
 --    `attempt` tăng ở ĐÂY. Đó là điều làm cho kết quả của một worker đã bị reaper
 --    thu hồi tự động bị từ chối ở bước 3 — không cần cơ chế nào khác.
+--
+--    Code: JdbcJudgeQueueRepository.CLAIM
+--
+--    ★ HAI CHI TIẾT KHÔNG ĐƯỢC VIẾT KHÁC ĐI
+--    1. `claimed_by_host` phân giải bằng SUB-SELECT theo TÊN máy, không nhận
+--       `:hostId` từ worker. Worker không được biết `judge_hosts.id` tồn tại —
+--       nó chỉ biết bốn đường dẫn trong `JudgeEndpoints` (bất biến #3). Nhận id
+--       từ worker là bắt worker biết lược đồ CSDL của API.
+--       Phụ thêm: máy chưa đăng ký thì cột nhận NULL và bài vẫn chấm được ngay
+--       (S2 — "worker mới join: 0 thao tác phía API").
+--    2. `make_interval(secs => :leaseSeconds)` chứ KHÔNG phải
+--       `(:leaseSeconds || ' seconds')::interval`.
+--       Cả hai đều PREPARE được — đo trên Postgres 16 ngày 2026-09-08 — nhưng
+--       kiểu tham số suy ra KHÁC NHAU:
+--           bản cũ  -> parameter_types = {text}
+--           bản mới  -> parameter_types = {double precision}
+--       `leaseSeconds` là một `int` trong Java (`AppProperties.leaseSeconds()`).
+--       Bản cũ buộc nó đi vòng qua text: JDBC phải bind một chuỗi, và giá trị
+--       lease — thứ quyết định sau bao lâu reaper cướp bài khỏi worker — được
+--       ghép bằng nối chuỗi thay vì bằng số học. Bản mới nhận thẳng con số.
+--       Kiểm lại: PREPARE cả hai rồi đọc `pg_prepared_statements.parameter_types`.
 -- ─────────────────────────────────────────────────────────────────────────────
 WITH picked AS (
     SELECT submission_id
@@ -44,8 +78,8 @@ WITH picked AS (
 )
 UPDATE judge_queue q
    SET claimed_at      = now(),
-       lease_until     = now() + (:leaseSeconds || ' seconds')::interval,  -- 120s
-       claimed_by_host = :hostId,
+       lease_until     = now() + make_interval(secs => :leaseSeconds),      -- 120s
+       claimed_by_host = (SELECT id FROM judge_hosts WHERE name = :hostName),
        attempt         = q.attempt + 1
   FROM picked p
  WHERE q.submission_id = p.submission_id
@@ -123,7 +157,7 @@ UPDATE judge_queue
        claimed_by_host = NULL
  WHERE claimed_at IS NOT NULL
    AND lease_until  < now()
-RETURNING submission_id, attempt;
+RETURNING submission_id;
 
 -- Đưa các bài đó về QUEUED trên bảng nóng
 UPDATE submissions SET status = 'QUEUED' WHERE id = ANY(:submissionIds);
@@ -168,6 +202,12 @@ SELECT created_at
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 8. QUOTA AI 5 LƯỢT/NGÀY — FR-AI-03.
+--
+--    ⚠️ BẢNG `ai_quota_usage` CHƯA TỒN TẠI. Không migration nào tạo nó, và
+--       package `dev.oj.ai` cũng chưa có. Câu này là THIẾT KẾ để dành cho tuần
+--       14-15, không phải mã đang chạy — đừng grep tìm nó trong repository rồi
+--       tưởng mình bỏ sót. Xem `docs/frplan.md` mục 2.5.
+--
 --    MỘT câu, nguyên tử, không race. 0 dòng trả về = hết quota.
 --    Đừng làm bằng SELECT rồi IF rồi UPDATE — hai tab trình duyệt là đủ để lách.
 --
@@ -187,12 +227,25 @@ RETURNING used_count;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 9. CHỐNG IDOR — điều kiện chủ sở hữu nằm TRONG câu query, không phải câu if
 --    ở service (oj-api/CLAUDE.md mục 2).
+--
+--    Code: JdbcSubmissionRepository.FIND_FOR_REQUESTER
+--                              và .FIND_DETAIL_FOR_REQUESTER
+--
+--    ★ HAI ĐIỀU KIỆN, KHÔNG PHẢI MỘT. Bản trước của file này chỉ có dòng
+--      `user_id`, và đó là lỗi: bài nộp bị ADMIN ẩn (FR-SUB-09) vẫn hiện ra với
+--      chính người nộp. "Ẩn" mà chủ bài vẫn xem được thì không phải ẩn — ADMIN
+--      ẩn một bài thường là vì nội dung của nó có vấn đề, tức là đúng lúc cần
+--      chặn nhất thì hàng rào không có.
+--
+--      Để ý câu 6 ngay trên đã có `hidden_at IS NULL`. Hai câu cùng đọc một bảng
+--      thì phải cùng một luật hiển thị; lệch nhau là có một đường vòng.
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT s.id, s.verdict, s.failed_test_ordinal, p.feedback_level
   FROM submissions s
   JOIN problems p ON p.id = s.problem_id
  WHERE s.id = :submissionId
-   AND (s.user_id = :requesterId OR :requesterRole = 'ADMIN');
+   AND (s.user_id   = :requesterId OR :requesterRole = 'ADMIN')
+   AND (s.hidden_at IS NULL        OR :requesterRole = 'ADMIN');
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 10. TESTCASE SAMPLE ĐƯỢC PHÉP HIỂN THỊ — FR-PROB-04.
@@ -208,22 +261,43 @@ SELECT t.ordinal, c.input_text, c.output_text, c.explanation
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 11. DỰNG LẠI BẢNG XẾP HẠNG — FR-CON-08, job nền theo từng đề.
---     Chặn khoảng id để `ix_submissions_problem_recent` cắt gần hết bảng, nhờ
---     vậy không cần index riêng cho contest_id trên bảng nóng.
+--
+--     Code: JdbcJudgingQueries.CUA_DE
+--
+--     ★ THỨ TỰ ĐIỀU KIỆN LÀ HIỆU NĂNG, KHÔNG PHẢI THẨM MỸ. `problem_id` đứng
+--       trước để `ix_submissions_problem_recent` cắt gần hết bảng; `contest_id`
+--       chỉ là bộ lọc thêm trên phần đã cắt. Viết ngược lại thì Postgres phải
+--       quét theo `contest_id` — cột CỐ Ý không có index (ngân sách index của
+--       `submissions` là 3-4, đang dùng 2, nfrplan 2.3).
+--
+--     ★ PHÂN TRANG BẰNG CON TRỎ, KHÔNG PHẢI KHOẢNG id. Bản trước của file này
+--       viết `id BETWEEN :minSubmissionId AND :maxSubmissionId` và KHÔNG có
+--       LIMIT. Hai tham số ấy chưa bao giờ tồn tại trong mã nguồn, và câu không
+--       LIMIT nạp trọn một kỳ thi vào bộ nhớ — đúng thứ bất biến #8 cấm. Job gọi
+--       lại nhiều lần, mỗi lần truyền `:sau` = id lớn nhất của lô trước.
 -- ─────────────────────────────────────────────────────────────────────────────
-SELECT s.user_id, s.id, s.verdict, s.score, s.created_at
-  FROM submissions s
- WHERE s.problem_id = :problemId
-   AND s.id BETWEEN :minSubmissionId AND :maxSubmissionId
-   AND s.contest_id = :contestId
-   AND s.status = 'DONE'
- ORDER BY s.id;
+SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score, created_at
+  FROM submissions
+ WHERE problem_id = :problemId
+   AND contest_id = :contestId
+   AND status     = 'DONE'
+   AND id > :sau                        -- 0 cho lô đầu tiên
+ ORDER BY id
+ LIMIT :gioiHan;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 12. TRANG TRẠNG THÁI CÔNG KHAI — FR-ADM-05. Đếm trên hàng đợi vài trăm dòng,
 --     không phải COUNT(*) trên `submissions`.
+--
+--     Code: JdbcJudgeQueueRepository.QUEUE_DEPTH
+--
+--     ★ TRẢ VỀ MỐC THỜI GIAN, KHÔNG TRẢ VỀ KHOẢNG CÁCH. Bản trước tính
+--       `oldest_wait_ms` ngay trong SQL bằng `now()`. Làm vậy thì thời gian của
+--       câu trả lời do đồng hồ CSDL quyết định, và tầng trên không test được nếu
+--       không dựng một Postgres thật. Trả `min(enqueued_at)` rồi để ứng dụng trừ
+--       bằng `Clock` của nó: cùng một con số, mà test tiêm được đồng hồ giả.
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT count(*) FILTER (WHERE claimed_at IS NULL)     AS queued,
        count(*) FILTER (WHERE claimed_at IS NOT NULL) AS judging,
-       COALESCE(EXTRACT(EPOCH FROM now() - min(enqueued_at)) * 1000, 0)::int AS oldest_wait_ms
+       min(enqueued_at)                               AS oldest_enqueued_at
   FROM judge_queue;
