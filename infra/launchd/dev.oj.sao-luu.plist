@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  =============================================================================
+  Chạy sao-luu-db.sh mỗi 15 phút cho ojdb_prod. Đây là thứ biến R4 (RPO 15 phút)
+  từ một dòng trong nfrplan thành một sự thật trên máy.
+
+  Cài (chạy từ gốc repo):
+      launchctl unload ~/Library/LaunchAgents/dev.oj.sao-luu.plist 2>/dev/null
+      mkdir -p ~/oj-backup/bin && cp scripts/sao-luu-db.sh ~/oj-backup/bin/
+      sed "s|@HOME@|$HOME|g" infra/launchd/dev.oj.sao-luu.plist > ~/Library/LaunchAgents/dev.oj.sao-luu.plist
+      launchctl load ~/Library/LaunchAgents/dev.oj.sao-luu.plist
+
+  Kiểm:   OJ_DB_NAME=ojdb_prod ./scripts/sao-luu-db.sh với cờ `kiem` (hai gạch ngang
+          phía trước; chú thích XML cấm viết hai gạch liền nhau)
+
+  ★ BỐN THỨ TRONG FILE NÀY KHÔNG PHẢI TRANG TRÍ
+
+  1. SCRIPT ĐƯỢC CHÉP RA ~/oj-backup/bin, KHÔNG CHẠY THẲNG TỪ REPO.
+     Repo nằm trong ~/Desktop, và macOS (TCC) chặn mọi tiến trình do launchd
+     sinh ra đọc Desktop, Documents, Downloads. Bản đầu của file này trỏ thẳng
+     vào repo. Đo thật 2026-09-11: mỗi 15 phút một dòng "Operation not permitted",
+     TÁM TIẾNG không có bản sao lưu nào, và launchctl list chỉ hiện con số 126.
+     Không có dòng nào ở chỗ người ta nhìn.
+
+     Đừng chữa bằng cách cấp Full Disk Access cho /bin/bash: làm thế là cho MỌI
+     script bash trên máy đọc được mọi thứ, để đổi lấy một job sao lưu.
+     Cái giá của cách chữa ở đây: sửa scripts/sao-luu-db.sh thì phải chép lại.
+
+  2. PATH. launchd KHÔNG đọc ~/.zshrc, nên PATH mặc định của nó là
+     /usr/bin:/bin:/usr/sbin:/sbin, không có /usr/local/bin, tức là KHÔNG CÓ
+     `docker`. Thiếu khối EnvironmentVariables thì job vẫn chạy đúng giờ và mỗi
+     lượt đều chết vì "command not found".
+
+  3. OJ_DB_NAME. Script mặc định sao lưu ojdb (DB dev). Thiếu dòng này thì job
+     chạy xanh mỗi 15 phút và sao lưu nhầm database, còn ojdb_prod thì không
+     có bản nào. Loại hỏng này còn tệ hơn hỏng hẳn, vì lệnh kiểm cũng báo xanh.
+
+  4. Hai đường dẫn log. Không có chúng thì output đi vào hư không, và lỗi ở
+     mục 1 không bao giờ tìm ra được.
+  =============================================================================
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.oj.sao-luu</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>@HOME@/oj-backup/bin/sao-luu-db.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>@HOME@</string>
+        <key>OJ_DB_NAME</key>
+        <string>ojdb_prod</string>
+    </dict>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>@HOME@/oj-backup/sao-luu.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/oj-backup/sao-luu.log</string>
+
+    <!-- KHÔNG đặt trong repo: cùng lý do với mục 1, bash chết ngay ở getcwd. -->
+    <key>WorkingDirectory</key>
+    <string>@HOME@/oj-backup</string>
+</dict>
+</plist>

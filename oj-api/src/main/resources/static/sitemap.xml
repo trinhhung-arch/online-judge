@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Chỉ những trang TĨNH cho index.
+
+  Từng đề KHÔNG có ở đây, và đó là quyết định chứ không phải thiếu sót. problem.html cần
+  ?code=, còn danh sách đề đổi theo mỗi lần xuất bản và theo khung giờ kỳ thi (FR-CON-03).
+  Liệt kê đề cần một endpoint sinh sitemap từ database: có LIMIT (bất biến #8) và lọc qua
+  ContestWindowQuery, nếu không thì chính sitemap báo trước đề của kỳ thi tuần sau. Chưa
+  làm. Google vẫn tới được từng đề qua liên kết trên trang chủ.
+
+  BeMatTimKiemTest: mọi loc phải cùng tên miền với dòng Sitemap trong robots.txt, được
+  robots.txt cho phép, và trỏ tới một file có thật trong static/.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url><loc>https://onlinejudge67.click/</loc></url>
+    <url><loc>https://onlinejudge67.click/contests.html</loc></url>
+    <url><loc>https://onlinejudge67.click/trang-thai.html</loc></url>
+    <url><loc>https://onlinejudge67.click/login.html</loc></url>
+</urlset>

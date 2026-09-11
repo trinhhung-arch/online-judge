@@ -12,6 +12,31 @@
 # sách đường dẫn đáng chú ý cho người tò mò. Thứ chặn thật là phân quyền ở use-case
 # (CLAUDE.md điều 11) — file này chỉ để Google khỏi đưa trang riêng tư lên kết quả
 # tìm kiếm. Vì thế ở đây chỉ liệt kê những đường dẫn vốn đã được bảo vệ ở tầng dưới.
+#
+# ★ NHƯNG CHÉP NGUYÊN NHÓM 4 LÀ SAI VỚI HỆ THỐNG NÀY — đo thật 2026-09-11, ngày đầu có
+#   tên miền. DMOJ dựng trang ở SERVER: HTML trả về đã có sẵn đề. Ở đây index.html,
+#   problem.html, contests.html là VỎ RỖNG, nội dung nạp bằng JavaScript qua /api/v1/...
+#   Chặn cả /api/ là Googlebot dựng trang mà thiếu đúng phần nội dung: thấy trang trắng,
+#   hoặc câu "Không tải được đề bài." vì problem.js gom tải đề và tải ngôn ngữ vào một
+#   Promise.all. Không có gì báo lỗi — người thật vẫn dùng bình thường, chỉ là không lên Google.
+#
+#   Cách sửa: vẫn chặn /api/, rồi Allow ĐÚNG những đường đọc công khai mà trang cho index
+#   gọi lúc tải. Google chọn luật khớp DÀI NHẤT (hoà thì Allow thắng), nên một dòng Allow
+#   dài hơn thắng `Disallow: /api/`. `*` là chuỗi bất kỳ kể cả dấu /, `$` là phải hết URL.
+#
+#   Mở những đường này không lộ thêm gì so với một người lạ chưa đăng nhập — và Googlebot
+#   CHÍNH LÀ người lạ chưa đăng nhập. GetProblemUseCase và ListProblemsUseCase đều qua
+#   ContestWindowQuery: đề của kỳ thi chưa mở, hoặc đang chạy mà chưa đăng ký, là 404 và
+#   không có trong danh sách (FR-CON-03, ContestAccessIT). Đề chỉ lên Google khi kỳ thi
+#   đã kết thúc (FR-CON-07).
+#
+#   BeMatTimKiemTest giữ cả hai chiều: trang cho index gọi được mọi API lúc tải, VÀ bề mặt
+#   riêng tư vẫn bị chặn. Thêm một lời gọi lúc tải vào trang công khai thì sửa ba chỗ:
+#   trang đó, dòng Allow dưới đây, và bảng API_LUC_TAI trong test.
+#
+# ★ BẢN ĐANG PHỤC VỤ TRÊN TÊN MIỀN DÀI HƠN FILE NÀY. Cloudflare chèn một khối lên đầu
+#   (Content-Signal, chặn bot huấn luyện AI). Google gộp các nhóm cho mọi bot làm một, và
+#   `Allow: /` của Cloudflare là luật ngắn nhất nên không đè được dòng nào ở đây.
 # =============================================================================
 
 User-agent: *
@@ -19,6 +44,24 @@ User-agent: *
 # --- Bề mặt máy móc, không có gì để đọc -------------------------------------
 Disallow: /api/
 Disallow: /internal/
+
+# --- ...trừ đúng những đường mà trang cho index gọi lúc tải ------------------
+# index.html: danh sách đề, có và không có query (phân trang gửi ?size=&cursor=).
+Allow: /api/v1/problems$
+Allow: /api/v1/problems?
+# problem.html: một đề theo MÃ. Dòng Disallow ngay sau dài hơn nên thắng với mọi đường có
+# thêm một đoạn nữa — /problems/12/edit, /publish, /testdata là việc của người ra đề.
+Allow: /api/v1/problems/
+Disallow: /api/v1/problems/*/
+# problem.html cũng gọi hai đường này, và /languages nằm CHUNG Promise.all với tải đề.
+Allow: /api/v1/languages$
+Allow: /api/v1/status$
+# contests.html: CHỈ danh sách. /contests/{slug} và bảng xếp hạng vẫn chặn, cùng lý do với
+# contest.html bên dưới.
+Allow: /api/v1/contests$
+Allow: /api/v1/contests?
+# login.html: hỏi server có bật Turnstile không, trước khi dựng form đăng ký.
+Allow: /api/v1/auth/captcha$
 
 # --- Dữ liệu của từng người ---------------------------------------------------
 # Vỏ HTML của các trang này rỗng (dữ liệu nạp bằng JS sau khi có token), nên Google
@@ -38,11 +81,11 @@ Disallow: /nhat-ky.html
 Disallow: /contest.html
 
 # --- Cho index ----------------------------------------------------------------
-# /index.html      danh sách đề đã xuất bản
-# /problem.html    một đề đã xuất bản
-# /contests.html   danh sách kỳ thi
-# /trang-thai.html trạng thái hệ thống
-# /login.html      trang đăng nhập
+# /                 danh sách đề đã xuất bản (index.html)
+# /problem.html     một đề — cần ?code=, nên KHÔNG có trong sitemap; Google tới qua liên
+#                   kết trên trang chủ
+# /contests.html    danh sách kỳ thi
+# /trang-thai.html  trạng thái hệ thống
+# /login.html       trang đăng nhập và đăng ký
 
-# Sau khi có tên miền, bỏ ghi chú dòng dưới và thay <TEN_MIEN>:
-# Sitemap: https://<TEN_MIEN>/sitemap.xml
+Sitemap: https://onlinejudge67.click/sitemap.xml
