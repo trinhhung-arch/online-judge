@@ -1,249 +1,107 @@
 /**
- * Biến bảng số của k6 thành một câu trả lời: "ở mức này, ĐẠT hay KHÔNG ĐẠT".
+ * Bảng cuối lượt k6 — CHỈ phần k6 biết. Kết luận đạt/không đạt của cả lượt đo nằm ở
+ * bao-cao-db.py, chạy SAU khi hàng đợi rút cạn, vì R1/R2/R3/P3/P5/P6 chỉ đo được lúc đó.
  *
- * Tách khỏi `k6-tai.js` vì hai lý do, không phải vì thẩm mỹ:
- *   · `k6-tai.js` là kịch bản tải — nó phải đọc được như mô tả hành vi người dùng.
- *     Trộn 130 dòng định dạng bảng vào đó là làm mờ đúng phần cần soát kỹ nhất.
- *   · Ngưỡng nằm ở `nguong.json`, và file này chỉ áp dụng chứ không tự đặt ra
- *     con số nào. Grep `200` trong file này sẽ không ra gì — cố ý.
+ * Bảng này cố ý in các ngưỡng DB là "chờ đo" chứ không im lặng bỏ đi: một người đọc thấy mọi ô
+ * k6 xanh rồi đóng terminal là đúng cái kết luận nửa vời mà bộ đo này sinh ra để chặn.
  *
- * ★ VÌ SAO `handleSummary` TỰ VẼ BẢNG THAY VÌ DÙNG BẢNG MẶC ĐỊNH CỦA k6
- * Bảng mặc định của k6 liệt kê ~25 metric ngang hàng nhau, trong đó `http_req_tls_handshaking`
- * và `doc_ms` to bằng nhau. Người đọc phải tự biết metric nào là SLO. Bảng dưới đây xếp
- * chúng theo *câu hỏi*: nhóm quyết định đạt/không đạt ở trên, nhóm chỉ để đọc đường cong ở
- * dưới. Cái giá là mất bảng gốc — nên `chay.sh` vẫn ghi JSON đầy đủ ra đĩa.
+ * Không con số nào viết cứng ở đây — mọi ngưỡng đọc từ `nguong.json`.
  */
 
-/** k6 chạy trên goja; `Intl` không có. Tách nghìn bằng tay. */
-function so(n, chuSoThapPhan) {
+function so(n, le) {
     if (n === null || n === undefined || Number.isNaN(n)) return '—';
-    const s = Number(n).toFixed(chuSoThapPhan === undefined ? 0 : chuSoThapPhan);
-    const [nguyen, le] = s.split('.');
+    const [nguyen, thap] = Number(n).toFixed(le === undefined ? 0 : le).split('.');
     const co = nguyen.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    return le ? `${co}.${le}` : co;
+    return thap ? `${co}.${thap}` : co;
 }
 
-function dinhDang(giaTri, donVi) {
-    if (giaTri === null || giaTri === undefined) return '—';
-    if (donVi === 'ti_le') return `${so(giaTri * 100, 2)} %`;
-    if (donVi === 'ms') return `${so(giaTri)} ms`;
-    if (donVi === 's') return `${so(giaTri)} s`;
-    if (donVi === 'bai_phut') return `${so(giaTri)}/phút`;
-    return so(giaTri);
+export function dinhDang(v, donVi) {
+    if (v === null || v === undefined) return '—';
+    if (donVi === 'ti_le') return `${so(v * 100, 2)} %`;
+    if (donVi === 'ms') return `${so(v)} ms`;
+    if (donVi === 'bai_s') return `${so(v, 2)} bài/s`;
+    if (donVi === 'mbps') return `${so(v, 1)} Mbps`;
+    return so(v);
 }
 
-function dem(s, n) {
-    let r = String(s);
-    while (r.length < n) r += ' ';
-    return r;
+const cot = (s, n) => String(s).padEnd(n);
+const cotPhai = (s, n) => String(s).padStart(n);
+
+/**
+ * `null` khi vắng mặt, KHÔNG phải 0: `doc_ms` vắng mặt nghĩa là không ai đọc được đề nào — rất
+ * tệ — còn 0 thì trông như nhanh vô hạn.
+ */
+export function docSo(metrics, ten, thongKe) {
+    const m = metrics[ten];
+    if (!m || !m.values) return null;
+    // ★ 0 MẪU LÀ KHÔNG ĐO ĐƯỢC, không phải 0. k6 vẫn ghi Trend/Rate đã khai báo dù không có mẫu nào —
+    // p(95) = 0, rate = 0. Đo 2026-09-11: một lượt chết ở setup() in "P1 0 ms ✅" và "hỏng 0.00 % ✅".
+    if (m.values.count === 0 || (m.values.passes === 0 && m.values.fails === 0)) return null;
+    const v = m.values[thongKe];
+    return v === undefined ? null : v;
 }
 
-function demTrai(s, n) {
-    let r = String(s);
-    while (r.length < n) r = ' ' + r;
-    return r;
+function apDung(nhom, nguon, kichBan) {
+    return nhom.filter((d) => d.nguon === nguon && d.kich_ban.includes(kichBan));
 }
 
 /**
- * Lấy một con số ra khỏi `data.metrics` của k6.
- *
- * Trả `null` khi metric không tồn tại chứ KHÔNG trả 0: hai chuyện đó khác nhau hoàn toàn.
- * `dropped_iterations` vắng mặt nghĩa là không có vòng nào bị bỏ (tốt); `doc_ms` vắng mặt
- * nghĩa là không ai đọc được đề nào trong cả lượt chạy (rất tệ). Trả 0 cho cả hai là xoá
- * mất sự khác biệt ấy — nên chỗ nào coi "vắng mặt = 0" thì phải khai `mac_dinh` trong
- * `nguong.json`, thành một quyết định viết ra chứ không phải một mặc định lặng lẽ.
+ * Dựng `options.thresholds` từ nguong.json — thay cho bản chép tay ba dòng cũ, thứ phải nhớ sửa
+ * ở hai nơi. k6 báo lỗi nếu ngưỡng trỏ tới một metric kịch bản không khai báo, nên chỉ lấy dòng
+ * thuộc đúng kịch bản.
  */
-export function docSo(metrics, ten, thongKe, macDinh) {
-    const m = metrics[ten];
-    if (!m || !m.values) return macDinh === undefined ? null : macDinh;
-    const v = m.values[thongKe];
-    if (v === undefined || v === null) return macDinh === undefined ? null : macDinh;
-    return v;
-}
-
-/** Áp `nguong.cung` — nhóm duy nhất quyết định đạt/không đạt. */
-export function chamCung(metrics, nguong) {
-    return nguong.cung.map((d) => {
-        const giaTri = docSo(metrics, d.metric, d.thong_ke, d.mac_dinh);
-        return {
-            ma: d.ma,
-            nhan: d.nhan,
-            donVi: d.don_vi,
-            chuThich: d.chu_thich,
-            giaTri,
-            toiDa: d.toi_da,
-            // Không đo được thì KHÔNG coi là đạt. Một ngưỡng vắng mặt lặng lẽ
-            // trở thành ngưỡng xanh là cách nhanh nhất để một bộ đo mất giá trị.
-            dat: giaTri === null ? false : giaTri <= d.toi_da,
-            doDuoc: giaTri !== null,
-        };
+export function nguongK6(nguong, kichBan) {
+    const ra = {};
+    apDung(nguong.cung, 'k6', kichBan).forEach((d) => {
+        ra[d.metric] = [`${d.thong_ke}<${d.toi_da === 0 ? 1 : d.toi_da}`];
     });
-}
-
-/** Áp `nguong.quan_sat` — chỉ đọc, không chấm. */
-export function chamQuanSat(metrics, nguong) {
-    return nguong.quan_sat.map((d) => ({
-        metric: d.metric,
-        ma: d.ma,
-        nhan: d.nhan,
-        donVi: d.don_vi,
-        chuThich: d.chu_thich,
-        moc: d.moc,
-        giaTri: docSo(metrics, d.metric, d.thong_ke, d.mac_dinh),
-    }));
-}
-
-function veHang(r) {
-    const dau = r.dat ? '✅' : (r.doDuoc ? '❌' : '⚠️ ');
-    const nguong = r.toiDa === 0 ? '= 0' : `< ${dinhDang(r.toiDa, r.donVi)}`;
-    return `  ${dem(r.ma, 5)} ${dem(r.nhan, 30)} ${demTrai(dinhDang(r.giaTri, r.donVi), 12)}`
-        + `   ${dem(nguong, 12)} ${dau}`;
-}
-
-function veHangQuanSat(r) {
-    const moc = r.moc === undefined ? '' : `   mốc ${dinhDang(r.moc, r.donVi)}`;
-    // `canDuoi`: giá trị thật lớn hơn con số in ra. Dấu ≥ phải nằm ngay cạnh số, không
-    // phải trong một chú thích bên dưới — người đọc vội chỉ nhìn cột số.
-    const v = r.canDuoi ? `\u2265 ${dinhDang(r.giaTri, r.donVi)}` : dinhDang(r.giaTri, r.donVi);
-    return `  ${dem(r.ma, 9)} ${dem(r.nhan, 30)} ${demTrai(v, 12)}${moc}`;
-}
-
-/** Chú thích dài phải xuống dòng, nếu không nó đẩy bảng ra khỏi bề ngang terminal. */
-function xuongDong(chu, le, rong) {
-    const ra = [];
-    let dong = '';
-    chu.split(' ').forEach((tu) => {
-        if (dong && (dong + ' ' + tu).length > rong) { ra.push(le + dong); dong = tu; }
-        else { dong = dong ? dong + ' ' + tu : tu; }
-    });
-    if (dong) ra.push(le + dong);
     return ra;
 }
 
-/**
- * @param boiCanh {{nguoi, thoiLuong, base, tiLeNop, docLen}}
- */
-function ve(metrics, nguong, boiCanh) {
-    const cung = chamCung(metrics, nguong);
-    const quanSat = chamQuanSat(metrics, nguong);
-    const dat = cung.every((r) => r.dat);
+function ve(metrics, nguong, bc) {
     const d = [];
     const vach = '═'.repeat(78);
+    d.push('', vach, `  ${bc.kichBan.toUpperCase()} · ${bc.moTa} · ${bc.base}`, vach, '');
 
-    d.push('');
-    d.push(vach);
-    d.push(`  ${boiCanh.nguoi} NGƯỜI ẢO · ${boiCanh.thoiLuong} · ${boiCanh.base}`);
-    d.push(`  dốc lên ${boiCanh.docLen} (không tính vào p95) · ${Math.round(boiCanh.tiLeNop * 100)}% lượt là nộp bài`);
-    d.push(vach);
-    d.push('');
-    d.push('ĐƯỜNG API — đây là câu trả lời cho "chịu được bao nhiêu người"');
-    d.push('');
-    cung.forEach((r) => d.push(veHang(r)));
-    d.push('');
-    d.push(dat
-        ? `  ➜  ĐẠT ở ${boiCanh.nguoi} người ảo.`
-        : `  ➜  KHÔNG ĐẠT ở ${boiCanh.nguoi} người ảo — xem dòng ❌ ở trên.`);
-    cung.filter((r) => !r.doDuoc).forEach((r) => {
-        d.push(`     ⚠️  "${r.nhan}" không đo được. Không có số thì không kết luận được — coi như trượt.`);
+    d.push('ĐƯỜNG API — đo ở client');
+    apDung(nguong.cung, 'k6', bc.kichBan).forEach((r) => {
+        const v = docSo(metrics, r.metric, r.thong_ke);
+        const dau = v === null ? '⚠️  không đo được' : (v <= r.toi_da ? '✅' : '❌');
+        d.push(`  ${cot(r.ma, 9)} ${cot(r.nhan, 34)} ${cotPhai(dinhDang(v, r.don_vi), 12)}`
+            + `   < ${cot(dinhDang(r.toi_da, r.don_vi), 10)} ${dau}`);
     });
-    d.push('');
-    d.push('ĐƯỜNG CHẤM — KHÔNG phải tiêu chí đạt/không đạt, đọc đường cong');
-    d.push('');
-    // ★ ĐÁNH DẤU P3 LÀ CẬN DƯỚI TRƯỚC KHI VẼ HÀNG.
-    //
-    // `verdict_ms` gộp cả mẫu chạm trần (xem theoToiVerdict). Chừng nào còn một mẫu như
-    // thế thì p95 không phải giá trị thật mà là giá trị thật BỊ CẮT — luôn thấp hơn.
-    const soChamTran = docSo(metrics, 'verdict_cham_tran', 'count', 0);
-    const soMauVerdict = docSo(metrics, 'verdict_ms', 'count', 0);
-    const tiLeChan = soMauVerdict > 0 ? soChamTran / soMauVerdict : 0;
-    quanSat.forEach((r) => { if (r.metric === 'verdict_ms' && soChamTran > 0) r.canDuoi = true; });
 
-    quanSat.forEach((r) => {
-        d.push(veHangQuanSat(r));
-        if (r.chuThich) xuongDong(r.chuThich, '            ', 64).forEach((l) => d.push(l));
+    d.push('', 'ĐƯỜNG CHẤM — CHỜ ĐO: bao-cao-db.py chạy sau khi hàng đợi rút cạn');
+    // db VÀ sse: cả hai chỉ có số sau khi hàng đợi rút cạn (kịch bản ky-thi gộp số SSE vào lúc đó).
+    nguong.cung.filter((d) => d.nguon !== 'k6' && d.kich_ban.includes(bc.kichBan)).forEach((r) => {
+        d.push(`  ${cot(r.ma, 9)} ${cot(r.nhan, 34)} ${cotPhai('…', 12)}`
+            + `   ${r.toi_da === 0 ? '= 0' : '< ' + dinhDang(r.toi_da, r.don_vi)}`);
     });
-    // ★ MẪU BỊ KIỂM DUYỆT QUÁ NHIỀU THÌ P3 KHÔNG DÙNG ĐƯỢC, VÀ PHẢI NÓI RA.
-    //
-    // Không phải "hơi kém chính xác" — nó sai có HỆ THỐNG và sai theo hướng đẹp lên, vì
-    // đúng những bài chậm nhất mới là những bài chạm trần. Đo thật 2026-09-05: ở 400 người
-    // 63% mẫu chạm trần, bảng in 59 746ms, số thật trong DB là 375 000ms.
-    if (tiLeChan > 0) {
-        d.push('');
-        const pct = so(tiLeChan * 100, 1);
-        if (tiLeChan >= 0.10) {
-            d.push(`  ⛔ P3 KHÔNG DÙNG ĐƯỢC: ${so(soChamTran)}/${so(soMauVerdict)} mẫu (${pct}%) chạm trần`);
-            d.push(`     ${so(boiCanh.hanVerdictMs || 60000)}ms rồi bị cắt. Càng tải nặng càng nhiều bài chậm`);
-            d.push('     bị cắt, nên con số ở trên thấp hơn sự thật một cách có hệ thống.');
-        } else {
-            d.push(`  ⚠️  P3 là CẬN DƯỚI: ${so(soChamTran)}/${so(soMauVerdict)} mẫu (${pct}%) chạm trần.`);
-        }
-        d.push('     Số thật lấy thẳng từ database, không qua k6:');
-        d.push('       SELECT round(percentile_cont(0.95) WITHIN GROUP (');
-        d.push('                ORDER BY EXTRACT(epoch FROM judged_at-created_at))*1000) AS p95_ms');
-        d.push("       FROM submissions WHERE created_at > now() - interval '30 minutes';");
-        d.push('     Nới trần đo:  HAN_VERDICT_S=180 ./chay.sh   (người ảo chờ lâu hơn thì');
-        d.push('     sinh ít tải hơn — nới vừa phải thôi.)');
-    }
 
-    const vMs = docSo(metrics, 'verdict_ms', 'p(95)');
-    if (vMs !== null && tiLeChan === 0 && vMs < nguong.verdict_san_ms) {
-        d.push('');
-        d.push(`  ⛔ verdict p95 = ${so(vMs)}ms, dưới sàn ${so(nguong.verdict_san_ms)}ms.`);
-        d.push('     Không có gì được biên dịch — riêng biên dịch đã tốn <400ms (nfrplan 2.1),');
-        d.push('     và hàm theo dõi ở đây ngủ 250ms trước khi hỏi lần đầu.');
-        d.push('     HAI nguyên nhân, kiểm theo đúng thứ tự này:');
-        d.push('');
-        d.push('     1. NGUON_DUY_NHAT=0 ⇒ mọi bài nộp trùng source ⇒ CompileCache trả lời');
-        d.push('        thay máy chấm. Đây là nguyên nhân thường gặp hơn, và nó KHÔNG phải');
-        d.push('        lỗi của worker. Bỏ biến ấy đi rồi đo lại.');
-        d.push('     2. Worker đang chạy ScriptedJudgeRunner (M1, giả lập,');
-        d.push('        `oj.worker.sandbox.enabled=false`) chứ không phải IsolateJudgeRunner.');
-        d.push('');
-        d.push('     Phân biệt hai cái bằng SQL, không đoán:');
-        d.push('       SELECT host_factor, tests_run, memory_kb FROM judge_runs');
-        d.push('       ORDER BY submission_id DESC LIMIT 5;');
-        d.push('     memory_kb khác nhau từng dòng = isolate thật đang đo cgroup.');
-        d.push('     ➜ CẢ NHÓM "ĐƯỜNG CHẤM" Ở TRÊN KHÔNG DÙNG ĐƯỢC. Nhóm "đường API" vẫn đúng.');
-    }
-    d.push('');
-    d.push('LƯU LƯỢNG');
-    d.push('');
-    nguong.luu_luong.forEach((l) => {
-        d.push(`  ${dem(l.nhan, 40)} ${demTrai(dinhDang(docSo(metrics, l.metric, l.thong_ke), l.don_vi), 12)}`);
+    d.push('', 'QUAN SÁT — đọc đường cong, không chấm');
+    apDung(nguong.quan_sat, 'k6', bc.kichBan).forEach((r) => {
+        const moc = r.moc === undefined ? '' : `   mốc ${dinhDang(r.moc, r.don_vi)}`;
+        d.push(`  ${cot(r.ma, 9)} ${cot(r.nhan, 30)} `
+            + cotPhai(dinhDang(docSo(metrics, r.metric, r.thong_ke), r.don_vi), 12) + moc);
     });
-    d.push(`  ${dem('VU cao nhất', 40)} ${demTrai(so(docSo(metrics, 'vus_max', 'max')), 12)}`);
-    d.push('');
 
-    if (/localhost|127\.0\.0\.1|\[::1\]/.test(boiCanh.base)) {
-        d.push('  ⚠️  k6 đang chạy trên CHÍNH máy được đo (BASE trỏ localhost).');
-        d.push('      nfrplan 2.2 chỉ chừa 3 core cho macOS + Postgres + Redis + RabbitMQ + JVM.');
-        d.push('      Từ ~400 VU, k6 ăn thêm 1–2 core của đúng 3 core ấy, nên con số đọc được');
-        d.push('      là con số của một máy chủ nhỏ hơn máy chủ thật. Muốn số dùng được ở 400+,');
-        d.push('      chạy k6 từ máy khác qua LAN.');
-        d.push('');
+    d.push('');
+    if (/localhost|127\.0\.0\.1|\[::1\]/.test(bc.base)) {
+        d.push('  ⚠️  k6 chạy trên CHÍNH máy được đo: từ ~400 người ảo k6 ăn 1–2 core của máy chủ,');
+        d.push('      nên số ở trên bi quan hơn sự thật. Số để nghiệm thu: chạy k6 từ máy khác qua LAN.', '');
     }
-    return d.map((l) => l.replace(/\s+$/, '')).join('\n');
+    return d.join('\n');
 }
 
-/**
- * Dựng giá trị trả về cho `handleSummary` của k6: bảng kết luận ra stdout, `data` nguyên vẹn
- * ra file nếu `boiCanh.raJson` có đường dẫn.
- *
- * ★ VÌ SAO VẪN GHI `data` NGUYÊN VẸN dù đã có bảng riêng: bảng ở trên là ý kiến — nó chọn
- * ~15 con số trong ~25 và xếp chúng theo một câu hỏi. Ba tháng nữa câu hỏi có thể khác, và
- * lúc đó ta cần số gốc chứ không cần ý kiến cũ. File JSON là số gốc; `tong-hop.py` đọc chính
- * nó chứ không parse lại stdout.
- */
-export function tomTat(data, nguong, boiCanh) {
-    const ra = { stdout: ve(data.metrics, nguong, boiCanh) + '\n' };
-    if (boiCanh.raJson) {
-        ra[boiCanh.raJson] = JSON.stringify({
-            nguoi: boiCanh.nguoi,
-            thoi_luong: boiCanh.thoiLuong,
-            doc_len: boiCanh.docLen,
-            base: boiCanh.base,
-            ti_le_nop: boiCanh.tiLeNop,
-            dat: chamCung(data.metrics, nguong).every((r) => r.dat),
+/** stdout: bảng. RA_JSON: `data` k6 nguyên vẹn — bao-cao-db.py vá số DB vào chính file này. */
+export function tomTat(data, nguong, bc) {
+    const moTa = bc.kichBan === 'quet'
+        ? `${bc.nguoi} người ảo · ${bc.thoiLuong} · dốc ${bc.docLen} (không tính vào p95)`
+        : bc.moTa;
+    const ra = { stdout: ve(data.metrics, nguong, { ...bc, moTa }) + '\n' };
+    if (bc.raJson) {
+        ra[bc.raJson] = JSON.stringify({
+            kich_ban: bc.kichBan, mo_ta: moTa, base: bc.base, nguoi: bc.nguoi || null,
             metrics: data.metrics,
         }, null, 2);
     }

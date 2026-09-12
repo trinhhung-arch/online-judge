@@ -1,157 +1,91 @@
 #!/usr/bin/env python3
-"""So các mức với nhau và chỉ ra ĐIỂM VỠ.
+"""So các mức của kịch bản QUÉT và chỉ ra ĐIỂM VỠ.
 
-    python3 tong-hop.py /tmp/oj-tai-trong
+    python3 tong-hop.py /tmp/oj-tai-trong/quet-<giờ>
 
-`chay.sh` gọi file này ở cuối. Chạy tay cũng được — nó chỉ đọc các file
-`tom-tat-<mức>.json` mà k6 đã ghi, không gọi mạng, không đụng database.
+Đọc các `tom-tat-<mức>.json` mà k6 ghi và bao-cao-db.py đã vá số DB vào. Không gọi mạng, không
+đụng database. Mọi ngưỡng đọc từ nguong.json qua nguong_chung.py.
 
-★ VÌ SAO CẦN MỘT BƯỚC RIÊNG THAY VÌ ĐỌC NĂM BẢNG CỦA k6
-Năm bảng rời cho năm câu trả lời rời. Câu hỏi thật không phải "400 người có đạt
-không" mà là "đạt tới đâu thì thôi" — và câu đó chỉ hiện ra khi năm mức nằm
-cạnh nhau trên cùng một bảng. Thêm nữa, đọc cột `doc_ms` theo chiều dọc cho
-biết độ trễ tăng TUYẾN TÍNH hay tăng VỌT; hai hình dạng ấy có hai nguyên nhân
-khác nhau (thiếu CPU · hết connection pool) và bảng rời không cho thấy điều đó.
+★ "chịu tới N" là TIỀN TỐ LIÊN TỤC các mức đạt, không phải max(mức đạt): 100 và 200 đạt, 400
+trượt, 500 lại đạt thì câu trả lời là 200 — cái 500 kia gần như chắc chắn là nhiễu (hàng đợi mức
+trước chưa rút cạn, hoặc máy throttle rồi hồi lại).
 
-Ngưỡng lấy từ `nguong.json` — cùng một file mà `ket-luan.js` dùng. Không có con
-số nào viết cứng trong file này.
+★ Một mức chỉ ĐẠT khi đạt CẢ đường API lẫn R1/R2/R3 đếm ở DB. Mức không có số DB (bao-cao-db.py
+chưa chạy hoặc hỏng) là KHÔNG đạt — thiếu bằng chứng thì không kết luận.
 """
 import io
 import json
 import os
 import sys
 
-O_KEY = {'ms': lambda v: f'{v:,.0f} ms'.replace(',', ' '),
-         's': lambda v: f'{v:,.0f} s'.replace(',', ' '),
-         'bai_phut': lambda v: f'{v:,.0f}/phút'.replace(',', ' '),
-         'ti_le': lambda v: f'{v * 100:.2f} %',
-         'so': lambda v: f'{v:,.0f}'.replace(',', ' ')}
-
-
-def dinh_dang(v, don_vi):
-    if v is None:
-        return '—'
-    return O_KEY.get(don_vi, O_KEY['so'])(v)
-
-
-def doc_so(metrics, ten, thong_ke, mac_dinh=None):
-    """Trả None khi vắng mặt — xem javadoc `docSo` trong ket-luan.js, cùng lý do."""
-    m = metrics.get(ten)
-    if not m or 'values' not in m:
-        return mac_dinh
-    v = m['values'].get(thong_ke)
-    return mac_dinh if v is None else v
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong  # noqa: E402
 
 
 def nap(thu_muc):
-    """Đọc mọi tom-tat-*.json, xếp theo số người tăng dần."""
     ra = []
-    for f in os.listdir(thu_muc):
-        if not (f.startswith('tom-tat-') and f.endswith('.json')):
-            continue
-        with io.open(os.path.join(thu_muc, f), encoding='utf-8') as fh:
-            d = json.load(fh)
-        ra.append((int(d.get('nguoi') or f[8:-5]), d))
+    for f in sorted(os.listdir(thu_muc)):
+        if f.startswith('tom-tat-') and f.endswith('.json'):
+            with io.open(os.path.join(thu_muc, f), encoding='utf-8') as fh:
+                d = json.load(fh)
+            if d.get('kich_ban') == 'quet':
+                ra.append((int(d['nguoi']), d))
     return sorted(ra, key=lambda x: x[0])
 
 
+def dat_o(run, nguong):
+    if 'dat' in run:
+        return run['dat'] is True
+    return all(cham(run['metrics'], r)[1] is True for r in ap_dung(nguong['cung'], 'quet'))
+
+
 def main():
-    thu_muc = sys.argv[1] if len(sys.argv) > 1 else '/tmp/oj-tai-trong'
-    nguong = json.load(io.open(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nguong.json'),
-        encoding='utf-8'))
+    thu_muc = sys.argv[1] if len(sys.argv) > 1 else '.'
+    nguong = nap_nguong()
     lan = nap(thu_muc)
     if not lan:
-        print(f'Không thấy tom-tat-*.json nào trong {thu_muc}')
+        print(f'Không thấy tom-tat-*.json của kịch bản quét trong {thu_muc}')
         return 1
 
-    cot = [f'{n}' for n, _ in lan]
-    vach = '═' * (34 + 14 * len(cot))
-    print()
-    print(vach)
-    print('  TỔNG HỢP — chịu tải được tới đâu')
-    print(vach)
-    print()
-    print('  ' + 'người ảo'.ljust(32) + ''.join(c.rjust(14) for c in cot))
-    print('  ' + '-' * (32 + 14 * len(cot)))
-
-    # --- ngưỡng cứng: đây là phần quyết định ---------------------------------
-    for d in nguong['cung']:
+    rong = 34 + 14 * len(lan)
+    print('\n' + '═' * rong + '\n  TỔNG HỢP QUÉT — chịu tải được tới đâu\n' + '═' * rong)
+    print('  ' + 'người ảo'.ljust(32) + ''.join(str(n).rjust(14) for n, _ in lan))
+    print('  ' + '-' * (rong - 2))
+    for r in ap_dung(nguong['cung'], 'quet'):
         o = []
         for _, run in lan:
-            v = doc_so(run['metrics'], d['metric'], d['thong_ke'], d.get('mac_dinh'))
-            dau = '·' if v is None else ('✓' if v <= d['toi_da'] else '✗')
-            o.append(f'{dinh_dang(v, d.get("don_vi"))} {dau}'.rjust(14))
-        print('  ' + f'{d["ma"]} {d["nhan"]}'.ljust(32) + ''.join(o))
-
+            v, dat = cham(run['metrics'], r)
+            o.append(f'{dinh_dang(v, r["don_vi"])} {"·" if dat is None else ("✓" if dat else "✗")}'.rjust(14))
+        print('  ' + f'{r["ma"]} {r["nhan"]}'[:32].ljust(32) + ''.join(o))
     print()
-    # --- quan sát: in ra để đọc đường cong, không chấm ------------------------
-    #
-    # ★ Ô `verdict_ms` phải mang dấu ≥ khi có mẫu chạm trần. Bảng NHIỀU MỨC là chỗ
-    # cái sai lộ rõ nhất — mức 200 in 62 634ms còn mức 400 in 59 746ms, tức là tải
-    # gấp đôi mà verdict nhanh hơn. Không có dấu ≥ thì người đọc sẽ đi tìm lời giải
-    # cho một nghịch lý không tồn tại, thay vì thấy ngay rằng mẫu đã bị cắt.
-    for d in nguong['quan_sat']:
-        o = []
-        for _, run in lan:
-            v = doc_so(run['metrics'], d['metric'], d['thong_ke'], d.get('mac_dinh'))
-            chu = dinh_dang(v, d.get('don_vi'))
-            if d['metric'] == 'verdict_ms' and v is not None:
-                if doc_so(run['metrics'], 'verdict_cham_tran', 'count', 0):
-                    chu = '\u2265 ' + chu
-            o.append(chu.rjust(14))
-        print('  ' + f'{d["ma"]} {d["nhan"]}'.ljust(32) + ''.join(o))
-
-    # --- kết luận ------------------------------------------------------------
-    def dat_o(run):
-        for d in nguong['cung']:
-            v = doc_so(run['metrics'], d['metric'], d['thong_ke'], d.get('mac_dinh'))
-            if v is None or v > d['toi_da']:
-                return False
-        return True
+    for r in ap_dung(nguong['quan_sat'], 'quet'):
+        o = [dinh_dang(doc_so(run['metrics'], r['metric'], r['thong_ke']), r['don_vi']).rjust(14)
+             for _, run in lan]
+        print('  ' + f'{r["ma"]} {r["nhan"]}'[:32].ljust(32) + ''.join(o))
 
     moi = [n for n, _ in lan]
-    dat = [n for n, run in lan if dat_o(run)]
-
-    # "Chịu tới N" phải là một TIỀN TỐ LIÊN TỤC, không phải max(dat). Nếu 100 và
-    # 200 đạt, 400 trượt, 500 lại đạt thì trả lời "chịu tới 500" là sai — cái 500
-    # ấy gần như chắc chắn là nhiễu (hàng đợi mức trước chưa rút cạn, hoặc máy đã
-    # throttle rồi hồi lại). Lấy tiền tố, rồi nói riêng về chỗ không đơn điệu.
+    dat = [n for n, run in lan if dat_o(run, nguong)]
     tien_to = []
     for n in moi:
-        if n in dat:
-            tien_to.append(n)
-        else:
+        if n not in dat:
             break
-    khong_don_dieu = sorted(set(dat) - set(tien_to))
+        tien_to.append(n)
+    le = sorted(set(dat) - set(tien_to))
 
-    print()
-    print(vach)
+    print('\n' + '═' * rong)
     if not tien_to:
-        print(f'  ➜  KHÔNG đạt ngay ở mức thấp nhất ({moi[0]} người ảo).')
-        print('     Kiểm MÁY ĐO trước khi kết luận về máy chủ: `dropped_iterations`')
-        print('     khác 0 nghĩa là chính k6 hụt hơi, và khi đó bảng trên vô nghĩa.')
+        print(f'  ➜  KHÔNG đạt ngay ở mức thấp nhất ({moi[0]} người ảo). Xem dòng ✗ và · ở trên.')
     else:
-        cao = tien_to[-1]
-        con_lai = [n for n in moi if n > cao]
-        print(f'  ➜  ĐẠT tới {cao} người ảo đồng thời trên đường API.')
-        if con_lai:
-            print(f'     Vỡ từ {con_lai[0]} người trở lên.')
-        else:
-            print('     Chưa chạm trần — mức cao nhất đã đo vẫn đạt. Đo tiếp mức cao hơn:')
-            print(f'       CAC_MUC="{cao} {cao * 2}" ./chay.sh')
-    if khong_don_dieu:
-        print(f'     ⚠️  Mức {khong_don_dieu} đạt trong khi một mức THẤP hơn trượt.')
-        print('        Kết quả không đơn điệu gần như luôn là nhiễu — hàng đợi của mức')
-        print('        trước chưa rút cạn, hoặc M1 Max đã throttle rồi hồi lại giữa chừng.')
-        print('        Chạy lại riêng hai mức đó trước khi tin con số nào.')
-    print(vach)
-    print()
-    print('  Đường API vỡ  → thiếu CPU cho JVM, hoặc hết Hikari pool '
-          f'({nguong["may_chuan"]["hikari_app_pool"]} connection).')
-    print(f'  Hàng đợi dài  → 6 judge slot × ~{nguong["may_chuan"]["throughput_cham_uoc_tinh"]}'
-          ' bài/s là trần đã biết. Không phải lỗi API, và không sửa được bằng cách sửa API.')
-    print()
+        con = [n for n in moi if n > tien_to[-1]]
+        print(f'  ➜  ĐẠT tới {tien_to[-1]} người ảo (đường API + 0 mất bài + 0 chấm trùng + IE).')
+        print(f'     Vỡ từ {con[0]} người.' if con else '     Chưa chạm trần — đo tiếp mức cao hơn.')
+    if le:
+        print(f'     ⚠️  Mức {le} đạt trong khi mức thấp hơn trượt — gần như luôn là nhiễu. Chạy lại riêng.')
+    print('═' * rong)
+    mc = nguong['may_chuan']
+    print(f'\n  Đường API vỡ → thiếu CPU cho JVM, hoặc hết Hikari pool ({mc["hikari_app_pool"]} connection).')
+    print(f'  Hàng đợi dài → {mc["judge_slot"]} judge slot × ~{mc["throughput_cham_uoc_tinh"]} bài/s là trần'
+          ' đã biết của máy chấm, không sửa được bằng cách sửa API.\n')
     return 0
 
 

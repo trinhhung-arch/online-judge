@@ -1,99 +1,582 @@
 {
   "_doc": [
-    "Nguồn sự thật DUY NHẤT của mọi ngưỡng trong bộ đo tải. `ket-luan.js` (chạy trong k6,",
-    "kết luận từng mức) và `tong-hop.py` (so các mức với nhau) đều đọc file này. Sửa một",
-    "con số ở đây là sửa cho cả hai — viết ngưỡng thẳng vào code là cách chắc chắn để hai",
-    "chỗ lệch nhau sau ba tháng.",
-    "Mọi con số dưới đây chép từ docs/nfrplan.md Phần 1. Đừng chỉnh để báo cáo đẹp hơn:",
-    "một ngưỡng nới ra là một SLO bị hạ mà không ai ghi ADR."
+    "Nguồn sự thật DUY NHẤT của mọi ngưỡng trong bộ đo tải. k6 dựng `thresholds` từ đây,",
+    "ket-luan.js, bao-cao-db.py, sse-tai.py và tong-hop.py cùng đọc file này. Mọi con số chép từ",
+    "docs/nfrplan.md Phần 1 — đừng nới để báo cáo đẹp: một ngưỡng nới ra là một SLO bị hạ mà",
+    "không ai ghi ADR.",
+    "",
+    "`nguon` nói con số đến từ đâu, và đó là phần quan trọng nhất của file này:",
+    "  k6  — đo ở client. Chỉ dùng cho đường API (P1, P2), nơi client thấy đúng thứ người dùng thấy.",
+    "  db  — đếm trên MỌI bài của lượt đo trong Postgres, bằng mốc giờ server ghi. Không lấy mẫu,",
+    "        không bị cắt ở trần chờ, không bị làm tròn theo nhịp hỏi. Mọi số của đường chấm lấy ở đây.",
+    "  sse — đo bởi sse-tai.py, kịch bản 1000 kết nối.",
+    "",
+    "`kich_ban` nói ngưỡng ấy CÓ NGHĨA ở kịch bản nào. P3 ('hàng đợi rỗng') và P6 ('tải bình",
+    "thường') chỉ chấm ở `on-dinh` — kịch bản `quet` cố ý quá tải, chấm P3 ở đó là chấm thời gian",
+    "xếp hàng.",
+    "",
+    "P2 cũng KHÔNG chấm ở `dot-bien`: nfrplan đo P2 bằng Micrometer trên tải thật (alert > 800ms/5 phút),",
+    "còn nghiệm thu kịch bản 2.4 (a) ở Phần 14 là 'rút cạn < 3 phút, 0 bài mất' — tức P5 và R1. 500",
+    "request đến cùng một mili-giây thì p95 là thời gian xếp hàng ≈ 0,95 × 500 ÷ tốc độ API ghi nhận bài;",
+    "cả hai số vẫn in ở phần quan sát. Đo 2026-09-11: p95 577ms, DB ghi nhận 500 bài trong 600ms."
   ],
-
-  "_vi_sao_hai_nhom": [
-    "`cung` là ĐƯỜNG API — nó trả lời đúng câu hỏi 'chịu được bao nhiêu người'. Đạt hay",
-    "không đạt ở đây là nhị phân.",
-    "`quan_sat` là ĐƯỜNG CHẤM. Nó KHÔNG được chấm đạt/không đạt, vì rate limit 10s/người",
-    "cho phép N người chào N/10 bài mỗi giây, còn năng lực chấm chỉ ~5 bài/s. Nghĩa là ngay",
-    "ở 100 người ảo hàng đợi ĐÃ dài, và đó là số học chứ không phải hỏng hóc. Chấm nhóm này",
-    "đạt/không đạt sẽ cho ra một bảng toàn màu đỏ ở mọi mức, và một bảng như thế dạy người",
-    "ta bỏ qua màu đỏ."
-  ],
-
   "cung": [
-    { "metric": "doc_ms", "thong_ke": "p(95)", "toi_da": 200,
-      "ma": "P1", "nhan": "đọc danh sách đề p95", "don_vi": "ms" },
-
-    { "metric": "nop_ms", "thong_ke": "p(95)", "toi_da": 300,
-      "ma": "P2", "nhan": "POST /submissions p95", "don_vi": "ms" },
-
-    { "metric": "http_req_failed{scenario:nguoi_dung}", "thong_ke": "rate", "toi_da": 0.01,
-      "ma": "—", "nhan": "tỉ lệ request HTTP hỏng", "don_vi": "ti_le",
-      "chu_thich": "429 KHÔNG tính là hỏng — xem http.setResponseCallback trong k6-tai.js. Ô này TỪNG mang mã R3, sai: R3 của nfrplan là tỉ lệ verdict IE (< 0.1%), mà một bài IE vẫn trả HTTP 200 nên nó không xuất hiện ở đây. Muốn R3 thật: SELECT count(*) FILTER (WHERE verdict='IE')::float/count(*) FROM judge_runs;" },
-
-    { "metric": "dropped_iterations", "thong_ke": "count", "toi_da": 0, "mac_dinh": 0,
-      "ma": "—", "nhan": "vòng lặp k6 bị bỏ", "don_vi": "so",
-      "chu_thich": "khác 0 = MÁY ĐO hụt hơi, cả lượt chạy bỏ đi. Với executor ramping-vus nó gần như luôn bằng 0 — k6 chỉ bỏ vòng lặp ở các executor arrival-rate. Giữ lại làm lưới an toàn, ĐỪNG coi ô xanh ở đây là bằng chứng máy đo khoẻ; xem http_req_blocked bên dưới." }
+    {
+      "ma": "P1",
+      "nhan": "đọc đề + danh sách p95",
+      "nguon": "k6",
+      "metric": "doc_ms",
+      "thong_ke": "p(95)",
+      "toi_da": 200,
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh"
+      ]
+    },
+    {
+      "ma": "P2",
+      "nhan": "POST /submissions p95",
+      "nguon": "k6",
+      "metric": "nop_ms",
+      "thong_ke": "p(95)",
+      "toi_da": 300,
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh"
+      ],
+      "chu_thich": "chỉ tính lần 202; 429 là rate limit, không phải đường nộp bài"
+    },
+    {
+      "ma": "—",
+      "nhan": "tỉ lệ request HTTP hỏng",
+      "nguon": "k6",
+      "metric": "http_req_failed{scenario:tai}",
+      "thong_ke": "rate",
+      "toi_da": 0.01,
+      "don_vi": "ti_le",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "429 không tính là hỏng — xem http.setResponseCallback trong chung.js"
+    },
+    {
+      "ma": "R1",
+      "nhan": "bài nộp bị mất",
+      "nguon": "db",
+      "metric": "db_bai_mat",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "số lần client nhận 202 trừ số bài có trong DB. Khác 0 là mất bài sau khi đã hứa với người nộp."
+    },
+    {
+      "ma": "R1",
+      "nhan": "bài chưa có verdict sau rút cạn",
+      "nguon": "db",
+      "metric": "db_chua_xong",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "bài vẫn QUEUED/JUDGING khi hàng đợi đã báo rỗng — kẹt, không phải chậm. Nếu chay.sh hết giờ chờ rút cạn thì ô này KHÔNG đo được và bị coi là trượt."
+    },
+    {
+      "ma": "R2",
+      "nhan": "bài bị chấm hơn một lần",
+      "nguon": "db",
+      "metric": "db_cham_trung",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "bài có từ hai judge_runs KHÔNG phải IE trở lên. IE được phép thử lại (FR-SUB-12); hai verdict thật cho một bài nghĩa là reaper thu hồi một bài vẫn đang chấm."
+    },
+    {
+      "ma": "R3",
+      "nhan": "tỉ lệ verdict IE",
+      "nguon": "db",
+      "metric": "db_ti_le_ie",
+      "thong_ke": "value",
+      "toi_da": 0.001,
+      "don_vi": "ti_le",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "P3",
+      "nhan": "nộp → verdict p95 (mọi bài)",
+      "nguon": "db",
+      "metric": "db_verdict_p95_ms",
+      "thong_ke": "value",
+      "toi_da": 2000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "on-dinh",
+        "ky-thi"
+      ],
+      "chu_thich": "judged_at − created_at, cả hai do server ghi. Bản cũ đo ở client bằng nhịp hỏi 0.25→0.65→1.29→2.31s: verdict thật 1.3s bị ghi 2.31s."
+    },
+    {
+      "ma": "P6",
+      "nhan": "chờ hàng đợi p95 (mọi bài)",
+      "nguon": "db",
+      "metric": "db_cho_p95_ms",
+      "thong_ke": "value",
+      "toi_da": 5000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "on-dinh",
+        "ky-thi"
+      ],
+      "chu_thich": "judge_runs.started_at (lần chấm đầu) − submissions.created_at. started_at do WORKER ghi: đo nhiều máy chấm thì đồng hồ các máy phải đồng bộ."
+    },
+    {
+      "ma": "P5",
+      "nhan": "đợt dồn rút cạn",
+      "nguon": "db",
+      "metric": "db_rut_can_dot_bien_ms",
+      "thong_ke": "value",
+      "toi_da": 180000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "dot-bien"
+      ],
+      "chu_thich": "max(judged_at) − min(created_at) của đúng các bài trong đợt. P5 định nghĩa cho đợt 500 bài — SO_BAI nhỏ hơn thì chỉ để dò đường."
+    },
+    {
+      "ma": "—",
+      "nhan": "kết nối SSE mở hỏng",
+      "nguon": "sse",
+      "metric": "sse_mo_hong",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "sse",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "FR-SUB-05",
+      "nhan": "kết nối SSE đứt giữa chừng",
+      "nguon": "sse",
+      "metric": "sse_dut",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "sse",
+        "ky-thi"
+      ],
+      "chu_thich": "đứt TRƯỚC khi hết thời gian giữ — không tính lần server chủ động đóng ở oj.sse.timeout"
+    },
+    {
+      "ma": "—",
+      "nhan": "kết nối SSE thiếu nhịp tim",
+      "nguon": "sse",
+      "metric": "sse_thieu_nhip",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "sse",
+        "ky-thi"
+      ],
+      "chu_thich": "nhận ít hơn (thời gian giữ ÷ oj.sse.heartbeat) − 1 dòng ': ping'. Mở được mà không nhận gì là kết nối chết mà client không biết."
+    },
+    {
+      "ma": "FR-CON-04",
+      "nhan": "người xem không thấy bài AC của mình",
+      "nguon": "db",
+      "metric": "sse_thieu_cap_nhat",
+      "thong_ke": "value",
+      "toi_da": 0,
+      "don_vi": "so",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "kết nối SSE của tài khoản X còn mở ít nhất 15s sau verdict AC đầu tiên của X, mà chưa từng nhận một khung có cuaToi.soBaiDat ≥ 1. Fan-out hoặc StandingsUpdater đã bỏ sót người này."
+    },
+    {
+      "ma": "P1",
+      "nhan": "đọc danh sách đề p95 khi giữ SSE",
+      "nguon": "sse",
+      "metric": "sse_doc_p95_ms",
+      "thong_ke": "value",
+      "toi_da": 200,
+      "don_vi": "ms",
+      "kich_ban": [
+        "sse"
+      ]
+    }
   ],
-
   "quan_sat": [
-    { "metric": "verdict_ms", "thong_ke": "p(95)", "moc": 2000,
-      "ma": "P3", "nhan": "nộp → verdict p95", "don_vi": "ms",
-      "chu_thich": "mốc 2s chỉ có nghĩa khi hàng đợi RỖNG. Dưới tải nó là thời gian xếp hàng, không phải thời gian chấm. Khi ô 'mẫu verdict chạm trần' khác 0 thì đây là CẬN DƯỚI, in kèm dấu ≥." },
-
-    { "metric": "verdict_cham_tran", "thong_ke": "count", "mac_dinh": 0,
-      "ma": "—", "nhan": "mẫu verdict chạm trần", "don_vi": "so",
-      "chu_thich": "số mẫu chờ hết HAN_VERDICT_S (mặc định 60s) mà chưa có verdict. Chúng được ghi Ở ĐÚNG GIÁ TRỊ TRẦN, nên giá trị thật lớn hơn — không ai biết lớn bao nhiêu. Khác 0 nghĩa là P3 ở trên là cận dưới; vượt 10% mẫu thì P3 không dùng được, đọc DB." },
-
-    { "metric": "cho_lau_nhat_ms", "thong_ke": "p(95)", "moc": 5000,
-      "ma": "P6", "nhan": "bài chờ lâu nhất p95", "don_vi": "ms",
-      "chu_thich": "CHỈ đo trong lúc còn tải. Luồng giám sát chết cùng lúc với người ảo, mà hàng đợi thì còn rút cạn thêm hàng phút nữa sau đó — đúng đoạn tệ nhất. Hai ô 'rút cạn' bên dưới mới là phần ấy." },
-
-    { "metric": "may_cham_song", "thong_ke": "min", "mac_dinh": 0,
-      "ma": "S1/A3", "nhan": "máy chấm còn sống (thấp nhất)", "don_vi": "so",
-      "chu_thich": "0 nghĩa là KHÔNG có worker nào — mọi con số đường chấm bên dưới đo một hệ thống không chấm bài. Phải nhìn ô này TRƯỚC khi đọc bất cứ dòng nào khác trong nhóm này." },
-
-    { "metric": "hang_doi", "thong_ke": "max",
-      "ma": "P4/P5", "nhan": "độ sâu hàng đợi lớn nhất", "don_vi": "so",
-      "chu_thich": "tăng tuyến tính suốt lượt chạy = năng lực chấm đã vỡ. Đó là giới hạn của 6 judge slot, KHÔNG phải của API." },
-
-    { "metric": "rut_can_bai_phut", "thong_ke": "value",
-      "ma": "P4", "nhan": "tốc độ rút cạn", "don_vi": "bai_phut",
-      "chu_thich": "đo bởi chay.sh SAU khi k6 thoát, trên hàng đợi tồn. Đây là NĂNG LỰC CHẤM THẬT, không lẫn thời gian xếp hàng — con số đáng tin nhất ở nhóm này. Chia 60 ra bài/s để so với P4 (≥ 5 bài/s). Đọc nó ở MỨC CAO NHẤT: mức thấp để lại hàng đợi ngắn, cửa sổ đo vài giây, số nhiễu." },
-
-    { "metric": "rut_can_giay", "thong_ke": "value",
-      "ma": "P5", "nhan": "thời gian rút cạn", "don_vi": "s",
-      "chu_thich": "từ lúc người ảo cuối dừng tới lúc hàng đợi về 0. Bài nộp muộn nhất chờ khoảng ngần này." },
-
-    { "metric": "ti_le_429", "thong_ke": "rate",
-      "ma": "FR-SUB-08", "nhan": "tỉ lệ chạm rate limit", "don_vi": "ti_le",
-      "chu_thich": "cao là ĐÚNG. Nó là cái van, và cái van đang đóng nghĩa là nó còn hoạt động." },
-
-    { "metric": "http_req_blocked", "thong_ke": "p(95)",
-      "ma": "máy đo", "nhan": "chờ lấy được connection p95", "don_vi": "ms",
-      "chu_thich": "thời gian k6 chờ một socket TRƯỚC khi kịp gửi byte đầu tiên. Vài chục ms là bình thường (bắt tay TCP). Hàng trăm ms trở lên nghĩa là chính MÁY ĐO nghẽn — hết file descriptor, hết cổng tạm, hoặc k6 đang tranh CPU với máy chủ. Khi ô này lớn, mọi con số phía trên đều bi quan hơn sự thật." },
-
-    { "metric": "dang_nhap_ms", "thong_ke": "p(95)",
-      "ma": "—", "nhan": "đăng nhập p95", "don_vi": "ms",
-      "chu_thich": "bcrypt cost 12 ≈ 250ms là ĐÚNG, không phải chậm. Nó không nằm trong SLO nào; in ra chỉ để thấy lúc dốc lên có nghẽn CPU không." }
+    {
+      "ma": "P1",
+      "nhan": "đọc đề p95 (qua mạng)",
+      "nguon": "k6",
+      "metric": "doc_ms",
+      "thong_ke": "p(95)",
+      "moc": 200,
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "đo ở client, qua Internet + Cloudflare + tunnel: gồm cả đường mạng. Mốc của nfrplan là số ĐO Ở MÁY CHỦ (Micrometer), nên đây là quan sát."
+    },
+    {
+      "ma": "P2",
+      "nhan": "nộp bài p95 (qua mạng)",
+      "nguon": "k6",
+      "metric": "nop_ms",
+      "thong_ke": "p(95)",
+      "moc": 300,
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "đo ở client, qua Internet + Cloudflare + tunnel: gồm cả đường mạng. Mốc của nfrplan là số ĐO Ở MÁY CHỦ (Micrometer), nên đây là quan sát."
+    },
+    {
+      "ma": "P8",
+      "nhan": "bài AC lên bảng của mình p50",
+      "nguon": "db",
+      "metric": "sse_p8_p50_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "P8",
+      "nhan": "bài AC lên bảng của mình p95",
+      "nguon": "db",
+      "metric": "sse_p8_p95_ms",
+      "thong_ke": "value",
+      "moc": 2000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "giờ client nhận khung đầu tiên có cuaToi.soBaiDat ≥ 1 trừ judged_at (cùng đồng hồ máy chủ). Gồm nhịp lô 2s + đọc lại bảng + mạng. nfrplan đo P8 bằng metric drift ở máy chủ, nên đây là quan sát chứ không phải ngưỡng."
+    },
+    {
+      "ma": "P8",
+      "nhan": "bài AC lên bảng lâu nhất",
+      "nguon": "db",
+      "metric": "sse_p8_max_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "—",
+      "nhan": "số bài AC đo được P8",
+      "nguon": "db",
+      "metric": "sse_p8_mau",
+      "thong_ke": "value",
+      "don_vi": "so",
+      "kich_ban": [
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "—",
+      "nhan": "bài AC không có người xem",
+      "nguon": "db",
+      "metric": "sse_khong_theo_doi",
+      "thong_ke": "value",
+      "don_vi": "so",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "kết nối của tài khoản ấy chưa mở hoặc đã đóng trước verdict + 15s — không kết luận được, không tính là hỏng."
+    },
+    {
+      "ma": "P1",
+      "nhan": "đọc đề p95 khi giữ SSE (qua mạng)",
+      "nguon": "sse",
+      "metric": "sse_doc_p95_ms",
+      "thong_ke": "value",
+      "moc": 200,
+      "don_vi": "ms",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "đo ở client, qua Internet + Cloudflare + tunnel: gồm cả đường mạng. Mốc của nfrplan là số ĐO Ở MÁY CHỦ (Micrometer), nên đây là quan sát."
+    },
+    {
+      "ma": "—",
+      "nhan": "băng thông SSE nhận về",
+      "nguon": "sse",
+      "metric": "sse_bang_thong_mbps",
+      "thong_ke": "value",
+      "don_vi": "mbps",
+      "kich_ban": [
+        "ky-thi"
+      ],
+      "chu_thich": "tổng byte mọi kết nối nhận ÷ thời gian giữ. Kỳ thi thật đẩy chừng này LÊN từ mạng nhà qua tunnel."
+    },
+    {
+      "ma": "P2",
+      "nhan": "POST /submissions p95",
+      "nguon": "k6",
+      "metric": "nop_ms",
+      "thong_ke": "p(95)",
+      "moc": 300,
+      "don_vi": "ms",
+      "kich_ban": [
+        "dot-bien"
+      ],
+      "chu_thich": "500 request cùng một mili-giây: p95 ≈ 0,95 × số bài ÷ tốc độ ghi nhận ở dòng dưới. Là con số năng lực, không phải độ trễ người dùng gặp. P2 chấm ở on-dinh và quet."
+    },
+    {
+      "ma": "—",
+      "nhan": "tốc độ API ghi nhận bài",
+      "nguon": "db",
+      "metric": "db_ghi_nhan_bai_s",
+      "thong_ke": "value",
+      "don_vi": "bai_s",
+      "kich_ban": [
+        "dot-bien"
+      ],
+      "chu_thich": "(số bài − 1) ÷ (max − min created_at). created_at = now() = lúc transaction nộp bài bắt đầu, nên đây là nhịp API đưa bài tới câu INSERT, đo bằng đồng hồ DB."
+    },
+    {
+      "ma": "—",
+      "nhan": "bài client nhận 202",
+      "nguon": "k6",
+      "metric": "nop_202",
+      "thong_ke": "count",
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "—",
+      "nhan": "bài có trong DB",
+      "nguon": "db",
+      "metric": "db_so_bai",
+      "thong_ke": "value",
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "P3",
+      "nhan": "nộp → verdict p50",
+      "nguon": "db",
+      "metric": "db_verdict_p50_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "P3",
+      "nhan": "nộp → verdict p95",
+      "nguon": "db",
+      "metric": "db_verdict_p95_ms",
+      "thong_ke": "value",
+      "moc": 2000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "dot-bien"
+      ],
+      "chu_thich": "ở kịch bản này hàng đợi KHÔNG rỗng, nên đây là thời gian xếp hàng — đọc đường cong, đừng so với mốc"
+    },
+    {
+      "ma": "—",
+      "nhan": "nộp → verdict lâu nhất",
+      "nguon": "db",
+      "metric": "db_verdict_max_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "P6",
+      "nhan": "chờ hàng đợi p95",
+      "nguon": "db",
+      "metric": "db_cho_p95_ms",
+      "thong_ke": "value",
+      "moc": 5000,
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "dot-bien"
+      ]
+    },
+    {
+      "ma": "—",
+      "nhan": "thời gian chấm p95 (1 bài)",
+      "nguon": "db",
+      "metric": "db_cham_p95_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "finished_at − started_at. Tách được chậm vì XẾP HÀNG với chậm vì CHẤM."
+    },
+    {
+      "ma": "P4",
+      "nhan": "thông lượng chấm khi rút cạn",
+      "nguon": "db",
+      "metric": "db_thong_luong_bai_s",
+      "thong_ke": "value",
+      "moc": 5,
+      "don_vi": "bai_s",
+      "kich_ban": [
+        "quet"
+      ],
+      "chu_thich": "số bài có judged_at trong pha rút cạn ÷ độ dài pha, cả hai mốc lấy từ đồng hồ DB. Chỉ đáng tin ở mức để lại hàng đợi dài."
+    },
+    {
+      "ma": "—",
+      "nhan": "máy chấm còn sống (thấp nhất)",
+      "nguon": "k6",
+      "metric": "may_cham_song",
+      "thong_ke": "min",
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "0 = không có worker nào; mọi số đường chấm đo một hệ thống không chấm bài. Đọc ô này TRƯỚC."
+    },
+    {
+      "ma": "—",
+      "nhan": "độ sâu hàng đợi lớn nhất",
+      "nguon": "k6",
+      "metric": "hang_doi",
+      "thong_ke": "max",
+      "don_vi": "so",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "FR-SUB-08",
+      "nhan": "tỉ lệ chạm rate limit",
+      "nguon": "k6",
+      "metric": "ti_le_429",
+      "thong_ke": "rate",
+      "don_vi": "ti_le",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "ky-thi"
+      ],
+      "chu_thich": "quet: cao là ĐÚNG. on-dinh: phải ≈ 0 — khác 0 nghĩa là bể tài khoản quá nhỏ cho TOC_DO."
+    },
+    {
+      "ma": "máy đo",
+      "nhan": "chờ lấy connection p95",
+      "nguon": "k6",
+      "metric": "http_req_blocked",
+      "thong_ke": "p(95)",
+      "don_vi": "ms",
+      "kich_ban": [
+        "quet",
+        "on-dinh",
+        "dot-bien",
+        "ky-thi"
+      ],
+      "chu_thich": "hàng trăm ms = chính máy đo nghẽn (fd, cổng tạm, tranh CPU); mọi số ở trên bi quan hơn sự thật."
+    },
+    {
+      "ma": "máy đo",
+      "nhan": "vòng lặp k6 bị bỏ",
+      "nguon": "k6",
+      "metric": "dropped_iterations",
+      "thong_ke": "count",
+      "don_vi": "so",
+      "kich_ban": [
+        "on-dinh",
+        "ky-thi"
+      ],
+      "chu_thich": "on-dinh dùng constant-arrival-rate: khác 0 nghĩa là k6 không phát nổi TOC_DO, và tải thật thấp hơn tải khai báo."
+    },
+    {
+      "ma": "—",
+      "nhan": "SSE mở được",
+      "nguon": "sse",
+      "metric": "sse_mo_duoc",
+      "thong_ke": "value",
+      "don_vi": "so",
+      "kich_ban": [
+        "sse",
+        "ky-thi"
+      ]
+    },
+    {
+      "ma": "—",
+      "nhan": "SSE thời gian tới header p95",
+      "nguon": "sse",
+      "metric": "sse_toi_header_p95_ms",
+      "thong_ke": "value",
+      "don_vi": "ms",
+      "kich_ban": [
+        "sse",
+        "ky-thi"
+      ]
+    }
   ],
-
-  "luu_luong": [
-    { "metric": "http_reqs",          "thong_ke": "count", "nhan": "tổng request" },
-    { "metric": "http_reqs",          "thong_ke": "rate",  "nhan": "request mỗi giây" },
-    { "metric": "iterations",         "thong_ke": "count", "nhan": "vòng lặp hoàn tất" },
-    { "metric": "iteration_duration", "thong_ke": "p(95)", "nhan": "một vòng lặp p95", "don_vi": "ms" }
-  ],
-
-  "_san_do": [
-    "Hàm theo dõi verdict trong k6-tai.js NGỦ 250ms trước lần hỏi đầu tiên, nên 250ms là",
-    "SÀN của phép đo chứ không phải kết quả. Ngân sách nfrplan 2.1 cho chấm thật: riêng biên",
-    "dịch đã < 400ms, cộng 20 test là ~1.4s. Một verdict p95 dưới `verdict_san_ms` nghĩa là",
-    "không có gì được biên dịch — gần như luôn là ScriptedJudgeRunner (sandbox.enabled=false)",
-    "chứ không phải một máy chấm nhanh."
-  ],
-  "verdict_san_ms": 500,
-
-  "muc_mac_dinh": [100, 200, 400, 500, 1000],
-
   "may_chuan": {
     "ten": "mac-m1max-host",
     "cpu": "Apple M1 Max — 8 P-core + 2 E-core, 64 GB RAM",
@@ -101,7 +584,22 @@
     "throughput_cham_uoc_tinh": 5.0,
     "rate_limit_giay": 10,
     "hikari_app_pool": 20,
-    "hikari_judge_pool": 6,
-    "_nguon": "docs/nfrplan.md 2.2 · oj-api/src/main/resources/application.yml · oj-worker/.../application.yml"
+    "_nguon": "docs/nfrplan.md 2.2 · oj-api/src/main/resources/application.yml"
+  },
+  "_san_cham": [
+    "THỜI GIAN CHẤM p95 (finished_at − started_at) dưới mức này nghĩa là không có gì được biên dịch.",
+    "KHÔNG dùng verdict p95 cho phép kiểm này — đo 2026-09-11 với worker giả lập: thời gian chấm 18ms",
+    "nhưng verdict p95 ~500ms, vì verdict gồm cả nhịp poll 500ms của worker khi tắt RabbitMQ. Phép kiểm",
+    "cũ dựa trên verdict p95 chỉ bật cảnh báo ở 1 trong 4 lượt đo giả lập.",
+    "Hai nguyên nhân: NGUON_DUY_NHAT=0 (CompileCache trả lời) hoặc worker chạy ScriptedJudgeRunner."
+  ],
+  "cham_san_ms": 200,
+  "_rut_can_toi_thieu": [
+    "Pha rút cạn ngắn hơn/ít bài hơn mức này thì 'bài/giây' là nhiễu: lượt đo nhẹ để lại hàng đợi rỗng",
+    "sau 0s và bản cũ in 0.00 bài/s (2026-09-11). Khi đó metric vắng mặt — in '—', không bịa số."
+  ],
+  "rut_can_toi_thieu": {
+    "giay": 10,
+    "bai": 20
   }
 }

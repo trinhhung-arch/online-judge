@@ -222,7 +222,8 @@ for _ in $(seq 40); do
         loi "container thoát với mã $ma trước khi JVM lên.
      Không kiểm gì thêm: mọi ca kiểm bên dưới sẽ hỏng vì đúng một lý do này."
     fi
-    if docker logs "$TEN" 2>&1 | grep -q "Started OjWorkerApplication"; then len_jvm=1; break; fi
+    # KHÔNG grep -q: với pipefail nó làm pipeline "hỏng" dù đã khớp (SIGPIPE, mã 141) — đo 2026-09-11.
+    if docker logs "$TEN" 2>&1 | grep "Started OjWorkerApplication" >/dev/null; then len_jvm=1; break; fi
     printf '.'
     sleep 1
 done
