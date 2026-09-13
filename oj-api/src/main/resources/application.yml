@@ -332,6 +332,17 @@ oj:
     drift-check-interval: 15m     # mỗi lần soát là một lần tính lại toàn bộ kỳ thi
     drift-check-window: 7d        # kỳ thi cũ hơn thế coi như đã chốt
 
+  # ---------------------------------------------------------------------------
+  # Trần chung cho mọi endpoint /api/v1/ — nfrplan 4.2, oj-api/CLAUDE.md mục 8.
+  # Ba giới hạn kia (nộp bài, đăng nhập, đăng ký) chỉ chắn ba đường đắt nhất; đây là trần cuối
+  # cùng, đặt ở bộ lọc nên không use-case nào quên được.
+  # ---------------------------------------------------------------------------
+  api-rate-limit:
+    per-user: ${OJ_API_RATE_LIMIT_USER:100}     # con số đã công bố ở bảng giới hạn
+    # Chỉ đếm lượt ẩn danh. Rộng hơn một bậc vì một IP là NHIỀU người: phòng thi sau NAT, 4G.
+    per-ip: ${OJ_API_RATE_LIMIT_IP:600}
+    window: 1m
+
   ai:
     daily-quota: 5                # FR-AI-03 — tuần 14-15
     timeout: 30s                  # cứng, không có ngoại lệ (nfrplan.md 10.5)

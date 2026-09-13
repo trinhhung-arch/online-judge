@@ -56,6 +56,14 @@ public final class AppPropertiesGia {
     }
 
     /** Cho {@code TurnstileVerifierTest} — nó bật/tắt captcha và đổi URL siteverify. */
+    /** Trần API cho test bộ lọc: 0 = tắt hẳn xô đó. */
+    public static AppProperties voiGioiHanApi(int moiNguoi, int moiIp) {
+        var a = macDinh();
+        return new AppProperties(a.submission(), a.judge(), a.page(), a.internal(), a.sse(),
+                a.securityHeaders(), a.auth(), a.jobs(), a.contest(),
+                new AppProperties.ApiRateLimit(moiNguoi, moiIp, Duration.ofMinutes(1)), a.ai());
+    }
+
     public static AppProperties voiTurnstile(TurnstileProperties turnstile) {
         var a = authMacDinh();
         var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),
@@ -109,6 +117,7 @@ public final class AppPropertiesGia {
                 new ContestProperties(Duration.ofSeconds(2), 500,
                         Duration.ofMinutes(5), 50,
                         Duration.ofMinutes(15), Duration.ofDays(7)),
+                new AppProperties.ApiRateLimit(100, 600, Duration.ofMinutes(1)),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));
     }
 }

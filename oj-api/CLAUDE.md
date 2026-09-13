@@ -124,7 +124,8 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 | Băm BCrypt song song | 4 phép cùng lúc | 429 **ngay**, không xếp hàng. Xếp hàng là giữ luồng Tomcat và kéo mọi endpoint khác chết theo |
 | Đăng ký | 10 tài khoản / giờ / IP | 429. Đếm cả lượt hỏng, nếu không thì dò handle là miễn phí |
 | Đăng ký · captcha | Cloudflare Turnstile | 400. Kiểm ở server, không tin widget. Cloudflare không trả lời thì TỪ CHỐI |
-| API chung | 100 req / phút / user | 429 |
+| API chung | 100 req / phút / user | 429 kèm `Retry-After`. Bộ lọc `GioiHanApiFilter`, không phải use-case |
+| API chung · ẩn danh | 600 req / phút / IP | 429. Rộng hơn một bậc vì một IP là NHIỀU người (phòng thi sau NAT, 4G) |
 | Kích thước source | 64KB | Từ chối ở tầng validate, thông báo rõ |
 | AI review | 5 lượt / ngày / user | UI hiện số lượt còn lại |
 

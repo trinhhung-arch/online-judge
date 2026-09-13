@@ -60,4 +60,18 @@ final class CurrentUserHolder {
         }
         return ketQua.nguoiDung();
     }
+
+    /**
+     * {@code null} khi chưa đăng nhập, token hỏng, hoặc token hết hạn — <b>không ném</b>.
+     *
+     * <p>Dành cho {@link GioiHanApiFilter}: nó chạy trước controller, trên MỌI request kể cả
+     * request ẩn danh hợp lệ (trang đề, bảng xếp hạng). Dùng {@link #batBuoc()} ở đó thì mọi
+     * khách vãng lai thành một ngoại lệ, và một trần chống lạm dụng biến thành một chốt đăng
+     * nhập cho cả site.
+     */
+    static Long idNeuCo() {
+        KetQua ketQua = HIEN_TAI.get();
+        return ketQua == null || ketQua.loi() != null || ketQua.nguoiDung() == null
+                ? null : ketQua.nguoiDung().id();
+    }
 }

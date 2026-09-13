@@ -19,6 +19,9 @@
 #             ojdb_prod trùng nhau — dùng chung là SSE của người dùng prod nhận sự kiện của bài đo.
 #   RabbitMQ  TÁCH (oj-do-rabbitmq): chung judge.live là worker prod nhặt bài đo rồi claim vào API prod.
 #   API đo    java -jar, cổng 18080/18081, profile dev (ojdb mang lịch sử dev-seed), bí mật RIÊNG.
+#             Trần API chung (nfrplan 4.2) đặt 1 000 000 thay vì 100/600: k6 bắn hàng chục nghìn lượt
+#             ẩn danh mỗi phút TỪ MỘT IP, nên trần thật biến phép đo P1 thành phép đo 429. Đặt số lớn
+#             chứ không đặt 0 là cố ý — bộ đếm VẪN chạy, nên chi phí của bộ lọc vẫn nằm trong số đo.
 #   Worker đo container oj-worker-do qua trien-khai-mac.sh: isolate thật, tên mac-m1max-host để phép đo
 #             máy được ghi, tmpfs 4g (VM ~15GB, worker prod đã giữ 8g).
 #   Redis/RabbitMQ chỉ mở trên 127.0.0.1: container vẫn gọi được qua host.docker.internal (đã thử).
@@ -102,6 +105,7 @@ echo; echo "── API đo ──"
 env -i PATH="$PATH" HOME="$HOME" \
     OJ_JWT_SECRET="$OJ_JWT_SECRET" OJ_TOTP_KEY="$OJ_TOTP_KEY" OJ_INTERNAL_SHARED_SECRET="$OJ_INTERNAL_SHARED_SECRET" \
     SPRING_PROFILES_ACTIVE=dev SERVER_PORT=$CONG_API MANAGEMENT_SERVER_PORT=$CONG_QT \
+    OJ_API_RATE_LIMIT_USER=1000000 OJ_API_RATE_LIMIT_IP=1000000 \
     OJ_DB_URL=jdbc:postgresql://127.0.0.1:5432/ojdb OJ_DB_APP_USER=ojuser OJ_DB_APP_PASSWORD=ojpass \
     SPRING_DATA_REDIS_HOST=127.0.0.1 SPRING_DATA_REDIS_PORT=$CONG_REDIS \
     OJ_RABBIT_ENABLED=true OJ_RABBIT_HOST=127.0.0.1 OJ_RABBIT_PORT=$CONG_RABBIT OJ_RABBIT_USER=ojuser OJ_RABBIT_PASSWORD=ojpass \

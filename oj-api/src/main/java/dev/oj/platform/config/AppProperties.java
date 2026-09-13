@@ -47,6 +47,7 @@ public record AppProperties(
         AuthProperties auth,
         Jobs jobs,
         ContestProperties contest,
+        ApiRateLimit apiRateLimit,
         Ai ai) {
 
     /**
@@ -261,6 +262,37 @@ public record AppProperties(
      * <p>Công tắc bật/tắt <b>không</b> ở đây — nó là {@code ai_review.enabled} trong
      * {@code system_settings}, vì ADMIN phải tắt được tức thì mà không deploy (FR-AI-09).
      */
+    /**
+     * ★ Trần chung cho mọi endpoint {@code /api/v1/} — nfrplan 4.2, oj-api/CLAUDE.md mục 8.
+     *
+     * <p>{@code perUser} là con số đã công bố: 100 lượt/phút/người đã đăng nhập.
+     *
+     * <p>{@code perIp} chỉ đếm lượt <b>ẩn danh</b>, và rộng hơn một bậc vì cả một phòng thi, một
+     * trường, một nhà mạng di động đi ra internet bằng CHUNG một IP. Đặt nó bằng perUser là để
+     * người thứ hai trong phòng chặn người thứ nhất.
+     *
+     * <p>Đặt 0 = TẮT hẳn xô đó, kể cả lượt đếm. Chỉ dùng cho stack đo tải: k6 bắn hàng chục nghìn
+     * lượt ẩn danh mỗi phút từ một IP, và một trần thật ở đó biến phép đo P1 thành phép đo 429.
+     */
+    public record ApiRateLimit(int perUser, int perIp, Duration window) {
+
+        public ApiRateLimit {
+            if (window == null || window.isZero() || window.isNegative()) {
+                throw new IllegalStateException("oj.api-rate-limit.window = " + window + " không hợp lệ");
+            }
+            if (perUser < 0 || perIp < 0) {
+                throw new IllegalStateException(
+                        "oj.api-rate-limit: số âm không có nghĩa. 0 là TẮT, số dương là trần. "
+                                + "Nhận perUser=" + perUser + ", perIp=" + perIp);
+            }
+            if (perIp > 0 && perUser > 0 && perIp < perUser) {
+                throw new IllegalStateException(
+                        "oj.api-rate-limit.per-ip (" + perIp + ") nhỏ hơn per-user (" + perUser
+                                + "): một IP là NHIỀU người (phòng thi sau NAT), nên xô IP phải rộng hơn xô người");
+            }
+        }
+    }
+
     public record Ai(int dailyQuota, Duration timeout) {
 
         public Ai {
