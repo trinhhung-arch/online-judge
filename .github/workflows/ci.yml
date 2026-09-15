@@ -82,11 +82,18 @@ jobs:
           done
 
 # -----------------------------------------------------------------------------
-# Workflow còn lại của build-order 0.8 CHƯA thêm ở đây, vì thêm bây giờ là CI đỏ
-# ngay từ lần push đầu — và một CI đỏ thường trực là một CI bị bỏ qua:
+# Ba workflow của build-order 0.8, trạng thái hôm nay:
 #
-#   buildx.yml           image multi-arch amd64 + arm64 (C1) — cần Dockerfile cho oj-api,
-#                        chưa có. infra/isolate/Dockerfile mới chỉ lo phần sandbox.
+#   ci.yml               file này.
+#   sandbox-attack.yml   BẬT ở M2, cùng lúc IsolateJudgeRunner thay ScriptedJudgeRunner.
+#   buildx.yml           BẬT 2026-09-15. Nó dựng ảnh oj-worker cho amd64 + arm64 trên
+#                        runner gốc của từng kiến trúc (C1). Đoạn ghi ở đây trước đó nói
+#                        buildx phải chờ Dockerfile của oj-api — chỉ đúng một nửa:
+#                        oj-api vẫn chưa có Dockerfile, nhưng infra/isolate/Dockerfile
+#                        thì có, và nó dựng đúng cái ảnh chạy mã người lạ. Chờ nốt nửa
+#                        kia đã trả giá 10 ngày host chạy ảnh cũ — xem đầu buildx.yml.
 #
-# sandbox-attack.yml ĐÃ BẬT ở M2, cùng lúc IsolateJudgeRunner thay ScriptedJudgeRunner.
+# Quét phụ thuộc (nfrplan 4.3) nằm ở .github/dependabot.yml, không phải ở đây: nó là
+# lịch mở PR, không phải một bước build. Phần "chặn merge" của mục ấy vẫn chưa có —
+# cuối dependabot.yml ghi rõ ba thứ còn thiếu.
 # -----------------------------------------------------------------------------

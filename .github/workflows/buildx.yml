@@ -1,0 +1,162 @@
+# ★ Ảnh oj-worker cho CẢ HAI kiến trúc — C1, nfrplan Phần 9.1 và Phần 11 tuần 0.
+#
+# build-order.md Bước 0.8 đòi buildx multi-arch "từ commit đầu". Nó bị hoãn với lý do ghi ở
+# cuối ci.yml: "cần Dockerfile cho oj-api, chưa có". Lý do ấy đúng một nửa — oj-api vẫn chưa
+# có Dockerfile, nhưng infra/isolate/Dockerfile thì có, và nó dựng chính cái ảnh chạy mã của
+# người lạ. Workflow này lo nửa đã làm được.
+#
+# ★ VÌ SAO NỬA CÒN LẠI ĐÁNG GIÁ HƠN VẺ NGOÀI — một sự cố thật, đo ngày 2026-09-15
+# Ảnh `oj-worker:arm64` trên host Mac được build ngày 05/09. Commit 46de53f ngày 10/09 thêm
+# ClaimBackoff.java (112 dòng mã production) và sửa JudgeLoop. Container được tạo lại ngày
+# 11/09 và 12/09 — nhưng dùng lại ảnh cũ, vì không ai build lại.
+#
+# Kết quả: suốt 10 ngày, CI xanh mỗi lần push trong khi máy chấm bài thật chạy mã cũ, và
+# ClaimBackoffTest xanh trên một class KHÔNG tồn tại trong tiến trình đang chấm. Không có
+# dấu hiệu nào. `mvnw verify` không bao giờ thấy được điều đó — nó chỉ nhìn mã nguồn.
+#
+# Workflow này không tự động triển khai (xem "CÁI NÀY KHÔNG LÀM" ở cuối), nhưng nó biến
+# "Dockerfile còn build được không" từ một câu hỏi không ai hỏi thành một dấu X hoặc dấu V.
+#
+# ★ VÌ SAO WORKFLOW RIÊNG, KHÔNG PHẢI MỘT BƯỚC TRONG ci.yml
+# Cùng lập luận với sandbox-attack.yml: khi ảnh hỏng, dấu X phải nói "ảnh hỏng", không phải
+# "build hỏng". Và nó chạy song song nên không cộng phút nào vào đường tới hạn của ci.
+name: buildx
+
+on:
+  push:
+    branches: [main, 'a/**', 'b/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: buildx-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  anh:
+    # ★ RUNNER GỐC CHO TỪNG KIẾN TRÚC, KHÔNG PHẢI QEMU.
+    #
+    # Cách hiển nhiên là một runner amd64 + setup-qemu-action rồi
+    # `--platform linux/amd64,linux/arm64`. Nó chạy được, và nó CHẬM tới mức phá ngân sách:
+    # stage 2 của Dockerfile là một lượt `mvn package` đầy đủ, mà JVM chạy dưới QEMU thì
+    # emulation ăn gấp bội — cộng thêm một lượt biên dịch isolate từ nguồn nữa cũng emulated.
+    # nfrplan đặt trần CI 10 phút, và một workflow vượt trần là một workflow bị bỏ qua.
+    #
+    # Repo này CÔNG KHAI nên runner arm64 của GitHub miễn phí. Mỗi kiến trúc build bằng CPU
+    # thật của chính nó: nhanh, và đúng tinh thần "KHÔNG BAO GIỜ copy binary isolate giữa hai
+    # kiến trúc" của infra/isolate/Dockerfile — ở đây thì cả hai đều được dựng từ nguồn trên
+    # đúng máy của mình.
+    strategy:
+      fail-fast: false      # arm64 hỏng không được che mất kết quả amd64, và ngược lại
+      matrix:
+        include:
+          - runner: ubuntu-latest       # giống máy dev WSL x86
+            nen: linux/amd64
+          - runner: ubuntu-24.04-arm    # giống host chấm bài Mac M1 Max
+            nen: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    name: ${{ matrix.nen }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # `load: true` nạp ảnh vào daemon để bước kiểm phía dưới chạy được. Nó chỉ hợp lệ vì
+      # mỗi job build ĐÚNG MỘT platform — một build đa platform không nạp vào daemon được.
+      #
+      # Cache theo scope riêng từng kiến trúc: dùng chung một scope thì hai job ghi đè nhau
+      # và lần nào cũng miss.
+      - name: Build ảnh
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/isolate/Dockerfile
+          platforms: ${{ matrix.nen }}
+          tags: oj-worker:ci
+          push: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.nen }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.nen }}
+
+      # ⛔ Chốt cuối, cùng vai trò với bước "Đủ 14 ca" của sandbox-attack.yml.
+      #
+      # "Build thành công" không có nghĩa là ảnh dùng được. Mọi dòng dưới đây tương ứng với
+      # một cách hỏng ĐÃ XẢY RA và đã được ghi lại trong header của Dockerfile — nên đây là
+      # danh sách hồi quy, không phải danh sách phòng hờ.
+      - name: Ảnh có dùng được không
+        run: |
+          set -eu
+          chay() { docker run --rm --entrypoint /bin/sh oj-worker:ci -c "$1"; }
+
+          # 1 · Kiến trúc đúng như job này khai. Bắt trường hợp nhãn runner đổi nghĩa.
+          that=$(docker image inspect oj-worker:ci --format '{{.Os}}/{{.Architecture}}')
+          [ "$that" = "${{ matrix.nen }}" ] || {
+            echo "::error::Ảnh là $that, phải là ${{ matrix.nen }}"; exit 1; }
+
+          # 2 · File config của isolate nằm ĐÚNG chỗ binary đi tìm.
+          #     Bug PREFIX ngày 05/09: `isolate --version` vẫn chạy trên một cài đặt hỏng vì
+          #     nó không đọc config, nên một phép kiểm gọi --version sẽ báo xanh. Kiểm file.
+          chay 'test -f /usr/local/etc/isolate' || {
+            echo "::error::Thiếu /usr/local/etc/isolate — PREFIX sai, xem header Dockerfile"
+            exit 1; }
+
+          # 3 · isolate-cg-keeper có mặt. Thiếu nó thì /run/isolate/cgroup không bao giờ
+          #     xuất hiện và container tắt ngay sau khi khởi động.
+          chay 'test -x /usr/local/sbin/isolate-cg-keeper' || {
+            echo "::error::Thiếu isolate-cg-keeper"; exit 1; }
+
+          # 4 · Bit setuid còn nguyên. Không có nó, isolate không tạo được namespace và
+          #     vài ca tấn công chuyển từ "bị chặn" sang "không chạy được" — hai kết quả
+          #     nhìn giống nhau trong log (header Dockerfile đã cảnh báo đúng điều này).
+          chay 'test -u /usr/local/bin/isolate' || {
+            echo "::error::/usr/local/bin/isolate mất bit setuid"; exit 1; }
+
+          # 5 · Dòng subuid. Thiếu nó thì cả isolate lẫn keeper chết lúc đọc config
+          #     (config.c: die "User %s not found"). Đúng lỗi đã làm CI đỏ một lần.
+          chay 'grep -q "^isolate:" /etc/subuid && grep -q "^isolate:" /etc/subgid' || {
+            echo "::error::/etc/subuid hoặc /etc/subgid thiếu dòng isolate"; exit 1; }
+
+          # 6 · Bất biến sandbox #7 — JVM của worker KHÔNG chạy root.
+          uid=$(chay 'id -u')
+          [ "$uid" = "1500" ] || {
+            echo "::error::Worker chạy dưới uid $uid, phải là 1500 (ojworker)"; exit 1; }
+
+          # 7 · Jar có thật và là jar của commit này, không phải tầng cache cũ.
+          chay 'test -s /app/oj-worker.jar' || {
+            echo "::error::Thiếu /app/oj-worker.jar"; exit 1; }
+
+          echo "7/7 phép kiểm đạt cho ${{ matrix.nen }}."
+
+      # Kích thước ảnh in ra log để thấy nó phình dần qua thời gian. Không có ngưỡng chặn:
+      # đặt một con số bây giờ là đặt bừa, còn một dòng số đọc được mỗi lần push thì đủ để
+      # nhận ra ngày nó nhảy gấp đôi.
+      - name: Kích thước
+        run: |
+          docker image inspect oj-worker:ci --format '{{.Size}}' \
+            | awk '{ printf "%s = %.0f MB\n", "${{ matrix.nen }}", $1/1024/1024 }'
+
+# =============================================================================
+# ★ CÁI NÀY KHÔNG LÀM
+#
+#   1. KHÔNG push ảnh đi đâu. Chưa có registry, và thêm một cái là một quyết định về
+#      nơi lưu, về khoá, và về đường triển khai — CLAUDE.md mục 5. Ảnh dựng ra ở đây
+#      sống và chết trong runner.
+#
+#      Hệ quả phải biết: workflow này chứng minh "Dockerfile còn build được", KHÔNG
+#      chứng minh "ảnh trên host là mới". Sự cố 10 ngày kể ở đầu file vẫn tái diễn được.
+#      Chữa thật là push lên GHCR rồi để scripts/trien-khai-mac.sh `docker pull` thay vì
+#      build tại chỗ — lúc ấy mới có một thứ duy nhất để đối chiếu. Đáng làm, nhưng là
+#      một quyết định riêng.
+#
+#   2. KHÔNG có oj-api. Module ấy chưa có Dockerfile; trên Mac nó chạy thẳng bằng
+#      `./mvnw -pl oj-api spring-boot:run` (xem đầu scripts/trien-khai-mac.sh). Thêm
+#      một dòng ở matrix khi nào Dockerfile ấy tồn tại.
+#
+#   3. KHÔNG chạy 14 test tấn công. Đó là việc của sandbox-attack.yml, và nó chạy
+#      isolate được cài thẳng trên runner chứ không phải trong ảnh này.
+# =============================================================================
