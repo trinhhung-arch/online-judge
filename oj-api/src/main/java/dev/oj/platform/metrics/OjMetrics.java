@@ -21,7 +21,7 @@ package dev.oj.platform.metrics;
  *   P1, P2   http.server.requests           Boot tự đo, có histogram (xem application.yml)
  *   P4       oj.judge.finished              đếm verdict -> throughput là đạo hàm của nó
  *   P6       oj.queue.wait.ms               bài chờ lâu nhất đang trong hàng đợi
- *   P8       oj.standings.drift             số ô lệch giữa Redis và Postgres
+ *   P8       oj.standings.drift             số dòng contest_standings lệch khỏi submissions
  *   R3       oj.judge.finished{verdict=IE}  tỉ lệ IE tính từ cùng một counter với P4
  *   —        oj.queue.waiting / .judging    độ sâu hàng đợi, FR-ADM-04 và FR-ADM-05
  *   —        oj.workers.live                số máy chấm còn báo danh
@@ -64,7 +64,7 @@ public final class OjMetrics {
     /** Tag của {@link #JUDGE_FINISHED}. */
     public static final String TAG_VERDICT = "verdict";
 
-    /** P8 — số ô lệch mà {@code StandingsDriftCheckJob} tìm thấy ở lần chạy gần nhất. */
+    /** P8 — số dòng lệch mà {@code StandingsDriftCheckJob} tìm thấy ở lần đối soát gần nhất. */
     public static final String STANDINGS_DRIFT = "oj.standings.drift";
 
     private OjMetrics() {
