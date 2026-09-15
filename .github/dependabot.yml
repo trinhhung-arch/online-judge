@@ -1,0 +1,143 @@
+# ★ Quét và cập nhật phụ thuộc — nfrplan 4.3 ("Dependency scan trong CI").
+#
+# Đây là mục DUY NHẤT của nfrplan Phần 4 từng không có gì đứng sau ngoài lời hứa.
+# File này là một nửa của nó — xem mục "CÁI FILE NÀY KHÔNG LÀM" ở cuối để biết nửa kia.
+#
+# ★ VÌ SAO KHÔNG CÓ ENTRY CHO THƯ MỤC GỐC
+# `pom.xml` ở gốc là aggregator thuần: nó có <modules> và KHÔNG có <parent>, không
+# <dependencyManagement>, không một <dependency> nào. Mọi version thật — kể cả
+# spring-boot-starter-parent — được khai trong ba pom con, mỗi pom một bản độc lập.
+# Trỏ Dependabot vào "/" là trỏ vào một file không có gì để cập nhật, và triệu chứng là
+# một cấu hình xanh mà không bao giờ mở PR nào. Nên ba entry, ba đường dẫn tường minh.
+#
+# Ba entry riêng thay vì một `directories:` gộp: mỗi module có nhịp rủi ro khác nhau
+# (oj-api kéo cả Spring + Testcontainers + MinIO; oj-contract gần như trống), và tách ra
+# thì trần PR của module này không nuốt mất PR của module kia.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Maven
+  # ---------------------------------------------------------------------------
+  #
+  # Gom mọi bản vá vào MỘT PR mỗi tuần. Với hai người thì mười PR vá lặt vặt một tuần
+  # là mười lần bấm merge không đọc — mà một PR không được đọc thì tệ hơn không có PR:
+  # nó dạy người ta rằng dấu xanh của CI là đủ.
+  #
+  # Minor và major vẫn tách riêng từng PR, vì chúng đáng được đọc từng cái một.
+  - package-ecosystem: maven
+    directory: /oj-api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      ban-va:
+        update-types: [patch]
+
+  - package-ecosystem: maven
+    directory: /oj-worker
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
+    groups:
+      ban-va:
+        update-types: [patch]
+
+  - package-ecosystem: maven
+    directory: /oj-contract
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
+    groups:
+      ban-va:
+        update-types: [patch]
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions
+  # ---------------------------------------------------------------------------
+  #
+  # `actions/checkout@v5` và bạn bè cũng là phụ thuộc, và chúng chạy với quyền đọc repo.
+  # Một action bị chiếm là một đường vào CI — đúng loại rủi ro mà nfrplan 4.3 nói tới,
+  # chỉ là không ai nghĩ tới nó vì nó không nằm trong pom.xml.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Ho_Chi_Minh
+    commit-message:
+      prefix: ci
+
+  # ---------------------------------------------------------------------------
+  # Docker — và đây là entry cần đọc kỹ nhất
+  # ---------------------------------------------------------------------------
+  #
+  # ★ HAI BASE IMAGE BỊ CẤM TỰ ĐỘNG NÂNG, VÀ LÝ DO KHÔNG PHẢI SỰ CẨN THẬN THỪA
+  #
+  # `debian:bookworm-slim` là môi trường BÊN TRONG box. Header của
+  # infra/isolate/Dockerfile ghi rõ: trixie có openjdk-21 thật, nhưng nó kéo theo
+  # g++ 12 -> 14 và python3 3.11 -> 3.13. Đổi chúng là:
+  #   * đổi thời gian chạy của mọi bài -> phải hiệu chuẩn lại `host_factor`
+  #   * đổi `languages.version_label` -> nhãn hiển thị cho thí sinh sai
+  #   * bắt bộ 14 test tấn công chứng minh lại trên một toolchain khác
+  # Một PR tiêu đề "Bump debian from bookworm-slim to trixie-slim" trông y hệt mọi PR
+  # vá bảo mật khác, và merge nó là đổi kết quả chấm bài của cả hệ thống trong im lặng.
+  # Đây đúng là thứ câu cuối của CLAUDE.md nói tới.
+  #
+  # `eclipse-temurin:21-jre-jammy` bị ghim vì glibc: jammy là 2.35, noble là 2.39.
+  # Binary dựng cho 2.35 chạy trên 2.36 được, chiều ngược lại thì không.
+  #
+  # Nâng hai ảnh này là việc CÓ THỂ làm — nhưng bằng tay, có chủ đích, kèm hiệu chuẩn
+  # lại và chạy lại sandbox-attack. Không phải bằng một nút merge sáng thứ Hai.
+  #
+  # Còn lại `maven:3.9-eclipse-temurin-21` ở stage build: nó chỉ dựng ra một file .jar
+  # và không có mặt trong ảnh chạy, nên nâng nó là an toàn. Đó là thứ entry này phục vụ.
+  - package-ecosystem: docker
+    directory: /infra/isolate
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Ho_Chi_Minh
+    commit-message:
+      prefix: docker
+    ignore:
+      - dependency-name: debian
+      - dependency-name: eclipse-temurin
+
+# =============================================================================
+# ★ CÁI FILE NÀY KHÔNG LÀM — đọc trước khi tick nfrplan 4.3 là xong
+#
+# nfrplan 4.3 viết: "Trivy hoặc Dependabot, CHẶN MERGE nếu có CRITICAL/HIGH".
+# File này lo phần "biết", không lo phần "chặn". Cụ thể nó KHÔNG:
+#
+#   1. Chặn merge. Version update chỉ mở PR; muốn chặn thì phải bật branch protection
+#      cho `main` và đặt `ci` + `sandbox-attack` làm required check. Đó là cấu hình
+#      trên GitHub, không phải file trong repo.
+#
+#   2. Quét lỗ hổng. Phần ấy là Dependabot *security updates* — một công tắc ở
+#      Settings > Code security, KHÔNG phải một khối trong file này. Bật nó thì
+#      GitHub mở PR ngay khi có CVE, không chờ tới thứ Hai.
+#
+#   3. Bắt CI đỏ khi có CRITICAL/HIGH. Muốn có răng thật thì cần một bước Trivy trong
+#      ci.yml với `exit-code: 1`, `severity: CRITICAL,HIGH`. Chưa thêm ở đây vì nó là
+#      một quyết định về tốc độ CI và về việc ai xử lý khi nó đỏ lúc 11 giờ đêm.
+#
+# Nói ngắn: file này làm cho phụ thuộc không tự già đi. Ba mục trên mới là "chặn".
+# =============================================================================

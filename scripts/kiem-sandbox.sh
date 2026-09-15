@@ -4,6 +4,7 @@
 #
 #   ./scripts/kiem-sandbox.sh              # build ảnh test rồi chạy
 #   ./scripts/kiem-sandbox.sh --khong-build
+#   IT=SandboxAttackIT,IsolateJudgeRunnerIT ./scripts/kiem-sandbox.sh   # thêm đường chấm thật
 #
 # CLAUDE.md mục 6 đòi chạy lại toàn bộ 14 ca mỗi khi đụng sandbox — và đổi kiến trúc máy
 # chấm (WSL x86 -> container trên Mac arm64) CHÍNH LÀ đụng sandbox.
@@ -14,9 +15,10 @@
 # ở đó KHÔNG có nghĩa là sandbox an toàn; nó có nghĩa là chưa ai thử. Script này vì thế
 # ĐẾM số ca đã chạy, và chỉ báo xanh khi đủ 14.
 #
-# ⚠️ SCRIPT NÀY CHƯA ĐƯỢC CHẠY TRỌN VẸN MỘT LẦN NÀO. Cú pháp bash đã kiểm, ảnh đã build
-#    được, nhưng lượt `docker run` có --cap-add SYS_ADMIN thì chưa ai chạy. Lần chạy đầu
-#    hãy đọc nhật ký chứ đừng chỉ đọc dòng kết luận.
+# ✔ ĐÃ CHẠY TRỌN VẸN: 2026-09-15 trên host Mac M1 Max (OrbStack), ảnh oj-worker:arm64 dựng
+#   lại cùng ngày — 14/14 ca chạy, 0 hỏng, 0 bỏ, hết 5,9 giây. Lượt `docker run` có
+#   --cap-add SYS_ADMIN chạy được, cgroup ba tầng dựng đúng. Dòng cảnh báo cũ ở đây nói
+#   script chưa từng chạy trọn vẹn; nó đã cũ và được thay bằng chính con số này.
 #
 # ★ CÁI BẪY MÀ HEADER trien-khai-mac.sh ĐÃ CẢNH BÁO
 # Khi nới/siết quyền container, một ca chuyển từ "bị chặn" sang "không chạy được" trông
@@ -29,7 +31,18 @@ ANH_CHAY=${ANH:-oj-worker:arm64}
 ANH_TEST=${ANH_TEST:-oj-worker-test:arm64}
 NEN_TANG=${NEN_TANG:-linux/arm64}
 SO_CA_MONG_DOI=${SO_CA_MONG_DOI:-14}
+
+# ★ Lớp IT được chọn. Mặc định đúng bằng hành vi cũ — chỉ bộ tấn công.
+#
+# Vì sao mở ra: `sandbox-attack.yml` trên CI chạy `verify` KHÔNG kèm -Dit.test, nên nó chạy
+# cả IsolateJudgeRunnerIT ("đường chấm thật: C++ -> verdict") và HostBenchmarkIT. Script này
+# thì ghim cứng một lớp, nên trên máy chấm thật có một câu chưa bao giờ được hỏi: ảnh vừa
+# dựng CHẶN được tấn công, nhưng nó CHẤM được một bài bình thường không?
+#
+# Tên đơn, phân tách bằng dấu phẩy — đúng cú pháp -Dit.test của Failsafe:
+#   IT=SandboxAttackIT,IsolateJudgeRunnerIT
 GOC=$(cd "$(dirname "$0")/.." && pwd)
+IT=${IT:-SandboxAttackIT}
 
 khong_build=0
 for a in "$@"; do case "$a" in
@@ -67,14 +80,14 @@ grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control || { echo "khong bat 
 echo /sys/fs/cgroup/boxes > /run/isolate/cgroup
 # Bao cao cu tu luot truoc doc y het bao cao that. Xoa truoc khi chay.
 rm -rf /work/oj-worker/target/failsafe-reports
-mvn -B -pl oj-worker -am verify -Dit.test=SandboxAttackIT
+mvn -B -pl oj-worker -am verify -Dit.test="$OJ_IT"
 ma=$?
 # Tra lai quyen so huu target/ cho nguoi dung host — Maven vua ghi bang root tren bind mount.
 chown -R "$OJ_HOST_UID:$OJ_HOST_GID" /work/oj-worker/target /work/oj-contract/target 2>/dev/null || true
 exit $ma'
 
 echo
-echo "── Chạy $SO_CA_MONG_DOI test tấn công trong container ──"
+echo "── Chạy $IT trong container ──"
 NHAT_KY=$(mktemp -t oj-sandbox-test)
 trap 'rm -f "$NHAT_KY"' EXIT
 
@@ -88,6 +101,7 @@ docker run --rm --name oj-sandbox-test \
     --cap-add SYS_ADMIN --cap-add SYS_RESOURCE --cap-add SYS_CHROOT --cap-add NET_ADMIN \
     --tmpfs "/var/local/lib/isolate:size=${OJ_BOX_TMPFS:-2g},mode=755" \
     -e OJ_HOST_UID="$(id -u)" -e OJ_HOST_GID="$(id -g)" \
+    -e OJ_IT="$IT" \
     -v "$GOC":/work \
     -v "$HOME/.m2":/root/.m2 \
     "$ANH_TEST" -c "$KICH_BAN" 2>&1 | tee "$NHAT_KY" || true
@@ -105,30 +119,54 @@ echo "── Kết luận ──"
 #
 # File XML của Failsafe không có chỗ cho nhầm lẫn ấy: nó chỉ tồn tại khi failsafe thật sự
 # chạy, và thuộc tính tests= là số ca của ĐÚNG class này.
-BAO_CAO="$GOC/oj-worker/target/failsafe-reports/TEST-dev.oj.worker.sandbox.SandboxAttackIT.xml"
-if [ ! -f "$BAO_CAO" ]; then
-    echo "  (không có $BAO_CAO)" >&2
-    loi "Failsafe chưa chạy được ca nào — build chết TRƯỚC nó.
+THU_MUC="$GOC/oj-worker/target/failsafe-reports"
+lay() { printf '%s' "$2" | sed -nE "s/.*[[:space:]]$1=\"([0-9]+)\".*/\1/p"; }
+tong_ca=0
+
+# ★ MỖI lớp trong $IT phải để lại một báo cáo, và mọi con số trong đó phải sạch.
+#
+# Vòng lặp này là điều kiện để $IT mở ra được mà không làm rỗng ruột phép kiểm. Mã thoát
+# của Maven bị bỏ qua có chủ ý (`|| true` phía trên), nên nếu chỉ đọc báo cáo của
+# SandboxAttackIT thì thêm một lớp vào $IT là thêm một lớp chạy xong KHÔNG AI ĐỌC KẾT QUẢ —
+# nó hỏng mà dòng cuối vẫn in màu xanh. Đó đúng là kiểu hỏng mà cả script này sinh ra để
+# ngăn, nên nó không được phép xuất hiện ở chính đây.
+#
+# Tên file có dạng TEST-<gói>.<Lớp>.xml, mà -Dit.test nhận tên ĐƠN — nên tra bằng glob
+# thay vì gõ cứng tên gói: thêm một lớp ở gói khác cũng không phải sửa dòng nào.
+for ten in $(printf '%s' "$IT" | tr ',' ' '); do
+    BAO_CAO=$(ls "$THU_MUC"/TEST-*."$ten".xml 2>/dev/null | head -1 || true)
+    if [ -z "$BAO_CAO" ]; then
+        echo "  (không có TEST-*.$ten.xml trong $THU_MUC)" >&2
+        loi "Failsafe chưa chạy được ca nào của $ten — build chết TRƯỚC nó.
      Gần như luôn là một ca unit test đỏ ở bước surefire. Tìm trong nhật ký phía trên:
        [ERROR] Tests run: ... in dev.oj.worker....
-     Sửa ca đó rồi chạy lại. Ca tấn công CHƯA chứng minh gì trong lượt này."
-fi
+     Sửa ca đó rồi chạy lại. $ten CHƯA chứng minh gì trong lượt này."
+    fi
 
-dong=$(grep -m1 '<testsuite ' "$BAO_CAO")
-lay() { printf '%s' "$dong" | sed -nE "s/.*[[:space:]]$1=\"([0-9]+)\".*/\1/p"; }
-chay=$(lay tests)
-hong=$(lay failures)
-loi_ca=$(lay errors)
-bo=$(lay skipped)
-[ -n "$chay$hong$loi_ca$bo" ] || loi "Không đọc được số liệu trong $BAO_CAO."
+    dong=$(grep -m1 '<testsuite ' "$BAO_CAO")
+    chay=$(lay tests "$dong")
+    hong=$(lay failures "$dong")
+    loi_ca=$(lay errors "$dong")
+    bo=$(lay skipped "$dong")
+    [ -n "$chay$hong$loi_ca$bo" ] || loi "Không đọc được số liệu trong $BAO_CAO."
 
-echo "  đã chạy $chay · hỏng $hong · lỗi $loi_ca · bỏ $bo"
+    echo "  $ten — chạy $chay · hỏng $hong · lỗi $loi_ca · bỏ $bo"
 
-[ "$chay" -eq "$SO_CA_MONG_DOI" ] || loi "Chạy $chay/$SO_CA_MONG_DOI ca — KHÔNG đủ.
+    [ "$chay" -ge 1 ] || loi "$ten chạy 0 ca. Một lớp bị huỷ và một lớp xanh có cùng mã thoát."
+    [ "$hong" -eq 0 ] && [ "$loi_ca" -eq 0 ] \
+        || loi "$ten: $hong ca hỏng, $loi_ca ca lỗi. CHƯA đạt — đọc nhật ký phía trên."
+    [ "$bo" -eq 0 ] || loi "$ten: $bo ca bị bỏ. Một ca bị bỏ là một ca chưa chứng minh gì."
+
+    # Chỉ bộ tấn công mới có con số cố định, và nó là con số của nfrplan 4.1 — 14, không
+    # phải "bao nhiêu cũng được miễn xanh". Các lớp khác chỉ cần chạy thật và sạch.
+    if [ "$ten" = SandboxAttackIT ] && [ "$chay" -ne "$SO_CA_MONG_DOI" ]; then
+        loi "Chạy $chay/$SO_CA_MONG_DOI ca tấn công — KHÔNG đủ.
      Số ca chạy khác $SO_CA_MONG_DOI nghĩa là có ca bị huỷ hoặc bị skip, KHÔNG phải là
      sandbox an toàn. Ca bị huỷ và ca xanh nhìn giống nhau ở mã thoát của Maven; đó
      chính là lý do script này đếm."
-[ "$hong" -eq 0 ] && [ "$loi_ca" -eq 0 ] || loi "$hong ca hỏng, $loi_ca ca lỗi. Sandbox CHƯA đạt — đọc nhật ký phía trên."
-[ "$bo" -eq 0 ] || loi "$bo ca bị bỏ. Một ca bị bỏ là một ca chưa chứng minh gì."
+    fi
 
-ok "$SO_CA_MONG_DOI/$SO_CA_MONG_DOI test tấn công xanh trên $ANH_CHAY."
+    tong_ca=$((tong_ca + chay))
+done
+
+ok "$tong_ca ca xanh trên $ANH_CHAY  ($IT)."

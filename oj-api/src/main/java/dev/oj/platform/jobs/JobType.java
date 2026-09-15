@@ -28,7 +28,7 @@ public enum JobType {
     /** FR-CON-08 — dựng lại bảng xếp hạng từ Postgres. {@code contests} (M5). */
     LEADERBOARD_REBUILD,
 
-    /** FR-CON-09 — đối chiếu bảng xếp hạng Redis với Postgres. {@code contests} (M5). */
+    /** FR-CON-09 — đối chiếu {@code contest_standings} với {@code submissions}. {@code contests} (M5). */
     STANDINGS_DRIFT_CHECK,
 
     /** Hiệu chuẩn {@code host_factor}. {@code platform} — không thuộc nghiệp vụ nào. */

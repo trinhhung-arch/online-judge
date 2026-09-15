@@ -28,8 +28,13 @@
 # Đó là chỗ duy nhất script này đi chệch khỏi ảnh, và nó đi chệch có chủ ý:
 # JVM chạy root là phá bất biến sandbox #7.
 #
-# ⚠️ CHƯA CHẠY THỬ TRÊN MAC THẬT. Viết từ header của Dockerfile và cấu hình của
-#    worker; cú pháp bash đã kiểm, phần hành vi thì chưa ai chạy. Đọc rồi hãy tin.
+# ✔ ĐÃ CHẠY THẬT: 2026-09-15 trên Mac M1 Max (OrbStack). Container lên, 7 phép kiểm bên
+#   trong xanh, worker nối được RabbitMQ và /internal/judge/claim, 14/14 test tấn công đạt
+#   trên đúng ảnh ấy. Dòng "chưa chạy thử" cũ ở đây đã hết hạn.
+#
+#   Lần chạy đó cũng để lại một chốt mới ở phần "Kiểm tiền đề": nếu shell đã source .env
+#   thì OJ_RABBIT_HOST/OJ_API_BASE_URL mang giá trị `localhost` của host đi vào container
+#   và worker lên nhưng không chấm được gì. Xem chú thích tại chỗ.
 # =============================================================================
 set -euo pipefail
 
@@ -91,6 +96,36 @@ fi
 [ -n "${OJ_INTERNAL_SHARED_SECRET:-}" ] || loi "Thiếu OJ_INTERNAL_SHARED_SECRET — worker không gọi được /internal/judge/*."
 [ ${#OJ_INTERNAL_SHARED_SECRET} -ge 32 ] || loi "OJ_INTERNAL_SHARED_SECRET chỉ ${#OJ_INTERNAL_SHARED_SECRET} ký tự, cần ≥ 32."
 ok "OJ_INTERNAL_SHARED_SECRET (${#OJ_INTERNAL_SHARED_SECRET} ký tự)"
+
+# ★ CHỐT CHỐNG MỘT SỰ CỐ ĐÃ XẢY RA THẬT — 2026-09-15, mất khoảng 3 phút worker không chấm.
+#
+# `.env` của dự án chứa đúng hai dòng này, và chúng ĐÚNG cho oj-api chạy thẳng trên macOS:
+#     OJ_RABBIT_HOST=localhost
+#     OJ_API_BASE_URL=http://localhost:8080
+# Ai đã `source .env` trong shell (chuyện thường khi chạy `./mvnw spring-boot:run`) rồi gọi
+# script này thì hai biến ấy ĐÃ ĐƯỢC ĐẶT, nên `${OJ_RABBIT_HOST:-host.docker.internal}` ở
+# đầu file KHÔNG rơi về mặc định — giá trị của host đi thẳng vào container.
+#
+# Bên trong container, `localhost` là chính container. Triệu chứng: vòng lặp vô tận
+# "Attempting to connect to: [localhost:5672]" mỗi 5 giây và ClaimBackoff báo mất API —
+# tức là container LÊN, mọi phép kiểm bên dưới XANH, và worker không chấm được bài nào.
+# Một cách hỏng im lặng, đúng loại mà file này vốn cẩn thận nhất để tránh.
+#
+# Không tự sửa thành host.docker.internal: đoán hộ người dùng ở một biến họ đặt tường minh
+# là cách sinh ra sự cố tiếp theo. Dừng, và nói ra lệnh đúng.
+for cap in "OJ_API_BASE_URL=$API" "OJ_RABBIT_HOST=$RABBIT"; do
+    case "${cap#*=}" in
+        *localhost*|*127.0.0.1*)
+            loi "$cap — 'localhost' bên trong container là CHÍNH CONTAINER, không phải máy Mac.
+     Gần như chắc chắn shell của bạn đã source .env (nơi giá trị này ĐÚNG cho oj-api chạy
+     thẳng trên máy). Container cần đi qua host-gateway. Chạy lại với hai biến ép rõ:
+
+       OJ_API_BASE_URL=http://host.docker.internal:8080 \\
+       OJ_RABBIT_HOST=host.docker.internal \\
+           ./scripts/trien-khai-mac.sh ${*:-}" ;;
+    esac
+done
+ok "địa chỉ API và RabbitMQ dùng được từ trong container"
 
 # Con số này đi thẳng vào `reference-cpu-ms` — một `int` của Spring. Giá trị không phải số
 # làm JVM chết ngay lúc bind properties, container thoát 1, rồi CẢ BẢY ca kiểm bên dưới
