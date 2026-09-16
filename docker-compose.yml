@@ -1,3 +1,18 @@
+# ★ HAI LUẬT CHO MỌI SERVICE Ở ĐÂY — đọc trước khi thêm service thứ năm.
+#
+#   1. Cổng publish LUÔN có tiền tố 127.0.0.1. Viết trần "6379:6379" là Docker nghe trên mọi
+#      địa chỉ, tức cả mạng LAN. Đo ngày 2026-09-16 trên host Mac: tường lửa macOS tắt, cả sáu
+#      cổng mở ra 192.168.x.x, và Redis trả PONG cho một máy lạ không cần mật khẩu.
+#      Container worker vẫn tới được cổng 127.0.0.1 qua host.docker.internal (--add-host
+#      host-gateway) — đã thử cùng ngày trên OrbStack.
+#
+#   2. Mật khẩu LUÔN là ${BIEN:?}, không bao giờ là chữ viết thẳng hay ${BIEN:-mac_dinh}.
+#      Chữ viết thẳng nằm trong git, nên ai có repo cũng có mật khẩu. Mặc định cũng vậy.
+#      Thiếu biến thì `docker compose` dừng NGAY với tên biến — thà vậy còn hơn lên bằng một
+#      mật khẩu ai cũng biết.
+#
+#   Đóng cổng KHÔNG thay được mật khẩu: chính phép thử trên cho thấy container worker tới
+#   được các cổng này, nên một lần thoát sandbox là tới được Postgres và Redis.
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,9 +21,11 @@ services:
     environment:
       POSTGRES_DB: ojdb
       POSTGRES_USER: ojuser
-      POSTGRES_PASSWORD: ojpass
+      # CHỈ có tác dụng lúc volume còn trống. Đổi trên DB đang chạy thì dùng
+      # `ALTER ROLE ojuser PASSWORD ...` — sửa biến này rồi `up -d` KHÔNG đổi gì cả.
+      POSTGRES_PASSWORD: ${OJ_POSTGRES_PASSWORD:?Thiếu OJ_POSTGRES_PASSWORD trong .env — xem .env.example}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       # Quyết định D — hai role oj_app / oj_migrator, tạo lúc khởi tạo volume.
@@ -23,13 +40,19 @@ services:
     image: redis:7-alpine
     container_name: oj-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${OJ_REDIS_PASSWORD:?Thiếu OJ_REDIS_PASSWORD trong .env — xem .env.example}"]
+    environment:
+      # redis-cli tự đọc biến này, nên healthcheck không phải đặt mật khẩu lên dòng lệnh.
+      REDISCLI_AUTH: ${OJ_REDIS_PASSWORD:?Thiếu OJ_REDIS_PASSWORD trong .env — xem .env.example}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # `grep PONG`, KHÔNG tin mã thoát. Đo 2026-09-16 trên redis 7.4: redis-cli in
+      # "AUTH failed: ERR ..." mà vẫn thoát 0. Chỉ gọi `redis-cli ping` thì healthcheck xanh
+      # trên một Redis mà ứng dụng không vào được.
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,10 +77,13 @@ services:
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ojuser
-      RABBITMQ_DEFAULT_PASS: ojpass
+      # CHỈ có tác dụng lúc mnesia còn trống — y như POSTGRES_PASSWORD. Đổi trên broker đang
+      # chạy: `docker exec -i oj-rabbitmq rabbitmqctl change_password ojuser`, rồi khởi động lại
+      # oj-api VÀ worker (scripts/trien-khai-mac.sh --khong-build) để chúng nối bằng mật khẩu mới.
+      RABBITMQ_DEFAULT_PASS: ${OJ_RABBIT_PASSWORD:?Thiếu OJ_RABBIT_PASSWORD trong .env — xem .env.example}
     ports:
-      - "5672:5672"    # AMQP - backend va judge worker ket noi qua port nay
-      - "15672:15672"  # Management UI - mo http://localhost:15672 tren trinh duyet
+      - "127.0.0.1:5672:5672"    # AMQP - backend va judge worker (qua host.docker.internal) ket noi
+      - "127.0.0.1:15672:15672"  # Management UI - mo http://localhost:15672 tren trinh duyet
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -101,11 +127,11 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${OJ_MINIO_ACCESS_KEY:-ojminio}
-      MINIO_ROOT_PASSWORD: ${OJ_MINIO_SECRET_KEY:-ojminio123}
+      MINIO_ROOT_USER: ${OJ_MINIO_ACCESS_KEY:?Thiếu OJ_MINIO_ACCESS_KEY trong .env — xem .env.example}
+      MINIO_ROOT_PASSWORD: ${OJ_MINIO_SECRET_KEY:?Thiếu OJ_MINIO_SECRET_KEY trong .env — xem .env.example}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
     healthcheck:

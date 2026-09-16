@@ -190,9 +190,23 @@ final class IdentityFakes {
             return Optional.ofNullable(theoBam.get(tokenSha256));
         }
 
+        /**
+         * Giả lập một request khác chen vào thu hồi token ngay trước lượt so-rồi-đổi của ta —
+         * thứ chỉ Postgres thật tái hiện được (xem {@code SessionLifecycleHttpIT}).
+         */
+        boolean requestKhacThuHoiTruoc;
+
         @Override
-        public void thuHoi(long tokenId, String lyDo, Long thayTheBoiId) {
-            doiTrangThai(t -> t.id() == tokenId, lyDo);
+        public boolean thuHoi(long tokenId, String lyDo, Long thayTheBoiId) {
+            if (requestKhacThuHoiTruoc) {
+                doiTrangThai(t -> t.id() == tokenId, "request khác");
+            }
+            return doiTrangThai(t -> t.id() == tokenId, lyDo) == 1;
+        }
+
+        @Override
+        public void ganThayThe(long tokenId, long thayTheBoiId) {
+            // Fake không giữ replaced_by_id: không ca nào đọc lại mắt xích ấy.
         }
 
         @Override
@@ -305,10 +319,20 @@ final class IdentityFakes {
             theoUser.put(userId, new TwoFactor(userId, cu.secretEnc(), true, buocDaDung));
         }
 
+        /**
+         * Giả lập một request song song tiêu mã ngay trước lượt ghi của ta — thứ chỉ Postgres
+         * thật tái hiện được (xem {@code ChongPhatLaiHaiLopIT}).
+         */
+        boolean requestKhacDungMaTruoc;
+
         @Override
-        public void ghiBuoc(long userId, long buoc) {
+        public boolean ghiBuoc(long userId, long buoc) {
             TwoFactor cu = theoUser.get(userId);
+            if (requestKhacDungMaTruoc || (cu.lastStep() != null && cu.lastStep() >= buoc)) {
+                return false;
+            }
             theoUser.put(userId, new TwoFactor(userId, cu.secretEnc(), cu.enabled(), buoc));
+            return true;
         }
 
         @Override
@@ -332,8 +356,12 @@ final class IdentityFakes {
         }
 
         @Override
-        public void danhDauDaDung(long maDuPhongId) {
-            maDuPhong.values().forEach(ds -> ds.removeIf(m -> m.id() == maDuPhongId));
+        public boolean danhDauDaDung(long maDuPhongId) {
+            boolean daXoa = false;
+            for (List<MaDuPhong> ds : maDuPhong.values()) {
+                daXoa |= ds.removeIf(m -> m.id() == maDuPhongId);
+            }
+            return daXoa && !requestKhacDungMaTruoc;
         }
     }
 

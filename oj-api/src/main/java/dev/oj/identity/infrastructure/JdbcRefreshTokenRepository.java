@@ -53,11 +53,19 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
      * {@code AND revoked_at IS NULL} — thu hồi là idempotent, và quan trọng hơn: nó giữ nguyên
      * {@code revoked_reason} của lần thu hồi ĐẦU TIÊN. Lần đầu mới là lần mang thông tin
      * ("nghi ngờ bị đánh cắp"); ghi đè bằng một lý do sau đó là xoá mất bằng chứng.
+     *
+     * <p>★ Cùng mệnh đề ấy là chốt chống đua khi xoay vòng: số dòng đổi được trả về cho
+     * {@code RefreshSessionUseCase}, và 0 dòng nghĩa là một request khác đã thu hồi trước.
      */
     private static final String THU_HOI = """
             UPDATE refresh_tokens
                SET revoked_at = now(), revoked_reason = :lyDo, replaced_by_id = :thayThe
              WHERE id = :id AND revoked_at IS NULL
+            """;
+
+    /** Chỉ nối mắt xích — trạng thái thu hồi đã được {@link #THU_HOI} chốt trước đó. */
+    private static final String GAN_THAY_THE = """
+            UPDATE refresh_tokens SET replaced_by_id = :thayThe WHERE id = :id
             """;
 
     private static final String THU_HOI_TAT_CA = """
@@ -92,12 +100,17 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
     }
 
     @Override
-    public void thuHoi(long tokenId, String lyDo, Long thayTheBoiId) {
-        jdbc.sql(THU_HOI)
+    public boolean thuHoi(long tokenId, String lyDo, Long thayTheBoiId) {
+        return jdbc.sql(THU_HOI)
                 .param("lyDo", lyDo)
                 .param("thayThe", thayTheBoiId)
                 .param("id", tokenId)
-                .update();
+                .update() == 1;
+    }
+
+    @Override
+    public void ganThayThe(long tokenId, long thayTheBoiId) {
+        jdbc.sql(GAN_THAY_THE).param("thayThe", thayTheBoiId).param("id", tokenId).update();
     }
 
     @Override

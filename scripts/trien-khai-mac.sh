@@ -97,6 +97,11 @@ fi
 [ ${#OJ_INTERNAL_SHARED_SECRET} -ge 32 ] || loi "OJ_INTERNAL_SHARED_SECRET chỉ ${#OJ_INTERNAL_SHARED_SECRET} ký tự, cần ≥ 32."
 ok "OJ_INTERNAL_SHARED_SECRET (${#OJ_INTERNAL_SHARED_SECRET} ký tự)"
 
+# Không có mặc định `ojpass` nữa: từ 2026-09-16 broker không nhận mật khẩu ấy (xem đầu
+# docker-compose.yml). Lùi về nó là dựng một worker lên xanh rồi nối RabbitMQ hỏng mãi mãi.
+[ -n "${OJ_RABBIT_PASSWORD:-}" ] || loi "Thiếu OJ_RABBIT_PASSWORD — lấy từ .env, cùng giá trị oj-api đang dùng."
+ok "OJ_RABBIT_PASSWORD"
+
 # ★ CHỐT CHỐNG MỘT SỰ CỐ ĐÃ XẢY RA THẬT — 2026-09-15, mất khoảng 3 phút worker không chấm.
 #
 # `.env` của dự án chứa đúng hai dòng này, và chúng ĐÚNG cho oj-api chạy thẳng trên macOS:
@@ -234,7 +239,7 @@ docker run -d --name "$TEN" \
     -e OJ_RABBIT_HOST="$RABBIT" \
     -e OJ_RABBIT_PORT="${OJ_RABBIT_PORT:-5672}" \
     -e OJ_RABBIT_USER="${OJ_RABBIT_USER:-ojuser}" \
-    -e OJ_RABBIT_PASSWORD="${OJ_RABBIT_PASSWORD:-ojpass}" \
+    -e OJ_RABBIT_PASSWORD="$OJ_RABBIT_PASSWORD" \
     -e OJ_WORKER_HOST_NAME="$HOST_NAME" \
     -e OJ_WORKER_ARCH=arm64 \
     -e OJ_WORKER_SLOTS="$SLOTS" \

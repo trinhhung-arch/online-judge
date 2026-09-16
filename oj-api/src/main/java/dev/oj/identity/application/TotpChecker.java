@@ -25,6 +25,16 @@ import java.util.Optional;
  * {@link Totp} là domain thuần và không có trạng thái. Nó trả về SỐ BƯỚC khớp; việc đối
  * chiếu bước ấy với {@code last_step} và ghi lại là việc của class này. Bỏ bước ấy đi thì
  * mọi ca test TOTP vẫn xanh, và cùng một mã dùng lại được suốt 30 giây.
+ *
+ * <h2>★ "Đối chiếu rồi ghi" phải là MỘT câu lệnh</h2>
+ * Bản đầu đọc {@code last_step}, so trong Java, rồi ghi vô điều kiện. Tám request song song
+ * với cùng một mã thì cả tám cùng qua — tương tự với mã dự phòng (đo 2026-09-16,
+ * {@code ChongPhatLaiHaiLopIT}). Kẻ đứng giữa bắt được một mã là dùng lại được nó ngay trong
+ * 30 giây ấy, chỉ cần gửi song song với chủ tài khoản.
+ *
+ * <p>Giờ {@link TwoFactorRepository#ghiBuoc} và {@link TwoFactorRepository#danhDauDaDung} là
+ * các câu {@code UPDATE} có điều kiện và trả về việc chính lời gọi này có ghi được không; khoá
+ * dòng của Postgres bảo đảm chỉ một request thắng.
  */
 @Component
 public class TotpChecker {
@@ -63,17 +73,21 @@ public class TotpChecker {
         Long buoc = Totp.kiem(cipher.giaiMa(tf.secretEnc()), gon,
                 clock.instant().getEpochSecond());
         if (buoc != null) {
-            if (tf.buocDaDung(buoc)) {
-                // Mã đúng nhưng bước này đã dùng — đây chính là một lần phát lại.
+            // Mã đúng nhưng bước này đã dùng — đây chính là một lần phát lại. Phép kiểm trên
+            // bản đã đọc chỉ bắt được lần phát lại TUẦN TỰ; lần phát lại SONG SONG thì mọi
+            // request cùng thấy last_step cũ, nên chốt thật là câu ghi có điều kiện ngay sau.
+            if (tf.buocDaDung(buoc) || !repository.ghiBuoc(userId, buoc)) {
                 throw IdentityException.totpSai();
             }
-            repository.ghiBuoc(userId, buoc);
             return;
         }
 
         for (TwoFactorRepository.MaDuPhong m : repository.maDuPhongChuaDung(userId)) {
             if (MaDuPhong.khop(gon, m.codeHash())) {
-                repository.danhDauDaDung(m.id());
+                // Khớp nhưng không đánh dấu được = một request khác vừa tiêu mã này trước.
+                if (!repository.danhDauDaDung(m.id())) {
+                    throw IdentityException.totpSai();
+                }
                 return;
             }
         }

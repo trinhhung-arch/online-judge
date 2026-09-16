@@ -54,9 +54,35 @@ async function doc(res) {
     return res.json().catch(() => null);
 }
 
-async function lamMoi() {
+/**
+ * ★ MỘT lượt làm mới cho mọi lời gọi đang chờ — kể cả ở tab khác.
+ *
+ * Server xoay vòng refresh token và coi một token trình ra lần hai là bị đánh cắp: nó thu hồi
+ * TOÀN BỘ phiên, và lượt nào thua cuộc đua cũng bị xử lý như thế (RefreshSessionUseCase). Một
+ * trang gọi ba API song song đúng lúc access token hết hạn thì cả ba cùng nhận
+ * `auth.token_het_han`; để cả ba tự làm mới là lượt thứ hai tự đăng xuất chính người dùng.
+ *
+ * Web Locks xếp các lượt ấy thành hàng qua mọi tab cùng origin. Vào tới khoá mà access token
+ * đã khác cái vừa bị từ chối thì ai đó đã làm mới xong — dùng luôn, không gọi server.
+ * Web Locks chỉ có trong secure context (HTTPS hoặc localhost); ngoài đó thì vẫn gom được
+ * trong một tab bằng một promise dùng chung.
+ */
+const KHOA_LAM_MOI = 'oj.lam-moi-phien';
+let lamMoiDangChay = null;
+
+function lamMoi(accessTokenBiTuChoi) {
+    if (navigator.locks) {
+        return navigator.locks.request(KHOA_LAM_MOI, () => lamMoiMotLan(accessTokenBiTuChoi));
+    }
+    lamMoiDangChay ??= lamMoiMotLan(accessTokenBiTuChoi)
+        .finally(() => { lamMoiDangChay = null; });
+    return lamMoiDangChay;
+}
+
+async function lamMoiMotLan(accessTokenBiTuChoi) {
     const p = phien();
     if (!p?.refreshToken) return false;
+    if (p.accessToken && p.accessToken !== accessTokenBiTuChoi) return true;
     const res = await fetch(DUONG.auth.lamMoi, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +125,7 @@ export async function goi(duongDan, tuyChon = {}) {
 
     // ★ Đúng một lần thử lại. Vòng lặp vô hạn ở đây là một cách tự tấn công server.
     if (code === 'auth.token_het_han' && !tuyChon.khongLamMoi) {
-        if (await lamMoi()) {
+        if (await lamMoi(p?.accessToken)) {
             return goi(duongDan, { ...tuyChon, khongLamMoi: true });
         }
     }

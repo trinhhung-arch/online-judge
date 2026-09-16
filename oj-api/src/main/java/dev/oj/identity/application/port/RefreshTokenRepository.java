@@ -22,8 +22,26 @@ public interface RefreshTokenRepository {
 
     Optional<RefreshToken> timTheoBam(String tokenSha256);
 
-    /** Thu hồi một token, ghi luôn token nào thay thế nó ({@code null} khi đăng xuất). */
-    void thuHoi(long tokenId, String lyDo, Long thayTheBoiId);
+    /**
+     * Thu hồi một token, ghi luôn token nào thay thế nó ({@code null} khi chưa biết).
+     *
+     * <p>★ Đây là một phép <b>so-rồi-đổi nguyên tử</b>: chỉ đổi dòng còn {@code revoked_at IS
+     * NULL}, trong đúng một câu lệnh. Hai lời gọi song song trên cùng một token thì Postgres
+     * xếp hàng chúng bằng khoá dòng, và lời gọi thứ hai thấy dòng đã bị thu hồi.
+     *
+     * @return {@code true} nếu CHÍNH lời gọi này thu hồi token; {@code false} nếu token đã bị
+     *         thu hồi trước đó — kể cả bởi một request khác chỉ vừa kịp trước vài micro giây.
+     *         {@code RefreshSessionUseCase} dựa vào giá trị này để phát hiện token bị sao chép
+     */
+    boolean thuHoi(long tokenId, String lyDo, Long thayTheBoiId);
+
+    /**
+     * Nối mắt xích {@code replaced_by_id} cho một token đã bị thu hồi khi xoay vòng.
+     *
+     * <p>Tách khỏi {@link #thuHoi} vì thứ tự: token cũ phải bị thu hồi TRƯỚC khi token mới được
+     * sinh ra (đó là chốt chống đua), nên lúc thu hồi thì id của token mới chưa tồn tại.
+     */
+    void ganThayThe(long tokenId, long thayTheBoiId);
 
     /**
      * Thu hồi mọi phiên còn sống của một người. Dùng cho FR-AUTH-04 (đổi mật khẩu),

@@ -1,5 +1,6 @@
 package dev.oj.identity.infrastructure;
 
+import com.sun.net.httpserver.HttpServer;
 import dev.oj.identity.domain.IdentityException;
 import dev.oj.platform.config.AppPropertiesGia;
 import dev.oj.platform.config.TurnstileProperties;
@@ -10,8 +11,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -94,5 +100,46 @@ class TurnstileVerifierTest {
                         + "hiệu hoá cả hàng rào")
                 .isInstanceOf(IdentityException.class)
                 .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
+    }
+
+    /**
+     * ★ Cloudflare không trả lời mà cũng không từ chối — nó chỉ im. Đây là ca {@code
+     * hong_thi_tu_choi} không bắt được, vì máy chủ giả trả lỗi NGAY.
+     *
+     * <p>Chạy trên một máy chủ HTTP thật cục bộ (JDK, không thêm dependency), và đi qua
+     * CHÍNH bean {@link TurnstileVerifier.HttpConfig#turnstileHttp} mà ứng dụng dùng: timeout
+     * phải đến từ cấu hình thật, không phải từ một builder test dựng riêng.
+     */
+    @Test
+    @DisplayName("★ Cloudflare TREO → từ chối sau đúng trần timeout, không giữ luồng đăng ký")
+    void treo_thi_cat_theo_timeout() throws Exception {
+        var tha = new CountDownLatch(1);
+        HttpServer cloudflareTreo = HttpServer.create(
+                new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        cloudflareTreo.createContext("/siteverify", trao -> {
+            try {
+                tha.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            trao.close();
+        });
+        cloudflareTreo.start();
+        try {
+            var props = AppPropertiesGia.voiTurnstile(new TurnstileProperties(true, "site", "secret",
+                    "http://127.0.0.1:" + cloudflareTreo.getAddress().getPort() + "/siteverify",
+                    Duration.ofMillis(300)));
+            var v = new TurnstileVerifier(props, new TurnstileVerifier.HttpConfig().turnstileHttp(props));
+
+            long batDau = System.nanoTime();
+            assertThatThrownBy(() -> v.kiem("token", "203.0.113.1"))
+                    .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
+            assertThat(Duration.ofNanos(System.nanoTime() - batDau))
+                    .as("trần 300ms mà chờ lâu hơn nhiều nghĩa là timeout không được áp")
+                    .isLessThan(Duration.ofSeconds(3));
+        } finally {
+            tha.countDown();
+            cloudflareTreo.stop(0);
+        }
     }
 }

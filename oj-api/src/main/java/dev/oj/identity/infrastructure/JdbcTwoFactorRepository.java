@@ -72,10 +72,19 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
         jdbc.sql(BAT).param("userId", userId).param("buoc", buocDaDung).update();
     }
 
+    /**
+     * Điều kiện {@code last_step < :buoc} nằm TRONG câu lệnh, không ở Java: hai request cùng một
+     * mã thì request sau chờ khoá dòng, rồi đánh giá lại mệnh đề trên giá trị request trước vừa
+     * ghi — và đổi được 0 dòng. Xem {@code TotpChecker}.
+     */
     @Override
-    public void ghiBuoc(long userId, long buoc) {
-        jdbc.sql("UPDATE user_two_factor SET last_step = :buoc WHERE user_id = :userId")
-                .param("userId", userId).param("buoc", buoc).update();
+    public boolean ghiBuoc(long userId, long buoc) {
+        return jdbc.sql("""
+                        UPDATE user_two_factor SET last_step = :buoc
+                         WHERE user_id = :userId
+                           AND (last_step IS NULL OR last_step < :buoc)
+                        """)
+                .param("userId", userId).param("buoc", buoc).update() == 1;
     }
 
     @Override
@@ -111,8 +120,8 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
     }
 
     @Override
-    public void danhDauDaDung(long maDuPhongId) {
-        jdbc.sql("UPDATE user_scratch_code SET used_at = now() WHERE id = :id AND used_at IS NULL")
-                .param("id", maDuPhongId).update();
+    public boolean danhDauDaDung(long maDuPhongId) {
+        return jdbc.sql("UPDATE user_scratch_code SET used_at = now() WHERE id = :id AND used_at IS NULL")
+                .param("id", maDuPhongId).update() == 1;
     }
 }

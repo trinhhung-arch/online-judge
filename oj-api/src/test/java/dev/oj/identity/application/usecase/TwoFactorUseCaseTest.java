@@ -3,6 +3,7 @@ package dev.oj.identity.application.usecase;
 import dev.oj.identity.application.TotpChecker;
 import dev.oj.identity.domain.IdentityException;
 import dev.oj.identity.domain.Totp;
+import dev.oj.identity.domain.TwoFactor;
 import dev.oj.platform.error.DomainException;
 import dev.oj.platform.security.Role;
 import org.junit.jupiter.api.BeforeEach;
@@ -171,6 +172,23 @@ class TwoFactorUseCaseTest {
             assertThatThrownBy(() -> c.kiem(userId, mot))
                     .as("mã dự phòng là mật khẩu dùng một lần — lần hai phải hỏng")
                     .isInstanceOf(IdentityException.class);
+        }
+
+        @Test
+        @DisplayName("★ mã đúng nhưng request song song đã tiêu nó trước → totp_sai, cả TOTP lẫn dự phòng")
+        void request_khac_tieu_ma_truoc_thi_tu_choi() {
+            haiLop.xoa(userId);
+            useCase().batDau();
+            List<String> duPhong = useCase().xacNhan(maDung());
+            haiLop.theoUser.computeIfPresent(userId,
+                    (id, tf) -> new TwoFactor(id, tf.secretEnc(), true, null));   // mã hiện tại lại "mới"
+            haiLop.requestKhacDungMaTruoc = true;
+            var c = checker();
+
+            assertThatThrownBy(() -> c.kiem(userId, maDung()))
+                    .hasFieldOrPropertyWithValue("code", "identity.totp_sai");
+            assertThatThrownBy(() -> c.kiem(userId, duPhong.get(0)))
+                    .hasFieldOrPropertyWithValue("code", "identity.totp_sai");
         }
     }
 

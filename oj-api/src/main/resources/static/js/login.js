@@ -49,8 +49,22 @@ if (viSao) bao(o, viSao[0], viSao[1]);
 function tiepTuc() {
     // Chỉ nhận đường dẫn nội bộ. Một tham số `tiep=https://ke-tan-cong.test` là open
     // redirect — người dùng bấm link của ta, đăng nhập thật, rồi bị đẩy sang trang giả.
+    //
+    // ★ Đừng kiểm bằng so chuỗi. Bản cũ là `startsWith('/') && !startsWith('//')`, và trình
+    // duyệt hiểu URL rộng hơn thế nhiều: `/\ke-tan-cong.test` (\ được coi là /) và
+    // `/<TAB>/ke-tan-cong.test` (TAB bị bỏ đi) đều lọt qua rồi đi thẳng ra ngoài. Cách duy nhất
+    // không lệch với trình duyệt là hỏi chính bộ phân tích URL của nó, rồi so ORIGIN.
+    //
+    // Trả về `href` tuyệt đối chứ không phải `pathname`: `/.//ke-tan-cong.test` có pathname là
+    // `//ke-tan-cong.test`, và gán chuỗi ấy cho location lại là một địa chỉ ngoài.
     const t = thamSo('tiep');
-    return t && t.startsWith('/') && !t.startsWith('//') ? t : '/';
+    if (!t) return '/';
+    try {
+        const dich = new URL(t, location.origin);
+        return dich.origin === location.origin ? dich.href : '/';
+    } catch {
+        return '/';
+    }
 }
 
 /**

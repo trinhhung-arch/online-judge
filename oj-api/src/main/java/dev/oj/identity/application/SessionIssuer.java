@@ -53,8 +53,12 @@ public class SessionIssuer {
     }
 
     /**
-     * @param thayThe id của refresh token bị cặp này thay thế, hoặc {@code null} khi đăng nhập mới
-     * @return phiên mới; token cũ (nếu có) đã được đánh dấu thu hồi và trỏ tới token mới
+     * @param thayThe id của refresh token bị cặp này thay thế, hoặc {@code null} khi đăng nhập
+     *                mới. ★ Token ấy phải <b>đã bị người gọi thu hồi</b> — hàm này chỉ nối mắt
+     *                xích {@code replaced_by_id}, không thu hồi gì cả. Thu hồi nằm ở
+     *                {@code RefreshSessionUseCase}, trước khi phát, vì chính lượt thu hồi ấy
+     *                là chốt quyết định request nào thắng khi nhiều request trình cùng token
+     * @return phiên mới; token cũ (nếu có) đã trỏ tới token mới
      */
     public Session phat(long userId, String handle, Role role,
                         String userAgent, String clientIp, Long thayThe) {
@@ -64,9 +68,8 @@ public class SessionIssuer {
                 bayGio.plus(properties.auth().refreshTtl()), userAgent, clientIp);
 
         if (thayThe != null) {
-            // Thu hồi SAU khi đã lưu token mới, để replaced_by_id trỏ được tới nó. Chuỗi này
-            // là thứ duy nhất phát hiện được token bị sao chép — xem RefreshSessionUseCase.
-            refreshTokens.thuHoi(thayThe, "xoay vòng", tokenId);
+            // Chuỗi replaced_by_id là thứ lần ra được đường đi của một token bị sao chép.
+            refreshTokens.ganThayThe(thayThe, tokenId);
         }
 
         String accessToken = jwt.phat(new CurrentUser(userId, handle, role));

@@ -324,6 +324,21 @@ class IdentityUseCasesTest {
         }
 
         @Test
+        @DisplayName("★ thua cuộc đua thu hồi → xử lý như dùng lại, và KHÔNG phát phiên mới")
+        void thua_cuoc_dua_thi_la_dung_lai() {
+            themNguoiDung("bi-dua", Role.USER);
+            SessionIssuer.Session mot = dangNhap().thucHien("bi-dua", "matkhau-tot-123", "curl", IP, null);
+            int soTokenTruoc = tokens.theoBam.size();
+            tokens.requestKhacThuHoiTruoc = true;
+
+            assertThatThrownBy(() -> useCase().thucHien(mot.refreshToken(), "curl", IP))
+                    .isInstanceOf(IdentityException.class)
+                    .hasFieldOrPropertyWithValue("code", "identity.phien_bi_dung_lai");
+            assertThat(tokens.theoBam).as("lượt thua không được sinh token nào").hasSize(soTokenTruoc);
+            assertThat(nhatKy.hanhDong).contains("REFRESH_TOKEN_REUSE_DETECTED");
+        }
+
+        @Test
         @DisplayName("token hết hạn, token bịa, token rỗng — đều là phiên không hợp lệ")
         void token_hong_thi_401() {
             var uc = useCase();

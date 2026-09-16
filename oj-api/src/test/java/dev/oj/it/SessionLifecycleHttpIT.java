@@ -7,7 +7,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -97,6 +103,57 @@ class SessionLifecycleHttpIT extends HttpIT {
                     .body(Map.of("refreshToken", token))
                     .exchange((req, r) -> r.getStatusCode(), false);
             assertThat(sauKhiDangXuat).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        /**
+         * ★ Cuộc đua là thứ kẻ cầm token trộm điều khiển được, nên nó phải được kiểm bằng cuộc
+         * đua thật: tám luồng, một cái chốt, cùng một token.
+         *
+         * <p>Bản cũ đọc {@code revoked_at} rồi mới thu hồi, bằng hai câu lệnh rời nhau — mọi
+         * request lọt vào giữa hai câu ấy đều thấy token còn sống và đều nhận một chuỗi phiên
+         * riêng. Kẻ trộm bắn N request cùng lúc là có N phiên sống bảy ngày, và
+         * {@code REFRESH_TOKEN_REUSE_DETECTED} không bao giờ được ghi.
+         */
+        @Test
+        @DisplayName("★ cùng một refresh token gửi SONG SONG → đúng MỘT lượt thắng, còn lại là dùng lại")
+        void lam_moi_song_song_chi_mot_luot_thang() throws Exception {
+            String cu = (String) login("dev", MAT_KHAU_DEV).getBody().get("refreshToken");
+            int soLuot = 8;
+            var chot = new CountDownLatch(1);
+            List<Future<ResponseEntity<Map<String, Object>>>> hen = new ArrayList<>();
+            try (ExecutorService luong = Executors.newFixedThreadPool(soLuot)) {
+                for (int i = 0; i < soLuot; i++) {
+                    hen.add(luong.submit(() -> {
+                        chot.await();
+                        return lamMoi(cu);
+                    }));
+                }
+                chot.countDown();
+            }
+
+            List<ResponseEntity<Map<String, Object>>> ketQua = new ArrayList<>();
+            for (var h : hen) {
+                ketQua.add(h.get());
+            }
+            var thang = ketQua.stream()
+                    .filter(r -> HttpStatus.OK.equals(r.getStatusCode()))
+                    .toList();
+            assertThat(thang).as("số lượt làm mới thành công").hasSize(1);
+            assertThat(ketQua).filteredOn(r -> !HttpStatus.OK.equals(r.getStatusCode()))
+                    .allSatisfy(r -> assertThat(r.getBody())
+                            .containsEntry("code", "identity.phien_bi_dung_lai"));
+
+            // Lượt thua đã kích hoạt phát hiện dùng lại, nên phiên của lượt thắng cũng chết theo
+            // — đúng như khi token cũ quay lại một cách tuần tự.
+            assertThat(lamMoi((String) thang.get(0).getBody().get("refreshToken")).getStatusCode())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        private ResponseEntity<Map<String, Object>> lamMoi(String refreshToken) {
+            return http.post().uri("/api/v1/auth/refresh")
+                    .body(Map.of("refreshToken", refreshToken))
+                    .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
+                            .body(r.bodyTo(THAN_JSON)), false);
         }
     }
 
