@@ -10,6 +10,7 @@ import dev.oj.identity.domain.User;
 import dev.oj.platform.audit.AuditLog;
 import dev.oj.platform.security.PublicAccess;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.Map;
@@ -34,11 +35,32 @@ import java.util.Map;
  * Access token thì không hỏi — nó mang sẵn vai trò, đó là cả điểm mạnh lẫn điểm yếu của nó
  * ({@code AuthProperties}). Nên một tài khoản bị vô hiệu hoá dừng hẳn ở lần làm mới kế
  * tiếp, chậm nhất 15 phút.
+ *
+ * <h2>★ Thu hồi TRƯỚC, phát SAU — và lượt thu hồi là chốt duy nhất</h2>
+ * Bản đầu đọc {@code revoked_at}, thấy {@code NULL}, phát token mới, rồi mới thu hồi token cũ
+ * bằng một câu lệnh khác. Mọi request lọt vào giữa lượt đọc và lượt thu hồi đều thấy token còn
+ * sống: tám request song song với cùng một token trộm được thì bảy request nhận phiên riêng, và
+ * {@code REFRESH_TOKEN_REUSE_DETECTED} không bao giờ được ghi (đo 2026-09-16,
+ * {@code SessionLifecycleHttpIT}). Phép kiểm {@code daThuHoi()} phía trên chỉ bắt được lần
+ * dùng lại TUẦN TỰ.
+ *
+ * <p>Giờ {@link RefreshTokenRepository#thuHoi} là một phép so-rồi-đổi nguyên tử, chạy trước khi
+ * phát. Postgres xếp hàng các request bằng khoá dòng; đúng một request đổi được dòng, mọi
+ * request khác nhận {@code false} và bị xử lý y hệt một lần trình lại token cũ — vì đó chính
+ * là điều vừa xảy ra.
+ *
+ * <p>{@code @Transactional} để lượt thu hồi và lượt phát là một: phát hỏng giữa chừng (mất kết
+ * nối database) thì token cũ sống lại, người dùng bấm lại được. Không có nó thì token cũ đã
+ * chết mà token mới chưa có, và lần thử lại kế tiếp bị nhận nhầm là token bị đánh cắp.
+ * {@code noRollbackFor} vì nhánh phát hiện dùng lại GHI rồi mới ném: thu hồi toàn bộ phiên và
+ * dòng {@code audit_log} ấy phải được commit, không phải bị cuộn lại cùng ngoại lệ.
  */
 @PublicAccess("Chính refresh token là thứ xác thực — đòi access token ở đây thì không ai làm "
         + "mới được sau khi access token hết hạn, tức là đúng lúc cần đến nó nhất.")
 @Service
 public class RefreshSessionUseCase {
+
+    private static final String LY_DO_XOAY_VONG = "xoay vòng";
 
     private final RefreshTokenRepository refreshTokens;
     private final UserRepository users;
@@ -55,6 +77,7 @@ public class RefreshSessionUseCase {
         this.clock = clock;
     }
 
+    @Transactional(noRollbackFor = IdentityException.class)
     public SessionIssuer.Session thucHien(String tokenTho, String userAgent, String clientIp) {
         if (tokenTho == null || tokenTho.isBlank()) {
             throw IdentityException.phienKhongHopLe();
@@ -75,6 +98,10 @@ public class RefreshSessionUseCase {
             throw IdentityException.phienKhongHopLe();
         }
 
+        // ★ Chốt: chỉ một request đổi được dòng này. Thua là token đã bị trình ra ở nơi khác.
+        if (!refreshTokens.thuHoi(token.id(), LY_DO_XOAY_VONG, null)) {
+            phatHienDungLai(token);
+        }
         return sessions.phat(nguoiDung.id(), nguoiDung.handle(), nguoiDung.role(),
                 userAgent, clientIp, token.id());
     }

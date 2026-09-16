@@ -38,6 +38,13 @@ spring:
     redis:
       host: localhost
       port: 6379
+      # docker-compose bật `--requirepass` từ CÙNG biến này. Mặc định rỗng là cho Testcontainers
+      # (Redis không mật khẩu): chuỗi rỗng thì Lettuce không gửi AUTH. Trên host thật mà quên
+      # biến thì kết nối hỏng NOAUTH ngay lúc khởi động — không có đường lùi về Redis không khoá.
+      #
+      # Trước 2026-09-16 Redis không có mật khẩu và nghe *:6379: một máy bất kỳ trong LAN xoá
+      # được khoá rate limit, ghi đè cache bảng xếp hạng, và PUBLISH verdict giả vào kênh SSE.
+      password: ${OJ_REDIS_PASSWORD:}
 
   rabbitmq:
     host: ${OJ_RABBIT_HOST:localhost}
@@ -80,6 +87,13 @@ spring:
 
 server:
   port: 8080
+  # ★ CHỈ NGHE 127.0.0.1. Mặc định của Spring là mọi địa chỉ, tức là cả LAN gọi thẳng được
+  # /internal/judge/* — đi vòng qua luật chặn của cloudflared, lớp phòng thủ thứ nhất của cửa
+  # ấy (infra/cloudflared/config.yml). Đo ngày 2026-09-16 trên host Mac (OrbStack): một cổng
+  # bind 127.0.0.1 vẫn tới được từ cloudflared (localhost) và từ container kiểu worker
+  # (host.docker.internal + --add-host host-gateway); máy khác trong LAN thì không.
+  # Cần thử từ điện thoại trong LAN thì đặt SERVER_ADDRESS=0.0.0.0 cho lượt chạy đó, đừng sửa ở đây.
+  address: 127.0.0.1
   # KHÔNG đặt servlet.context-path=/api/v1 (build-order.md 0.6 đề nghị thế, và nó SAI):
   # context-path bọc TOÀN BỘ ứng dụng, nên /internal/judge/* sẽ thành
   # /api/v1/internal/judge/* — đúng thứ mà oj-api/CLAUDE.md mục 5 cấm, và nó sẽ lọt ra
@@ -101,6 +115,9 @@ server:
 management:
   server:
     port: 8081
+    # `show-details: always` ở dưới chỉ an toàn khi cổng này là nội bộ THẬT. Trước 2026-09-16
+    # nó nghe *:8081 — cả LAN đọc được tình trạng từng thành phần hạ tầng. Xem server.address.
+    address: 127.0.0.1
   endpoints:
     web:
       exposure:

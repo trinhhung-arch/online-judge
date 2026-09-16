@@ -10,12 +10,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -45,13 +46,29 @@ import java.util.Map;
  * Worker gọi {@code result} và {@code progress} hàng trăm lượt mỗi phút từ MỘT máy: áp trần ở
  * đó là tự bóp đường ghi verdict, tức phá R1 bằng chính cái vốn để bảo vệ hệ thống. Cửa ấy đã
  * có {@link InternalSecretFilter} và luật chặn trong cấu hình tunnel.
+ *
+ * <h2>★ Phạm vi do servlet container chọn, KHÔNG do một câu {@code startsWith}</h2>
+ * Bản đầu là {@code @Component} kèm {@code shouldNotFilter} so tiền tố {@code "/api/v1/"} trên
+ * {@code getRequestURI()} — chuỗi THÔ, chưa giải mã, chưa bỏ {@code ;tham-so}. Nhưng Tomcat và
+ * Spring chọn controller trên đường dẫn ĐÃ chuẩn hoá. Hai cách đọc lệch nhau đúng ở chỗ kẻ lạm
+ * dụng cần: {@code /api/v1;x/status} và {@code /%61pi/v1/status} tới thẳng controller mà không
+ * bị đếm lượt nào (đo 2026-09-16, {@code GioiHanApiHttpIT}).
+ *
+ * <p>Nên bộ lọc đăng ký qua {@link Registration} với {@code urlPatterns}, đúng như
+ * {@link InternalSecretFilter}: container so mẫu trên chính đường dẫn nó dùng để định tuyến,
+ * nên không còn khoảng lệch nào để chen vào. Đừng thêm lại {@code @Component} — Spring Boot sẽ
+ * đăng ký thêm một bản áp cho MỌI đường, kể cả {@code /internal/**}.
  */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 15)   // sau JwtAuthFilter (+10): phải biết userId mới chọn được xô
 public class GioiHanApiFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(GioiHanApiFilter.class);
-    private static final String DUONG_DAN = "/api/v1/";
+
+    /** Mẫu servlet, không phải tiền tố chuỗi — xem mục "Phạm vi" ở javadoc của class. */
+    static final String MAU_URL = "/api/v1/*";
+
+    /** Sau {@link JwtAuthFilter} ({@code +10}): phải biết {@code userId} mới chọn được xô. */
+    static final int THU_TU = Ordered.HIGHEST_PRECEDENCE + 15;
+
     private static final String MA_LOI = "api.rate_limited";
     private static final String CAU = "Bạn gọi quá nhiều yêu cầu trong một phút. Chờ một chút rồi thử lại.";
 
@@ -69,11 +86,6 @@ public class GioiHanApiFilter extends OncePerRequestFilter {
     public GioiHanApiFilter(DemTocDo dem, AppProperties properties) {
         this.dem = dem;
         this.gioiHan = properties.apiRateLimit();
-    }
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(DUONG_DAN);
     }
 
     @Override
@@ -115,5 +127,23 @@ public class GioiHanApiFilter extends OncePerRequestFilter {
         response.setCharacterEncoding("UTF-8");
         JSON.writeValue(response.getWriter(),
                 new ApiError(MA_LOI, CAU, TraceIdFilter.current(), Map.of("retryAfterSeconds", giay)));
+    }
+
+    /**
+     * Đăng ký cho <b>đúng một mẫu đường dẫn</b>, và đứng sau {@link JwtAuthFilter} — xem mục
+     * "Phạm vi" ở javadoc của class. Cùng khuôn với {@code InternalSecretFilter.Registration}.
+     */
+    @Configuration
+    public static class Registration {
+
+        @Bean
+        public FilterRegistrationBean<GioiHanApiFilter> gioiHanApiFilter(DemTocDo dem,
+                                                                         AppProperties properties) {
+            var registration = new FilterRegistrationBean<>(new GioiHanApiFilter(dem, properties));
+            registration.addUrlPatterns(MAU_URL);
+            registration.setOrder(THU_TU);
+            registration.setName("gioiHanApiFilter");
+            return registration;
+        }
     }
 }

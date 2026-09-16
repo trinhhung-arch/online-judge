@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.Order;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -115,12 +116,28 @@ class GioiHanApiFilterTest {
         assertThat(daQua).isTrue();
     }
 
+    /**
+     * Phạm vi giờ do servlet container quyết theo mẫu URL, nên thứ kiểm được ở tầng unit là
+     * <b>bản đăng ký</b>: đúng một mẫu, và đứng sau {@link JwtAuthFilter}. Hành vi thật trên
+     * đường dẫn lạ ({@code ;x}, {@code %61}) và việc {@code /internal/**} không bị đếm nằm ở
+     * {@code GioiHanApiHttpIT} — chỉ Tomcat thật mới chuẩn hoá đường dẫn.
+     */
     @Test
-    @DisplayName("★ /internal/** và file tĩnh KHÔNG bị áp trần — bóp cửa worker là bóp đường ghi verdict")
-    void ngoai_api_v1_thi_khong_ap() {
-        GioiHanApiFilter filter = loc(100, 600);
-        assertThat(filter.shouldNotFilter(new MockHttpServletRequest("POST", "/internal/judge/result"))).isTrue();
-        assertThat(filter.shouldNotFilter(new MockHttpServletRequest("GET", "/index.html"))).isTrue();
-        assertThat(filter.shouldNotFilter(new MockHttpServletRequest("GET", "/api/v1/problems"))).isFalse();
+    @DisplayName("★ chỉ đăng ký cho /api/v1/* — /internal/** và file tĩnh nằm ngoài mẫu")
+    void chi_dang_ky_cho_api_v1() {
+        var dangKy = new GioiHanApiFilter.Registration().gioiHanApiFilter(
+                (khoa, cuaSo) -> 1, AppPropertiesGia.voiGioiHanApi(100, 600));
+
+        assertThat(dangKy.getUrlPatterns()).containsExactly("/api/v1/*");
+    }
+
+    @Test
+    @DisplayName("★ chạy SAU JwtAuthFilter — chạy trước thì mọi người đăng nhập bị đếm theo IP")
+    void dung_sau_jwt_auth_filter() {
+        var dangKy = new GioiHanApiFilter.Registration().gioiHanApiFilter(
+                (khoa, cuaSo) -> 1, AppPropertiesGia.voiGioiHanApi(100, 600));
+        int thuTuJwt = JwtAuthFilter.class.getAnnotation(Order.class).value();
+
+        assertThat(dangKy.getOrder()).isGreaterThan(thuTuJwt);
     }
 }

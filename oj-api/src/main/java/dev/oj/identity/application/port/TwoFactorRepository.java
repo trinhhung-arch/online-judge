@@ -25,8 +25,13 @@ public interface TwoFactorRepository {
     /** Bật sau khi người dùng đã chứng minh quét được mã. */
     void bat(long userId, long buocDaDung);
 
-    /** Chống phát lại — ghi bước vừa dùng. */
-    void ghiBuoc(long userId, long buoc);
+    /**
+     * Chống phát lại — ghi bước vừa dùng, <b>chỉ khi</b> nó mới hơn bước đã ghi.
+     *
+     * @return {@code true} nếu CHÍNH lời gọi này ghi được; {@code false} nếu bước ấy (hoặc một
+     *         bước mới hơn) đã được ghi — kể cả bởi một request song song vừa kịp trước
+     */
+    boolean ghiBuoc(long userId, long buoc);
 
     /** Tắt hẳn: xoá cả bí mật lẫn mã dự phòng. */
     void xoa(long userId);
@@ -37,7 +42,8 @@ public interface TwoFactorRepository {
     /** Băm của các mã dự phòng chưa dùng, kèm id để đánh dấu. */
     List<MaDuPhong> maDuPhongChuaDung(long userId);
 
-    void danhDauDaDung(long maDuPhongId);
+    /** @return {@code true} nếu CHÍNH lời gọi này tiêu được mã; {@code false} nếu mã đã bị dùng */
+    boolean danhDauDaDung(long maDuPhongId);
 
     record MaDuPhong(long id, String codeHash) {
     }

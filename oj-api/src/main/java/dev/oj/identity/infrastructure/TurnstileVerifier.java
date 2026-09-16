@@ -6,11 +6,15 @@ import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.TurnstileProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -41,7 +45,12 @@ public class TurnstileVerifier implements CaptchaVerifier {
     private final TurnstileProperties properties;
     private final RestClient http;
 
-    public TurnstileVerifier(AppProperties app, RestClient.Builder builder) {
+    /**
+     * @param builder builder ĐÃ mang timeout — xem {@link HttpConfig}. Test truyền một builder
+     *                gắn {@code MockRestServiceServer}, nên class này không được tự đặt lại
+     *                request factory: làm thế là ghi đè máy chủ giả và test gọi ra internet
+     */
+    public TurnstileVerifier(AppProperties app, @Qualifier(HttpConfig.BEAN) RestClient.Builder builder) {
         this.properties = app.auth().turnstile();
         this.http = builder.build();
         if (!properties.enabled()) {
@@ -99,16 +108,31 @@ public class TurnstileVerifier implements CaptchaVerifier {
      * chứng là {@code NoSuchBeanDefinitionException} ở một lớp IT ngẫu nhiên chứ không phải
      * ở chỗ gây ra.
      *
-     * <p>{@code @ConditionalOnMissingBean} để ngày nào đó Spring Boot tự cấp thì bean ở đây
-     * lặng lẽ nhường chỗ, thay vì đâm nhau.
+     * <h2>★ Timeout nằm Ở ĐÂY, và vì sao bean có tên riêng</h2>
+     * {@code oj.auth.turnstile.timeout} từng được khai báo, được {@code TurnstileProperties}
+     * kiểm lúc boot — và không được dùng ở đâu cả. {@code RestClient.builder()} trần không có
+     * timeout nào: Cloudflare treo là luồng đăng ký treo theo, mỗi lượt một luồng, trong khi
+     * cấu hình trông như đã có trần 3 giây. Kiểu hỏng tệ nhất — im lặng và trông như đúng.
+     *
+     * <p>Bản đầu là bean {@code RestClient.Builder} chung kèm {@code @ConditionalOnMissingBean}
+     * "để nhường chỗ khi Spring Boot tự cấp". Đặt timeout vào đó thì ngày Boot tự cấp builder
+     * (thêm {@code spring-boot-starter-restclient} là đủ), bean này lặng lẽ nhường, và timeout
+     * biến mất theo mà không ai hay. Tên riêng + {@code @Qualifier} thì không nhường được: hoặc
+     * dùng đúng builder này, hoặc context không dựng được.
      */
     @org.springframework.context.annotation.Configuration
     public static class HttpConfig {
 
-        @org.springframework.context.annotation.Bean
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-        public RestClient.Builder restClientBuilder() {
-            return RestClient.builder();
+        public static final String BEAN = "turnstileHttp";
+
+        @org.springframework.context.annotation.Bean(BEAN)
+        public RestClient.Builder turnstileHttp(AppProperties app) {
+            Duration tran = app.auth().turnstile().timeout();
+            // Cùng một trần cho hai giai đoạn: mở kết nối, và chờ Cloudflare trả lời.
+            var factory = new JdkClientHttpRequestFactory(
+                    HttpClient.newBuilder().connectTimeout(tran).build());
+            factory.setReadTimeout(tran);
+            return RestClient.builder().requestFactory(factory);
         }
     }
 }

@@ -85,6 +85,13 @@ for c in $CONG_API $CONG_QT $CONG_REDIS $CONG_RABBIT; do
 done
 ok "jar, oj-postgres/ojdb, đề A-PLUS-B, 4 cổng trống"
 
+# Mật khẩu của oj-postgres và oj-minio THẬT — đọc đúng ba khoá cần từ .env, KHÔNG source cả
+# file (cùng lý do với env -i ở trên). Từ 2026-09-16 ojpass/ojminio123 không còn đúng nữa.
+doc_env() { grep -E "^$1=" "$GOC/.env" 2>/dev/null | tail -1 | cut -d= -f2-; }
+PG_MK=$(doc_env OJ_POSTGRES_PASSWORD); MINIO_KHOA=$(doc_env OJ_MINIO_ACCESS_KEY); MINIO_MK=$(doc_env OJ_MINIO_SECRET_KEY)
+[ -n "$PG_MK" ] && [ -n "$MINIO_KHOA" ] && [ -n "$MINIO_MK" ] \
+    || loi "Thiếu OJ_POSTGRES_PASSWORD / OJ_MINIO_ACCESS_KEY / OJ_MINIO_SECRET_KEY trong $GOC/.env"
+
 mkdir -p "$NHA" && chmod 700 "$NHA"
 if [ ! -f "$NHA/bi-mat.env" ]; then
     ( umask 077; { echo "OJ_JWT_SECRET=$(openssl rand -base64 48)"; echo "OJ_TOTP_KEY=$(openssl rand -base64 48)"
@@ -106,10 +113,10 @@ env -i PATH="$PATH" HOME="$HOME" \
     OJ_JWT_SECRET="$OJ_JWT_SECRET" OJ_TOTP_KEY="$OJ_TOTP_KEY" OJ_INTERNAL_SHARED_SECRET="$OJ_INTERNAL_SHARED_SECRET" \
     SPRING_PROFILES_ACTIVE=dev SERVER_PORT=$CONG_API MANAGEMENT_SERVER_PORT=$CONG_QT \
     OJ_API_RATE_LIMIT_USER=1000000 OJ_API_RATE_LIMIT_IP=1000000 \
-    OJ_DB_URL=jdbc:postgresql://127.0.0.1:5432/ojdb OJ_DB_APP_USER=ojuser OJ_DB_APP_PASSWORD=ojpass \
+    OJ_DB_URL=jdbc:postgresql://127.0.0.1:5432/ojdb OJ_DB_APP_USER=ojuser OJ_DB_APP_PASSWORD="$PG_MK" \
     SPRING_DATA_REDIS_HOST=127.0.0.1 SPRING_DATA_REDIS_PORT=$CONG_REDIS \
     OJ_RABBIT_ENABLED=true OJ_RABBIT_HOST=127.0.0.1 OJ_RABBIT_PORT=$CONG_RABBIT OJ_RABBIT_USER=ojuser OJ_RABBIT_PASSWORD=ojpass \
-    OJ_MINIO_ENDPOINT=http://127.0.0.1:9000 OJ_MINIO_ACCESS_KEY=ojminio OJ_MINIO_SECRET_KEY=ojminio123 \
+    OJ_MINIO_ENDPOINT=http://127.0.0.1:9000 OJ_MINIO_ACCESS_KEY="$MINIO_KHOA" OJ_MINIO_SECRET_KEY="$MINIO_MK" \
     nohup java -jar "$JAR" > "$NHA/api.log" 2>&1 &
 echo $! > "$NHA/api.pid"
 ma=$(curl -s -o /dev/null -w '%{http_code}' --retry 90 --retry-delay 1 --retry-connrefused --retry-all-errors \
