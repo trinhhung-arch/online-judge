@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # `load: true` nạp ảnh vào daemon để bước kiểm phía dưới chạy được. Nó chỉ hợp lệ vì
       # mỗi job build ĐÚNG MỘT platform — một build đa platform không nạp vào daemon được.
