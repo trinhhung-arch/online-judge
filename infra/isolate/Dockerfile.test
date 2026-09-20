@@ -24,7 +24,7 @@
 # =============================================================================
 ARG ANH=oj-worker:arm64
 
-FROM maven:3.9-eclipse-temurin-21 AS mvn
+FROM maven:3-eclipse-temurin-24 AS mvn
 
 FROM ${ANH}
 

@@ -61,7 +61,7 @@ RUN git clone --depth 1 --branch ${ISOLATE_VERSION} https://github.com/ioi/isola
     && make -C /src install PREFIX=/usr/local DESTDIR=/staging
 
 # ---------- stage 2: build worker ----------
-FROM maven:3.9-eclipse-temurin-21 AS worker-build
+FROM maven:3-eclipse-temurin-24 AS worker-build
 WORKDIR /build
 COPY pom.xml .
 COPY oj-contract/pom.xml oj-contract/
