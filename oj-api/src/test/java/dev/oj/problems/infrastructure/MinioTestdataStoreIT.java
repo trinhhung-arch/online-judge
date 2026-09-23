@@ -31,13 +31,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * nâng ấy hỏng ngay ở biên dịch ({@code okhttp3.HttpUrl}); một lần hỏng lúc CHẠY thì không
  * có gì bắt được trước khi tới máy thật.
  *
- * <p>Cùng ảnh MinIO với {@code docker-compose.yml}: đo đúng thứ sẽ chạy, và máy dev đã có sẵn ảnh.
+ * <p>Cùng ảnh MinIO với {@code docker-compose.yml}: đo đúng thứ sẽ chạy.
  * Container singleton, không {@code stop()} — cùng lý do với {@code PostgresIT}.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MinioTestdataStoreIT {
 
-    private static final String ANH = "minio/minio:RELEASE.2024-10-13T13-34-11Z";
+    /**
+     * Đúng chuỗi của {@code docker-compose.yml} — quay.io + digest, xem lý do ở đó. Bản đầu dùng
+     * {@code minio/minio} của Docker Hub: xanh trên máy dev (ảnh có sẵn), đỏ trên CI với
+     * "pull access denied … repository does not exist" (2026-09-24).
+     */
+    private static final String ANH = "quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z"
+            + "@sha256:9535594ad4122b7a78c6632788a989b96d9199b483d3bd71a5ceae73a922cdfa";
     private static final String NGUOI_DUNG = "ojminio";
     private static final String MAT_KHAU = "ojminio123";
 

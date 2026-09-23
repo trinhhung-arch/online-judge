@@ -165,6 +165,10 @@ Kèm một chốt tự canh theo khuôn `sandbox-attack.yml`: nếu ai hạ `exi
 > 5.34.0). MinIO thì từ lượt vá cuối có `MinioTestdataStoreIT` (4 ca, MinIO thật; gỡ tạo bucket
 > trong `luu` → 1/4 đỏ). MinIO 8.6.0 cần thêm `okhttp-jvm`: `okhttp` 5.x trên Central là gốc Kotlin
 > đa nền tảng không có class JVM (767 byte), Maven không tự chọn biến thể như Gradle.
+> Lần CI đầu của IT ấy đỏ: repo `minio/minio` trên **Docker Hub đã 404** ("repository does not
+> exist") — máy dev xanh chỉ vì có sẵn ảnh. `docker-compose.yml` dùng cùng ảnh, nên máy mới cũng
+> không dựng được MinIO. Chuyển cả hai sang `quay.io/minio/minio` + ghim digest — cùng digest
+> `9535594a…` với ảnh cũ, không đổi một byte.
 
 > **Còn lại, và KHÔNG commit vào repo được:** biến dấu đỏ thành *không merge được* là branch
 > protection cho `main` (đặt `ci` · `sandbox-attack` · `quet-phu-thuoc` làm required check), và

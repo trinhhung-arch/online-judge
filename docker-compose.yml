@@ -158,8 +158,15 @@ services:
   # Testdata content-addressed. Chưa ai gọi tới trước M4, nhưng nó nằm trong bộ bốn
   # service của build-order.md Bước 0.4 — dựng sẵn để "docker compose up là chạy được"
   # đúng như README hứa, thay vì phát hiện thiếu vào tuần 8.
+  #
+  # ★ quay.io, KHÔNG phải Docker Hub, và ghim digest. Đo 2026-09-24: repo `minio/minio` trên
+  # Docker Hub trả 404 ("repository does not exist") — máy nào chưa có sẵn ảnh thì
+  # `docker compose up` hỏng ngay ở đây, và CI không kéo được ảnh cho MinioTestdataStoreIT.
+  # quay.io/minio/minio còn đúng tag này với CÙNG digest ảnh cũ, nên đổi nguồn không đổi một
+  # byte nào. Digest ghim để tag có biến mất hay bị gắn lại thì ảnh vẫn là ảnh này.
+  # Sửa dòng này thì sửa cả MinioTestdataStoreIT.ANH.
   minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z@sha256:9535594ad4122b7a78c6632788a989b96d9199b483d3bd71a5ceae73a922cdfa
     container_name: oj-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
