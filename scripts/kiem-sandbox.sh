@@ -66,7 +66,8 @@ if [ "$khong_build" -eq 0 ]; then
     ok "đã build $ANH_TEST"
 fi
 
-# Cùng bộ cờ và cùng cách dựng cgroup như trien-khai-mac.sh. Hai chỗ này phải khớp nhau:
+# Cùng bộ cờ và cùng cách dựng cgroup như trien-khai-mac.sh (seccomp MẶC ĐỊNH từ 2026-09-24 —
+# lý do và phép đo ở chú thích ngay trên `docker run` trong trien-khai-mac.sh). Hai chỗ này phải khớp nhau:
 # test một sandbox dựng khác cách với sandbox chạy thật thì không chứng minh gì.
 KICH_BAN='set -e
 mount -o remount,rw /sys/fs/cgroup
@@ -96,8 +97,6 @@ trap 'rm -f "$NHAT_KY"' EXIT
 docker run --rm --name oj-sandbox-test \
     --user root --entrypoint /bin/sh \
     --cgroupns=private \
-    --security-opt seccomp=unconfined \
-    --security-opt apparmor=unconfined \
     --cap-add SYS_ADMIN --cap-add SYS_RESOURCE --cap-add SYS_CHROOT --cap-add NET_ADMIN \
     --tmpfs "/var/local/lib/isolate:size=${OJ_BOX_TMPFS:-2g},mode=755" \
     -e OJ_HOST_UID="$(id -u)" -e OJ_HOST_GID="$(id -g)" \

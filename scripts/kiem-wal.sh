@@ -62,7 +62,8 @@ ok "archive_mode = on · archive_timeout = $(psql "SHOW archive_timeout")"
 if ! docker exec -u postgres "$CONTAINER" test -w /wal-archive; then
     loi "/wal-archive KHÔNG ghi được bởi user postgres (root thì ghi được — đừng tin root)."
     luu_y "pg_wal sẽ phình cho tới khi đầy đĩa. Sửa NGAY:"
-    luu_y "    chmod 777 \"$WAL_DIR\"    (hoặc chown 70:70 nếu muốn chặt hơn)"
+    luu_y "    chmod 700 \"$WAL_DIR\"   — trên OrbStack là ĐỦ: mọi uid trong container được coi là chủ"
+    luu_y "    thư mục (đo 2026-09-24). 777 là thừa: ai trên máy cũng xoá/cài được file WAL. Linux thật: chown 70:70."
     hong=1
 else
     ok "/wal-archive ghi được từ trong container."

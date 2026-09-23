@@ -37,6 +37,9 @@
 #   "một backup chưa từng được restore không phải là backup".
 # =============================================================================
 set -uo pipefail
+# ★ umask 077: bản sao lưu chứa băm mật khẩu, email, mã nguồn mọi bài nộp — chỉ chủ máy đọc
+#   được. Trước 2026-09-24 file ra 644 (rà soát bảo mật, F5).
+umask 077
 
 CONTAINER=${OJ_PG_CONTAINER:-oj-postgres}
 DB=${OJ_DB_NAME:-ojdb}

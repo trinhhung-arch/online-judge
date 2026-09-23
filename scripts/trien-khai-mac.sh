@@ -225,12 +225,21 @@ grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control || { echo "khong bat 
 echo /sys/fs/cgroup/boxes > /run/isolate/cgroup
 exec setpriv --reuid=1500 --regid=1500 --init-groups java -jar /app/oj-worker.jar'
 
+# ★ SECCOMP MẶC ĐỊNH CỦA DOCKER, KHÔNG `unconfined` — đo 2026-09-24 (rà soát bảo mật, D0b).
+#   Bản trước chạy seccomp=unconfined + apparmor=unconfined. Đo bằng kiem-sandbox.sh (14 ca tấn
+#   công + 9 ca chấm thật) với từng biến thể:
+#     bỏ seccomp=unconfined  → 23/23 xanh: profile mặc định vẫn cho mount/unshare/setns khi có
+#                              SYS_ADMIN — đủ cho isolate — mà chặn thêm vài chục syscall ở tầng
+#                              container (keyctl, kexec_load, open_by_handle_at, …).
+#     bỏ NET_ADMIN           → 21/23 ĐỎ: "SIOCSIFFLAGS on 'lo' failed" — isolate phải bật card
+#                              lo trong network namespace riêng của box. Quyền này là CẦN.
+#   apparmor=unconfined bỏ vì máy ảo OrbStack không có AppArmor (docker info: chỉ seccomp).
+#   Sửa bộ cờ ở đây thì sửa CẢ scripts/kiem-sandbox.sh — test một sandbox dựng khác cách với
+#   bản chạy thật là không chứng minh gì.
 docker run -d --name "$TEN" \
     --user root \
     --entrypoint /bin/sh \
     --cgroupns=private \
-    --security-opt seccomp=unconfined \
-    --security-opt apparmor=unconfined \
     --cap-add SYS_ADMIN --cap-add SYS_RESOURCE --cap-add SYS_CHROOT --cap-add NET_ADMIN \
     --tmpfs "/var/local/lib/isolate:size=$TMPFS,mode=755" \
     --add-host host.docker.internal:host-gateway \
