@@ -66,6 +66,14 @@ public class IdentityException extends DomainException {
                 "Đăng nhập thất bại (không ghi handle đã thử vào đây — bất biến #9)");
     }
 
+    /** V15 · trần mã hai lớp theo tài khoản. Cùng hình dạng 429 + Retry-After với {@link #daKhoaTam}. */
+    public static IdentityException haiLopTamKhoa(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.hai_lop_tam_khoa",
+                "Nhập sai mã xác thực quá nhiều lần. Thử lại sau "
+                        + Math.max(1, conLai.toMinutes()) + " phút.",
+                "Bước mã hai lớp của tài khoản bị khoá tạm (V15)", conLai);
+    }
+
     public static IdentityException daKhoaTam(Duration conLai) {
         return new IdentityException(Kind.RATE_LIMITED, "identity.khoa_tam",
                 "Sai quá nhiều lần. Thử lại sau " + conLai.toMinutes() + " phút.",

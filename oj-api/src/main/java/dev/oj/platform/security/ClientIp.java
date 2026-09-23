@@ -2,8 +2,11 @@ package dev.oj.platform.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.regex.Pattern;
 
 /**
  * IP thật của người gọi — thứ FR-AUTH-08 đếm khi khoá 5 lần đăng nhập sai / phút / IP.
@@ -38,6 +41,17 @@ public final class ClientIp {
     private static final String CF = "CF-Connecting-IP";
 
     private static final String XFF = "X-Forwarded-For";
+
+    /** Bốn số thập phân — xem {@link #hopLe}. Giá trị từng số do {@code getByName} kiểm. */
+    private static final Pattern IPV4 = Pattern.compile("\\d{1,3}(\\.\\d{1,3}){3}");
+
+    /**
+     * Dải IPv6 coi là MỘT người gọi. Không phải ngưỡng để tinh chỉnh như các trần trong
+     * {@code application.yml}: /64 là đơn vị cấp phát nhỏ nhất cho một đường mạng (RFC 6177),
+     * nên nó là định nghĩa của "một người gọi", như 32 bit là định nghĩa của một IPv4. Rộng hơn
+     * (/56) là gom nhầm nhiều hộ của cùng nhà mạng; hẹp hơn là mở lại đường xoay địa chỉ.
+     */
+    static final int TIEN_TO_IPV6 = 64;
 
     /**
      * Giá trị thay thế khi không xác định được IP nào — ví dụ khi use-case được gọi thẳng từ
@@ -79,14 +93,23 @@ public final class ClientIp {
     }
 
     /**
-     * Trả về {@code null} nếu không phải một địa chỉ IP.
+     * Trả về {@code null} nếu không phải một địa chỉ IP <b>viết dạng số</b>.
      *
      * <p>{@link InetAddress#getByName} <b>tra DNS</b> với một chuỗi không phải IP — tức là một
-     * header giả mạo sẽ biến thành một lượt tra DNS đi ra ngoài, ở mỗi request. Nên phải chặn
-     * trước bằng một phép kiểm ký tự: IP chỉ gồm chữ số, dấu chấm, hai chấm và chữ cái hex.
+     * header giả mạo sẽ biến thành một lượt tra DNS đi ra ngoài, ở mỗi request.
+     *
+     * <p>★ Bản trước chặn bằng phép kiểm KÝ TỰ (số, chấm, hai chấm, chữ hex) và javadoc khẳng
+     * định thế là đủ. Không đủ: {@code a-f} cũng là chữ của tên miền. Đo 2026-09-24:
+     * {@code bad.cafe} qua được phép kiểm, tra DNS mất 211ms và được nhận là "IP"; rồi nó đi vào
+     * {@code CAST(:clientIp AS inet)}. Giờ đòi hình dạng: IPv6 PHẢI có {@code ':'} (Java không
+     * bao giờ tra DNS cho chuỗi có hai chấm — đo cùng ngày), IPv4 PHẢI là bốn số thập phân.
      */
     private static String hopLe(String ip) {
         if (ip == null || ip.isBlank() || ip.length() > 45) {
+            return null;
+        }
+        boolean v6 = ip.indexOf(':') >= 0;
+        if (!v6 && !IPV4.matcher(ip).matches()) {
             return null;
         }
         for (int i = 0; i < ip.length(); i++) {
@@ -103,6 +126,42 @@ public final class ClientIp {
         } catch (UnknownHostException e) {
             return null;
         }
+    }
+
+    /**
+     * ★ Khoá dùng để ĐẾM (khoá đăng nhập, trần đăng ký, trần API ẩn danh) — KHÔNG dùng để ghi
+     * nhật ký; nhật ký vẫn giữ địa chỉ đầy đủ.
+     *
+     * <p>IPv4 giữ nguyên. IPv6 gom về dải /{@value #TIEN_TO_IPV6}. Một đường mạng gia đình hay
+     * di động được cấp nguyên một /64 và tự đổi địa chỉ trong dải ấy (địa chỉ tạm, RFC 8981).
+     * Đếm theo từng địa chỉ thì mỗi lần đổi là một xô mới: "5 lần sai/phút/IP" thành vô hạn, và
+     * mã TOTP sáu chữ số dò được trong vài giờ (rà soát 2026-09-24, F2). IPv4 viết dạng
+     * {@code ::ffff:a.b.c.d} tự quy về {@code a.b.c.d} — Java làm việc ấy khi đọc chuỗi.
+     *
+     * @param ip địa chỉ đã qua {@link #cua} — luôn là IP dạng số, nên không có lượt tra DNS nào
+     * @return dạng Postgres {@code inet} đọc được: {@code 1.2.3.4} hoặc {@code 2001:db8:1:2:0:0:0:0/64}
+     */
+    public static String khoaGioiHan(String ip) {
+        String hl = hopLe(ip);
+        if (hl == null) {
+            return KHONG_RO;
+        }
+        try {
+            InetAddress a = InetAddress.getByName(hl);
+            if (a instanceof Inet6Address) {
+                byte[] b = a.getAddress();
+                Arrays.fill(b, TIEN_TO_IPV6 / 8, b.length, (byte) 0);
+                return InetAddress.getByAddress(b).getHostAddress() + "/" + TIEN_TO_IPV6;
+            }
+            return a.getHostAddress();
+        } catch (UnknownHostException e) {
+            return KHONG_RO;
+        }
+    }
+
+    /** {@link #khoaGioiHan} của {@link #cua} — cho bộ lọc, nơi có sẵn request. */
+    public static String khoaGioiHan(HttpServletRequest request) {
+        return khoaGioiHan(cua(request));
     }
 
     private static boolean laLoopback(String ip) {

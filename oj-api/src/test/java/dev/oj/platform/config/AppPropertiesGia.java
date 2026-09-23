@@ -50,7 +50,7 @@ public final class AppPropertiesGia {
         var auth = new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                soSuat, cho, Duration.ofSeconds(2),
+                soSuat, cho, Duration.ofSeconds(2), 10, Duration.ofMinutes(15),
                 new TurnstileProperties(false, "", "", List.of(),
                         "https://vi-du.test/siteverify", Duration.ofSeconds(3)),
                 xacMinhEmailMacDinh());
@@ -72,7 +72,8 @@ public final class AppPropertiesGia {
                 a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
                 a.maxRegistrationsPerIp(), a.registrationWindow(), a.totpKey(),
                 a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
-                a.loginMinInterval(), turnstile, a.emailVerification());
+                a.loginMinInterval(), a.totpMaxFailures(), a.totpLockout(),
+                turnstile, a.emailVerification());
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
@@ -93,7 +94,8 @@ public final class AppPropertiesGia {
                 a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
                 a.maxRegistrationsPerIp(), a.registrationWindow(), a.totpKey(),
                 a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
-                a.loginMinInterval(), a.turnstile(), xacMinh);
+                a.loginMinInterval(), a.totpMaxFailures(), a.totpLockout(),
+                a.turnstile(), xacMinh);
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
@@ -101,7 +103,7 @@ public final class AppPropertiesGia {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                4, Duration.ofMillis(150), Duration.ofSeconds(2),
+                4, Duration.ofMillis(150), Duration.ofSeconds(2), 10, Duration.ofMinutes(15),
                 new TurnstileProperties(false, "", "", List.of(),
                         "https://vi-du.test/siteverify", Duration.ofSeconds(3)),
                 xacMinhEmailMacDinh());

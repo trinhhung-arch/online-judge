@@ -69,6 +69,10 @@ import java.time.Duration;
  * @param bcryptWait        chờ tối đa ngần này để xin một suất, hết thì trả 429
  * @param loginMinInterval  khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của
  *                          cùng một tài khoản
+ * @param totpMaxFailures   số mã hai lớp sai LIÊN TIẾP của một tài khoản trước khi khoá bước
+ *                          ấy (V15, rà soát 2026-09-24 F2). Theo TÀI KHOẢN, không theo IP —
+ *                          xem {@code TotpChecker}
+ * @param totpLockout       khoá bước hai lớp trong ngần này; mã đúng cũng bị từ chối
  * @param turnstile         chống bot ở cửa đăng ký — xem {@link TurnstileProperties}
  *
  * <h2>★ Xác minh email là một nhóm RIÊNG, và nó KHÔNG phải hàng rào chống bot</h2>
@@ -97,6 +101,8 @@ public record AuthProperties(
         int bcryptConcurrency,
         Duration bcryptWait,
         Duration loginMinInterval,
+        int totpMaxFailures,
+        Duration totpLockout,
         TurnstileProperties turnstile,
         EmailVerificationProperties emailVerification) {
 
@@ -170,6 +176,12 @@ public AuthProperties {
         }
         if (loginMinInterval == null || loginMinInterval.isNegative()) {
             throw new IllegalStateException("oj.auth.login-min-interval không hợp lệ");
+        }
+        if (totpMaxFailures != 10 || totpLockout == null || totpLockout.toMinutes() != 15) {
+            throw new IllegalStateException(
+                    "oj.auth: trần mã hai lớp chốt 10 mã sai liên tiếp / tài khoản, khoá 15 phút. "
+                            + "Nhận được " + totpMaxFailures + " / " + totpLockout + ". Đây là một "
+                            + "dòng trong bảng giới hạn của oj-api/CLAUDE.md mục 8 — đổi là phải hỏi người");
         }
         if (turnstile == null) {
             throw new IllegalStateException("Thiếu khối oj.auth.turnstile");

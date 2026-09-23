@@ -351,6 +351,12 @@ oj:
     # ra ngoài bằng cách gõ sai mật khẩu của họ liên tục.
     login-min-interval: 2s
 
+    # Trần mã hai lớp THEO TÀI KHOẢN — V15, rà soát bảo mật 2026-09-24 (F2). Một dòng trong
+    # bảng giới hạn (oj-api/CLAUDE.md mục 8); AuthProperties crash nếu khác. Lý do nó theo tài
+    # khoản mà không vi phạm lập trường của FR-AUTH-08: tới được bước này là đã có mật khẩu.
+    totp-max-failures: 10
+    totp-lockout: 15m
+
     # Cloudflare Turnstile — chặn bot ở cửa đăng ký (FR-AUTH-01).
     #
     # ★ MẶC ĐỊNH TẮT vì máy dev và bộ IT không có khoá. TurnstileVerifier ghi một dòng WARN

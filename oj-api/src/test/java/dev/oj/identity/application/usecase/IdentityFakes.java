@@ -372,6 +372,32 @@ final class IdentityFakes {
             return new ArrayList<>(maDuPhong.getOrDefault(userId, List.of()));
         }
 
+        /** V15 — cùng ngữ nghĩa với {@code JdbcTwoFactorRepository}: đếm liên tiếp, chạm ngưỡng thì khoá và về 0. */
+        final Map<Long, Integer> maSai = new LinkedHashMap<>();
+        final Map<Long, Instant> khoaToi = new LinkedHashMap<>();
+
+        @Override
+        public Optional<Instant> khoaHaiLopToi(long userId) {
+            return Optional.ofNullable(khoaToi.get(userId));
+        }
+
+        @Override
+        public boolean ghiMaSai(long userId, int nguong, Instant toi) {
+            int n = maSai.getOrDefault(userId, 0) + 1;
+            if (n >= nguong) {
+                maSai.put(userId, 0);
+                khoaToi.put(userId, toi);
+                return true;
+            }
+            maSai.put(userId, n);
+            return false;
+        }
+
+        @Override
+        public void xoaDemMaSai(long userId) {
+            maSai.put(userId, 0);
+        }
+
         @Override
         public boolean danhDauDaDung(long maDuPhongId) {
             boolean daXoa = false;

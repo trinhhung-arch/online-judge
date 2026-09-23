@@ -21,6 +21,11 @@ import java.util.Optional;
  * Khoá theo tài khoản là trao cho bất kỳ ai một nút <b>khoá tài khoản người khác</b>: gõ sai
  * năm lần vào handle của một người là họ không đăng nhập được trong 15 phút. Giữa một kỳ thi
  * thì đó là một vũ khí, không phải một biện pháp bảo vệ.
+ *
+ * <p>"IP" ở đây là <b>một dải</b> từ 2026-09-24: IPv4 giữ nguyên, IPv6 gom về /64
+ * ({@code ClientIp.khoaGioiHan}). Bước mã hai lớp thì CÓ thêm một trần theo tài khoản — ở
+ * {@code TotpChecker}, và không mâu thuẫn với đoạn trên: muốn tới bước ấy phải có mật khẩu,
+ * nên không ai khoá được tài khoản của người khác bằng nó.
  */
 public interface LoginAttemptRepository {
 
@@ -30,11 +35,20 @@ public interface LoginAttemptRepository {
      */
     void ghiNhan(String handleDaThu, String clientIp, boolean thanhCong);
 
-    /** Số lần sai từ {@code moc} tới nay của một IP. */
-    int demThatBaiTu(String clientIp, Instant moc);
+    /**
+     * Số lần sai từ {@code moc} tới nay của mọi địa chỉ NẰM TRONG một dải.
+     *
+     * @param dai {@code ClientIp.khoaGioiHan(...)} — một IPv4, hoặc một dải IPv6 {@code …/64}
+     */
+    int demThatBaiTu(String dai, Instant moc);
 
-    /** @return thời điểm hết khoá, hoặc rỗng nếu IP này không bị khoá */
+    /**
+     * @param clientIp địa chỉ ĐẦY ĐỦ của người gọi. Khoá nào CHỨA địa chỉ này đều tính — cả khoá
+     *                 theo dải lẫn khoá theo đúng một địa chỉ ghi trước khi đổi sang dải
+     * @return thời điểm hết khoá muộn nhất, hoặc rỗng nếu không bị khoá
+     */
     Optional<Instant> khoaToi(String clientIp);
 
-    void khoa(String clientIp, Instant toi, String lyDo);
+    /** @param dai cùng dạng với {@link #demThatBaiTu} */
+    void khoa(String dai, Instant toi, String lyDo);
 }

@@ -112,10 +112,10 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-AUTH-05 | Xem và sửa hồ sơ: tên hiển thị, ngôn ngữ ưa dùng | — | Must |
 | FR-AUTH-06 | Ba vai trò USER / SETTER / ADMIN. **Kiểm quyền ở tầng use-case** | SEC2, M-ArchUnit | Must |
 | FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên | R1, audit | Must |
-| FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP, khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
+| FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP (IPv6 đếm theo dải /64, từ 2026-09-24), khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
 | FR-AUTH-09 | **Xác minh email** — mã 6 chữ số, hạn 30 phút, 5 lần thử. **Mức mềm: chưa xác minh KHÔNG chặn đăng nhập/nộp bài/dự thi** | A (SMTP không nằm trên đường nào quan trọng) | **Done (v1.1)** — V13, ADR 016 |
 | FR-AUTH-09b | Quên mật khẩu qua email | — | **Won't** — giờ đã có kênh đã xác minh để dựa vào, nhưng nó là một cửa chiếm tài khoản nếu làm ẩu. Việc riêng, đặc tả riêng |
-| FR-AUTH-10 | Xác thực hai lớp TOTP (RFC 6238) + 10 mã dự phòng dùng một lần. **Bắt buộc với ADMIN**: chưa bật thì không dùng được quyền ADMIN | SEC2, SEC3 (ADMIN đọc được testdata mọi đề) | Must |
+| FR-AUTH-10 | Xác thực hai lớp TOTP (RFC 6238) + 10 mã dự phòng dùng một lần. **Bắt buộc với ADMIN**: chưa bật thì không dùng được quyền ADMIN. **10 mã sai liên tiếp / tài khoản → khoá bước 2FA 15 phút** (V15, 2026-09-24) | SEC2, SEC3 (ADMIN đọc được testdata mọi đề) | Must |
 
 > **FR-AUTH-01 chọn Turnstile chứ không chọn xác minh email, và đó là hai mục tiêu khác nhau.** Mục tiêu ở đây là chặn **bot tạo tài khoản hàng loạt**. Xác minh email gần như không làm được việc đó: dịch vụ mail dùng-một-lần có hàng nghìn tên miền, một script lấy hộp thư tạm mất vài trăm mili-giây — nó chặn người lười, không chặn bot có chủ đích. Turnstile thì chặn đúng thứ ấy, không cần SMTP, và hệ thống đằng nào cũng đứng sau Cloudflare.
 >

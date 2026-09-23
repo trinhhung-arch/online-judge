@@ -22,6 +22,13 @@ import java.util.Optional;
  * của Postgres từ chối — đó là một phép kiểm miễn phí mà kiểu {@code TEXT} sẽ không cho.
  *
  * <h2>Khoá ghi theo kiểu chèn-hoặc-đè</h2>
+ * <h2>Đếm theo DẢI bằng chính kiểu {@code inet} — không cần migration (2026-09-24)</h2>
+ * {@code login_attempts} vẫn ghi địa chỉ đầy đủ (để điều tra). Đếm dùng {@code <<=} ("nằm trong
+ * dải"), khoá ghi chính dải ấy ({@code 2001:db8:1:2::/64}), và phép kiểm khoá dùng {@code >>=}
+ * ("dải nào chứa địa chỉ này") — nên khoá ghi theo từng địa chỉ TRƯỚC khi đổi vẫn còn hiệu lực.
+ * Btree trên {@code inet} dùng được cho {@code <<=} (Postgres tự đổi nó thành một khoảng), nên
+ * {@code ix_login_attempts_ip_recent} vẫn phục vụ câu đếm.
+ *
  * {@code ON CONFLICT (client_ip) DO UPDATE} — cùng một IP bị khoá lần nữa thì <b>gia hạn</b>,
  * không phải chèn thêm dòng. Nếu để nó chèn thêm thì cột khoá chính vỡ, mà nếu bỏ khoá chính
  * thì mỗi lần kiểm phải tìm dòng mới nhất trong hàng nghìn dòng của cùng một IP đang bị tấn công.
@@ -37,7 +44,7 @@ public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
     private static final String DEM_THAT_BAI = """
             SELECT count(*)
               FROM login_attempts
-             WHERE client_ip = CAST(:clientIp AS inet)
+             WHERE client_ip <<= CAST(:dai AS inet)
                AND NOT succeeded
                AND attempted_at >= :moc
             """;
@@ -45,12 +52,14 @@ public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
     private static final String KHOA_TOI = """
             SELECT locked_until
               FROM login_lockouts
-             WHERE client_ip = CAST(:clientIp AS inet)
+             WHERE client_ip >>= CAST(:clientIp AS inet)
+             ORDER BY locked_until DESC
+             LIMIT 1
             """;
 
     private static final String KHOA = """
             INSERT INTO login_lockouts (client_ip, locked_until, reason)
-            VALUES (CAST(:clientIp AS inet), :toi, :lyDo)
+            VALUES (CAST(:dai AS inet), :toi, :lyDo)
             ON CONFLICT (client_ip) DO UPDATE
                SET locked_until = EXCLUDED.locked_until,
                    reason = EXCLUDED.reason,
@@ -73,9 +82,9 @@ public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
     }
 
     @Override
-    public int demThatBaiTu(String clientIp, Instant moc) {
+    public int demThatBaiTu(String dai, Instant moc) {
         return jdbc.sql(DEM_THAT_BAI)
-                .param("clientIp", clientIp)
+                .param("dai", dai)
                 .param("moc", OffsetDateTime.ofInstant(moc, ZoneOffset.UTC))
                 .query(Integer.class)
                 .single();
@@ -91,9 +100,9 @@ public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
     }
 
     @Override
-    public void khoa(String clientIp, Instant toi, String lyDo) {
+    public void khoa(String dai, Instant toi, String lyDo) {
         jdbc.sql(KHOA)
-                .param("clientIp", clientIp)
+                .param("dai", dai)
                 .param("toi", OffsetDateTime.ofInstant(toi, ZoneOffset.UTC))
                 .param("lyDo", lyDo)
                 .update();

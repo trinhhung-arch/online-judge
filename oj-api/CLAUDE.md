@@ -123,15 +123,16 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 | Giới hạn | Giá trị | Hành vi khi chạm |
 |---|---|---|
 | Nộp bài | 1 bài / 10s / user | UI hiện đếm ngược, trả 429 kèm `Retry-After` |
-| Đăng nhập sai | 5 lần / phút / IP | Khoá tạm 15 phút |
+| Đăng nhập sai | 5 lần / phút / IP — IPv6 đếm theo **dải /64** | Khoá tạm 15 phút. Đếm theo dải vì một kết nối IPv6 tự đổi địa chỉ trong /64 của nó (`ClientIp.khoaGioiHan`) |
+| Mã hai lớp sai | 10 lần **liên tiếp** / **tài khoản** | Khoá bước 2FA 15 phút, 429 kèm `Retry-After`; đang khoá thì mã đúng cũng bị từ chối. Theo tài khoản mà không trao ai nút khoá người khác: tới bước này là đã có mật khẩu (V15) |
 | Đăng nhập **đúng** | 1 lượt / 2s / user | 429. Chỉ tính lượt thành công — tính lượt sai thì ai cũng khoá được người khác |
 | Băm BCrypt song song | 4 phép cùng lúc | 429 **ngay**, không xếp hàng. Xếp hàng là giữ luồng Tomcat và kéo mọi endpoint khác chết theo |
-| Đăng ký | 10 tài khoản / giờ / IP | 429. Đếm cả lượt hỏng, nếu không thì dò handle là miễn phí |
+| Đăng ký | 10 tài khoản / giờ / IP (IPv6: dải /64) | 429. Đếm cả lượt hỏng, nếu không thì dò handle là miễn phí |
 | Đăng ký · captcha | Cloudflare Turnstile | 400. Kiểm ở server, không tin widget. Cloudflare không trả lời thì TỪ CHỐI. Token giải trên tên miền ngoài `OJ_TURNSTILE_HOSTNAMES` cũng TỪ CHỐI |
 | Gửi lại mã xác minh email | 1 lượt / 60s / user | 429 kèm `Retry-After`. Bảo vệ **hộp thư người dùng**, không bảo vệ server — trần API chung không coi 100 lá thư/phút vào một địa chỉ là vấn đề |
 | Nhập mã xác minh email | 5 lần thử / mã · hạn 30 phút | Sai quá thì **mã chết**, phải xin mã mới. Ba con số này (5 · 30 phút · mã mới huỷ mã cũ) là thứ DUY NHẤT giữ cho một mã 6 chữ số an toàn — xem `V13__xac_minh_email.sql` |
 | API chung | 100 req / phút / user | 429 kèm `Retry-After`. Bộ lọc `GioiHanApiFilter`, không phải use-case |
-| API chung · ẩn danh | 600 req / phút / IP | 429. Rộng hơn một bậc vì một IP là NHIỀU người (phòng thi sau NAT, 4G) |
+| API chung · ẩn danh | 600 req / phút / IP (IPv6: dải /64) | 429. Rộng hơn một bậc vì một IP là NHIỀU người (phòng thi sau NAT, 4G) |
 | Kích thước source | 64KB | Từ chối ở tầng validate, thông báo rõ |
 | AI review | 5 lượt / ngày / user | UI hiện số lượt còn lại |
 

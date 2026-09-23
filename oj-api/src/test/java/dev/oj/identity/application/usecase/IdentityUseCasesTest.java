@@ -55,8 +55,8 @@ class IdentityUseCasesTest {
      */
     private dev.oj.identity.application.TotpChecker totpChecker() {
         return new dev.oj.identity.application.TotpChecker(
-                haiLop, new IdentityFakes.MaHoaGia(),
-                java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
+                haiLop, new IdentityFakes.MaHoaGia(), dev.oj.platform.config.AppPropertiesGia.macDinh(),
+                new IdentityFakes.NhatKyGia(), java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
     }
     private IdentityFakes.ChanDangKyGia chanDangKy;
     private IdentityFakes.XacMinhEmailGia maXacMinh;

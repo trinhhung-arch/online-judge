@@ -517,6 +517,7 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 | `V12__thu_tu_de_la_chinh_cai_nhan.sql` | M5 (bổ sung) | bỏ `contest_problems.ordinal` — nhãn LÀ thứ tự (ADR 015) |
 | `V13__xac_minh_email.sql` | v1.1 | `email_verifications` · cột `users.email_verified_at` · thay `ck_users_anonymized` (ADR 016) |
 | `V14__audit_log_khoa_ca_partition.sql` | v1.1 | `REVOKE ALL` trên partition `audit_log` + hàm tạo partition tự khoá — append-only thật (mục 5) |
+| `V15__tran_do_ma_hai_lop_theo_tai_khoan.sql` | v1.1 | `user_two_factor.failed_attempts` + `locked_until` — trần mã hai lớp THEO TÀI KHOẢN (rà soát 2026-09-24, F2). Nullable có mặc định (CLAUDE.md §7) |
 | `R__seed_du_lieu_tham_chieu.sql` | mọi lúc | 3 ngôn ngữ · máy chấm chuẩn · tag. Thêm ngôn ngữ = sửa file này |
 
 M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án".

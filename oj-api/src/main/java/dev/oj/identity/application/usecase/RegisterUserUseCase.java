@@ -9,6 +9,7 @@ import dev.oj.identity.domain.IdentityException;
 import dev.oj.identity.domain.PasswordPolicy;
 import dev.oj.identity.domain.User;
 import dev.oj.platform.audit.AuditLog;
+import dev.oj.platform.security.ClientIp;
 import dev.oj.platform.security.PublicAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +85,10 @@ public class RegisterUserUseCase {
         // nào còn trống chỉ cần gửi email sai định dạng là không bị đếm, mà vẫn nhận được câu
         // trả lời "handle này đã có người dùng". Lượt hỏng cũng tốn tài nguyên và cũng rò rỉ
         // thông tin, nên lượt hỏng cũng phải trả giá.
-        rateLimiter.kiemVaGhiNhan(clientIp);
+        //
+        // Đếm theo DẢI (IPv6 /64), không theo địa chỉ — xem ClientIp.khoaGioiHan. Captcha bên
+        // dưới vẫn nhận địa chỉ đầy đủ: Cloudflare chấm điểm trên chính địa chỉ ấy.
+        rateLimiter.kiemVaGhiNhan(ClientIp.khoaGioiHan(clientIp));
 
         // ★ CAPTCHA SAU rate limit, TRƯỚC mọi thứ khác — thứ tự này là chủ ý.
         //
