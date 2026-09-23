@@ -46,9 +46,14 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # Quét pom.xml một mình thì Trivy phải tự đoán cây phụ thuộc bắc cầu. Dựng jar trước
-      # rồi quét cả thư mục: Trivy đọc luôn các jar thật nằm trong target/, tức là ĐÚNG những
-      # gì sẽ chạy trên host, không phải một cây phụ thuộc suy ra.
+      # ⚠️ Ý định ban đầu: dựng jar rồi quét cả thư mục, để Trivy đọc các jar thật trong target/.
+      #   ĐO 2026-09-24 THÌ KHÔNG PHẢI VẬY: ở scan-type fs, bảng "Report Summary" chỉ có bốn
+      #   target, cả bốn là pom.xml — jar không được đọc. Trivy tự giải cây phụ thuộc từ pom
+      #   (kể cả bản do parent Spring Boot quản), và lần quét ấy đã bắt đúng tomcat 11.0.24 đi
+      #   vào bắc cầu, nên cổng vẫn có răng. Nhưng "quét đúng thứ sẽ chạy" là CHƯA đúng: một
+      #   phiên bản Maven giải khác Trivy thì cổng không thấy. Muốn đọc jar thật phải chuyển sang
+      #   scan-type rootfs trên target/ — đổi cách cổng làm việc, chờ người quyết.
+      #   Bước dựng này vì thế hiện chưa góp gì cho phép quét; giữ tới khi quyết xong.
       #
       # -DskipTests là cố ý: ci.yml đã chạy test rồi. Job này trả lời một câu khác.
       - name: Dựng jar để quét đúng thứ sẽ chạy

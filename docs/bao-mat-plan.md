@@ -74,7 +74,7 @@ thì kỳ thi ấy hỏng vĩnh viễn. Thứ tự ưu tiên ở Phần 3 theo �
 | `/internal` không tới được từ internet | ✅ ba lớp: ingress không neo · 404 cho request mang header Cloudflare · secret — `InternalQuaTunnelHttpIT` · `InternalSecretFilterTest` (Lỗ 11) |
 | `.secrets-dev` không vào git | ✅ `.gitignore:47`, chưa từng được track |
 | `audit_log` append-only | ✅ `AuditLogChiGhiThemIT`, chạy bằng `oj_app` (V14). Trước 2026-09-23 dòng này dẫn `VanHanhHttpIT` — test ấy không kiểm append-only, và kiểm thật thì thủng qua partition (Lỗ 9) |
-| Quét phụ thuộc | ⚠️ **nửa vời** — xem Lỗ 2 |
+| Quét phụ thuộc | ✅ **có răng** từ 2026-09-24 — lần quét thật đầu tiên (`85f2f79`) tìm 11 CVE CRITICAL/HIGH có bản vá; `7d542e9` vá 10 (Tomcat 11.0.26 · bcprov 1.85.2 · amqp-client 5.34.0, đã chạy trên prod). ⚠️ **Còn mở:** CVE-2025-59952 (MinIO client, HIGH) — nâng cần thêm `okhttp-jvm`, chờ quyết. ⚠️ Trivy quét **pom**, không quét jar — xem Lỗ 2 |
 
 ### Tầng 4 — Công bằng kỳ thi · ✅
 
@@ -146,11 +146,22 @@ bước Trivy). Đây là mục duy nhất của `nfrplan.md` Phần 4 chỉ có
 - **`ignore-unfixed: true`.** Một CVE chưa có bản vá thì đỏ CI không đổi được gì, và một cổng
   đỏ-mà-không-vá-được sẽ bị tắt — tắt một lần thì hiếm khi bật lại. Cổng chỉ đỏ khi **có việc
   để làm**. CVE chưa vá vẫn in ra ở bước báo cáo không-chặn.
-- **Quét jar đã dựng, không quét `pom.xml` suông.** Trivy đọc đúng thứ sẽ chạy trên host thay
-  vì một cây phụ thuộc bắc cầu suy ra.
+- ~~**Quét jar đã dựng, không quét `pom.xml` suông.**~~ **Đo 2026-09-24: sai.** Ở `scan-type: fs`
+  bảng tổng hợp chỉ có bốn target, cả bốn là `pom.xml` — jar trong `target/` không được đọc.
+  Trivy tự giải cây phụ thuộc từ pom (kể cả bản do parent Spring Boot quản) và đã bắt đúng
+  Tomcat 11.0.24 đi vào bắc cầu, nên cổng vẫn có răng; nhưng nó quét cây **suy ra**, không phải
+  jar sẽ chạy. Đọc jar thật cần `scan-type: rootfs` trên `target/` — chờ người quyết.
 
 Kèm một chốt tự canh theo khuôn `sandbox-attack.yml`: nếu ai hạ `exit-code` hoặc thu hẹp
 `severity`, chính job ấy đỏ.
+
+> **Lần chạy thật đầu tiên — 2026-09-24.** Lần đầu (`ae7e81c`) đỏ ở "Set up job" mà chưa quét
+> gì: tag `aquasecurity/trivy-action@0.28.0` đã bị gỡ (repo chỉ còn `v0.x.y`). Ghim theo SHA
+> (`85f2f79`). Lần quét thật tìm 11 CVE CRITICAL/HIGH có bản vá: Tomcat ×3 CRITICAL, Bouncy
+> Castle ×2 CRITICAL + 1 HIGH, amqp-client ×4 HIGH, MinIO ×1 HIGH. Spring Boot 4.1.1 là bản
+> 4.1.x mới nhất và chính nó ghim bản có lỗ, nên `7d542e9` ghi đè thuộc tính của parent; đã
+> deploy cả API lẫn worker, broker thấy hai client 5.34.0, sandbox 14/14 + chấm thật 9/9 trên
+> ảnh mới. IT **không** chạm MinIO hay RabbitMQ thật — hai bản nâng ấy được đo trên prod.
 
 > **Còn lại, và KHÔNG commit vào repo được:** biến dấu đỏ thành *không merge được* là branch
 > protection cho `main` (đặt `ci` · `sandbox-attack` · `quet-phu-thuoc` làm required check), và
