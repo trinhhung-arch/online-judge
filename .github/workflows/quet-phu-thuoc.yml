@@ -60,8 +60,14 @@ jobs:
       # lựa chọn duy nhất còn lại là tắt cổng hoặc thêm ngoại lệ — và một cổng bị tắt một lần
       # thì hiếm khi được bật lại. Cổng này chỉ đỏ khi CÓ VIỆC ĐỂ LÀM, và vì thế nó đáng được
       # giữ đỏ. CVE chưa vá vẫn hiện trong log của bước "Báo cáo đầy đủ" bên dưới.
+      #
+      # ★ GHIM THEO SHA, KHÔNG THEO TAG. Bản đầu ghi `@0.28.0` — tag ấy bị gỡ khỏi repo của
+      # action (từ 2026-03 chỉ còn dạng `v0.x.y`), và lần chạy đầu tiên 2026-09-24 đỏ ngay ở
+      # "Set up job" mà chưa quét gì. Tag gỡ được thì cũng GẮN LẠI được sang mã khác; một action
+      # quét bảo mật mà chạy mã lạ trong CI là đúng thứ nó được đặt ra để bắt. SHA thì không đổi.
+      # Dependabot (hệ github-actions) vẫn mở PR nâng SHA, kèm chú thích phiên bản ở cuối dòng.
       - name: Trivy — CRITICAL/HIGH có bản vá thì CHẶN
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -75,7 +81,7 @@ jobs:
       # và cả CVE chưa có bản vá. Bước trên quyết định đỏ/xanh, bước này trả lời "còn gì nữa".
       - name: Báo cáo đầy đủ (không chặn)
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
