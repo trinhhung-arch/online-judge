@@ -52,6 +52,7 @@ users ──┬──< submissions >──── problems ──< testdata_versi
         │
         ├──< refresh_tokens · login_attempts · login_lockouts
         ├──1 user_two_factor ──< user_scratch_code       (V11 — 2FA, FR-AUTH-10)
+        ├──< email_verifications                        (V13 — xác minh email, FR-AUTH-09)
         ├──< contest_registrations >── contests ──< contest_problems >── problems
         │                                   └──< contest_standings ──< contest_problem_standings
         │                                   └──< contest_standings_frozen ──< contest_problem_standings_frozen
@@ -67,6 +68,13 @@ languages · judge_hosts · host_benchmarks · system_settings · jobs · job_ev
 **Đường một chiều cần nhớ:** `ai_reviews → submissions`, không có chiều ngược.
 Không cột nào của `submissions` bị package `ai` ghi vào — đó là AI1 (0ms thêm vào đường chấm)
 được diễn đạt ở tầng dữ liệu.
+
+---
+
+> **Hai bảng có thật nhưng không vẽ trong sơ đồ:** `rendered_statements` (cache bản render
+> Markdown của đề, khoá theo hash nội dung — FR-PROB-02) và `subtask_dependencies` (phụ thuộc
+> giữa các nhóm điểm — FR-PROB-06). Cả hai treo dưới `problems`/`subtasks`; bỏ ra cho sơ đồ
+> đọc được, ghi ở đây để danh sách bảng vẫn đủ 36.
 
 ---
 
@@ -191,16 +199,25 @@ Muốn lưu nội dung cho một testcase ẩn, khoá ngoại phải khớp `(id
 Đã kiểm: chèn thử trả về lỗi khoá ngoại.
 
 **2. Không ai xoá được bài nộp, kể cả ADMIN, kể cả qua SQL.**
-`REVOKE DELETE, TRUNCATE ON submissions FROM oj_app` (V9). FR-SUB-09 trở thành quyền hệ thống,
+`REVOKE DELETE, TRUNCATE ON submissions FROM oj_app` (**V8**). FR-SUB-09 trở thành quyền hệ thống,
 không phải một nút bị ẩn.
 
 **3. `audit_log` và `judge_runs` chỉ ghi thêm.**
 Cùng cơ chế: `REVOKE UPDATE, DELETE`. Trigger thì tắt được, quyền thì không.
 
+> ⚠️ **Với bảng phân vùng, khoá bảng cha là CHƯA ĐỦ** (sửa ở **V14**, 2026-09-23). Postgres
+> không truyền GRANT/REVOKE từ cha xuống partition, và xét quyền trên đúng bảng được gọi tên —
+> nên V8 khoá `audit_log` mà `DELETE FROM audit_log_2026_09` vẫn chạy được bằng `oj_app`. V14
+> `REVOKE ALL` trên mọi partition, và hàm `create_audit_log_partition` khoá partition ngay khi
+> tạo. Ghi/đọc qua bảng cha không đổi: tuple routing chỉ xét quyền bảng cha. Bảng phân vùng
+> nào thêm sau này phải làm y như vậy. Canh bởi `AuditLogChiGhiThemIT`, chạy bằng `oj_app`.
+
 Thêm ba hàng rào nhỏ nhưng cứu được ngày tệ nhất:
 
-- `ux_jobs_one_active_per_type` — một cú double-click trên trang admin không tạo ra ba job
-  rejudge hàng loạt chạy song song.
+- `ux_jobs_one_active_per_entity` — một cú double-click trên trang admin không tạo ra ba job
+  rejudge hàng loạt chạy song song. **V6 đặt nó là `..._per_type` (khoá theo `type`); V9 đổi
+  thành khoá theo `(type, thực thể)`** vì bản cũ chặn rộng hơn ý định — hai SETTER không nạp
+  được testdata cho hai đề khác nhau cùng lúc. Bảo đảm chống double-click giữ nguyên.
 - `ux_judge_hosts_single_reference` — chỉ tồn tại đúng một "máy chấm chuẩn". Mọi con số thời
   gian quy chiếu về nó (FR-SUB-11).
 - `ck_problems_epsilon` — `checker_epsilon` bắt buộc có khi và chỉ khi `checker_type='float'`.
@@ -287,11 +304,18 @@ verdict mới ──► cập nhật contest_standings (theo lô mỗi 2s, khôn
 | `oj_app` | `oj-api` lúc chạy | DML, **không** DDL; bị REVOKE như mục 5 |
 
 Đây là 15 phút cấu hình đổi lấy: một lỗ SQL injection lọt lưới cũng không `DROP TABLE` được,
-`audit_log` append-only thành thật, và `judge_runs` bất biến thành thật.
+`audit_log` append-only thành thật (từ **V14** — V8 chỉ khoá bảng cha, xem mục 5), và
+`judge_runs` bất biến thành thật.
 `oj-worker` **không có role nào** — nó không có `DataSource` (bất biến #3).
 
-Migration `V9` viết phòng thủ: nếu role chưa tồn tại thì bỏ qua phần GRANT, nên
+Migration **`V8`** viết phòng thủ: nếu role chưa tồn tại thì bỏ qua phần GRANT, nên
 Testcontainers và máy dev vẫn chạy được mà không cần dựng role trước.
+
+> **★ Nó từng được lên kế hoạch là V9 và giao ra là V8** — `de_soan_rieng_cho_ky_thi` của M5
+> lấy mất số trước đó. Chính đầu file `V8__phan_quyen_role_ung_dung.sql` có ghi chú ⚠️ ĐÁNH SỐ
+> nói điều này, nhưng **không nơi nào cập nhật theo**: tới 2026-09-20 vẫn còn bảy javadoc
+> trong `oj-api` dẫn "(V9)" cho lệnh `REVOKE`. Ai mở V9 đi tìm sẽ thấy một thay đổi index
+> của bảng `jobs`. Đã sửa cùng lượt rà này.
 
 ---
 
@@ -372,16 +396,20 @@ Cả hai pool đều chạy bằng role `oj_app`.
 
 ## 12 · Backup, RPO và RTO
 
-`nfrplan.md` chốt RPO ≤ 15 phút bằng `pg_dump`. Thiết kế này giữ nguyên và **đề xuất bổ sung**:
+`nfrplan.md` từng chốt RPO ≤ 15 phút bằng `pg_dump`. Từ 2026-09-21 cả hai vế cùng chạy:
 
 | Lớp | Cấu hình | RPO đạt được |
 |---|---|---|
 | Đã chốt | `pg_dump` mỗi 15 phút → ổ ngoài + Backblaze B2 | ≤ 15 phút |
-| Đề xuất thêm | WAL archiving (`archive_mode=on`, `archive_command` → cùng đích) | **gần 0** |
+| ✅ Đã bật 2026-09-21 | WAL archiving (`archive_mode=on` · `archive_timeout=60s` · gzip) + `pg_basebackup` hằng ngày | **≤ 1 phút** |
 
 Với `submissions` chỉ 386 MB ở 1M dòng, WAL archiving gần như miễn phí về dung lượng, và nó
-biến "mất tối đa 15 phút bài nộp" thành "mất tối đa vài giây". Vì R1 nói **0 bài mất là tuyệt đối**,
-đây là chỗ đáng chi. Nhưng nó chạm con số đã chốt R4 → **cần người quyết** (mục 14).
+biến "mất tối đa 15 phút bài nộp" thành "mất tối đa vài giây".
+
+Lập luận cũ ở đây là *"vì R1 nói 0 bài mất là tuyệt đối nên đây là chỗ đáng chi"* — **lập luận ấy
+sai phạm vi**, và đã sửa ở `nfrplan.md` 5.3: R1 đo việc đang chạy bằng chaos test, không đo việc
+mất ổ đĩa. Lý do đáng chi thật sự đơn giản hơn: nó rẻ, và mất 15 phút bài nộp giữa một kỳ thi là
+mất mát không xin lỗi được. Nhưng nó chạm con số đã chốt R4 → **cần người quyết** (mục 14).
 
 Diễn tập restore tuần 12 vẫn bấm giờ như kế hoạch. Một backup chưa từng restore không phải backup.
 
@@ -405,9 +433,20 @@ trong CI — nó bắt được đúng những lỗi mà unit test với reposit
 
 ---
 
-## 14 · Cần người quyết — không tự làm
+## 14 · Cần người quyết — **5/6 đã quyết, còn 1**
 
-Sáu điểm dưới đây nằm trong danh sách "phải dừng và hỏi" của `CLAUDE.md` mục 5:
+Sáu điểm dưới đây nằm trong danh sách "phải dừng và hỏi" của `CLAUDE.md` mục 5. Kiểm lại
+ngày 2026-09-20 trên schema thật (dựng lại từ V1→V13 trong một container sạch):
+
+| # | Kết cục |
+|---|---|
+| 1 | ✅ chọn (b) — `submissions` KHÔNG partition (`relkind = 'r'`) |
+| 2 | ✅ chọn (b) — không có bảng kết quả từng test; `judge_runs` giữ `failed_test_ordinal` |
+| 3 | ✅ chọn (b) — khoá lạc quan trên `judge_queue`, đã ghi **ADR 009**, `CLAUDE.md` bất biến #7 đã sửa theo |
+| 4 | ✅ chọn (a) — bảng `source_blobs` có thật trong Postgres |
+| 5 | ✅ chọn (b) — `oj_app` / `oj_migrator`, V8 + `infra/postgres/init/01-roles.sql` + `.env.example` |
+| 6 | ✅ **ĐÃ LÀM 2026-09-21** — `archive_mode=on` · `archive_timeout=60s` trong `docker-compose.yml`, đích là `OJ_WAL_ARCHIVE_DIR` bind-mount ra host. Kèm hai mảnh không có thì WAL vô dụng: `scripts/sao-luu-goc.sh` (base backup **vật lý** — WAL không replay lên `pg_dump` logic được) và `scripts/kiem-wal.sh` (canh việc archive hỏng làm `pg_wal` phình tới khi đầy đĩa). **R4 đổi từ 15 phút xuống 1 phút** — số đã chốt, đổi có phép. Quy trình PITR ở đầu `scripts/khoi-phuc-db.sh` |
+
 
 | # | Vấn đề | Phương án | Khuyến nghị |
 |---|---|---|---|
@@ -416,7 +455,7 @@ Sáu điểm dưới đây nằm trong danh sách "phải dừng và hỏi" củ
 | 3 | **Khoá lạc quan chuyển sang `judge_queue`** — bất biến #7 viết `WHERE id=? AND attempt=? AND status='JUDGING'` trên `submissions` | (a) giữ nguyên chữ · (b) giữ nguyên ngữ nghĩa, đổi chỗ đặt | **(b)** — số đo mục 4. Nhưng đây là **chạm vào một bất biến**, phải được cả hai người đồng ý và ghi ADR |
 | 4 | **Source người dùng lưu trong Postgres** (`source_blobs`), không phải MinIO | (a) Postgres · (b) MinIO | **(a)** — 64KB/bài, 5000 blob = 1,2 MB; và worker nhận source qua `claim` response nên vẫn không cần DataSource. Nhưng điều này **chạm `oj-contract`** → phải hỏi |
 | 5 | **Thêm role `oj_app` / `oj_migrator`** | (a) một role như hiện tại · (b) hai role | **(b)** — nhưng nó đổi cấu hình deploy và `.env.example`, không phải quyết định một mình |
-| 6 | **WAL archiving bổ sung cho `pg_dump`** | (a) giữ RPO 15 phút · (b) thêm WAL archiving, RPO ≈ 0 | **(b)** — nhưng R4 là con số đã chốt |
+| 6 | **WAL archiving bổ sung cho `pg_dump`** | (a) giữ RPO 15 phút · (b) thêm WAL archiving | ✅ **đã chọn (b)** 2026-09-21 — R4 xuống **1 phút** (`archive_timeout=60s`). Kèm `sao-luu-goc.sh` + `kiem-wal.sh`, xem mục 14 điểm 6 |
 
 Ngoài ra, ba con số dưới đây nằm trong schema và **đổi là phải hỏi**: lease reaper 120s
 (`judge_queue.lease_until`), quota AI 5/ngày (`ai_quota_usage`), giới hạn source 64KB
@@ -431,8 +470,24 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 - ❌ **`COUNT(*)` trên `submissions`** — kể cả cho trang trạng thái. Đếm trên `judge_queue`.
 - ❌ **`OFFSET` để phân trang** — cursor `WHERE id < :cursor` luôn, không ngoại lệ.
 - ❌ **Trigger trên `submissions`** — mọi trigger đều nằm trên đường nộp bài 300ms.
-- ❌ **`ON DELETE CASCADE` trỏ vào `submissions` hay `users`** — không ai bị xoá, cascade
-  chỉ tạo ảo giác là xoá được.
+- ❌ **`ON DELETE CASCADE` trỏ vào `submissions`** — không ngoại lệ nào. `submissions` là lịch
+  sử; FR-AUTH-07 **ẩn danh hoá** chứ không xoá dòng, nên một cascade ở đó hứa một thao tác mà
+  hệ thống cố ý không có.
+- ⚠️ **`ON DELETE CASCADE` trỏ vào `users`** — cấm, **trừ nhóm bảng "chỉ chứa bí mật dẫn xuất
+  của đúng một user"**. Hôm nay nhóm ấy có đúng ba bảng: `user_two_factor`,
+  `user_scratch_code` (V11), `email_verifications` (V13).
+  > **Vì sao là ngoại lệ chứ không phải vi phạm** *(chốt 2026-09-21)*: ba bảng ấy chứa bí mật
+  > TOTP, mã dự phòng và mã xác minh email — không một dòng lịch sử nào. Với chúng, cascade
+  > **không** phải ảo giác xoá được: nếu một dòng `users` thật sự biến mất thì những bí mật
+  > ấy *phải* biến mất theo. Thứ luật bảo vệ là lịch sử, và chúng không có lịch sử.
+  >
+  > **Ngoại lệ này được ÉP, không phải được hứa.** `SchemaInvariantsIT` đọc `pg_constraint`
+  > và đòi danh sách cascade-tới-`users` **đúng bằng ba tên trên** — một danh sách trắng, nên
+  > bảng thứ tư lọt vào là đỏ ngay và người thêm buộc phải nói ra bảng ấy chứa gì. Một ca thứ
+  > hai đòi danh sách cascade-tới-`submissions` **rỗng**.
+  >
+  > Trước đó không có gì bắt được: ArchUnit không đọc SQL, `smoke_test.sql` không kiểm
+  > `confdeltype`, và ba khoá ngoại này đã nằm im trong schema từ V11.
 - ❌ **Lưu tiền bằng `FLOAT`** — `cost_micro_usd BIGINT`.
 - ❌ **`CREATE TYPE ... AS ENUM`** — thêm giá trị mới vướng ràng buộc transaction của Flyway.
   Dùng `TEXT` + `CHECK`.
@@ -460,6 +515,8 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 | `V10__de_soan_rieng_cho_ky_thi.sql` | M5 | `contest_problems.soan_rieng` — đề sinh ra cho một kỳ thi |
 | `V11__xac_thuc_hai_lop.sql` | M4 (bổ sung) | `user_two_factor` · `user_scratch_code` |
 | `V12__thu_tu_de_la_chinh_cai_nhan.sql` | M5 (bổ sung) | bỏ `contest_problems.ordinal` — nhãn LÀ thứ tự (ADR 015) |
+| `V13__xac_minh_email.sql` | v1.1 | `email_verifications` · cột `users.email_verified_at` · thay `ck_users_anonymized` (ADR 016) |
+| `V14__audit_log_khoa_ca_partition.sql` | v1.1 | `REVOKE ALL` trên partition `audit_log` + hàm tạo partition tự khoá — append-only thật (mục 5) |
 | `R__seed_du_lieu_tham_chieu.sql` | mọi lúc | 3 ngôn ngữ · máy chấm chuẩn · tag. Thêm ngôn ngữ = sửa file này |
 
 M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án".
@@ -479,9 +536,15 @@ M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án
 > chính nằm ở đây, và chú thích trong V3 được để nguyên. Ai đọc V3 rồi đi tìm FK ở V6 thì
 > quay lại dòng này.
 >
-> **`V8__ai_review.sql` chưa tồn tại.** Bảng này từng liệt kê nó ở hàng V8; số hiệu ấy đã bị
-> `phan_quyen_role_ung_dung` dùng mất. Khi làm AI review (tuần 14–15), migration đó sẽ mang
-> số kế tiếp còn trống, không phải V8.
+> **Migration của AI review chưa tồn tại, và số hiệu của nó đã lỡ BA lần.** Bảng này từng
+> liệt kê nó ở hàng V8; `phan_quyen_role_ung_dung` lấy mất V8. File nháp trong
+> `docs/sql/migration-cho-moc-sau/` mang tên V10; `de_soan_rieng_cho_ky_thi` lấy mất V10.
+> `ai-review-plan.md` thì ghi V13; `xac_minh_email` lấy mất V13 (2026-09-20).
+>
+> Ba lần cùng một nguyên nhân: mỗi migration giao ra trong lúc chờ tuần 14–15 đều đẩy số kế
+> tiếp đi một bậc, nên **mọi con số viết cứng cho một migration chưa viết đều sẽ sai**. Số
+> chốt lúc `git mv`, bằng cách nhìn `ls db/migration/` — hôm nay là V14. Cách làm nằm ở
+> `docs/sql/migration-cho-moc-sau/README.md`.
 
 ---
 

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
  * Truy vấn 3b. Pool {@code judge} — luôn chạy trong transaction ghi verdict.
  *
  * <p>Chỉ có INSERT. Không sửa, không xoá, và đó không phải quy ước mà là quyền:
- * {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V9).
+ * {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V8).
  */
 @Repository
 public class JdbcJudgeRunRepository implements JudgeRunRepository {

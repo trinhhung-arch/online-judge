@@ -18,7 +18,7 @@ package dev.oj.judging.domain;
  *
  * <h2>Không có DELETED, không có CANCELLED</h2>
  * Không ai xoá được bài nộp, kể cả ADMIN, kể cả qua SQL — {@code REVOKE DELETE, TRUNCATE ON
- * submissions FROM oj_app} ở V9. FR-SUB-09 là một quyền ở tầng Postgres, không phải một nút
+ * submissions FROM oj_app} ở V8. FR-SUB-09 là một quyền ở tầng Postgres, không phải một nút
  * bị ẩn. ADMIN chỉ <i>ẩn</i> được, và đó là hai cột khác ({@code hidden_at}/{@code hidden_by}).
  */
 public enum SubmissionStatus {

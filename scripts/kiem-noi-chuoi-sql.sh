@@ -41,18 +41,49 @@ set -euo pipefail
 
 goc="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# ---------------------------------------------------------------------------------------
+# ★ `while read` CHỨ KHÔNG PHẢI `mapfile`, và đây không phải chuyện khẩu vị.
+#
+# `mapfile` (và bí danh `readarray`) có từ bash 4. macOS ship bash **3.2.57** — bản cuối
+# cùng dưới giấy phép GPLv2 — và Apple sẽ không nâng. Nên trên máy chấm và trên mọi máy dev
+# dùng Mac, bản cũ của file này chết ở dòng đầu tiên chạm mảng:
+#
+#     scripts/kiem-noi-chuoi-sql.sh: line 48: mapfile: command not found
+#
+# `set -e` biến nó thành exit 127, nên nó KHÔNG âm thầm xanh — nhưng hậu quả cũng đủ tệ:
+# bước kiểm này chỉ còn chạy ở CI (ubuntu-latest). Mà chính đầu file này hứa
+# *"đỏ ở CI thì tái hiện ở máy trong một giây, không phải một vòng push"* — một lời hứa
+# không giữ được trên chính cái máy mà dự án được viết ra.
+#
+# `while IFS= read -r` cho kết quả y hệt và chạy từ bash 2 trở đi. Đã đo trên bash 3.2.57
+# ngày 2026-09-20: `arr+=()`, `${#arr[@]}` trên mảng rỗng, và `"${arr[@]#tien-to}"` đều đúng.
+#
+# ⚠️ Thêm mảng mới thì dùng lại khuôn này, ở đây và ở mọi script khác trong `scripts/`.
+# Lệnh soát (bỏ qua chính khối chú thích này):
+#
+#     grep -nE '^[^#]*\b(mapfile|readarray)\b' scripts/*.sh     # phải rỗng
+# ---------------------------------------------------------------------------------------
+
 # Tìm MỌI thư mục tên `infrastructure`, ở bất kỳ độ sâu nào.
 #
 # Bản trước dùng glob `dev/oj/*/infrastructure/` — đúng một mức — nên nó bỏ sót
 # `dev/oj/platform/audit/infrastructure/` xuất hiện ở M4.
-mapfile -t thu_muc < <(find "$goc/oj-api/src/main/java" -type d -name infrastructure | sort)
+thu_muc=()
+while IFS= read -r duong; do
+  thu_muc+=("$duong")
+done < <(find "$goc/oj-api/src/main/java" -type d -name infrastructure | sort)
 
 if [ ${#thu_muc[@]} -eq 0 ]; then
   echo "::error::Không tìm thấy thư mục infrastructure nào — bước kiểm này đang chạy rỗng"
   exit 1
 fi
 
-mapfile -t tep < <(find "${thu_muc[@]}" -name '*.java' -type f | sort)
+# An toàn khi mở rộng "${thu_muc[@]}" dù `set -u`: nhánh trên đã `exit 1` nếu mảng rỗng, và
+# bash 3.2 coi việc mở rộng một mảng rỗng dưới `set -u` là lỗi "unbound variable".
+tep=()
+while IFS= read -r tep_java; do
+  tep+=("$tep_java")
+done < <(find "${thu_muc[@]}" -name '*.java' -type f | sort)
 
 if [ ${#tep[@]} -eq 0 ]; then
   echo "::error::Không tìm thấy file .java nào trong ${#thu_muc[@]} thư mục infrastructure"

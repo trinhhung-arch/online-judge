@@ -250,9 +250,15 @@ document.getElementById('form-dang-ky').addEventListener('submit', (ev) => {
     }
 
     gui(form, DUONG.auth.dangKy, () => {
-        // Server cố ý KHÔNG tự đăng nhập sau khi đăng ký (xem AuthController): hai hành
-        // động sẽ tách ra khi có xác minh email ở v1.1. Đăng nhập hộ ở đây bằng chính
-        // thông tin vừa nhập giữ trải nghiệm liền mạch mà không cần server đổi gì.
+        // Server cố ý KHÔNG tự đăng nhập sau khi đăng ký (xem AuthController). Đăng nhập
+        // hộ ở đây bằng chính thông tin vừa nhập giữ trải nghiệm liền mạch mà không cần
+        // server đổi gì.
+        //
+        // ★ Và nó vẫn đúng sau V13 (xác minh email), vì xác minh ở MỨC MỀM: lá thư mang mã
+        // đã được gửi trong lượt đăng ký, nhưng nó không chặn gì cả. Người dùng vào thẳng
+        // trang đề bài; mã chờ họ ở trang hồ sơ khi nào họ muốn. Đưa họ sang một màn hình
+        // "hãy xác minh email" ngay ở đây là dựng một cánh cửa mà chính hệ thống nói là
+        // không có.
         const dn = document.getElementById('form-dang-nhap');
         dn.dinhDanh.value = form.handle.value;
         dn.password.value = form.password.value;

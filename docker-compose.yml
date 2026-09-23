@@ -26,10 +26,47 @@ services:
       POSTGRES_PASSWORD: ${OJ_POSTGRES_PASSWORD:?Thiếu OJ_POSTGRES_PASSWORD trong .env — xem .env.example}
     ports:
       - "127.0.0.1:5432:5432"
+    # ★ WAL archiving — R4. Bật 2026-09-21 theo quyết định F của build-order.md PHẦN 0.
+    #
+    # `archive_mode` là tham số mức postmaster: đổi nó PHẢI khởi động lại container, không
+    # `pg_reload_conf()` được. Đó là lý do nó nằm ở đây chứ không ở một file conf nóng.
+    #
+    # archive_command dùng .tmp rồi `mv`: `mv` trong cùng một filesystem là nguyên tử, nên một
+    # lần container chết giữa chừng để lại file .tmp rác chứ KHÔNG để lại một segment cụt trông
+    # như segment hợp lệ. Cùng nỗi lo với "đĩa đầy thì pg_dump vẫn thoát 0" ở sao-luu-db.sh.
+    #
+    # `test ! -f` ở đầu: Postgres có thể gọi lại archive_command cho cùng một segment sau khi
+    # crash. Ghi đè một segment đã lưu là cách đánh mất nó.
+    #
+    # archive_timeout=60s là thứ BIẾN RPO THÀNH MỘT CON SỐ. Không có nó, một segment đang ghi
+    # dở không bao giờ được lưu trong lúc hệ thống rảnh, và RPO lúc rảnh là vô hạn. Với 60s,
+    # R4 = "mất tối đa 1 phút". Giá phải trả: một segment 16MB mỗi phút kể cả khi không ai nộp
+    # bài — nhưng segment rỗng nén gzip còn khoảng 20KB, nên ~30MB/ngày lúc nhàn rỗi.
+    #
+    # ⛔ HIỂM HOẠ PHẢI BIẾT: archive_command hỏng LIÊN TỤC thì Postgres GIỮ LẠI mọi WAL chưa
+    # lưu được, pg_wal phình cho tới khi đầy đĩa và database DỪNG HẲN. Một cải tiến sao lưu
+    # biến thành một sự cố mất dịch vụ. `scripts/kiem-wal.sh` tồn tại chỉ vì điều này —
+    # cắm nó vào bảng vận hành, đừng chờ tới lúc đĩa đầy.
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /wal-archive/%f.gz && gzip -c %p > /wal-archive/%f.gz.tmp && mv /wal-archive/%f.gz.tmp /wal-archive/%f.gz
+      - -c
+      - archive_timeout=60s
+      - -c
+      - wal_level=replica
+      - -c
+      - wal_compression=zstd
     volumes:
       - postgres-data:/var/lib/postgresql/data
       # Quyết định D — hai role oj_app / oj_migrator, tạo lúc khởi tạo volume.
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      # Đích WAL. PHẢI là bind mount ra host, không phải named volume: mục đích của nó là
+      # sống sót qua việc mất chính cái volume dữ liệu. Thư mục này phải GHI ĐƯỢC bởi uid 70
+      # (user postgres của ảnh alpine) — xem kiem-wal.sh, phép kiểm đầu tiên.
+      - ${OJ_WAL_ARCHIVE_DIR:?Thiếu OJ_WAL_ARCHIVE_DIR trong .env — xem .env.example}:/wal-archive
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ojuser -d ojdb"]
       interval: 10s

@@ -56,6 +56,45 @@ spring:
     # trong RabbitJudgeJobPublisher lo phần "đừng thử lại mỗi bài".
     connection-timeout: 200ms
 
+  # ===========================================================================
+  # SMTP — FR-AUTH-09 (V13), xác minh email.
+  #
+  # ★ KHÔNG CÓ MẶC ĐỊNH CHO `host`, và đó là cách tính năng này tự tắt trên máy dev:
+  # Spring Boot chỉ dựng bean JavaMailSender khi `spring.mail.host` có giá trị. Biến trống
+  # -> không có bean -> SmtpEmailSender chạy ở chế độ tắt và ghi một dòng WARN. Bộ IT không
+  # cần một máy chủ thư nào.
+  #
+  # ★ BA TIMEOUT DƯỚI ĐÂY KHÔNG PHẢI TUỲ CHỌN.
+  # Mặc định của JavaMail là chờ VÔ HẠN. Một máy chủ SMTP treo — không từ chối, không đóng
+  # kết nối, chỉ im lặng — giữ luôn luồng Tomcat đang chạy lượt đăng ký, và giữ mãi. Vài
+  # chục lượt như thế là hết luồng, và triệu chứng không phải "không gửi được thư" mà là
+  # "cả site không phản hồi".
+  #
+  # Chúng được đọc lại lúc boot: `SmtpEmailSender` hỏi chính đối tượng JavaMailSender xem ba
+  # khoá này có mặt không, và TỪ CHỐI KHỞI ĐỘNG nếu thiếu. Lý do nằm ở bài học của
+  # `TurnstileVerifier.HttpConfig` — một trần thời gian khai trong yml mà không tới được nơi
+  # cần là kiểu hỏng tệ nhất: im lặng và trông như đúng.
+  #
+  # 10 giây, không phải 3 giây như Turnstile: bắt tay SMTP có TLS và AUTH là nhiều vòng đi
+  # về hơn một lượt POST, và lá thư này không có ai ngồi chờ verdict ở đầu kia.
+  # ===========================================================================
+  mail:
+    host: ${OJ_MAIL_HOST:}
+    port: ${OJ_MAIL_PORT:587}
+    username: ${OJ_MAIL_USERNAME:}
+    password: ${OJ_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          # STARTTLS trên cổng 587. Thiếu dòng này thì mật khẩu SMTP đi qua mạng dạng thô.
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
   # ★ SÁU tác vụ @Scheduled, và mặc định của Spring là MỘT luồng cho tất cả.
   #
   # M6 đã gặp đúng lỗi này một lần: JobRunner chạy job đồng bộ trên luồng ấy, nên một lần nạp
@@ -324,9 +363,46 @@ oj:
       # Công khai — nó nằm trong HTML của mọi trang đăng ký.
       site-key: ${OJ_TURNSTILE_SITE_KEY:}
       secret: ${OJ_TURNSTILE_SECRET:}
+      # Nơi token được phép được giải — so với `hostname` trong phản hồi siteverify. Phân tách
+      # bằng dấu phẩy. Bắt buộc khi bật: thiếu thì token giải trên localhost của người lạ cũng
+      # được nhận (xem TurnstileProperties).
+      hostnames: ${OJ_TURNSTILE_HOSTNAMES:}
       # Tham số hoá để test trỏ vào máy chủ giả thay vì gọi ra internet.
       verify-url: ${OJ_TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
       timeout: 3s
+
+    # =========================================================================
+    # Xác minh email — FR-AUTH-09 (V13). MỨC MỀM.
+    #
+    # ★ "Mức mềm" nghĩa là nhãn users.email_verified_at KHÔNG CHẶN GÌ CẢ: chưa xác minh thì
+    # vẫn đăng nhập, vẫn nộp bài, vẫn dự thi. Đó là điều kiện để thêm SMTP vào hệ thống này —
+    # nhà cung cấp thư chết thì hôm ấy không ai xác minh được, và không ai mất gì. Chặn đăng
+    # nhập thì một sự cố của họ trở thành sự cố truy cập của ta, đúng vào ngày contest.
+    # Xem docs/adr/016-xac-minh-email-muc-mem.md.
+    #
+    # ★ ĐÂY KHÔNG PHẢI HÀNG RÀO CHỐNG BOT. Việc đó là của turnstile ở trên. Xác minh email
+    # chặn bot rất kém (hộp thư dùng-một-lần có hàng nghìn tên miền) và tồn tại cho một mục
+    # tiêu khác: CÓ một kênh liên lạc đã xác minh, thứ mà quên-mật-khẩu sẽ dựa vào.
+    #
+    # ★ MẶC ĐỊNH TẮT, cùng lý do với turnstile: máy dev và bộ IT không có máy chủ thư.
+    # SmtpEmailSender ghi một dòng WARN lúc khởi động khi nó tắt.
+    #
+    # ★ BA CON SỐ DƯỚI ĐÂY LÀ THỨ LÀM CHO MÃ 6 CHỮ SỐ AN TOÀN, không phải độ dài mã.
+    # Một triệu khả năng chỉ đủ khi: số lần thử bị chặn (max-attempts), mã có hạn (ttl), và
+    # mã mới huỷ mã cũ (ux_email_verifications_song trong V13). Nới bất kỳ con số nào ở đây
+    # là nới đúng cái đang giữ cho mã ngắn dùng được. EmailVerificationProperties crash lúc
+    # boot nếu ai đó nới quá xa.
+    # =========================================================================
+    email-verification:
+      enabled: ${OJ_EMAIL_VERIFICATION_ENABLED:false}
+      # Phải thuộc tên miền đã cấu hình SPF/DKIM. Không thì thư vào thẳng hộp spam — và
+      # "mã rơi vào spam" là trải nghiệm tệ hơn không có xác minh.
+      from: ${OJ_MAIL_FROM:}
+      ttl: 30m
+      max-attempts: 5
+      # Bảo vệ HỘP THƯ của người dùng, không bảo vệ server: trần API chung (100 lượt/phút/
+      # người) không coi 100 lá thư trong một phút vào hộp thư của chính mình là vấn đề.
+      resend-cooldown: 60s
 
   jobs:
     # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của

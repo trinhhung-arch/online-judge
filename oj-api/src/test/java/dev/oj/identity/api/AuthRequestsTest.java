@@ -19,6 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code toString()} in mọi trường. Một test liệt kê sẵn ba class chỉ bảo vệ ba class đó;
  * test này duyệt <b>mọi</b> record trong file và bắt cả những cái chưa được viết.
  *
+ * <p><b>Cái thứ hai trong danh sách ấy đã tới thật</b>: {@code XacMinhEmail} (V13,
+ * FR-AUTH-09). Vế {@code hasSize} dưới đây đỏ ngay lần biên dịch đầu tiên sau khi record mới
+ * được thêm, đúng như thiết kế — người thêm phải dừng lại ở file này và quyết định xem
+ * {@code toString()} của nó có được phép in gì.
+ *
  * <p>Nó cũng chính là bài học của {@code SubmissionEvent} ở M3, áp lại cho một họ class khác.
  */
 class AuthRequestsTest {
@@ -34,6 +39,7 @@ class AuthRequestsTest {
                 new AuthRequests.Login("nguoi", BI_MAT, BI_MAT),
                 new AuthRequests.XacNhanHaiLop(BI_MAT),
                 new AuthRequests.TatHaiLop(BI_MAT, BI_MAT),
+                new AuthRequests.XacMinhEmail(BI_MAT),
                 new AuthRequests.Refresh(BI_MAT),
                 new AuthRequests.ChangePassword(BI_MAT, BI_MAT));
 

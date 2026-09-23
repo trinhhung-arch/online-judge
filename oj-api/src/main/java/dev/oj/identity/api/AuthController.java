@@ -55,8 +55,9 @@ public class AuthController {
      * FR-AUTH-01. Trả {@code 201} kèm {@code userId} — <b>không</b> tự đăng nhập luôn.
      *
      * <p>Đăng ký xong đăng nhập ngay là tiện, nhưng nó gộp hai hành động mà một ngày nào đó
-     * sẽ tách ra (xác minh email ở v1.1, FR-AUTH-09). Tách sẵn từ bây giờ thì client không
-     * phải sửa gì vào ngày đó.
+     * sẽ tách ra. Ngày đó <b>đã tới</b>: V13 gửi một mã xác minh ngay trong lượt đăng ký
+     * (FR-AUTH-09), và vì xác minh ở mức mềm nên việc tách vẫn không tốn gì của ai — người
+     * dùng đăng nhập được ngay, mã chờ họ ở trang hồ sơ.
      */
     /**
      * Cấu hình captcha cho giao diện — công khai, không cần đăng nhập.

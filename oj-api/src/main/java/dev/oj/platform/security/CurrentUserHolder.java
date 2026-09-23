@@ -24,8 +24,15 @@ import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
  */
 final class CurrentUserHolder {
 
-    /** Đúng một trong hai trường có giá trị; cả hai {@code null} nghĩa là request ẩn danh. */
-    private record KetQua(CurrentUser nguoiDung, AuthorizationException loi) {
+    /**
+     * Đúng một trong hai trường đầu có giá trị; cả hai {@code null} nghĩa là request ẩn danh.
+     *
+     * @param daQuaCongHaiLop {@code nguoiDung} đã được {@link JwtCurrentUserProvider} hỏi cổng
+     *                        2FA trong request này — hỏi lại là thêm một lượt đọc DB cho mỗi
+     *                        lời gọi {@code current()}, mà một request gọi nó nhiều lần
+     */
+    private record KetQua(CurrentUser nguoiDung, AuthorizationException loi,
+                          boolean daQuaCongHaiLop) {
     }
 
     private static final ThreadLocal<KetQua> HIEN_TAI = new ThreadLocal<>();
@@ -33,12 +40,23 @@ final class CurrentUserHolder {
     private CurrentUserHolder() {
     }
 
+    /** Danh tính vừa đọc từ token — chưa hỏi cổng 2FA. */
     static void dat(CurrentUser nguoiDung) {
-        HIEN_TAI.set(new KetQua(nguoiDung, null));
+        HIEN_TAI.set(new KetQua(nguoiDung, null, false));
+    }
+
+    /** Thay bằng vai trò hiệu lực sau khi đã hỏi cổng 2FA — xem {@link JwtCurrentUserProvider}. */
+    static void datSauCongHaiLop(CurrentUser hieuLuc) {
+        HIEN_TAI.set(new KetQua(hieuLuc, null, true));
+    }
+
+    static boolean daQuaCongHaiLop() {
+        KetQua ketQua = HIEN_TAI.get();
+        return ketQua != null && ketQua.daQuaCongHaiLop();
     }
 
     static void datLoi(AuthorizationException loi) {
-        HIEN_TAI.set(new KetQua(null, loi));
+        HIEN_TAI.set(new KetQua(null, loi, false));
     }
 
     static void xoa() {

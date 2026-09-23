@@ -33,41 +33,72 @@ online-judge/
 ├── .env.example
 │
 ├── oj-contract/                    ← biên giới giữa 2 người, 2 tiến trình. Chỉ JDK.
-├── oj-api/                         ← modular monolith
+├── oj-api/                         ← modular monolith. Giao diện nằm TRONG đây:
+│                                     src/main/resources/static/ — 12 trang tĩnh
 ├── oj-worker/                      ← nơi duy nhất chạy mã người lạ
-├── oj-web/                         ← frontend (build riêng, không phải Maven module)
+│                                     (KHÔNG có oj-web/ — xem ghi chú dưới cây)
 │
 ├── docker-compose.yml              ← postgres · redis · rabbitmq · minio (Ở GỐC REPO,
 │                                     không phải trong infra/ — `docker compose up` phải
 │                                     chạy được ngay sau khi clone, không cần -f)
-├── infra/
+├── infra/                          ← CHỈ thứ docker/hệ điều hành đọc, không có script tay
 │   ├── postgres/init/01-roles.sql  ← tạo oj_app / oj_migrator (quyết định D)
-│   ├── docker-compose.host.yml     ← chồng lên khi chạy trên Mac host        (chưa có)
 │   ├── isolate/Dockerfile          ← worker + isolate, build được cả amd64 lẫn arm64
-│   ├── prometheus/ · grafana/                                                (M6)
-│   └── scripts/                    ← backup.sh · restore.sh · deploy.sh      (M6)
+│   ├── cloudflared/config.yml      ← chỉ publish /api/v1/**, chặn /internal/judge/*
+│   └── launchd/dev.oj.sao-luu.plist ← job sao lưu mỗi 15 phút (R4)
 │
-├── scripts/
+├── scripts/                        ← 12 script + tai-trong/ (bộ k6). `ls scripts/` là nguồn
+│   ├── chay-dev.sh                   sự thật; liệt kê đủ ở đây là một danh sách sẽ lạc hậu
+│   ├── trien-khai-mac.sh
+│   ├── sao-luu-db.sh · khoi-phuc-db.sh
 │   ├── build-isolate.sh            ← build isolate TỪ NGUỒN trên chính máy chấm (Bước 2.1)
-│   └── mount-box-tmpfs.sh          ← box dir lên tmpfs (Bước 2.8)
+│   ├── mount-box-tmpfs.sh          ← box dir lên tmpfs (Bước 2.8)
+│   └── tai-trong/                  ← k6: k6-tai · k6-dot-bien · k6-on-dinh · k6-ky-thi
 │
 ├── docs/
 │   ├── frplan.md · nfrplan.md · postgres-design.md · build-order.md
+│   ├── giao-dien-plan.md · ai-review-plan.md
 │   ├── cau-truc-source.md          ← file này
-│   ├── adr/                        ← 001..010, xem nfrplan 8.3
+│   ├── adr/                        ← 001..016, xem nfrplan 8.3
 │   └── sql/
 │       ├── duong_nong.sql          ← 12 truy vấn nóng, chép nguyên văn vào repository
 │       ├── smoke_test.sql          ← 12 ca kiểm chứng schema
-│       └── migration-cho-moc-sau/  ← V4..V9, CHƯA nằm trong db/migration (xem README)
+│       └── migration-cho-moc-sau/  ← còn đúng migration của `ai` (xem README trong đó)
 │
 └── .github/workflows/
-    ├── ci.yml                      ← mvnw verify + ArchUnit + JaCoCo, < 10 phút (M3)
+    ├── ci.yml                      ← mvnw verify + ArchUnit + kiem-noi-chuoi-sql, < 10 phút
     ├── sandbox-attack.yml          ← 14 test tấn công, mỗi push (SEC1) — ĐÃ BẬT ở M2
+    ├── quet-phu-thuoc.yml          ← Trivy, CRITICAL/HIGH có bản vá thì đỏ (SEC2) — 2026-09-21
     └── buildx.yml                  ← multi-arch amd64 + arm64 (C1)
 ```
 
-**Vì sao `oj-web` không phải Maven module:** đóng gói frontend vào JAR làm CI chậm và làm
-mọi thay đổi CSS phải build lại backend. Deploy riêng, phục vụ qua nginx trong compose.
+> **★ Ba thứ trong cây này từng có mặt rồi biến mất — ghi lại để không ai đi tìm.**
+>
+> - **`infra/prometheus/ · grafana/`** và **`infra/scripts/`**: bản đầu hẹn ở M6. M6 xong,
+>   cả hai không được dựng. Dashboard đi đường khác — Micrometer + `GET /api/v1/admin/ops`
+>   (README 6.10); script vận hành nằm ở `scripts/` gốc repo với tên tiếng Việt.
+>   ✅ `nfrplan.md` 2.3 và Phần 14 đã được đối chiếu lại 2026-09-21: cả hai giờ nói
+>   `GET /api/v1/admin/ops`, không còn nhắc Prometheus như một cổng.
+> - **`JaCoCo` trong `ci.yml`**: ✅ đã có từ 2026-09-21 — nhưng nằm trong `oj-api/pom.xml`
+>   chứ không phải `ci.yml`, vì nó là một cổng của `verify` chứ không phải một bước CI
+>   riêng. SLO M2 từ chỗ **không đo được** thành **được ép**: goal `check`, ngưỡng 0.80,
+>   số thật lúc chốt là 84.9% (domain 83.2 · application 85.6).
+> - **`docker-compose.host.yml`**: vẫn chưa có, và giờ cũng không cần —
+>   `scripts/trien-khai-mac.sh` làm việc đó.
+
+> **★ `oj-web/` KHÔNG TỒN TẠI — quyết định đã bị đảo, và đây là chỗ ghi lại.**
+>
+> Bản đầu của tài liệu này lập luận: *"đóng gói frontend vào JAR làm CI chậm và làm mọi thay
+> đổi CSS phải build lại backend — deploy riêng, phục vụ qua nginx trong compose."*
+>
+> Thực tế đi đường ngược lại và lý do mạnh hơn: giao diện là **trang tĩnh thuần, không build
+> step, không Node trong CI** (`giao-dien-plan.md` 1.1). Không có bước build thì "CI chậm" và
+> "build lại backend" đều không xảy ra, nên cái giá từng biện minh cho một module riêng biến
+> mất — trong khi một module riêng vẫn phải trả tiền cho nginx, cho một vòng deploy thứ hai,
+> và cho một biên giới nữa giữa hai người.
+>
+> Đổi lại, `BeMatFrontendTest` canh biên giới ấy bằng CI: mọi đường dẫn `/api/v1/...` trong
+> `static/js/` phải khớp một `@RequestMapping` có thật.
 
 ---
 
@@ -318,7 +349,7 @@ Khung ở `platform/jobs/`, **việc cụ thể ở module sở hữu dữ liệ
 oj-api/src/main/resources/
 ├── application.yml              ★ mọi ngưỡng/timeout/giới hạn có tên ở đây
 ├── application-dev.yml · application-host.yml
-├── db/migration/                ← V1..V9 + R__seed (postgres-design.md mục 16)
+├── db/migration/                ← V1..V13 + R__seed (postgres-design.md mục 16)
 └── prompts/
     └── code-review-v3.md        ← nfrplan 10.6: prompt trong file, có version
 ```
@@ -435,15 +466,22 @@ build". Trên macOS thì bỏ qua, vì `isolate` không tồn tại ở đó.
 **Vì sao 14 test tấn công là file dữ liệu chứ không phải chuỗi trong Java:** thêm case thứ 15
 là thêm một file, không phải sửa một class — và diff của PR đọc được bằng mắt.
 
-**Vì sao `SchemaInvariantTest` tồn tại:** 12 ca trong `smoke_test.sql` bắt đúng loại lỗi mà
+**Vì sao `SchemaInvariantsIT` tồn tại:** 12 ca trong `smoke_test.sql` bắt đúng loại lỗi mà
 unit test với repository giả không bao giờ bắt được — khoá ngoại tổng hợp chặn testcase ẩn,
 quota AI nguyên tử, unique job REJUDGE (postgres-design.md mục 13).
 
 ---
 
-## 6 · ArchUnit — sáu rule, mỗi rule là một bất biến
+## 6 · ArchUnit — chín luật, mỗi luật là một bất biến
 
-Ba rule đầu đã có trong nfrplan 8.2; ba rule sau là đề nghị bổ sung của tài liệu này.
+> **★ Bảng dưới là bản PHÁC của tài liệu này, không phải danh sách đang chạy.** Nó từng ghi
+> "sáu rule" ở tiêu đề trong khi liệt kê bảy dòng, và thực tế đã vượt cả hai: `ArchitectureTest`
+> + `CodingRulesTest` (oj-api) và `WorkerArchitectureTest` + `WorkerHasNoDataSourceTest`
+> (oj-worker) đang ép **LUẬT 1–9**. Nguồn sự thật là bốn class ấy; đếm bằng
+> `grep -rho "LUẬT [0-9]*" oj-*/src/test/java/dev/oj/*/architecture/`.
+
+Ba rule đầu đã có trong nfrplan 8.2; bốn rule sau là đề nghị bổ sung của tài liệu này —
+**cả bốn đều đã được thực hiện**.
 
 | # | Rule | Bất biến |
 |---|---|---|
@@ -455,7 +493,13 @@ Ba rule đầu đã có trong nfrplan 8.2; ba rule sau là đề nghị bổ sun
 | 6 | **`ProcessBuilder` / `Runtime.exec` chỉ trong `worker.sandbox`** | **#4 (SEC1)** |
 | 7 | **HTTP client chỉ trong `worker.client`** | **#3 (S1, S2)** |
 
-Rule 6 và 7 chạy trong module `oj-worker`, không phải `oj-api`.
+Rule 6 và 7 chạy trong module `oj-worker`, không phải `oj-api` — ✅ đã có:
+`WorkerArchitectureTest` và `WorkerHasNoDataSourceTest`, với `archunit-junit5` trong
+`oj-worker/pom.xml`.
+
+Hai luật mà bảng này chưa nhắc, vì chúng ra đời sau: **LUẬT 8** (mọi `*UseCase` phải
+tuyên bố lập trường phân quyền) và **LUẬT 9** (đường đọc đề không chạm kho đối tượng,
+giữ lời hứa degraded mode của `nfrplan.md` 7.2).
 
 ---
 
@@ -467,12 +511,21 @@ Rule 6 và 7 chạy trong module `oj-worker`, không phải `oj-api`.
 | Port | Danh từ + `Repository` / `Publisher` / `Storage` | `JudgeQueueRepository` |
 | Impl | Công nghệ + tên port | `JdbcJudgeQueueRepository`, `RabbitJudgeJobPublisher` |
 | DTO request | `<Việc>Request` | `SubmitSolutionRequest` |
-| DTO response | `<Thứ>Response` / `<Thứ>View` | `SubmissionDetailView` |
-| Migration | `V<n>__mo_ta_khong_dau.sql` | `V10__them_cot_x.sql` |
+| DTO response | `<Thứ>Response` | `SubmissionDetailResponse` |
+| Migration | `V<n>__mo_ta_khong_dau.sql` | `V13__xac_minh_email.sql` |
 | Test | `<Class>Test` · integration `<Class>IT` | `SubmitSolutionUseCaseTest` |
-
-> **Hậu tố `UseCase` không phải chuyện thẩm mỹ.** Luật ArchUnit thứ 8 (bật ở M4, Bước 4.6) khớp theo `haveSimpleNameEndingWith("UseCase")` để ép mọi use-case sửa dữ liệu phải mang `@RequiresRole` (bất biến #11). Bỏ hậu tố thì luật ấy khớp 0 class và **xanh vô nghĩa** — vì `archunit.properties` đặt `failOnEmptyShould=false`. Một luật xanh vô nghĩa còn tệ hơn không có luật.
 | Nhánh | `a/<viec>` hoặc `b/<viec>`, sống ≤ 3 ngày | `b/isolate-cgroup` |
+
+> **Hậu tố `UseCase` không phải chuyện thẩm mỹ.** LUẬT 8 của ArchUnit (bật ở M4, Bước 4.6)
+> khớp theo `haveSimpleNameEndingWith("UseCase")` để ép **mọi** use-case — kể cả use-case chỉ
+> ĐỌC — phải mang một trong ba tuyên bố `@RequiresRole` · `@PublicAccess` · `@InternalAccess`
+> (bất biến #11). Bỏ hậu tố thì luật ấy khớp 0 class và **xanh vô nghĩa**, vì
+> `archunit.properties` đặt `failOnEmptyShould=false`. Một luật xanh vô nghĩa còn tệ hơn
+> không có luật.
+>
+> Hậu tố `View` từng đứng cạnh `Response` ở dòng trên và **chưa bao giờ được dùng**: cả cây
+> mã không có một class `*View` nào. Một quy ước có hai lựa chọn mà một lựa chọn không ai
+> chọn thì nó chỉ là một chỗ để lệch.
 
 **Từ vựng lấy từ CLAUDE.md mục 10** — `submission` không phải `solution`, `verdict` không
 phải `result`, `attempt` không phải `retry`. Tên class phải dùng đúng từ đó.
@@ -491,24 +544,28 @@ phải `result`, `attempt` không phải `retry`. Tên class phải dùng đúng
 | **M1** | `judging/` đủ 4 tầng · `problems/domain` tối giản · V1–V3 |
 | **M2** | `oj-worker/{sandbox,compile,run}` · 14 test tấn công |
 | **M3** | `worker/{testdata,report,run/SubtaskScorer}` · `problems/domain/FeedbackPolicy` · `judging/{api/SubmissionSseController,infrastructure/RedisSubmissionEventBus}` · V4 |
-| **M4** | `identity/` đủ 4 tầng · `problems/` đầy đủ · `platform/{security,ratelimit,sse}` · V5 |
+| **M4** | `identity/` đủ 4 tầng · `problems/` đầy đủ · `platform/{security,ratelimit,sse}` · V5 · **V6 + `platform/jobs`** (kéo từ M6 lên — phương án (a) của `build-order.md` PHẦN 6, vì Bước 4.10 upload ZIP phải là job nền) |
 | **M5** | `contests/` · `platform/messaging` (Redis pub/sub) · V7, V10 |
-| **M6** | `platform/{jobs,audit,settings}` · các job cụ thể · V6, V8, V9 |
+| **M6** | `platform/{audit,settings}` · các job cụ thể · V8, V9 |
 | **M4 bổ sung** | 2FA (`identity/domain/Totp`…) · header bảo mật · Turnstile · V11 |
+| **v1.1** | xác minh email (`identity/domain/{MaXacMinhEmail,ThuXacMinhEmail}` · `application/EmailVerificationIssuer` · `infrastructure/SmtpEmailSender`) · V13 |
 | **T14–15** | `ai/` · `prompts/` — **chưa làm** |
 
 Mỗi module chỉ ra đời khi có FR đầu tiên cần đến nó.
 
 ---
 
-## 9 · Cần người quyết
+## 9 · Cần người quyết — ✅ **CẢ BỐN ĐÃ CÓ CÂU TRẢ LỜI**
 
-| # | Vấn đề | Khuyến nghị |
-|---|---|---|
-| 1 | Thêm package `application/published/` + ArchUnit rule #2 — đây là **bổ sung** cho luật "module X không import infrastructure của Y" ở CLAUDE.md mục 3 | Nhận. Không có nó, luật đó không ép được bằng máy |
-| 2 | ArchUnit rule #6 và #7 ở `oj-worker` (hiện repo chưa có ArchUnit ở module này) | Nhận. Chi phí ~1h, ép trực tiếp bất biến #3 và #4 |
-| 3 | `oj-web` build ngoài Maven, deploy qua nginx | Nhận, nhưng chạm `docker-compose` và script deploy → hai người cùng duyệt |
-| 4 | ArchUnit ở `oj-worker` cần thêm dependency `archunit-junit5` vào `oj-worker/pom.xml` | **Sửa `pom.xml` là việc phải hỏi người** (CLAUDE.md 5.2) |
+Kiểm lại ngày 2026-09-20: không còn câu nào chờ người. Giữ bảng làm hồ sơ, vì ba trong bốn
+quyết định đang được ép bằng CI và người sửa chúng cần biết chúng từng được cân nhắc.
+
+| # | Vấn đề | Khuyến nghị lúc ấy | Kết cục |
+|---|---|---|---|
+| 1 | Thêm package `application/published/` + ArchUnit rule #2 — **bổ sung** cho luật "module X không import infrastructure của Y" ở CLAUDE.md mục 3 | Nhận. Không có nó, luật đó không ép được bằng máy | ✅ đã có ở `judging/application/published/` và `problems/application/published/`, LUẬT 2 đang ép |
+| 2 | ArchUnit rule #6 và #7 ở `oj-worker` (lúc ấy repo chưa có ArchUnit ở module này) | Nhận. Chi phí ~1h, ép trực tiếp bất biến #3 và #4 | ✅ `WorkerArchitectureTest` + `WorkerHasNoDataSourceTest` |
+| 3 | `oj-web` build ngoài Maven, deploy qua nginx | Nhận, nhưng chạm `docker-compose` và script deploy → hai người cùng duyệt | ❌ **đã bác** — giao diện là trang tĩnh trong `oj-api`, không build step (xem ghi chú ở mục 1) |
+| 4 | ArchUnit ở `oj-worker` cần `archunit-junit5` trong `oj-worker/pom.xml` | **Sửa `pom.xml` là việc phải hỏi người** (CLAUDE.md 5.2) | ✅ đã duyệt và đã thêm |
 
 ---
 

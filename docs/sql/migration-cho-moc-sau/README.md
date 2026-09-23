@@ -1,6 +1,6 @@
 # Migration của các mốc sau — chưa được kích hoạt
 
-`postgres-design.md` mục 16 gắn mỗi file vào một mốc. **Đang chạy: V1–V7 + `R__seed`.**
+`postgres-design.md` mục 16 gắn mỗi file vào một mốc. **Đang chạy: V1–V13 + `R__seed`.**
 
 > ✅ `V4__subtasks_va_ket_qua_theo_nhom.sql` đã được kích hoạt ở M3 cùng với `SubtaskScorer`
 > và `SubtaskSpecDto` — nó nằm ở `oj-api/src/main/resources/db/migration/` từ đó.
@@ -29,9 +29,30 @@ schema thật đang ở đâu.
 
 | File | Mốc | Kích hoạt cùng với |
 |---|---|---|
-| `V8__ai_review.sql` | tuần 14–15 | module `ai` |
-| `V9__phan_quyen_role_ung_dung.sql` | M6 | GRANT/REVOKE cho `oj_app` — **hai role đã tồn tại từ M0**, xem `infra/postgres/init/01-roles.sql` |
+| `V10__ai_review.sql` | tuần 14–15 | module `ai` |
+
+> ✅ `V9__phan_quyen_role_ung_dung.sql` đã được kích hoạt ở M6 — và mang số **V8**, vì
+> `de_soan_rieng_cho_ky_thi` của M5 lấy mất V10 trước đó. Bảng này từng liệt kê nó ở hàng V9.
+>
+> ⚠️ **Số trong tên file còn lại ở đây là số CŨ, không phải số nó sẽ mang.** `V10` đã bị
+> `de_soan_rieng_cho_ky_thi` dùng; `ai-review-plan.md` thì từng ghi `V13`, và V13 cũng đã bị
+> `xac_minh_email` dùng. Ba lần lỡ cho cùng một file, vì mỗi migration giao ra trong lúc chờ
+> đều đẩy số kế tiếp đi một bậc.
+>
+> Nên **số chốt lúc `git mv`, không phải lúc viết**: nhìn
+> `ls oj-api/src/main/resources/db/migration/` rồi lấy số kế tiếp còn trống (hôm nay là
+> **V14**), và sửa cả dòng `-- V<n>` ở đầu file cho khớp.
 
 **Cách kích hoạt:** `git mv` file sang `oj-api/src/main/resources/db/migration/`, chạy trên DB
-rỗng **và** DB đã có dữ liệu, đo thời gian khoá (`CLAUDE.md` mục 6). Không sửa nội dung file
-lúc chuyển — nếu cần sửa thì tạo `V<n+1>` mới (bất biến #6).
+rỗng **và** DB đã có dữ liệu, đo thời gian khoá (`CLAUDE.md` mục 6).
+
+**Được sửa gì lúc chuyển, và không được sửa gì:**
+
+| | Lúc `git mv` | Sau khi đã chạy ở đâu đó |
+|---|---|---|
+| Số hiệu (tên file + dòng `-- V<n>`) | ✅ bắt buộc, xem cảnh báo ở trên | ❌ đổi checksum → `flyway validate` đỏ trên mọi máy |
+| Câu lệnh SQL | ❌ tạo `V<n+1>` mới | ❌ tạo `V<n+1>` mới |
+
+Bất biến #6 cấm sửa một file Flyway **đã được áp dụng**. File ở thư mục này chưa từng chạy ở
+đâu, nên đổi số của nó không thuộc diện đó — chính đoạn 🔀 ở trên đã dùng lập luận ấy một lần
+khi job nền và contest hoán đổi V6/V7.

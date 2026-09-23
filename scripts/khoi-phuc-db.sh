@@ -18,6 +18,63 @@
 # ★ CON SỐ PHẢI ĐẠT: RTO ≤ 30 phút (R5). Script bấm giờ phần restore. Phần còn lại của 30
 #   phút là thời gian con người: nhận ra sự cố, quyết định, dựng lại API và worker.
 # =============================================================================
+# =============================================================================
+# ⛔ FILE NÀY KHÔNG LÀM PITR. Đọc mục này TRƯỚC khi dùng nó trong một sự cố thật.
+#
+# Từ 2026-09-21 hệ thống có HAI loại sao lưu, và chúng khôi phục theo hai cách
+# hoàn toàn khác nhau:
+#
+#   pg_dump (file này)         → về đúng thời điểm bản dump được chụp.
+#                                 Mất tối đa 15 phút. Chạy được trên Postgres
+#                                 phiên bản khác, kiến trúc khác.
+#   pg_basebackup + WAL (PITR) → về ĐÚNG MỘT GIÂY bạn chọn, mất tối đa 1 phút.
+#                                 Đòi CÙNG phiên bản, CÙNG kiến trúc.
+#
+# Dùng cái nào? Mất dữ liệu vì hỏng ổ/hỏng máy → PITR, vì nó mất ít hơn. Cần
+# lấy lại một bảng, hay chuyển sang máy khác kiến trúc → bản dump.
+#
+# ---- QUY TRÌNH PITR, viết ra để không phải nghĩ lúc 3 giờ sáng ----
+#
+#  0. DỪNG oj-api TRƯỚC. Khôi phục dưới chân một ứng dụng đang ghi là hỏng cả hai.
+#         docker compose stop oj-api   (hoặc dừng tiến trình java)
+#
+#  1. Chọn base backup NGAY TRƯỚC thời điểm muốn về:
+#         ls -lt ~/oj-backup/goc/
+#
+#  2. Dựng thư mục dữ liệu mới từ nó (ĐỪNG đè lên cái đang có — giữ nó để còn
+#     đường lùi nếu chọn nhầm thời điểm):
+#         mkdir -p ~/oj-khoi-phuc/data && cd ~/oj-khoi-phuc/data
+#         tar xzf ~/oj-backup/goc/goc-<mốc>.tar.gz
+#
+#  3. Nói cho Postgres biết lấy WAL ở đâu và dừng ở đâu. Trong
+#     ~/oj-khoi-phuc/data/postgresql.auto.conf thêm:
+#         restore_command = 'gunzip -c /wal-archive/%f.gz > %p'
+#         recovery_target_time = '2026-09-21 14:32:00+07'
+#         recovery_target_action = 'promote'
+#     rồi:
+#         touch ~/oj-khoi-phuc/data/recovery.signal
+#
+#     ★ recovery_target_time PHẢI có múi giờ. Thiếu nó, Postgres hiểu theo
+#       timezone của server và bạn về nhầm 7 tiếng.
+#
+#  4. Khởi động một Postgres CÙNG PHIÊN BẢN trỏ vào thư mục ấy, mount kho WAL
+#     read-only. Nó sẽ replay rồi tự promote:
+#         docker run --rm -v ~/oj-khoi-phuc/data:/var/lib/postgresql/data \
+#              -v ~/oj-backup/wal:/wal-archive:ro -p 5433:5432 postgres:16-alpine
+#
+#  5. KIỂM TRƯỚC KHI TIN. Nối vào cổng 5433 và soi dòng cuối cùng:
+#         SELECT max(id), max(created_at) FROM submissions;
+#     Đúng thời điểm mong đợi thì mới đổi sang dùng thật.
+#
+#  6. Kho WAL phải mount READ-ONLY (:ro ở bước 4). Một Postgres đang recovery
+#     mà ghi được vào kho WAL có thể ghi đè lịch sử bạn đang cần.
+#
+# ---- Diễn tập PITR cũng bắt buộc như diễn tập dump ----
+# nfrplan 5.3 nói "một backup chưa từng được restore không phải là backup", và
+# câu đó áp cho CẢ HAI loại. Một base backup chưa từng replay thử là một file
+# 4MB mà bạn hy vọng dùng được.
+# =============================================================================
+
 set -uo pipefail
 
 CONTAINER=${OJ_PG_CONTAINER:-oj-postgres}

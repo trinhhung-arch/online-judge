@@ -17,30 +17,8 @@ public interface ContestRepository {
 
     long tao(ContestMoi contest);
 
-    /**
-     * Gắn một đề <b>mượn từ kho đề chung</b> vào kỳ thi.
-     *
-     * <p>Không có tham số thứ tự: {@code label} vừa là tên đề trong kỳ thi vừa <b>là</b> thứ
-     * tự của nó (V12, ADR 015).
-     */
-    void themDe(long contestId, long problemId, String label, int points);
-
-    /**
-     * Gắn một đề <b>vừa được soạn riêng cho kỳ thi này</b> (V10).
-     *
-     * <p>Hai phương thức thay vì một tham số {@code boolean} vì đây là hai hành động khác
-     * nhau, không phải một hành động có hai chế độ: một bên lấy thứ đã có sẵn và có thể đang
-     * được người khác luyện tập, một bên tạo ra thứ chưa ai thấy. Người đọc chỗ gọi nên biết
-     * ngay mình đang làm cái nào mà không phải lần theo một cờ {@code true}.
-     */
-    void themDeSoanRieng(long contestId, long problemId, String label, int points);
-
-    /**
-     * Gỡ một đề khỏi kỳ thi. Không đụng tới bản thân đề.
-     *
-     * @return {@code false} nếu đề không nằm trong kỳ thi này
-     */
-    boolean goDe(long contestId, long problemId);
+    // Gắn/gỡ đề đã dời sang ContestAuthoringRepository — thao tác ấy cần biết người gọi, và
+    // một phương thức ghi contest_problems không nhận người gọi là một lỗ chờ được gọi nhầm.
 
     /** Đề của kỳ thi, <b>đã sắp theo nhãn</b>: A, B, ..., Z, AA. ADR 015. */
     List<DeCuaContest> deCua(long contestId);

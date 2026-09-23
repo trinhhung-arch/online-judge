@@ -47,7 +47,7 @@ Mọi quy tắc dưới đây phục vụ ba điều này. Tốc độ và trả
 |---|---|---|---|
 | 1 | **Để nội dung testcase ẩn rời khỏi worker** — không qua API response, log, exception message, prompt LLM, hay bất cứ đâu | Người dùng rút trích được toàn bộ bộ test bằng cách nộp bài cố tình sai từng test một, rồi nộp bảng tra cứu đáp án | SEC3 |
 | 2 | **Để `SubmitSolution` chờ verdict** — không gọi worker đồng bộ, không `.get()`, không `.join()`, không `@Transactional` bao quanh việc publish | Worker chậm là cả site đơ; 500 người nộp cùng lúc là 500 connection treo | P2, R1 |
-| 3 | **Cho `oj-worker` một `DataSource`** — worker chỉ biết các đường dẫn liệt kê trong `JudgeEndpoints` (`claim` · `result` · `progress` · `benchmark`) | Worker có DB là worker không scale ngang được và không đổi transport được | S1, S2 |
+| 3 | **Cho `oj-worker` một `DataSource`** — worker chỉ biết các đường dẫn liệt kê trong `JudgeEndpoints` (`claim` · `result` · `progress` · `benchmark` · `testdata`) | Worker có DB là worker không scale ngang được và không đổi transport được | S1, S2 |
 | 4 | **Chạy mã người dùng ngoài `isolate`** — kể cả bước biên dịch, kể cả "chỉ để thử nhanh" | Compiler bomb và fork bomb là có thật; `ProcessBuilder` + timeout không phải sandbox | SEC1 |
 | 5 | **Nối chuỗi vào SQL** — chỉ `JdbcClient` với named parameter | ArchUnit chặn, và đây là lỗ hổng kinh điển | SEC2 |
 | 6 | **Sửa file Flyway đã commit** — luôn tạo `V<n+1>__mo_ta.sql` mới | Hai máy dev lệch schema, và không ai biết cho đến khi lỗi lạ xuất hiện | M |
@@ -70,14 +70,20 @@ Mọi quy tắc dưới đây phục vụ ba điều này. Tốc độ và trả
 
 ## 3 · Chiều phụ thuộc — ArchUnit ép, vi phạm là fail CI
 
+> **Mũi tên đọc là "import":** `A ──▶ B` nghĩa là *A được phép import B*, B không biết A tồn
+> tại. Bản trước của khối này vẽ ngược chiều và mâu thuẫn với chính luật 3 ngay bên dưới.
+> Nguồn sự thật là `ArchitectureTest.luat3_chieu_module_mot_chieu`, không phải hình vẽ này.
+
 ```
 Giữa các module (một chiều, không có ngoại lệ):
 
-    identity ──▶ problems ──▶ judging ──▶ contests
-                                 ▲
-                              ai (AI review)   ⚠️ CHƯA TỒN TẠI — tuần 14–15
+    contests ──▶ judging ──▶ problems ──▶ identity
 
-    platform (config, error, security) ◀── ai cũng import được
+    ai ──▶ judging          ⚠️ CHƯA TỒN TẠI — tuần 14–15
+    ai ──▶ problems         ai KHÔNG được import contests (luật 3)
+
+    mọi module ──▶ platform (config, error, security, trace)
+    platform KHÔNG được import module nghiệp vụ nào
 
 Trong mỗi module (một chiều):
 
@@ -85,6 +91,10 @@ Trong mỗi module (một chiều):
                  │
                  └──▶ infrastructure
 ```
+
+`cau-truc-source.md` và `nfrplan.md` 8.2 vẽ cùng quan hệ này bằng mũi tên ngược
+(`identity ◀── problems ◀── judging ◀── contests`) — cùng một ý, khác hướng vẽ. Khi nghi ngờ,
+đọc `mayOnlyBeAccessedByLayers` trong `ArchitectureTest`.
 
 **Bốn luật cứng:**
 

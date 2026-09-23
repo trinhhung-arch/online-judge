@@ -1,0 +1,110 @@
+# ★ Quét lỗ hổng phụ thuộc — SEC2, nfrplan.md 4.3 và §14 ("Trivy: 0 CRITICAL/HIGH").
+#
+# nfrplan 4.3 viết: "Trivy hoặc Dependabot, CHẶN MERGE nếu có CRITICAL/HIGH".
+# `.github/dependabot.yml` lo phần "biết" — nó mở PR nâng version hằng tuần. File này là
+# phần "chặn": nó làm CI ĐỎ. Hai thứ khác nhau, và trước 2026-09-21 chỉ có phần đầu tồn tại,
+# nên §14 đòi một bằng chứng mà không có gì trong repo sinh ra được.
+#
+# ★ VÌ SAO LÀ WORKFLOW RIÊNG, KHÔNG PHẢI MỘT BƯỚC TRONG ci.yml
+# Cùng lý do với sandbox-attack.yml: khi nó đỏ, dấu X phải nói ngay "có CVE trong phụ thuộc"
+# chứ không phải "build hỏng". Và nó chạy SONG SONG, nên không tiêu một phút nào của ngân
+# sách CI < 10 phút (nfrplan M3) — đó là điều kiện để thêm cổng này mà không đánh đổi SLO.
+#
+# ★ VÌ SAO CÓ LỊCH CHẠY HẰNG NGÀY
+# Một CVE công bố ngày mai ảnh hưởng tới mã đã merge hôm nay. Nếu chỉ chạy theo push thì một
+# kho code đứng yên hai tuần là hai tuần không ai biết. Lịch 06:00 giờ VN, cùng giờ với
+# dependabot.yml, để hai thứ nói về cùng một trạng thái.
+name: quet-phu-thuoc
+
+on:
+  push:
+    branches: [main, 'a/**', 'b/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 23 * * *'        # 23:00 UTC = 06:00 Asia/Ho_Chi_Minh
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Java 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Quét pom.xml một mình thì Trivy phải tự đoán cây phụ thuộc bắc cầu. Dựng jar trước
+      # rồi quét cả thư mục: Trivy đọc luôn các jar thật nằm trong target/, tức là ĐÚNG những
+      # gì sẽ chạy trên host, không phải một cây phụ thuộc suy ra.
+      #
+      # -DskipTests là cố ý: ci.yml đã chạy test rồi. Job này trả lời một câu khác.
+      - name: Dựng jar để quét đúng thứ sẽ chạy
+        run: ./mvnw -B --no-transfer-progress -DskipTests package
+
+      # ignore-unfixed: true — KHÔNG phải để cho dễ thở.
+      #
+      # Một CVE chưa có bản vá thì đỏ CI không đổi được gì: không ai nâng version được, nên
+      # lựa chọn duy nhất còn lại là tắt cổng hoặc thêm ngoại lệ — và một cổng bị tắt một lần
+      # thì hiếm khi được bật lại. Cổng này chỉ đỏ khi CÓ VIỆC ĐỂ LÀM, và vì thế nó đáng được
+      # giữ đỏ. CVE chưa vá vẫn hiện trong log của bước "Báo cáo đầy đủ" bên dưới.
+      - name: Trivy — CRITICAL/HIGH có bản vá thì CHẶN
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      # Chạy kể cả khi bước trên đỏ, và KHÔNG chặn: đây là bản đầy đủ để đọc, gồm cả MEDIUM
+      # và cả CVE chưa có bản vá. Bước trên quyết định đỏ/xanh, bước này trả lời "còn gì nữa".
+      - name: Báo cáo đầy đủ (không chặn)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          exit-code: '0'
+          format: table
+
+      # ⛔ Chốt cuối, cùng tinh thần với sandbox-attack.yml: cổng này KHÔNG được biến mất
+      # trong im lặng. Nếu ai đó đổi severity, bật ignore-unfixed cho cả cổng, hay hạ
+      # exit-code về 0, thì job vẫn xanh — và §14 lại thành một lời hứa.
+      - name: Cổng vẫn còn răng?
+        if: always()
+        run: |
+          f=.github/workflows/quet-phu-thuoc.yml
+          grep -q "severity: CRITICAL,HIGH$" "$f" || {
+            echo "::error::Cổng chặn không còn quét đủ CRITICAL,HIGH"; exit 1; }
+          grep -q "exit-code: '1'" "$f" || {
+            echo "::error::Cổng chặn không còn làm CI đỏ (exit-code khác 1)"; exit 1; }
+          echo "Cổng còn nguyên: CRITICAL,HIGH · exit-code 1."
+
+# -----------------------------------------------------------------------------
+# CÁI FILE NÀY VẪN KHÔNG LÀM: chặn merge.
+#
+# Nó làm CI đỏ. Biến dấu đỏ thành "không merge được" là branch protection cho `main`, với
+# `ci`, `sandbox-attack` và `quet-phu-thuoc` đặt làm required check. Đó là cấu hình trên
+# GitHub, không phải file trong repo — không có cách nào commit nó vào đây.
+#
+# Cần bật thêm một công tắc nữa ở Settings > Code security: Dependabot *security updates*.
+# Nó mở PR NGAY khi có CVE thay vì chờ thứ Hai. File này phát hiện, công tắc đó vá.
+# -----------------------------------------------------------------------------

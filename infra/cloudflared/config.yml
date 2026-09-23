@@ -36,15 +36,29 @@ ingress:
   # http://localhost:8080 trực tiếp, nên chặn ở đây không cắt gì của nó.
   #
   # http_status:404 chứ không phải 403: 403 xác nhận "đường dẫn này có thật".
+  #
+  # ★ REGEX KHÔNG NEO Ở ĐẦU, CỐ Ý. Bản cũ `^/internal(/|$)` bị qua mặt bằng đường dẫn mà
+  #   Tomcat chuẩn hoá về đúng /internal/judge/* còn cloudflared thì không: `//internal/…`,
+  #   `/./internal/…`, `/api/v1/../../internal/…`, `/internal;x=1/…`, `/%2e/internal/…`,
+  #   `/api/v1/%2e%2e/%2e%2e/internal/…`. Đo 2026-09-23 bằng `cloudflared tunnel ingress rule`
+  #   (2026.9.0): cả sáu đi thẳng tới localhost:8080; trên Tomcat 11.0.24: cả sáu vào
+  #   InternalSecretFilter.
+  #   Bản này bắt "internal" là một ĐOẠN đường dẫn ở bất cứ đâu, kèm tham số `;…` tuỳ ý,
+  #   miễn có `/` theo sau — nên kỳ thi hay đề tên `internal` (/api/v1/contests/internal)
+  #   vẫn truy cập được. scripts/kiem-tunnel.sh đo lại đúng bộ biến thể này.
+  #
+  #   Đây là lớp MỘT. oj-api còn tự từ chối mọi request tới /internal mang header của
+  #   Cloudflare (InternalSecretFilter) — nên regex này hỏng thì vẫn chưa tới lượt secret.
   - hostname: <TEN_MIEN>
-    path: ^/internal(/|$)
+    path: (^|/)internal(;[^/]*)?/
     service: http_status:404
 
   # Actuator nghe ở cổng 8081 nên /actuator trên 8080 vốn đã 404. Luật này là để phòng
   # ngày ai đó gỡ `management.server.port` — lúc ấy actuator rơi về 8080 và đi thẳng ra
   # internet mà không ai sửa gì ở đây cả.
+  # Cùng khuôn không-neo như luật trên, cùng lý do (`//actuator/health` lọt bản cũ).
   - hostname: <TEN_MIEN>
-    path: ^/actuator(/|$)
+    path: (^|/)actuator(;[^/]*)?(/|$)
     service: http_status:404
 
   # ---------------------------------------------------------------------------

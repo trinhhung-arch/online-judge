@@ -51,9 +51,24 @@ rà chéo lịch với `CLAUDE.md`. Mỗi điểm ghi rõ **chốt muộn nhất
 > `./mvnw verify` KHÔNG chạy được bộ này — `Assumptions.abort()` huỷ cả class và Maven vẫn in
 > BUILD SUCCESS với 0 ca, đọc y hệt "14/14 xanh". Dùng `kiem-sandbox.sh`: nó ĐẾM số ca.
 
+> ### ✅ Trạng thái bảy quyết định — kiểm lại 2026-09-21
+>
+> Sáu trên bảy đã được thực hiện; kiểm bằng schema thật (dựng lại V1→V13 trong container sạch)
+> và bằng cây mã:
+>
+> | # | Kết cục |
+> |---|---|
+> | **A** | ✅ khoá lạc quan trên `judge_queue` — **ADR 009**, `CLAUDE.md` bất biến #7 đã sửa theo |
+> | **B** | ✅ bảng `source_blobs` trong Postgres; `JudgeJobDto` mang `sourceContent` + `sourceSha256` |
+> | **C** | ✅ không có bảng kết quả từng test; `judge_runs` giữ `failed_test_ordinal` |
+> | **D** | ✅ `oj_app` / `oj_migrator` — `infra/postgres/init/01-roles.sql` + V8 + `.env.example` |
+> | **E** | ✅ `submissions` không partition (`relkind = 'r'`) |
+> | **F** | ✅ **ĐÃ LÀM 2026-09-21** — `archive_mode=on` + `archive_timeout=60s`, base backup vật lý hằng ngày, và `kiem-wal.sh` canh hiểm hoạ đầy đĩa. **R4: 15 phút → 1 phút.** Ghi chú: ô "Lý do" của chính dòng F viết *"RPO 15 phút mâu thuẫn chính R1"* — lập luận ấy **sai phạm vi** (R1 đo bằng chaos test, R4 đo bằng backup interval) và đã sửa ở `nfrplan.md` 5.3. Việc vẫn đáng làm, chỉ là vì lý do khác: mất 15 phút bài nộp giữa kỳ thi là mất mát không xin lỗi được |
+> | **G** | ✅ `JudgeRunner` có hai hiện thực `ScriptedJudgeRunner` + `IsolateJudgeRunner`; không `ProcessBuilder` nào ngoài `worker.sandbox` (ArchUnit ép) |
+
 Ngoài ra, **ba con số nằm trong schema, đổi là phải hỏi người**: lease reaper `120s` ·
 quota AI `5/ngày` · giới hạn source `64KB`. Đặt cả ba vào `application.yml` ngay ở M0
-(`oj.judge.lease-seconds`, `oj.ai.daily-quota`, `oj.submission.max-source-bytes`) để sau này
+(`oj.judge.lease`, `oj.ai.daily-quota`, `oj.submission.max-source-bytes`) để sau này
 không ai đi tìm chúng trong code.
 
 ---
@@ -161,13 +176,32 @@ bất kỳ annotation framework nào · bất kỳ kiểu nào của `oj-api` ha
 ### Bước M1-2 · Migration V1 · V2 · V3
 
 Chép nguyên văn vào `oj-api/src/main/resources/db/migration/`: **V1–V3 + `R__seed_du_lieu_tham_chieu.sql`**
-(`postgres-design.md` mục 16). V4–V9 nằm ở `docs/sql/migration-cho-moc-sau/` và **chưa** được chép
-vào — Flyway chạy mọi file nó thấy, nên chép sớm là dựng bảng của tuần 12 vào tuần 2.
+(`postgres-design.md` mục 16). Phần còn lại nằm ở `docs/sql/migration-cho-moc-sau/` và **chưa**
+được chép vào — Flyway chạy mọi file nó thấy, nên chép sớm là dựng bảng của tuần 12 vào tuần 2.
+
+> ### ⚠️ SỐ HIỆU MIGRATION TRONG TÀI LIỆU NÀY LÀ SỐ **KẾ HOẠCH**, KHÔNG PHẢI SỐ ĐÃ GIAO
+>
+> Hạ tầng job được kéo từ M6 lên tuần 7 (phương án (a), PHẦN 6), mà Flyway áp theo thứ tự số
+> tăng dần và từ chối một phiên bản thấp xuất hiện sau một phiên bản cao đã chạy — nên "kéo
+> lên" bắt buộc kèm đổi số. Job nền và contest **hoán đổi chỗ**, và mọi số sau đó trượt theo.
+>
+> | Tài liệu này viết | Đã giao ra là | Nội dung |
+> |---|---|---|
+> | V1 – V5 | **giống hệt** | — |
+> | V6 (Bước 5.1) | **V7** | `contests_va_bang_xep_hang` |
+> | V7 (Bước 4.x, 6.1) | **V6** | `jobs_nen_va_van_hanh` |
+> | V8 (Bước 7.1) | **chưa viết** | `ai_review` — số chốt lúc `git mv`, xem `docs/sql/migration-cho-moc-sau/README.md` |
+> | V9 (Bước 6.1) | **V8** | `phan_quyen_role_ung_dung` |
+> | — | V9 – V13 | sinh ra sau tài liệu này (xem `postgres-design.md` mục 16) |
+>
+> **Không sửa các số bên dưới thành số đã giao**, vì chính `V8__phan_quyen_role_ung_dung.sql`
+> dẫn ngược lại đây: *"build-order.md Bước 6.1 gọi file này là V9"*. Đổi ở đây là làm hỏng một
+> tham chiếu đang đúng. Bảng này là chỗ dịch giữa hai hệ.
 
 Kiểm ngay: `docker compose exec postgres psql -U ojuser -d ojdb -f docs/sql/smoke_test.sql`.
 
-> ⚠️ **Ở M1 chỉ 9/12 ca chạy được.** TEST 9 cần `ai_quota_usage` (V8), TEST 10 cần `jobs` (V7),
-> TEST 11 cần `audit_log` (V5). File đã tự bỏ qua ba ca đó bằng `\if :co_bang` — không có phần ấy
+> ⚠️ **Ở M1 chỉ 9/12 ca chạy được.** TEST 9 cần `ai_quota_usage` (V8 kế hoạch — **tới nay vẫn
+> chưa viết**), TEST 10 cần `jobs` (V7 kế hoạch = **V6** đã giao), TEST 11 cần `audit_log` (V5). File đã tự bỏ qua ba ca đó bằng `\if :co_bang` — không có phần ấy
 > thì `ON_ERROR_STOP` làm script chết tại TEST 9 và **TEST 12 không bao giờ chạy**, mà TEST 12
 > chính là ca kiểm `CHECK (status <> 'DONE' OR verdict IS NOT NULL)`.
 
@@ -488,7 +522,7 @@ Không có FR mới. Đây là mốc thuần chất lượng, và là **rủi ro
 
 ## PHẦN 6 — M4 · Danh tính · quyền · upload · giao diện (tuần 7–9)
 
-> **Mốc nặng nhất: 19 FR, ước lượng thực ~95h, trong khi cả team có ~100h/3 tuần.**
+> **Mốc nặng nhất: 20 FR, ước lượng thực ~95h, trong khi cả team có ~100h/3 tuần.**
 > Kín lịch, không còn khoảng trống (`frplan.md` Phần 6).
 
 **Thứ tự bắt buộc — bảo mật trước giao diện.** Nếu tuần 8 thấy chậm, thứ cắt là giao diện,
@@ -528,7 +562,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 
 | Bước | Viết gì | FR |
 |---|---|---|
-| 5.1 | Migration **V6** | |
+| 5.1 | Migration **V6** *(đã giao ra là **V7**)* | |
 | 5.2 | `contests.domain`: `Contest` · `ContestFormat` interface · `IcpcFormat` · `IoiFormat` | FR-CON-01, 06 · M4-nfr (thêm thể thức = 1 file) |
 | 5.3 | ★ `ContestWindowService.isProblemInRunningContest(problemId)` — **một câu, ba nơi dùng**: cấm sửa đề (FR-PROB-11) · tắt AI review (FR-AI-02) · cấm rejudge (FR-ADM-01) | |
 | 5.4 | `ContestAccessPolicy` — đề chỉ truy cập trong khung giờ, **kiểm ở use-case, không phải ẩn nút** | FR-CON-03 |
@@ -552,7 +586,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 
 | Bước | Viết gì | FR / NFR |
 |---|---|---|
-| 6.1 | Migration **V7** (nếu chưa kéo lên tuần 7) + **V9** (role `oj_app`) | quyết định D |
+| 6.1 | Migration **V7** *(đã giao là **V6**)* nếu chưa kéo lên tuần 7 + **V9** *(đã giao là **V8**)* role `oj_app` | quyết định D |
 | 6.2 | Hạ tầng job: `Job` · `JobRunner` · `JobProgress` · `GET /api/v1/jobs/{id}` · **sống sót restart** · `ux_jobs_one_active_per_type` | Quy tắc 5 |
 | 6.3 | ★ **`RejudgeJob`**: hai hàng đợi `judge.live` (ưu tiên 0) / `judge.rejudge` (ưu tiên 10) · trần **30% năng lực**, tự giảm về 0 khi `queue_wait` live > 5s · **cấm chạy khi có contest đang diễn ra** · verdict cũ giữ nguyên, tạo `attempt` mới | FR-ADM-01, P4, P6 |
 | 6.4 | ★ **Chuyển Postgres queue → RabbitMQ**: quorum queue · **manual ack sau khi kết quả đã vào DB** · `prefetch=1` · DLQ sau 3 lần | R |
@@ -587,7 +621,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 - **Diễn tập restore có bấm giờ**, mục tiêu RTO ≤ 30 phút — **không được cắt**
 - Usability test đợt 2
 
-**Tuần 13 — đệm:** checklist OWASP ký nhận · hoàn tất 8 file ADR · tài liệu NFR · video demo.
+**Tuần 13 — đệm:** checklist OWASP ký nhận · hoàn tất ADR *(kế hoạch 8 file; thực tế đã có 16)* · tài liệu NFR · video demo.
 
 > Nếu tuần 12 phải cắt việc, cắt từ **Usability** và **Availability**.
 > Đừng bao giờ cắt bộ test tấn công, chaos test, hay buổi diễn tập restore.
@@ -603,7 +637,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 | 7.1 | Migration **V8** | |
 | 7.2 | `ai` module tách hoàn toàn — **luật ArchUnit thứ 7 đã chặn gọi LLM từ ngoài package này từ M0** | AI1 |
 | 7.3 | `CodeReviewer` interface + `OpenAiCodeReviewer` — đổi nhà cung cấp = thay 1 class | M |
-| 7.4 | `prompts/code-review-v1.md` **trong file**, version-controlled. Lưu `model` + `prompt_version` cùng mỗi review | M |
+| 7.4 | `prompts/code-review-v3.md` **trong file**, version-controlled. Lưu `model` + `prompt_version` cùng mỗi review | M |
 | 7.5 | ★ `PromptBuilder` — prompt **chỉ chứa**: đề bài (public) · source của chính user · verdict · test số mấy fail. **KHÔNG BAO GIỜ** nội dung testdata, lời giải mẫu, source người khác | SEC3, rủi ro #3 |
 | 7.6 | ★ **8 test prompt injection** trong CI + kiểm output (review giống system prompt hoặc giống testdata → chặn, log, alert) | AI3 |
 | 7.7 | `ConsumeAiQuotaUseCase` — **một câu `INSERT ... ON CONFLICT ... WHERE`** (truy vấn 8). Không `SELECT` → `if` → `UPDATE` | FR-AI-03 |
@@ -667,7 +701,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 | 2 | **Upload ZIP (M4, tuần 8) cần hạ tầng job nền (V7, M6)** | Bước 4.10 | Kéo V7 + `JobRunner` lõi lên tuần 7 — nó còn được rejudge, rebuild leaderboard, AI review dùng lại |
 | 3 | **`judging` phải viết trước `identity`**, nhưng chiều phụ thuộc là `identity → problems → judging` | M1 vs M4 | Seam `CurrentUserProvider` ở `platform.security`: M1 dùng `FixedDevUserProvider` (user seed id=1), M4 thay bằng `JwtCurrentUserProvider`. **Không** truyền `userId` lung tung qua tham số controller rồi sửa lại 20 chỗ ở tuần 7 |
 
-Thêm một điểm nhỏ: **role DB `oj_app`/`oj_migrator` (quyết định D) nên vào từ M0**, không phải V9/M6 —
+Thêm một điểm nhỏ: **role DB `oj_app`/`oj_migrator` (quyết định D) nên vào từ M0**, không phải V9/M6 *(đã giao là V8)* —
 vì nó nằm trong `.env.example` và `docker-compose.yml`, và đổi cấu hình deploy giữa tuần 11
 trên host đang chạy là loại việc không ai muốn làm.
 

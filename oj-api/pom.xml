@@ -154,6 +154,35 @@
 		</dependency>
 
 		<!--
+			SMTP — FR-AUTH-09 (V13), xác minh email. ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2).
+
+			Ba điều cần biết trước khi ai đó định gỡ nó ra hay thay nó:
+
+			  1. Đây là dependency DUY NHẤT của tính năng này. Đường còn lại — gọi HTTP API
+			     của một nhà cung cấp thư (Resend, Brevo, SES) qua RestClient như
+			     TurnstileVerifier đang làm — KHÔNG cần dependency nào cả. Đường SMTP được
+			     chọn có chủ ý: nó chạy được với bất kỳ máy chủ thư nào, kể cả một hộp thư
+			     Gmail thường, nên không khoá dự án vào một nhà cung cấp.
+
+			  2. Nó KHÔNG kéo theo auto-config nào tự bật: Spring Boot chỉ dựng bean
+			     JavaMailSender khi `spring.mail.host` có giá trị. Máy dev và bộ IT không đặt
+			     biến ấy, nên bề mặt thật sự thêm vào lúc chạy test là BẰNG KHÔNG.
+
+			  3. Nó nằm ngoài đường `nộp bài -> verdict`. Lá thư duy nhất hệ thống gửi là mã
+			     xác minh, và nó đi từ cửa đăng ký cùng trang hồ sơ. Không một verdict nào
+			     chờ SMTP (nfrplan 2.1).
+
+			★ Mặc định của JavaMail là CHỜ VÔ HẠN. Ba timeout trong application.yml không
+			  phải tuỳ chọn — SmtpEmailSender đọc lại chúng lúc boot và TỪ CHỐI khởi động
+			  nếu thiếu. Xem javadoc ở đó để biết vì sao một trần thời gian không tới được
+			  nơi cần là kiểu hỏng tệ nhất.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<!--
 			Markdown server-side — FR-PROB-02, Bước 4.9. ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2).
 
 			Cố ý là commonmark chứ không phải flexmark: hai artifact, không transitive
@@ -391,6 +420,69 @@
 					<cleanDisabled>true</cleanDisabled>
 				</configuration>
 			</plugin>
+
+			<!--
+			  ★ JaCoCo — SLO M2 (nfrplan.md Phần 1): "Coverage domain+application ≥ 80%".
+
+			  Trước 2026-09-21 không có plugin này ở bất kỳ pom nào, nên M2 là một SLO KHÔNG ĐO
+			  ĐƯỢC — cau-truc-source.md đã ghi đúng như vậy. Một chỉ số không đo được thì không
+			  phải chỉ số, nó là một câu khẩu hiệu.
+
+			  Chỉ đo `domain` và `application`: đó là chỗ nghiệp vụ sống. `infrastructure` được
+			  bộ IT trên Postgres thật che, `api` là DTO và ánh xạ, và ép cả hai vào con số làm
+			  người ta viết test cho getter để kéo phần trăm lên — đúng thứ SLO này không muốn.
+
+					Đo trước rồi mới chốt ngưỡng: 2026-09-21, unit+IT cho domain 83.2% và
+					application 85.6%, tổng 84.9%. Ngưỡng đặt ở 80% đúng theo SLO M2 — còn dư
+					gần 5 điểm, đủ để một lần refactor không làm đỏ build một cách vô cớ.
+
+					⚠️ BẪY: chỉ chạy unit test thì con số là 64.4%, không phải 84.9% — phần lớn
+					`application` được bộ IT trên Postgres thật che. Nên `check` nằm ở phase
+					`verify`, SAU failsafe. `mvn verify -DskipITs` sẽ đỏ, và đỏ ĐÚNG: nó nghĩa
+					là "bạn chưa chạy thứ tạo ra phần lớn coverage".
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<configuration>
+					<includes>
+						<include>dev/oj/**/domain/**</include>
+						<include>dev/oj/**/application/**</include>
+					</includes>
+				</configuration>
+				<executions>
+					<execution>
+						<id>gan-agent</id>
+						<goals><goal>prepare-agent</goal></goals>
+					</execution>
+					<execution>
+						<id>bao-cao</id>
+						<phase>verify</phase>
+						<goals><goal>report</goal></goals>
+					</execution>
+					<execution>
+						<id>cong-slo-m2</id>
+						<phase>verify</phase>
+						<goals><goal>check</goal></goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
 		</plugins>
 	</build>
 

@@ -5,7 +5,6 @@ import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormats;
 import dev.oj.contests.domain.ContestsException;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -22,7 +21,7 @@ import java.util.Optional;
 
 /**
  * Bảng {@code contests}, {@code contest_problems}, {@code contest_registrations} (V7).
- * Pool {@code app}.
+ * Pool {@code app}. Gắn/gỡ đề nằm ở {@link JdbcContestAuthoringRepository}.
  */
 @Repository
 public class JdbcContestRepository implements ContestRepository {
@@ -95,25 +94,6 @@ public class JdbcContestRepository implements ContestRepository {
             VALUES (:slug, :title, :format, :startsAt, :endsAt, :freezeAt,
                     :penaltyMinutes, :registrationRequired, :revealAfterEnd, :createdBy)
             RETURNING id
-            """;
-
-    private static final String THEM_DE = """
-            INSERT INTO contest_problems (contest_id, problem_id, label, points,
-                                          created_for_contest)
-            VALUES (:contestId, :problemId, :label, :points, :soanRieng)
-            ON CONFLICT (contest_id, problem_id) DO UPDATE
-               SET label = EXCLUDED.label,
-                   points = EXCLUDED.points,
-                   -- Nguồn gốc DÍNH: gắn lại một đề đã soạn riêng không biến nó thành đề
-                   -- mượn, và ngược lại. Đây là dữ kiện lịch sử, không phải một thuộc tính
-                   -- người dùng chỉnh được bằng cách bấm lại nút.
-                   created_for_contest = contest_problems.created_for_contest
-                                      OR EXCLUDED.created_for_contest
-            """;
-
-    private static final String GO_DE = """
-            DELETE FROM contest_problems
-             WHERE contest_id = :contestId AND problem_id = :problemId
             """;
 
     /**
@@ -189,59 +169,6 @@ public class JdbcContestRepository implements ContestRepository {
     }
 
     @Override
-    public void themDe(long contestId, long problemId, String label, int points) {
-        gan(contestId, problemId, label, points, false);
-    }
-
-    @Override
-    public void themDeSoanRieng(long contestId, long problemId, String label, int points) {
-        gan(contestId, problemId, label, points, true);
-    }
-
-    private void gan(long contestId, long problemId, String label, int points,
-                     boolean soanRieng) {
-        try {
-            jdbc.sql(THEM_DE)
-                    .param("contestId", contestId)
-                    .param("problemId", problemId)
-                    .param("label", label)
-                    .param("points", points)
-                    .param("soanRieng", soanRieng)
-                    .update();
-        } catch (DuplicateKeyException e) {
-            // UNIQUE (contest_id, label) — hai đề cùng nhãn 'A' thì bảng xếp hạng có hai cột
-            // trùng tên và không ai biết cột nào là đề nào.
-            //
-            // Trùng (contest_id, problem_id) KHÔNG tới được đây: THEM_DE có ON CONFLICT
-            // DO UPDATE, tức thêm lại cùng một đề là đổi nhãn/điểm của nó.
-            throw ContestsException.khongHopLe("contest.nhan_de_trung",
-                    "Nhãn đề này đã được dùng trong kỳ thi.");
-        } catch (DataIntegrityViolationException e) {
-            // ★ Khoá ngoại contest_problems.problem_id -> problems(id).
-            //
-            // Javadoc của AuthorContestUseCase.themDe chọn khoá ngoại làm chốt "đề có tồn
-            // tại không" thay vì một câu SELECT, vì khoá ngoại không quên được. Nhưng chốt
-            // ấy chỉ hoàn chỉnh khi có người DỊCH nó: chưa dịch thì một id gõ nhầm rơi ra
-            // ngoài như DataIntegrityViolationException và người dùng nhận HTTP 500 —
-            // "lỗi phía hệ thống" cho một lỗi hoàn toàn phía người gõ.
-            //
-            // Ca thật đã gặp: người ra đề đọc cột "Mã đề" trên trang danh sách (một CHUỖI,
-            // ví dụ A-PLUS-B) rồi gõ nó vào ô nhận id (một SỐ). Câu dưới đây nói thẳng ra
-            // sự nhầm lẫn đó, vì bản thân con số không tự nói được điều gì.
-            throw ContestsException.khongHopLe("contest.de_khong_ton_tai",
-                    "Không có đề nào mang id " + problemId + ".");
-        }
-    }
-
-    @Override
-    public boolean goDe(long contestId, long problemId) {
-        return jdbc.sql(GO_DE)
-                .param("contestId", contestId)
-                .param("problemId", problemId)
-                .update() == 1;
-    }
-
-    @Override
     public List<DeCuaContest> deCua(long contestId) {
         return jdbc.sql(DE_CUA)
                 .param("contestId", contestId)
@@ -303,7 +230,8 @@ public class JdbcContestRepository implements ContestRepository {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    private static final RowMapper<Contest> MAPPER = (rs, i) -> new Contest(
+    /** Package-private: {@link JdbcContestAuthoringRepository} đọc cùng hình dạng dòng. */
+    static final RowMapper<Contest> MAPPER = (rs, i) -> new Contest(
             rs.getLong("id"),
             rs.getString("slug"),
             rs.getString("title"),

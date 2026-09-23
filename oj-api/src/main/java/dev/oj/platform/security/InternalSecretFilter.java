@@ -17,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 
 /**
  * Cửa duy nhất vào {@code /internal/**}. Xác thực bằng <b>shared secret đọc từ env</b>, không
@@ -28,11 +29,23 @@ import java.security.MessageDigest;
  * bị dùng để đăng nhập vào giao diện. Một secret dùng riêng cho một bề mặt duy nhất thì không
  * có những đường đó.
  *
- * <h2>Đây là lớp phòng thủ thứ HAI, không phải thứ nhất</h2>
- * Lớp thứ nhất là mạng: Cloudflare Tunnel chỉ publish {@code /api/v1/**}, nên
- * {@code /internal/**} không có đường đi từ internet vào. Filter này bảo vệ trường hợp lớp
- * ấy sai — cấu hình tunnel bị sửa nhầm, hoặc một ngày nào đó host mở cổng ra LAN. Kiểm tay
- * cấu hình tunnel ở tuần 9 ({@code build-order.md} Bước M1-8).
+ * <h2>Ba lớp, và filter này giữ hai lớp sau</h2>
+ * <ol>
+ *   <li><b>Luật ingress của cloudflared</b> ({@code infra/cloudflared/config.yml}) trả 404
+ *       cho {@code /internal} trước khi request rời Cloudflare.</li>
+ *   <li><b>Request mang dấu Cloudflare thì 404</b> — {@link #DAU_CLOUDFLARE}, ở đây. Worker
+ *       gọi thẳng {@code localhost}, không bao giờ đi qua tunnel ({@code oj-api/CLAUDE.md}
+ *       mục 5), nên một request tới {@code /internal} mà có {@code CF-Ray} là request từ
+ *       internet — bất kể nó mang secret gì.</li>
+ *   <li><b>Shared secret</b> — phần còn lại của lớp này.</li>
+ * </ol>
+ *
+ * <p>Lớp 2 tồn tại vì lớp 1 là một regex, và regex ấy từng thủng: {@code //internal/…},
+ * {@code /./internal/…}, {@code /internal;x=1/…} lọt qua {@code ^/internal(/|$)} của
+ * cloudflared, còn Tomcat chuẩn hoá chúng về đúng {@code /internal/judge/*} (đo 2026-09-23).
+ * Lớp 2 không phụ thuộc chuỗi đường dẫn: servlet container đã chuẩn hoá xong mới gọi filter
+ * này, nên biến thể nào tới được endpoint thì cũng tới được đây. Nhờ nó, <b>lộ secret không
+ * còn đồng nghĩa với bị ghi verdict từ internet</b>.
  *
  * <h2>So sánh trong thời gian hằng định</h2>
  * {@code String.equals} thoát ra ngay ở byte đầu tiên khác nhau, nên thời gian phản hồi rò rỉ
@@ -52,6 +65,19 @@ public class InternalSecretFilter extends OncePerRequestFilter {
      */
     public static final String HEADER = JudgeEndpoints.SECRET_HEADER;
 
+    /**
+     * Header mà Cloudflare đặt vào MỌI request nó chuyển về origin — kể cả qua tunnel. Có
+     * {@code CF-Connecting-IP} tới được Tomcat là chuyện {@link ClientIp} đã dựa vào từ M4.
+     *
+     * <p>Kẻ tấn công không gỡ được chúng khỏi request đi qua Cloudflare: edge ghi đè
+     * {@code CF-*} và nối {@code CDN-Loop}. Họ chỉ có thể THÊM — và thêm thì bị chặn, nên
+     * chiều sai duy nhất của phép kiểm này là chặn nhầm, không phải cho lọt.
+     *
+     * <p>⚠️ Hệ quả: worker <b>không bao giờ</b> gọi được {@code /internal} qua Cloudflare. Muốn
+     * đặt worker ở máy khác thì đi mạng riêng (WireGuard, Tailscale), không đi tunnel công khai.
+     */
+    static final List<String> DAU_CLOUDFLARE = List.of("CF-Ray", "CF-Connecting-IP", "CDN-Loop");
+
     private final byte[] expected;
 
     public InternalSecretFilter(AppProperties properties) {
@@ -61,6 +87,11 @@ public class InternalSecretFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
+        // Lớp 2 TRƯỚC secret: request từ internet bị từ chối kể cả khi mang đúng secret.
+        if (quaCloudflare(request)) {
+            tuChoiQuaTunnel(request, response);
+            return;
+        }
         String presented = request.getHeader(HEADER);
         if (presented == null
                 || !MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected)) {
@@ -68,6 +99,32 @@ public class InternalSecretFilter extends OncePerRequestFilter {
             return;
         }
         chain.doFilter(request, response);
+    }
+
+    static boolean quaCloudflare(HttpServletRequest request) {
+        for (String h : DAU_CLOUDFLARE) {
+            if (request.getHeader(h) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 404, không phải 401: cùng câu trả lời với luật ingress {@code http_status:404}, nên người
+     * dò từ ngoài không phân biệt được lớp nào đã chặn — và không biết đường dẫn có thật.
+     * {@code scripts/kiem-tunnel.sh} đọc 404 là ĐẠT, 401 là hai lớp đầu cùng thủng.
+     *
+     * <p>Log ở WARN: tới được đây nghĩa là luật ingress đã để lọt — việc của người trực.
+     */
+    private void tuChoiQuaTunnel(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        log.warn("Từ chối {} {} từ {} — request tới /internal mang header Cloudflare. Luật "
+                        + "ingress đã để lọt: chạy scripts/kiem-tunnel.sh [traceId={}]",
+                request.getMethod(), request.getRequestURI(), ClientIp.cua(request),
+                TraceIdFilter.current());
+        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+        response.getWriter().flush();
     }
 
     /**

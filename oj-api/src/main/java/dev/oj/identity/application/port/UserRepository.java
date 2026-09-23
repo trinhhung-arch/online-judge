@@ -56,6 +56,22 @@ public interface UserRepository {
     void doiMatKhau(long userId, String passwordHash);
 
     /**
+     * FR-AUTH-09 (V13) — đặt {@code email_verified_at = now()}.
+     *
+     * <p>Câu {@code UPDATE} mang {@code AND email_verified_at IS NULL}: xác minh lần thứ hai
+     * không được dời mốc thời gian của lần thứ nhất. Mốc ấy là bằng chứng "địa chỉ này đã
+     * được chứng minh vào lúc nào", và ghi đè nó là làm lịch sử nói dối — cùng lý do
+     * {@code UpdateProfileUseCase} không cho đổi {@code handle}.
+     *
+     * <p>Nó cũng mang {@code AND status <> 'ANONYMIZED'}: tài khoản đã ẩn danh hoá không còn
+     * email, và {@code ck_users_anonymized} (V13) sẽ từ chối câu ghi. Chặn trong SQL cho ra
+     * "0 dòng" thay vì một ngoại lệ ràng buộc ở một chỗ không ai đoán được.
+     *
+     * @return {@code false} nếu không dòng nào khớp — đã xác minh rồi, hoặc đã ẩn danh hoá
+     */
+    boolean danhDauDaXacMinhEmail(long userId);
+
+    /**
      * FR-AUTH-07 — xoá email, xoá băm mật khẩu, đổi tên hiển thị, đặt trạng thái
      * {@code ANONYMIZED}. <b>Không xoá dòng</b>: {@code submissions.user_id} có khoá ngoại, và
      * thứ hạng của mọi kỳ thi người đó từng dự phụ thuộc vào dòng này còn tồn tại.

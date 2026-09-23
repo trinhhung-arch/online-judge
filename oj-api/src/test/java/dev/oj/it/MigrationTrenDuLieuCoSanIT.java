@@ -167,6 +167,76 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
+    /**
+     * ★ V13 thay được {@code ck_users_anonymized} trên một bảng {@code users} <b>đã có một
+     * tài khoản ẩn danh hoá</b>.
+     *
+     * <p>V13 làm hai việc mà không migration nào trước đó làm cùng lúc: thêm một cột vào
+     * {@code users}, rồi <b>DROP và ADD lại một CHECK đang có hiệu lực</b> trên chính bảng ấy.
+     * Câu {@code ADD CONSTRAINT} được Postgres kiểm lại trên <i>toàn bộ dữ liệu hiện có</i>,
+     * nên nếu một dòng nào đó không thoả, Flyway chết <b>giữa lúc deploy</b> — trên một
+     * database đã áp một nửa số migration.
+     *
+     * <p>Dòng duy nhất có thể không thoả là một tài khoản {@code ANONYMIZED}, vì ràng buộc
+     * mới chỉ nói về chúng. Ca này dựng đúng một dòng như thế trước khi V13 chạy.
+     *
+     * <p>Nó chốt luôn vế thứ hai, thứ mà phép kiểm lúc migrate không nói: sau V13, một tài
+     * khoản ẩn danh hoá <b>không nhận được</b> {@code email_verified_at}. Đó là lời hứa
+     * FR-AUTH-07 mở rộng sang cột mới, và nó là lý do cột ấy được đưa vào ràng buộc thay vì
+     * chỉ được nhớ trong câu {@code UPDATE} của {@code JdbcUserRepository}.
+     */
+    @Test
+    @DisplayName("★ V13 thay được ck_users_anonymized khi đã có tài khoản ẩn danh hoá")
+    void v13_chay_duoc_khi_da_co_tai_khoan_an_danh() throws SQLException {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
+            pg.start();
+
+            // 1. Chạy tới V12 — trạng thái ngay trước V13.
+            flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("12")).load()
+                    .migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, role)
+                        VALUES ('con-dung', 'con@oj.test', 'Còn dùng', 'x', 'USER')
+                        """);
+                // Đúng hình dạng mà AnonymizeAccountUseCase để lại: email và băm mật khẩu
+                // đã bị xoá thật, dòng thì vẫn còn vì submissions tham chiếu tới nó.
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, status)
+                        VALUES ('da-xoa', NULL, '[đã xoá #2]', NULL, 'ANONYMIZED')
+                        """);
+            }
+
+            // 2. Chạy nốt V13 trên database ĐÃ CÓ dòng ANONYMIZED.
+            flyway(pg).load().migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                var rs = st.executeQuery(
+                        "SELECT count(*) FROM users WHERE email_verified_at IS NOT NULL");
+                rs.next();
+                assertThat(rs.getInt(1))
+                        .as("★ V13 cố ý KHÔNG backfill: tài khoản cũ chưa từng xác minh, và "
+                                + "đánh dấu chúng là đã xác minh là ghi một điều không đúng")
+                        .isZero();
+
+                assertThat(chenDuocKhong(st, """
+                        UPDATE users SET email_verified_at = now() WHERE handle = 'con-dung'
+                        """))
+                        .as("tài khoản đang dùng thì xác minh được bình thường")
+                        .isTrue();
+
+                assertThat(chenDuocKhong(st, """
+                        UPDATE users SET email_verified_at = now() WHERE handle = 'da-xoa'
+                        """))
+                        .as("★ nhưng tài khoản đã ẩn danh hoá thì KHÔNG — FR-AUTH-07 hứa xoá "
+                                + "dữ liệu định danh, và một mốc 'đã xác minh email lúc 10:03' "
+                                + "là một khẳng định về một địa chỉ vừa bị xoá")
+                        .isFalse();
+            }
+        }
+    }
+
     private static org.flywaydb.core.api.configuration.FluentConfiguration flyway(
             PostgreSQLContainer pg) {
         return Flyway.configure()

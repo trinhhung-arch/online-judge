@@ -18,7 +18,7 @@ import java.time.Instant;
  *   <li><b>Không ghi verdict cho bài chưa được claim.</b> {@link #markDone} đòi
  *       {@link SubmissionStatus#JUDGING}, và từ chối verdict {@code null}.</li>
  *   <li><b>Không có {@code delete()}.</b> Không ai xoá được bài nộp (FR-SUB-09) — ADMIN chỉ
- *       ẩn, và hàng rào thật nằm ở {@code REVOKE DELETE, TRUNCATE ... FROM oj_app} (V9).
+ *       ẩn, và hàng rào thật nằm ở {@code REVOKE DELETE, TRUNCATE ... FROM oj_app} (V8).
  *       Một phương thức {@code delete()} ở đây sẽ là lời mời viết câu SQL tương ứng.</li>
  * </ul>
  *

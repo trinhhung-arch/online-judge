@@ -105,7 +105,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 | ID | Yêu cầu | Ràng buộc NFR | Ưu tiên |
 |---|---|---|---|
-| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12. **Giới hạn 10 tài khoản/giờ/IP** (đếm cả lượt hỏng) + **Cloudflare Turnstile** | SEC2, A (chống tạo hàng loạt) | Must |
+| FR-AUTH-01 | Đăng ký bằng email + mật khẩu. Mật khẩu ≥ 8 ký tự, băm BCrypt cost 12. **Giới hạn 10 tài khoản/giờ/IP** (đếm cả lượt hỏng) + **Cloudflare Turnstile** — token phải được giải trên chính tên miền của ta (`hostname` của siteverify ∈ `OJ_TURNSTILE_HOSTNAMES`, từ 2026-09-24) | SEC2, A (chống tạo hàng loạt) | Must |
 | FR-AUTH-02 | Đăng nhập trả JWT (15 phút) + refresh token (7 ngày). **Không dùng session in-memory** | S2, S1 | Must |
 | FR-AUTH-03 | Đăng xuất — thu hồi refresh token | — | Must |
 | FR-AUTH-04 | Đổi mật khẩu (yêu cầu mật khẩu cũ), thu hồi mọi refresh token | SEC2 | Must |
@@ -113,12 +113,19 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-AUTH-06 | Ba vai trò USER / SETTER / ADMIN. **Kiểm quyền ở tầng use-case** | SEC2, M-ArchUnit | Must |
 | FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên | R1, audit | Must |
 | FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP, khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
-| FR-AUTH-09 | Quên mật khẩu qua email | — | **Won't (v1.1)** — cần SMTP, thêm một điểm hỏng, không đáng cho v1.0 |
+| FR-AUTH-09 | **Xác minh email** — mã 6 chữ số, hạn 30 phút, 5 lần thử. **Mức mềm: chưa xác minh KHÔNG chặn đăng nhập/nộp bài/dự thi** | A (SMTP không nằm trên đường nào quan trọng) | **Done (v1.1)** — V13, ADR 016 |
+| FR-AUTH-09b | Quên mật khẩu qua email | — | **Won't** — giờ đã có kênh đã xác minh để dựa vào, nhưng nó là một cửa chiếm tài khoản nếu làm ẩu. Việc riêng, đặc tả riêng |
 | FR-AUTH-10 | Xác thực hai lớp TOTP (RFC 6238) + 10 mã dự phòng dùng một lần. **Bắt buộc với ADMIN**: chưa bật thì không dùng được quyền ADMIN | SEC2, SEC3 (ADMIN đọc được testdata mọi đề) | Must |
 
 > **FR-AUTH-01 chọn Turnstile chứ không chọn xác minh email, và đó là hai mục tiêu khác nhau.** Mục tiêu ở đây là chặn **bot tạo tài khoản hàng loạt**. Xác minh email gần như không làm được việc đó: dịch vụ mail dùng-một-lần có hàng nghìn tên miền, một script lấy hộp thư tạm mất vài trăm mili-giây — nó chặn người lười, không chặn bot có chủ đích. Turnstile thì chặn đúng thứ ấy, không cần SMTP, và hệ thống đằng nào cũng đứng sau Cloudflare.
 >
-> Xác minh email vẫn đáng làm, nhưng cho mục tiêu **có một kênh liên lạc đã xác minh** — quên mật khẩu, báo kết quả kỳ thi. Đó là FR-AUTH-09, vẫn hoãn sang v1.1.
+> Xác minh email vẫn đáng làm, nhưng cho mục tiêu **có một kênh liên lạc đã xác minh** — quên mật khẩu, báo kết quả kỳ thi. Đó là FR-AUTH-09.
+>
+> **Cập nhật 2026-09-20 — FR-AUTH-09 đã làm, ở mức mềm (V13, ADR 016).** Hai câu trên vẫn đúng từng chữ, và chính chúng quyết định *mức* chặn: vì mục tiêu không phải chống bot, nhãn `users.email_verified_at` **không chặn gì cả** — chưa xác minh thì vẫn đăng nhập, vẫn nộp bài, vẫn dự thi.
+>
+> Đó không phải sự nửa vời mà là điều kiện để nhận thêm SMTP vào hệ thống. Lý do hoãn ban đầu — *"thêm một điểm hỏng"* — vẫn đúng; mức mềm không xoá điểm hỏng ấy mà làm cho nó không nằm trên đường nào quan trọng. Nhà cung cấp thư chết thì hôm ấy không ai xác minh được, và **không ai mất quyền vào hệ thống**. Chặn đăng nhập thì một sự cố của họ trở thành sự cố truy cập của ta, đúng vào ngày contest.
+>
+> **Hai hàng rào này KHÔNG thay thế nhau.** Tắt xác minh email không hạ mức chống bot đi chút nào; tắt Turnstile thì có. Ai định bỏ một trong hai vì "đã có cái kia" là đang bỏ một hàng rào mà không được gì.
 >
 > Hai chi tiết của thiết kế: captcha kiểm **sau** rate limit theo IP (đặt trước thì một đợt dội 1 000 request biến thành 1 000 lượt gọi ra Cloudflare — ta tự khuếch đại đòn tấn công), và **trước** phần kiểm định dạng lẫn BCrypt. Cloudflare không trả lời thì **từ chối**, cùng lập trường với rate limit đăng ký: cho qua nghĩa là một bot chỉ cần làm nghẽn đường ra internet là vô hiệu hoá cả hàng rào.
 
@@ -131,6 +138,8 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 > **FR-AUTH-10 bắt buộc với ADMIN vì ADMIN đọc được testdata mọi đề.** Một mật khẩu ADMIN bị lộ không phải là mất một tài khoản, mà là mất **tính công bằng** — thứ đứng đầu danh sách không thể thoả hiệp của dự án. DMOJ đặt `DMOJ_REQUIRE_STAFF_2FA = True` mặc định vì cùng lý do.
 >
 > Ràng buộc quan trọng nhất của thiết kế: **đường bật 2FA phải nằm DƯỚI cổng mà nó mở**. Endpoint `/api/v1/me/2fa` mang `@RequiresRole` mức USER, nên một ADMIN chưa bật 2FA vẫn đăng nhập được, vẫn vào trang hồ sơ được, và vẫn bật được — chỉ quyền ADMIN là chưa dùng được. Đòi ADMIN ở chính endpoint ấy là khoá người quản trị ra ngoài vĩnh viễn, vì không còn ai đủ quyền để gỡ.
+>
+> **"Quyền ADMIN" nghĩa là MỌI quyền ADMIN, không chỉ các endpoint mang nhãn ADMIN** (sửa 2026-09-23, ADR 017). Bản đầu chỉ chặn ở use-case khai `@RequiresRole(ADMIN)`, nên ADMIN chưa bật 2FA vẫn tải được testdata mọi đề, đọc được source mọi người, xem được đề trước giờ thi và bảng xếp hạng lúc đóng băng — qua các câu `isAdmin()` nằm trong use-case mức SETTER/USER. Giờ ADMIN chưa bật 2FA được đối xử như **SETTER** ở mọi nơi cho tới khi bật; endpoint mang nhãn ADMIN vẫn trả `403 auth.can_hai_lop` để giao diện nói đúng việc phải làm.
 >
 > Mã dự phòng băm bằng **SHA-256 chứ không BCrypt**: chúng do `SecureRandom` sinh (50 bit), không nằm trong từ điển nào nên làm chậm phép băm không mua thêm gì — mà nhập một mã sai thì server phải duyệt cả 10 mã, tức là 2,5 giây CPU với BCrypt. Cùng lý do `refresh_tokens` lưu SHA-256 của token.
 
@@ -183,7 +192,9 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-CON-07 | Sau khi contest kết thúc: mở đề ra ngoài, **mở lại AI review**, công bố bảng xếp hạng đầy đủ | AI (công bằng) | Must |
 | FR-CON-08 | ADMIN chạy job **rebuild bảng xếp hạng từ Postgres** — job nền có tiến độ | Quy tắc 5, A (Redis chết) | Must |
 | FR-CON-09 | Job đối soát dữ liệu denormalize + metric `drift` + alert | R | Must |
-| FR-CON-10 | Virtual participation | — | **Should** — ứng viên đầu tiên bị cắt nếu thiếu thời gian |
+| FR-CON-10 | Virtual participation | — | **Should** — ứng viên đầu tiên bị cắt nếu thiếu thời gian. ❌ **đã cắt thật**: M5 chốt ở FR-CON-01→09 |
+
+> **FR-CON-01 — ai được soạn kỳ thi** (bổ sung 2026-09-23, `bao-mat-plan.md` Lỗ 10). Chỉ **chủ kỳ thi** (người tạo) hoặc ADMIN gắn, gỡ, đổi nhãn đề hay soạn đề riêng trong kỳ thi đó; và chỉ gắn được **đề của chính mình** (ADMIN: mọi đề). Lý do: gắn một đề vào kỳ thi là giấu nó khỏi kho (FR-CON-03), khoá chủ đề không sửa được (FR-PROB-11) và làm nó không bao giờ xoá được — ba việc làm trên tài sản của người khác. Kỳ thi nhiều người ra đề thì ADMIN ghép, hoặc chủ kỳ thi soạn đề ngay trong kỳ thi (V10). Người không được soạn nhận **404**, không 403; đề của người khác và id không có thật nhận **cùng một câu**.
 
 ### 2.5 — FR-AI · AI Code Reviewer  *(tuần 14–15 nếu chọn phương án C)*
 
@@ -310,7 +321,19 @@ Bổ sung một mâu thuẫn chưa nhắc: **FR-AI-05 — AI không được đ�
 
 **NFR bị phá:** SEC2 (zip bomb: file 1MB giải nén thành 100GB), R (đầy đĩa trên máy host — mà đây là laptop cá nhân), và Quy tắc 5 (upload 200MB không thể là request đồng bộ).
 
-**Cách viết lại — FR-PROB-03** với giới hạn **nằm trong đặc tả, không phải trong config ẩn**: ≤200MB nén · ≤2GB sau giải nén · tỉ lệ nén ≤100:1 · ≤1000 testcase · chặn đường dẫn tuyệt đối, `..`, và symlink · validate `problem.yaml` trước khi ghi bất cứ file nào · chạy như job nền có tiến độ.
+**Cách viết lại — FR-PROB-03** với giới hạn **nằm trong đặc tả, không phải trong config ẩn**: ≤200MB nén · ≤2GB sau giải nén · tỉ lệ nén ≤100:1 · ≤1000 testcase · chặn đường dẫn tuyệt đối và `..` bằng **danh sách cho phép** · validate `problem.yaml` trước khi ghi bất cứ file nào · chạy như job nền có tiến độ.
+
+> **Về symlink** — bản trước liệt kê "chặn symlink" cùng với `..` và đường dẫn tuyệt đối.
+> Ba thứ đó chống cùng một mối nguy: *ghi ra ngoài thư mục đích*. `ZipTestdataValidator`
+> **không bao giờ ghi ra hệ thống tệp** — mọi nội dung đi thẳng vào kho content-addressed
+> dưới khoá sha256 — nên một entry symlink chỉ là một file có nội dung là chuỗi đường dẫn,
+> và nó được lưu như một chuỗi vô hại. Mối nguy bị loại **theo cấu trúc**, và vì thế
+> **không có phép kiểm symlink nào, cũng không có test nào cho nó**.
+>
+> ⚠️ Điều kiện của lập luận ấy là *không ghi ra đĩa*. Ai đổi lớp này sang giải nén ra thư
+> mục tạm sẽ làm mối nguy sống lại mà **không một test nào đỏ** — lúc đó phải thêm phép
+> kiểm symlink thật. Xem javadoc `ZipTestdataValidator` mục "Vì sao KHÔNG có phép kiểm
+> symlink" và `docs/bao-mat-plan.md` Tầng 2.
 
 ### 3.9 — Xem source người khác ↔ tính công bằng contest
 
@@ -382,7 +405,7 @@ Danh sách này quan trọng ngang danh sách FR được nhận. Mỗi dòng l�
 | **Hiển thị nội dung testcase ẩn cho tác giả bài nộp** | SEC3 | Xem mâu thuẫn #1 — đây là cái dễ bị nhân nhượng nhất, đừng nhân nhượng |
 | **AI review tự động cho mọi bài** | AI2 | Xem mâu thuẫn #7 |
 | **Thông báo email khi có kết quả** | A, M | Cần SMTP + hàng đợi email + xử lý bounce. SSE đã giải quyết đúng nhu cầu đó |
-| **OAuth (Google/GitHub), 2FA** | M, thời gian | Plan gốc đã loại |
+| **OAuth (Google/GitHub)** | M, thời gian | Plan gốc đã loại. ~~2FA~~ từng đứng chung dòng này — **đã nhận lại** thành FR-AUTH-10 (Must, V11), vì ADMIN đọc được testdata mọi đề nên một mật khẩu ADMIN bị lộ là mất tính công bằng. Xem ghi chú dưới bảng 2.1 |
 | **Đa ngôn ngữ giao diện (i18n)** | M, thời gian | Plan gốc đã loại |
 | **Rating Elo** | M | Cần dữ liệu nhiều contest mới có ý nghĩa. v1.1 |
 
@@ -394,13 +417,13 @@ Danh sách này quan trọng ngang danh sách FR được nhận. Mỗi dòng l�
 |---|---|---|---|
 | **M1** | 1–2 | FR-SUB-02, 03, 04 · FR-PROB-01 (tối giản) | **Lõi. Không có FR nào khác được chen vào đây** |
 | M2 | 3–4 | (không có FR mới — toàn bộ là NFR sandbox) | Đây là mốc thuần chất lượng |
-| M3 | 3–6 | FR-SUB-05, 06 · FR-PROB-05, 06 | Realtime + checker + đa ngôn ngữ |
+| M3 | 5–6 | FR-SUB-05, 06 · FR-PROB-05, 06 | Realtime + checker + đa ngôn ngữ |
 | M4 | 7–9 | FR-AUTH-01→08, 10 · FR-PROB-02, 03, 04, 07, 08, 09 · FR-SUB-01, 07, 08, 10, 11 | **Mốc nặng nhất — 20 FR** |
 | M5 | 10–12 | FR-CON-01→09 | FR-CON-10 là cái cắt đầu tiên |
 | M6 | 10–12 | FR-ADM-01→06 · FR-SUB-09, 12 · FR-PROB-10, 11, 12 | |
 | — | 14–15 | FR-AI-01→09 | Chỉ khi chọn phương án C ở `nfrplan.md` 10.7 |
 
-> ⚠️ **Cảnh báo khối lượng:** M4 gánh 19 FR trong 3 tuần. Plan gốc ước lượng M4 là **82h** (tổng task 4.1–4.9), **chưa tính** FR-PROB-07 (`feedback_level`), FR-SUB-11, và phần SSE-qua-Redis mà `nfrplan.md` 3.2 bổ sung. Thực tế gần **95h** — với ~100h công của cả team trong 3 tuần thì kín lịch, không còn khoảng trống.
+> ⚠️ **Cảnh báo khối lượng:** M4 gánh 20 FR trong 3 tuần. Plan gốc ước lượng M4 là **82h** (tổng task 4.1–4.9), **chưa tính** FR-PROB-07 (`feedback_level`), FR-SUB-11, và phần SSE-qua-Redis mà `nfrplan.md` 3.2 bổ sung. Thực tế gần **95h** — với ~100h công của cả team trong 3 tuần thì kín lịch, không còn khoảng trống.
 >
 > Nếu tuần 8 thấy chậm, thứ tự cắt: **FR-PROB-12 → FR-SUB-10 → FR-PROB-06 (subtask) → FR-CON-10**. Tuyệt đối không cắt FR-PROB-07 — nó là biện pháp chống rò rỉ testdata, không phải tính năng.
 
@@ -433,13 +456,14 @@ Nhưng điều quan trọng nhất nằm ở chỗ giao nhau, và nó gọn tron
 
 ---
 
-## Phụ lục — Hai chỗ cần sửa trong `nfrplan.md`
+## Phụ lục — Hai chỗ cần sửa trong `nfrplan.md` — ✅ **CẢ HAI ĐÃ XONG**
 
-Rà soát chéo phát hiện hai điểm không khớp, đã tính đến trong tài liệu này:
+Rà soát chéo từng phát hiện hai điểm không khớp. Kiểm lại ngày 2026-09-20: **cả hai đã được
+sửa trong `nfrplan.md`**, nên bảng dưới đây là hồ sơ, không phải việc cần làm.
 
-| Vấn đề | Chi tiết | Xử lý |
-|---|---|---|
-| **U3 thiếu trong bảng SLO** | `nfrplan.md` mục 6.1 định nghĩa U3 ("mọi verdict giải thích được") nhưng bảng SLO Phần 1 chỉ có U1, U2 | Thêm dòng `U3 · Verdict giải thích được · 7/7 loại · — · usability test` vào bảng Phần 1 |
-| **Bảng 6.2 nói về WA quá lỏng** | Bản đó viết *"(nếu đề cho phép) input/expected/actual của test đó"* — cách diễn đạt này mở đường cho rò rỉ testdata | Thay bằng tham chiếu tới `feedback_level` (FR-PROB-07) và mâu thuẫn #1 của tài liệu này |
+| Vấn đề | Chi tiết | Xử lý | Trạng thái |
+|---|---|---|---|
+| **U3 thiếu trong bảng SLO** | `nfrplan.md` mục 6.1 định nghĩa U3 ("mọi verdict giải thích được") nhưng bảng SLO Phần 1 chỉ có U1, U2 | Thêm dòng `U3 · Verdict giải thích được · 7/7 loại · — · usability test` vào bảng Phần 1 | ✅ đã có ở `nfrplan.md` Phần 1 |
+| **Bảng 6.2 nói về WA quá lỏng** | Bản đó viết *"(nếu đề cho phép) input/expected/actual của test đó"* — cách diễn đạt này mở đường cho rò rỉ testdata | Thay bằng tham chiếu tới `feedback_level` (FR-PROB-07) và mâu thuẫn #1 của tài liệu này | ✅ `nfrplan.md` 6.2 nay dẫn `feedback_level` và ghi rõ *"nội dung testcase ẩn không bao giờ rời khỏi worker"* |
 
 Ngoài ra lưu ý ký hiệu: **M1–M4 trong `nfrplan.md` là mã chỉ số Maintainability**, còn **M1–M6 trong plan gốc là mốc dự án**. Hai hệ trùng ký tự. Trong tài liệu này, mã NFR Maintainability được viết là `M4-nfr` để tránh nhầm.

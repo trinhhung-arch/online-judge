@@ -70,6 +70,17 @@ import java.time.Duration;
  * @param loginMinInterval  khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của
  *                          cùng một tài khoản
  * @param turnstile         chống bot ở cửa đăng ký — xem {@link TurnstileProperties}
+ *
+ * <h2>★ Xác minh email là một nhóm RIÊNG, và nó KHÔNG phải hàng rào chống bot</h2>
+ * Đặt nó cạnh {@code turnstile} dễ làm người đọc tưởng hai thứ cùng một việc. Chúng ngược
+ * nhau: Turnstile chặn bot tạo tài khoản hàng loạt; xác minh email không làm được việc đó
+ * (hộp thư dùng-một-lần có hàng nghìn tên miền) và tồn tại cho một mục tiêu khác — CÓ một
+ * kênh liên lạc đã xác minh, thứ mà quên-mật-khẩu sẽ dựa vào.
+ *
+ * <p>Hệ quả: tắt {@code emailVerification} KHÔNG hạ mức chống bot đi chút nào. Tắt
+ * {@code turnstile} thì có.
+ *
+ * @param emailVerification xác minh email mức mềm — xem {@link EmailVerificationProperties}
  */
 public record AuthProperties(
         String jwtSecret,
@@ -86,7 +97,8 @@ public record AuthProperties(
         int bcryptConcurrency,
         Duration bcryptWait,
         Duration loginMinInterval,
-        TurnstileProperties turnstile) {
+        TurnstileProperties turnstile,
+        EmailVerificationProperties emailVerification) {
 
 public AuthProperties {
         if (jwtSecret == null || jwtSecret.isBlank()) {
@@ -161,6 +173,9 @@ public AuthProperties {
         }
         if (turnstile == null) {
             throw new IllegalStateException("Thiếu khối oj.auth.turnstile");
+        }
+        if (emailVerification == null) {
+            throw new IllegalStateException("Thiếu khối oj.auth.email-verification");
         }
         if (totpKey.equals(jwtSecret)) {
             throw new IllegalStateException(

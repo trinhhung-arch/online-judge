@@ -105,9 +105,11 @@ final class ResetGiuaCacTest {
      *
      * <h2>Vì sao xoá được {@code audit_log} dù nó là append-only</h2>
      * Tính append-only được ép bằng <b>phân quyền</b> ({@code REVOKE DELETE ... FROM oj_app}),
-     * và phần GRANT đó nằm ở V9 (M6). Trong test, Flyway chạy bằng vai trò sở hữu schema nên
-     * lệnh xoá vẫn thực hiện được. Khi V9 được kích hoạt, dòng này sẽ đỏ — và đó là lời nhắc
-     * đúng lúc rằng test cần một vai trò riêng, chứ không phải rằng V9 sai.
+     * và phần GRANT đó nằm ở <b>V8</b> (M6) — không phải V9, thứ chỉ đổi một index của
+     * {@code jobs}. Trong test, Flyway chạy bằng vai trò SỞ HỮU schema nên lệnh xoá vẫn thực
+     * hiện được, kể cả sau khi V8 đã chạy: {@code REVOKE} chỉ áp cho role {@code oj_app}.
+     * Ngày nào bộ test đổi sang chạy bằng {@code oj_app}, dòng này sẽ đỏ — và đó là lời nhắc
+     * đúng lúc rằng test cần một vai trò riêng, chứ không phải rằng V8 sai.
      */
     private static void danhTinh(JdbcClient jdbc) {
         // V11 — hai bảng 2FA. Không dọn thì một test bật 2FA cho `dev` sẽ làm mọi test
@@ -116,6 +118,13 @@ final class ResetGiuaCacTest {
         // PostgresIT bật lại 2FA cho ADMIN ngay sau khi hàm này chạy xong.
         jdbc.sql("DELETE FROM user_scratch_code").update();
         jdbc.sql("DELETE FROM user_two_factor").update();
+        // V13 — mã xác minh email. Khoá ngoại có ON DELETE CASCADE, nhưng câu
+        // `DELETE FROM users WHERE id > 3` ở dưới chỉ dọn được mã của tài khoản do test tạo:
+        // mã của ba tài khoản seed thì sống sót. Một mã còn sống mang theo `created_at`, và
+        // `created_at` là thứ khoảng chờ gửi-lại đọc — nên test sau bấm "gửi lại" sẽ nhận 429
+        // vì một lượt gửi nó không hề thực hiện. Đúng bài học M4 với khoá rate limit trong
+        // Redis, lặp lại trên một bảng.
+        jdbc.sql("DELETE FROM email_verifications").update();
         jdbc.sql("DELETE FROM refresh_tokens").update();
         jdbc.sql("DELETE FROM login_attempts").update();
         jdbc.sql("DELETE FROM login_lockouts").update();
@@ -132,6 +141,11 @@ final class ResetGiuaCacTest {
                     role = CASE id WHEN 1 THEN 'USER' WHEN 2 THEN 'SETTER' ELSE 'ADMIN' END,
                     status = 'ACTIVE',
                     preferred_language_id = NULL,
+                    -- V13. Không có dòng này thì một test xác minh xong email của `dev` sẽ
+                    -- để lại nhãn ấy cho MỌI test sau — và test kiểm "tài khoản seed chưa
+                    -- xác minh" đỏ vì một việc nó không làm. Lần thứ NĂM của bài học ở
+                    -- javadoc lớp này.
+                    email_verified_at = NULL,
                     password_hash = :bam
                  WHERE id <= 3
                 """).param("bam", BAM_MAT_KHAU_DEV).update();

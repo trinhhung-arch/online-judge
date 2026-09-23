@@ -1,5 +1,6 @@
 package dev.oj.it;
 
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.platform.error.DomainException;
 import dev.oj.platform.security.GiaLapDanhTinh;
@@ -42,17 +43,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ContestProblemsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
+
+    @Autowired ContestAuthoringRepository soanKyThi;
     @Autowired AuthorProblemUseCase authorProblem;
     @Autowired dev.oj.contests.application.usecase.AuthorContestUseCase author;
 
     private static final Instant MOC = Instant.now();
 
-    /** Kỳ thi chưa mở — {@code AuthorContestUseCase} chỉ cho gắn đề trước giờ bắt đầu. */
+    /**
+     * Kỳ thi chưa mở — {@code AuthorContestUseCase} chỉ cho gắn đề trước giờ bắt đầu.
+     *
+     * <p>Của {@code SETTER_ID}, vì các ca dưới đóng vai chính người ấy: từ 2026-09-23 chỉ chủ
+     * kỳ thi (hoặc ADMIN) soạn được nó. Bản cũ tạo dưới tên ADMIN rồi soạn bằng SETTER —
+     * chính đường vòng mà {@code ContestChuSoHuuIT} giờ chặn.
+     */
     private long kyThiChuaMo() {
         return contests.tao(new ContestRepository.ContestMoi(
                 "gan-de-" + System.nanoTime(), "Thi thử", "ICPC",
                 MOC.plus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(4)), null,
-                20, true, true, ADMIN_ID));
+                20, true, true, SETTER_ID));
     }
 
     private long deMoi(String ma) {
@@ -81,7 +90,7 @@ class ContestProblemsIT extends PostgresIT {
     void id_de_khong_co_that_khong_thanh_loi_he_thong() {
         long ky = kyThiChuaMo();
 
-        assertThatThrownBy(() -> contests.themDe(ky, 999_999L, "A", 100))
+        assertThatThrownBy(() -> soanKyThi.themDe(ky, 999_999L, "A", 100, ADMIN_ID, true))
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "contest.de_khong_ton_tai")
                 .hasMessageContaining("999999");
@@ -98,9 +107,9 @@ class ContestProblemsIT extends PostgresIT {
         long ky = kyThiChuaMo();
         long deKhac = deMoi("gan-de-" + System.nanoTime());
 
-        contests.themDe(ky, PROBLEM_ID, "A", 100);
+        soanKyThi.themDe(ky, PROBLEM_ID, "A", 100, ADMIN_ID, true);
 
-        assertThatThrownBy(() -> contests.themDe(ky, deKhac, "A", 100))
+        assertThatThrownBy(() -> soanKyThi.themDe(ky, deKhac, "A", 100, ADMIN_ID, true))
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
     }
@@ -125,10 +134,10 @@ class ContestProblemsIT extends PostgresIT {
     void thu_tu_de_la_thu_tu_nhan() {
         long ky = kyThiChuaMo();
 
-        contests.themDe(ky, deMoi("thu-tu-aa-" + System.nanoTime()), "AA", 100);
-        contests.themDe(ky, deMoi("thu-tu-z-" + System.nanoTime()), "Z", 100);
-        contests.themDe(ky, PROBLEM_ID, "B", 100);
-        contests.themDe(ky, deMoi("thu-tu-a-" + System.nanoTime()), "A", 100);
+        soanKyThi.themDe(ky, deMoi("thu-tu-aa-" + System.nanoTime()), "AA", 100, ADMIN_ID, true);
+        soanKyThi.themDe(ky, deMoi("thu-tu-z-" + System.nanoTime()), "Z", 100, ADMIN_ID, true);
+        soanKyThi.themDe(ky, PROBLEM_ID, "B", 100, ADMIN_ID, true);
+        soanKyThi.themDe(ky, deMoi("thu-tu-a-" + System.nanoTime()), "A", 100, ADMIN_ID, true);
 
         assertThat(contests.deCua(ky))
                 .extracting(ContestRepository.DeCuaContest::label)
@@ -183,7 +192,7 @@ class ContestProblemsIT extends PostgresIT {
         @DisplayName("đề mượn từ kho KHÔNG bị đánh dấu là soạn riêng")
         void de_muon_khong_bi_danh_dau() {
             long ky = kyThiChuaMo();
-            contests.themDe(ky, PROBLEM_ID, "A", 100);
+            soanKyThi.themDe(ky, PROBLEM_ID, "A", 100, ADMIN_ID, true);
 
             assertThat(contests.deCua(ky)).singleElement()
                     .satisfies(d -> assertThat(d.soanRieng()).isFalse());
@@ -204,7 +213,7 @@ class ContestProblemsIT extends PostgresIT {
                         "A", 100);
             }
 
-            contests.themDe(ky, problemId, "B", 250);
+            soanKyThi.themDe(ky, problemId, "B", 250, ADMIN_ID, true);
 
             assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
                 assertThat(d.label()).isEqualTo("B");
@@ -224,7 +233,7 @@ class ContestProblemsIT extends PostgresIT {
         @DisplayName("★ gắn hỏng thì KHÔNG để lại đề mồ côi")
         void gan_hong_thi_khong_de_lai_de_mo_coi() {
             long ky = kyThiChuaMo();
-            contests.themDe(ky, PROBLEM_ID, "A", 100);
+            soanKyThi.themDe(ky, PROBLEM_ID, "A", 100, ADMIN_ID, true);
             String ma = "mo-coi-" + System.nanoTime();
 
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
@@ -246,7 +255,7 @@ class ContestProblemsIT extends PostgresIT {
             long ky = contests.tao(new ContestRepository.ContestMoi(
                     "dang-chay-" + System.nanoTime(), "Thi thử", "ICPC",
                     MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null,
-                    20, true, true, ADMIN_ID));
+                    20, true, true, SETTER_ID));   // của chính người soạn — xem kyThiChuaMo
 
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
@@ -270,8 +279,8 @@ class ContestProblemsIT extends PostgresIT {
     void them_lai_cung_de_la_cap_nhat() {
         long ky = kyThiChuaMo();
 
-        contests.themDe(ky, PROBLEM_ID, "A", 100);
-        contests.themDe(ky, PROBLEM_ID, "B", 250);
+        soanKyThi.themDe(ky, PROBLEM_ID, "A", 100, ADMIN_ID, true);
+        soanKyThi.themDe(ky, PROBLEM_ID, "B", 250, ADMIN_ID, true);
 
         assertThat(contests.deCua(ky))
                 .singleElement()

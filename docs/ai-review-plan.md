@@ -141,7 +141,16 @@ tham số nào để nhận những thứ này — bất biến ép ở chữ k�
 
 ---
 
-## 3 · Schema — `V13__ai_review.sql`
+## 3 · Schema — `ai_review`
+
+> **★ Số hiệu migration chốt LÚC KÍCH HOẠT, không phải bây giờ.** Bản đầu của tài liệu này
+> ghi `V13__ai_review.sql`; tới 2026-09-20 thì V13 đã bị `xac_minh_email` dùng mất — lần thứ
+> **ba** con số này lỡ (V8 → V10 → V13). Nguyên nhân không phải ai bất cẩn: mọi migration
+> giao ra trong lúc chờ tuần 14–15 đều đẩy số kế tiếp đi một bậc, nên một con số viết cứng ở
+> đây **chắc chắn** sai vào ngày nó được dùng.
+>
+> Nguồn sự thật duy nhất là `ls oj-api/src/main/resources/db/migration/` tại thời điểm
+> `git mv` — xem `docs/sql/migration-cho-moc-sau/README.md`.
 
 ```sql
 CREATE TABLE ai_reviews (
@@ -179,7 +188,7 @@ CREATE TABLE ai_daily_usage (            -- cầu dao ngân sách: một dòng m
     cost_micro_usd BIGINT NOT NULL DEFAULT 0);
 ```
 
-V8 (`oj_app` chỉ DML) đã phủ ba bảng mới nhờ `ALTER DEFAULT PRIVILEGES` — kiểm lại khi viết V13.
+V8 (`oj_app` chỉ DML) đã phủ ba bảng mới nhờ `ALTER DEFAULT PRIVILEGES` — kiểm lại khi viết migration này.
 Migration phải chạy trên DB rỗng **và** DB đã có dữ liệu (CLAUDE.md mục 6).
 
 ---
@@ -282,7 +291,7 @@ oj:
 
 | Bước | Việc | Test bắt buộc (CLAUDE.md mục 6) | Giờ |
 |---|---|---|---|
-| 7.1 | V13 · `domain` · port · ArchUnit thêm cạnh `ai →` | Migration trên DB rỗng và DB có dữ liệu · ArchUnit xanh | 3 |
+| 7.1 | migration `ai_review` · `domain` · port · ArchUnit thêm cạnh `ai →` | Migration trên DB rỗng và DB có dữ liệu · ArchUnit xanh | 3 |
 | 7.2 | `JdbcReviewContextReader` (owner trong SQL) · `JdbcAiQuotaRepository` (câu nguyên tử) · `JdbcAiReviewRepository` (claim `SKIP LOCKED`) | Testcontainers: 6 lượt → lượt 6 trả 0 dòng · hai luồng claim không trùng · người khác đọc → rỗng | 5 |
 | 7.3 | `RequestAiReviewUseCase` · `GetAiReviewUseCase` · thêm `AI_REVIEW` vào công tắc | Unit với fake: 8 chốt theo thứ tự · vai trò sai → 403 · CE → 400 · cache → không trừ quota | 5 |
 | 7.4 | `PromptBuilder` + `prompts/code-review-v3.md` (đang là file rỗng) | Chữ ký không nhận testdata · delimiter · canary có mặt | 4 |

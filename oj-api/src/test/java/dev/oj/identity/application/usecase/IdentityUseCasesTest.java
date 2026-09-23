@@ -59,6 +59,8 @@ class IdentityUseCasesTest {
                 java.time.Clock.fixed(BAY_GIO, java.time.ZoneOffset.UTC));
     }
     private IdentityFakes.ChanDangKyGia chanDangKy;
+    private IdentityFakes.XacMinhEmailGia maXacMinh;
+    private IdentityFakes.ThuGia hopThu;
     private SessionIssuer phatPhien;
     private AppProperties props;
 
@@ -69,6 +71,8 @@ class IdentityUseCasesTest {
         lanThu = new IdentityFakes.LanThuGia();
         haiLop = new IdentityFakes.HaiLopGia();
         chanDangKy = new IdentityFakes.ChanDangKyGia();
+        maXacMinh = new IdentityFakes.XacMinhEmailGia();
+        hopThu = new IdentityFakes.ThuGia();
         nhatKy = new IdentityFakes.NhatKyGia();
         hasher = new IdentityFakes.BamGia();
         props = IdentityFakes.properties();
@@ -93,8 +97,16 @@ class IdentityUseCasesTest {
     @DisplayName("FR-AUTH-01 · đăng ký")
     class DangKy {
 
+        /**
+         * {@code props} mặc định có xác minh email TẮT, nên {@code EmailVerificationIssuer}
+         * ở đây không gửi gì cả — đúng thứ các ca dưới đây cần: chúng nói về vai trò, băm mật
+         * khẩu và trùng handle, không nói về thư. Ca về thư nằm ở
+         * {@code XacMinhEmailUseCaseTest}, nơi nó được bật lên tường minh.
+         */
         private RegisterUserUseCase useCase() {
-            return new RegisterUserUseCase(users, hasher, nhatKy, chanDangKy, (t, ip) -> { });
+            return new RegisterUserUseCase(users, hasher, nhatKy, chanDangKy, (t, ip) -> { },
+                    new dev.oj.identity.application.EmailVerificationIssuer(
+                            maXacMinh, hopThu, props, Clock.fixed(BAY_GIO, ZoneOffset.UTC)));
         }
 
         @Test

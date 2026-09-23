@@ -159,8 +159,12 @@ class ArchitectureTest {
 
     // =========================================================================
     // LUẬT 3 — chiều module một chiều, không có chiều ngược
-    //   identity → problems → judging → contests   ·   ai → judging
-    //   platform: ai cũng import được
+    //   Mũi tên đọc là "import": A → B nghĩa là A được phép import B.
+    //     contests → judging → problems → identity   ·   ai → judging, ai → problems
+    //     mọi module → platform; platform không import module nghiệp vụ nào
+    //   Bản trước của hai dòng này viết "identity → problems → judging → contests", tức là
+    //   trộn hai quy ước trong cùng một dòng: nửa đầu đọc theo chiều "được truy cập bởi",
+    //   nửa sau ("ai → judging") đọc theo chiều "import". Chính chỗ người ta tới để gỡ rối.
     // CLAUDE.md mục 3 luật 3
     // =========================================================================
 

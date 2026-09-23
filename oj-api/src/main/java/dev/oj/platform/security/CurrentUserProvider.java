@@ -39,16 +39,28 @@ public interface CurrentUserProvider {
     CurrentUser current();
 
     /**
-     * Danh tính đã xác thực. Cố ý tối giản: chỉ ba thứ mà mọi use-case đều cần.
+     * Danh tính đã xác thực. Cố ý tối giản: chỉ những thứ mà mọi use-case đều cần.
      *
      * <p>Thêm {@code email} vào đây là mở đường cho việc nó lọt vào log; thêm
      * {@code List<Permission>} là mở đường cho việc kiểm quyền chạy khỏi tầng use-case.
      *
-     * @param id      {@code users.id}
-     * @param handle  tên đăng nhập, để hiển thị và ghi {@code audit_log}
-     * @param role    vai trò tại thời điểm phát token — <b>không</b> đọc lại từ DB mỗi request
+     * <h2>★ {@code role} là vai trò HIỆU LỰC, không phải vai trò ghi trong token</h2>
+     * Token nói ADMIN mà tài khoản chưa bật 2FA thì {@code role} ở đây là {@link Role#SETTER}
+     * và {@code adminChuaBatHaiLop} là {@code true} — {@link JwtCurrentUserProvider} hạ nó.
+     * Hạ ở gốc chứ không kiểm ở từng use-case, vì quyền ADMIN không chỉ đi qua
+     * {@code @RequiresRole(ADMIN)}: nó còn đi qua mọi câu {@code isAdmin()} và mọi câu SQL
+     * {@code :requesterRole = 'ADMIN'} nằm trong use-case mức SETTER/USER — tải testdata mọi
+     * đề, đọc source mọi người. Kiểm từng chỗ thì chỗ thứ mười viết sau này sẽ quên.
+     *
+     * @param id                  {@code users.id}
+     * @param handle              tên đăng nhập, để hiển thị và ghi {@code audit_log}
+     * @param role                vai trò hiệu lực — lấy từ token (<b>không</b> đọc lại từ DB
+     *                            mỗi request), rồi hạ xuống nếu ADMIN chưa qua cổng 2FA
+     * @param adminChuaBatHaiLop  token là ADMIN nhưng bị hạ vì chưa bật 2FA. Chỉ để
+     *                            {@code RequiresRoleAdvisorConfig} nói đúng lý do bị chặn
+     *                            ({@code auth.can_hai_lop}); <b>đừng dùng nó để cấp quyền</b>
      */
-    record CurrentUser(long id, String handle, Role role) {
+    record CurrentUser(long id, String handle, Role role, boolean adminChuaBatHaiLop) {
 
         public CurrentUser {
             if (id <= 0) {
@@ -60,6 +72,25 @@ public interface CurrentUserProvider {
             if (role == null) {
                 throw new NullPointerException("role");
             }
+            if (adminChuaBatHaiLop && role != Role.SETTER) {
+                // Cờ này chỉ tồn tại trên một danh tính ĐÃ bị hạ. Một ADMIN mang cờ là mâu
+                // thuẫn: nó vừa nói "chưa qua cổng" vừa giữ nguyên quyền của người đã qua.
+                throw new IllegalArgumentException("adminChuaBatHaiLop chỉ đi với vai trò đã hạ");
+            }
+        }
+
+        /** Danh tính đọc từ token, chưa hỏi cổng 2FA. */
+        public CurrentUser(long id, String handle, Role role) {
+            this(id, handle, role, false);
+        }
+
+        /**
+         * Bản đã hạ của một ADMIN chưa bật 2FA — SETTER, không phải USER: người ấy vẫn soạn
+         * được đề <i>của chính mình</i>, thứ mà SETTER nào cũng làm được. Chỉ quyền vượt
+         * qua chủ sở hữu là mất.
+         */
+        CurrentUser haVaiTroViChuaBatHaiLop() {
+            return new CurrentUser(id, handle, Role.SETTER, true);
         }
 
         public boolean isAdmin() {

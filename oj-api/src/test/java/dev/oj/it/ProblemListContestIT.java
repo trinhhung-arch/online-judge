@@ -1,5 +1,6 @@
 package dev.oj.it;
 
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.platform.security.GiaLapDanhTinh;
 import dev.oj.platform.security.Role;
@@ -40,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProblemListContestIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
+
+    @Autowired ContestAuthoringRepository soanKyThi;
     @Autowired ListProblemsUseCase listProblems;
     @Autowired AuthorProblemUseCase authorProblem;
 
@@ -50,7 +53,7 @@ class ProblemListContestIT extends PostgresIT {
         long id = contests.tao(new ContestRepository.ContestMoi(
                 "ds-de-" + System.nanoTime(), "Thi thử", "ICPC",
                 batDau, ketThuc, null, 20, true, true, ADMIN_ID));
-        contests.themDe(id, problemId, "A", 100);
+        soanKyThi.themDe(id, problemId, "A", 100, ADMIN_ID, true);
         return id;
     }
 

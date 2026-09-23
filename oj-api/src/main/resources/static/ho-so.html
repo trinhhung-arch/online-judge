@@ -64,6 +64,40 @@
         </section>
 
         <section class="the">
+            <h2>Xác minh email</h2>
+
+            <!-- ★ Nói ra rằng nó KHÔNG bắt buộc. Người dùng của một hệ thống chấm bài đã
+                 quen với việc mọi cảnh báo màu vàng đều chặn họ làm gì đó; nếu không nói,
+                 họ sẽ tưởng bài nộp của mình không được chấm cho tới khi xác minh xong.
+                 Mức mềm là một lời hứa, và lời hứa phải đọc được trên màn hình. -->
+            <p class="goi-y">Xác minh cho chúng tôi biết hộp thư này là của bạn thật.
+                <strong>Không bắt buộc</strong> — chưa xác minh thì bạn vẫn đăng nhập, vẫn
+                nộp bài và vẫn dự thi bình thường.</p>
+
+            <p id="xac-minh-trang-thai" class="goi-y" role="status" aria-live="polite">Đang tải…</p>
+
+            <!-- Chưa xác minh -->
+            <div id="xac-minh-chua" hidden>
+                <p><button type="button" id="nut-gui-ma">Gửi mã tới email của tôi</button></p>
+
+                <!-- Chỉ hiện sau khi server nhận gửi mã. Bày sẵn một ô nhập mã cho người
+                     chưa có mã nào là mời họ gõ bừa — và mỗi lần gõ bừa tiêu một trong năm
+                     lượt thử của một mã họ còn chưa nhận. -->
+                <form id="form-xac-minh" novalidate hidden>
+                    <label for="xac-minh-ma">Mã 6 chữ số trong thư</label>
+                    <input id="xac-minh-ma" name="ma" inputmode="numeric"
+                           autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required
+                           aria-describedby="goi-y-xac-minh-ma">
+                    <p class="goi-y" id="goi-y-xac-minh-ma">Mã sống 30 phút. Nhập sai quá
+                        5 lần thì mã hỏng và bạn phải xin mã mới.</p>
+                    <p><button type="submit">Xác minh</button></p>
+                </form>
+            </div>
+
+            <!-- Đã xác minh: không còn gì để làm, nên không bày nút nào. -->
+        </section>
+
+        <section class="the">
             <h2>Xác thực hai lớp</h2>
 
             <!-- ★ Nói TRƯỚC vì sao lại có mục này. Người dùng thường coi 2FA là phiền toái
@@ -142,5 +176,6 @@
         crossorigin="anonymous"></script>
 <script type="module" src="/js/ho-so.js"></script>
 <script type="module" src="/js/hai-lop.js"></script>
+<script type="module" src="/js/xac-minh-email.js"></script>
 </body>
 </html>

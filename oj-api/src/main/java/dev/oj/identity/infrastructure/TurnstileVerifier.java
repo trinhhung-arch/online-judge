@@ -15,7 +15,10 @@ import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Hỏi lại Cloudflare xem token captcha có thật không — FR-AUTH-01.
@@ -45,6 +48,9 @@ public class TurnstileVerifier implements CaptchaVerifier {
     private final TurnstileProperties properties;
     private final RestClient http;
 
+    /** Chữ thường, dựng một lần: tên miền không phân biệt hoa thường. */
+    private final Set<String> hostnames;
+
     /**
      * @param builder builder ĐÃ mang timeout — xem {@link HttpConfig}. Test truyền một builder
      *                gắn {@code MockRestServiceServer}, nên class này không được tự đặt lại
@@ -53,6 +59,9 @@ public class TurnstileVerifier implements CaptchaVerifier {
     public TurnstileVerifier(AppProperties app, @Qualifier(HttpConfig.BEAN) RestClient.Builder builder) {
         this.properties = app.auth().turnstile();
         this.http = builder.build();
+        this.hostnames = properties.hostnames().stream()
+                .map(h -> h.trim().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
         if (!properties.enabled()) {
             // WARN chứ không INFO: một máy công khai quên bật thì dòng này là thứ duy nhất
             // nói ra điều đó, và nó phải nổi lên giữa nhật ký khởi động.
@@ -98,6 +107,23 @@ public class TurnstileVerifier implements CaptchaVerifier {
             log.debug("Turnstile từ chối: {}", traLoi == null ? "không có thân" : traLoi.get("error-codes"));
             throw IdentityException.captchaKhongHopLe();
         }
+        kiemNoiGiai(traLoi.get("hostname"));
+    }
+
+    /**
+     * {@code success=true} chỉ nói token có thật — không nói nó được giải ở đâu. Xem mục
+     * {@code hostnames} ở {@link TurnstileProperties}. Thiếu trường {@code hostname} cũng từ
+     * chối: không biết nơi giải thì không chứng minh được gì.
+     */
+    private void kiemNoiGiai(Object hostname) {
+        if (hostname instanceof String h && hostnames.contains(h.toLowerCase(Locale.ROOT))) {
+            return;
+        }
+        // WARN: hoặc có người đang đem token giải ở nơi khác tới, hoặc ta phục vụ trang đăng ký
+        // trên một tên miền chưa khai trong OJ_TURNSTILE_HOSTNAMES — cả hai đều cần người nhìn.
+        // Tên miền không phải bí mật; token thì có, và không được ghi (bất biến #9).
+        log.warn("Turnstile: token giải trên hostname '{}', không thuộc {} — từ chối.", hostname, hostnames);
+        throw IdentityException.captchaKhongHopLe();
     }
 
     /**

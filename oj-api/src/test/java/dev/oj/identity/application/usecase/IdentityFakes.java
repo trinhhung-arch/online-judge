@@ -1,5 +1,7 @@
 package dev.oj.identity.application.usecase;
 
+import dev.oj.identity.application.port.EmailSender;
+import dev.oj.identity.application.port.EmailVerificationRepository;
 import dev.oj.identity.application.port.LoginAttemptRepository;
 import dev.oj.identity.application.port.PasswordHasher;
 import dev.oj.identity.application.port.RegistrationRateLimiter;
@@ -66,7 +68,8 @@ final class IdentityFakes {
 
         long them(String handle, String email, Role role, UserStatus status, String bam) {
             long id = seq.incrementAndGet();
-            theoId.put(id, new User(id, handle, email, handle, role, status, null, Instant.EPOCH));
+            theoId.put(id, new User(id, handle, email, handle, role, status, null,
+                    Instant.EPOCH, null));
             bamMatKhau.put(id, bam);
             return id;
         }
@@ -131,7 +134,7 @@ final class IdentityFakes {
         public void capNhatHoSo(long userId, String displayName, Short preferredLanguageId) {
             User u = theoId.get(userId);
             theoId.put(userId, new User(u.id(), u.handle(), u.email(), displayName, u.role(),
-                    u.status(), preferredLanguageId, u.createdAt()));
+                    u.status(), preferredLanguageId, u.createdAt(), u.emailVerifiedAt()));
         }
 
         @Override
@@ -139,11 +142,24 @@ final class IdentityFakes {
             bamMatKhau.put(userId, passwordHash);
         }
 
+        /** Bắt chước đúng hai điều kiện trong WHERE của câu SQL thật — xem javadoc của port. */
+        @Override
+        public boolean danhDauDaXacMinhEmail(long userId) {
+            User u = theoId.get(userId);
+            if (u == null || u.daXacMinhEmail() || u.status() == UserStatus.ANONYMIZED) {
+                return false;
+            }
+            theoId.put(userId, new User(u.id(), u.handle(), u.email(), u.displayName(), u.role(),
+                    u.status(), u.preferredLanguageId(), u.createdAt(), Instant.EPOCH));
+            return true;
+        }
+
         @Override
         public void anDanhHoa(long userId, String tenHienThiMoi) {
             User u = theoId.get(userId);
+            // Bắt chước ck_users_anonymized của V13: mốc xác minh bị xoá cùng email.
             theoId.put(userId, new User(u.id(), u.handle(), null, tenHienThiMoi, u.role(),
-                    UserStatus.ANONYMIZED, null, u.createdAt()));
+                    UserStatus.ANONYMIZED, null, u.createdAt(), null));
             bamMatKhau.put(userId, null);
         }
 
@@ -154,7 +170,8 @@ final class IdentityFakes {
                 return false;
             }
             theoId.put(userId, new User(u.id(), u.handle(), u.email(), u.displayName(),
-                    Role.valueOf(vaiTroMoi), u.status(), u.preferredLanguageId(), u.createdAt()));
+                    Role.valueOf(vaiTroMoi), u.status(), u.preferredLanguageId(), u.createdAt(),
+                    u.emailVerifiedAt()));
             return true;
         }
 
@@ -166,7 +183,7 @@ final class IdentityFakes {
             }
             theoId.put(userId, new User(u.id(), u.handle(), u.email(), u.displayName(),
                     u.role(), UserStatus.valueOf(trangThaiMoi), u.preferredLanguageId(),
-                    u.createdAt()));
+                    u.createdAt(), u.emailVerifiedAt()));
             return true;
         }
     }
@@ -362,6 +379,141 @@ final class IdentityFakes {
                 daXoa |= ds.removeIf(m -> m.id() == maDuPhongId);
             }
             return daXoa && !requestKhacDungMaTruoc;
+        }
+    }
+
+    /**
+     * Bảng {@code email_verifications} trong bộ nhớ — V13.
+     *
+     * <p>Bắt chước <b>hai</b> hành vi mà câu SQL thật bảo đảm, vì cả hai đều là thứ use-case
+     * dựa vào: {@code ux_email_verifications_song} chỉ cho một mã sống mỗi người, và
+     * {@link #tieuThu} là một phép kiểm-rồi-ghi nguyên tử.
+     */
+    static final class XacMinhEmailGia implements EmailVerificationRepository {
+
+        /** Dòng đã lưu, kể cả dòng đã khai tử — test cần đếm được cả hai. */
+        record Dong(long id, long userId, String sha256Hex, Instant taoLuc, Instant hetHan,
+                    int soLanThu, boolean daTieu) {
+        }
+
+        final List<Dong> dong = new ArrayList<>();
+        private final AtomicLong seq = new AtomicLong();
+
+        /** Đồng hồ của test: mọi phép so hạn dùng đi qua đây, không qua {@code Instant.now()}. */
+        Instant bayGio = Instant.EPOCH;
+
+        /** Giả lập một request khác tiêu thụ mã ngay trước lượt ghi của ta. */
+        boolean requestKhacTieuTruoc;
+
+        /**
+         * Giả lập một request gửi lại khác vừa CHÈN xong trước ta — thứ chỉ Postgres thật
+         * tái hiện được, vì nó là một va chạm trên {@code ux_email_verifications_song}.
+         */
+        boolean requestKhacChenTruoc;
+
+        @Override
+        public Optional<MaDangSong> timMaDangSong(long userId) {
+            return dong.stream()
+                    .filter(d -> d.userId() == userId && !d.daTieu() && d.hetHan().isAfter(bayGio))
+                    .findFirst()
+                    .map(d -> new MaDangSong(d.id(), d.sha256Hex(), d.taoLuc(), d.soLanThu()));
+        }
+
+        @Override
+        public int huyMaCu(long userId) {
+            int n = 0;
+            for (int i = 0; i < dong.size(); i++) {
+                Dong d = dong.get(i);
+                // KHÔNG lọc theo hạn dùng — đúng như câu SQL thật. Mã hết hạn vẫn chiếm chỗ
+                // trong unique index cho tới khi bị khai tử.
+                if (d.userId() == userId && !d.daTieu()) {
+                    dong.set(i, danhDauTieu(d));
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        @Override
+        public long luu(long userId, String maSha256, Instant hetHan) {
+            if (requestKhacChenTruoc) {
+                // Bản Jdbc dịch DuplicateKeyException thành đúng ngoại lệ này. Fake phải nói
+                // cùng một câu, nếu không thì ca test dưới đây chứng minh một hành vi mà
+                // production không có.
+                throw IdentityException.guiLaiQuaNhanh(java.time.Duration.ZERO);
+            }
+            if (timMaDangSong(userId).isPresent()) {
+                throw new IllegalStateException(
+                        "ux_email_verifications_song: userId=" + userId + " đã có một mã sống. "
+                                + "Phải gọi huyMaCu() trước — database thật sẽ từ chối câu chèn này");
+            }
+            long id = seq.incrementAndGet();
+            dong.add(new Dong(id, userId, maSha256, bayGio, hetHan, 0, false));
+            return id;
+        }
+
+        @Override
+        public boolean tieuThu(long id) {
+            for (int i = 0; i < dong.size(); i++) {
+                Dong d = dong.get(i);
+                if (d.id() != id) {
+                    continue;
+                }
+                if (requestKhacTieuTruoc || d.daTieu() || !d.hetHan().isAfter(bayGio)) {
+                    return false;
+                }
+                dong.set(i, danhDauTieu(d));
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public int ghiNhanThuSai(long id) {
+            for (int i = 0; i < dong.size(); i++) {
+                Dong d = dong.get(i);
+                if (d.id() == id && !d.daTieu()) {
+                    dong.set(i, new Dong(d.id(), d.userId(), d.sha256Hex(), d.taoLuc(),
+                            d.hetHan(), d.soLanThu() + 1, false));
+                    return d.soLanThu() + 1;
+                }
+            }
+            return 0;
+        }
+
+        private static Dong danhDauTieu(Dong d) {
+            return new Dong(d.id(), d.userId(), d.sha256Hex(), d.taoLuc(), d.hetHan(),
+                    d.soLanThu(), true);
+        }
+    }
+
+    /**
+     * Hộp thư trong bộ nhớ.
+     *
+     * <p>Nó GIỮ mã thô, và đó là cách duy nhất test kiểm được vòng đầy đủ: mã thật chỉ tồn
+     * tại trong lá thư, database chỉ có bản băm. Không có fake này thì ca "gửi rồi xác minh"
+     * phải tự tính SHA-256 — tức là tự viết lại chính thứ đang kiểm.
+     */
+    static final class ThuGia implements EmailSender {
+
+        record LaThu(String den, String tenHienThi, String ma, long soPhutConHan) {
+        }
+
+        final List<LaThu> daGui = new ArrayList<>();
+
+        /** Bật để giả lập SMTP từ chối — dùng cho ca "đăng ký vẫn thành công". */
+        boolean hong;
+
+        @Override
+        public void guiMaXacMinh(String den, String tenHienThi, String ma, long soPhutConHan) {
+            if (hong) {
+                throw IdentityException.khongGuiDuocThu();
+            }
+            daGui.add(new LaThu(den, tenHienThi, ma, soPhutConHan));
+        }
+
+        String maMoiNhat() {
+            return daGui.getLast().ma();
         }
     }
 

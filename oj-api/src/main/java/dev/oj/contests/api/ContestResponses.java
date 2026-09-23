@@ -21,13 +21,16 @@ public final class ContestResponses {
     }
 
     /**
-     * @param cacDe rỗng khi kỳ thi chưa mở. Cùng lý do ở {@code GetContestUseCase}: danh sách
-     *              mã đề đã là thông tin
+     * @param cacDe    rỗng khi kỳ thi chưa mở. Cùng lý do ở {@code GetContestUseCase}: danh
+     *                 sách mã đề đã là thông tin
+     * @param duocSoan người gọi là chủ kỳ thi hoặc ADMIN — giao diện dùng để hiện khu gắn/gỡ
+     *                 đề. Không phải chốt quyền: xem {@code GetContestUseCase.ChiTiet}
      */
     public record ChiTiet(long id, String slug, String title, String format,
                           Instant startsAt, Instant endsAt, Instant freezeAt,
                           boolean daCongBo, boolean registrationRequired,
-                          boolean daDangKy, String trangThai, List<De> cacDe) {
+                          boolean daDangKy, String trangThai, List<De> cacDe,
+                          boolean duocSoan) {
 
         /**
          * ★ {@code trangThai} suy ở SERVER, và nó là thứ làm cho {@code cacDe} đọc được.
@@ -48,7 +51,8 @@ public final class ContestResponses {
                     c.startsAt(), c.endsAt(), c.freezeAt(), c.daCongBo(),
                     c.registrationRequired(), ct.daDangKy(),
                     ListContestsUseCase.TrangThai.cua(c, bayGio).name(),
-                    ct.cacDe().stream().map(De::tu).toList());
+                    ct.cacDe().stream().map(De::tu).toList(),
+                    ct.duocSoan());
         }
     }
 

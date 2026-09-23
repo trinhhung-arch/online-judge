@@ -72,6 +72,24 @@ public final class AuthRequests {
         }
     }
 
+    /**
+     * FR-AUTH-09 (V13) — sáu chữ số gõ lại từ thư xác minh.
+     *
+     * <p>Mã chỉ sống 30 phút và chết sau vài lần gõ sai, nên nó "ít bí mật" hơn một mật khẩu.
+     * Nhưng {@code toString()} vẫn bị ghi đè, vì cái giá của việc giấu nó bằng không, còn cái
+     * giá của một ngoại lệ validation in ra mã đúng lúc nó còn sống thì không.
+     *
+     * <p>Cùng lập luận đã áp cho {@link XacNhanHaiLop}: ba mươi giây là thừa đủ để một dòng
+     * log bị đọc.
+     */
+    public record XacMinhEmail(String ma) {
+
+        @Override
+        public String toString() {
+            return "XacMinhEmail[]";
+        }
+    }
+
     /** FR-AUTH-02 và FR-AUTH-03: cùng một trường cho làm mới và đăng xuất. */
     public record Refresh(String refreshToken) {
 
