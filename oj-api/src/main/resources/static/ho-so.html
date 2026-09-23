@@ -168,10 +168,10 @@
 </main>
 <!-- ★ Thư viện QR, GHIM BẰNG SRI.
      Trang này hiện bí mật TOTP, nên một script lạ ở đây đọc được nó. `integrity` khoá đúng
-     bộ byte của phiên bản 1.4.4: CDN bị chiếm thì trình duyệt TỪ CHỐI chạy file, chứ không
-     chạy một file khác. CSP đã cho phép cdn.jsdelivr.net (KaTeX dùng chung).
+     bộ byte của phiên bản 1.4.4. Từ 2026-09-24 file nằm ở static/vendor/ (rà soát F3) — vẫn
+     giữ integrity: sửa lén file trong repo mà quên SHA256SUMS thì trình duyệt vẫn TỪ CHỐI chạy.
      Không có nó thì phần nhập tay vẫn chạy — QR chỉ là đường tắt. -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"
+<script src="/vendor/npm/qrcode-generator@1.4.4/qrcode.js"
         integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
         crossorigin="anonymous"></script>
 <script type="module" src="/js/ho-so.js"></script>

@@ -22,8 +22,10 @@ import java.time.Duration;
  *   <li><b>Không có một {@code <script>} nội tuyến nào</b> — nên không cần
  *       {@code 'unsafe-inline'} cho script, tức là CSP ở đây thật sự chặn được XSS chứ không
  *       chỉ trang trí. Giữ được điều này là điều kiện để cả chính sách có giá trị.</li>
- *   <li><b>{@code cdn.jsdelivr.net}</b> — KaTeX, và nó đã có {@code integrity=} (SRI) ở cả
- *       bốn thẻ. CSP cho phép origin; SRI mới là thứ chặn CDN bị chiếm.</li>
+ *   <li><b>Không host ngoài nào ngoài {@code challenges.cloudflare.com}</b> (Turnstile). Đến
+ *       2026-09-24 CSP mở cả {@code cdn.jsdelivr.net} cho KaTeX và CodeMirror — tức là MỌI gói
+ *       npm được phép chạy trong trang giữ access token. Giờ thư viện nằm ở
+ *       {@code static/vendor/}; {@code TaiNguyenGiaoDienTest} giữ cho nó ở đó.</li>
  *   <li><b>{@code style-src-attr 'unsafe-inline'}</b> — KaTeX sinh ra hàng loạt thuộc tính
  *       {@code style="..."} lúc chạy. Không có dòng này thì công thức toán vỡ hình. Thuộc
  *       tính style là vector yếu hơn hẳn script nội tuyến, và nó KHÔNG nới lỏng

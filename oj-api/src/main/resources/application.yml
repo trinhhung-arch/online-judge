@@ -297,13 +297,17 @@ oj:
     #     <script> nội tuyến là buộc phải nới, và nới là mất tác dụng chặn XSS.
     #   style-src-attr 'unsafe-inline' — KaTeX sinh thuộc tính style lúc chạy. Không có
     #     dòng này thì công thức toán vỡ hình. Nó KHÔNG nới lỏng script-src.
-    #   cdn.jsdelivr.net — KaTeX, đã có integrity= (SRI) ở cả bốn thẻ trong problem.html.
+    #   KHÔNG còn cdn.jsdelivr.net (từ 2026-09-24, rà soát F3): KaTeX, qrcode và CodeMirror
+    #     nằm ở static/vendor/. Mở cả host jsDelivr là cho phép MỌI gói npm chạy trong trang
+    #     giữ access token — một lỗ XSS bất kỳ là nạp được thư viện tuỳ ý qua đó.
+    #     TaiNguyenGiaoDienTest đỏ nếu chuỗi dưới đây nhắc lại jsdelivr.
+    #   challenges.cloudflare.com — host ngoài DUY NHẤT: widget Turnstile ở trang đăng ký.
     content-security-policy: >-
       default-src 'none';
-      script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com;
-      style-src 'self' https://cdn.jsdelivr.net;
+      script-src 'self' https://challenges.cloudflare.com;
+      style-src 'self';
       style-src-attr 'unsafe-inline';
-      font-src https://cdn.jsdelivr.net;
+      font-src 'self';
       img-src 'self' data:;
       connect-src 'self';
       form-action 'self';
