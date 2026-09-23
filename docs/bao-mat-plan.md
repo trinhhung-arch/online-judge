@@ -96,7 +96,7 @@ vì chưa có gì để tấn công. Đặc tả đã đủ chi tiết để vi�
 
 ---
 
-## PHẦN 2 — Mười một lỗ trong chính lưới kiểm thử *(6 đã sửa, 5 còn mở)*
+## PHẦN 2 — Mười một lỗ trong chính lưới kiểm thử *(9 đã sửa, 2 còn mở — cập nhật 2026-09-24)*
 
 Xếp theo *hậu quả × khả năng không ai phát hiện*, không theo độ khó sửa.
 
@@ -182,7 +182,13 @@ Kèm một chốt tự canh theo khuôn `sandbox-attack.yml`: nếu ai hạ `exi
 > protection cho `main` (đặt `ci` · `sandbox-attack` · `quet-phu-thuoc` làm required check), và
 > bật Dependabot *security updates* ở Settings > Code security. Hai việc bấm trên GitHub.
 
-### Lỗ 3 · Bất biến #9 được canh ở `toString()`, không ở dòng log
+### Lỗ 3 · ✅ ĐÃ SỬA 2026-09-24 · Bất biến #9 được canh ở `toString()`, không ở dòng log
+
+> **Đã sửa bằng hai lưới:** `LogKhongBiMatTest` (LUẬT 10 — quét mọi `log.*(…)` của `oj-api` và
+> `oj-worker`, tham số không được mang tên bí mật) và `LogKhongLoBiMatIT` (bắt log THẬT ở mức
+> TRACE qua nộp bài → tiến độ → verdict, lỗi biên dịch, đăng nhập sai qua HTTP; mã nguồn, log
+> compiler, mật khẩu mang chuỗi mốc). Gỡ-cơ-chế: log `source()` → cả hai đỏ; log mật khẩu qua
+> `LoggerFactory.getLogger(…)` → **chỉ IT** đỏ — luật quét chỉ thấy dạng `log.x(`. Cần cả hai.
 
 Năm chỗ ép `toString()` không chứa bí mật (`MaXacMinhEmailTest` · `SubmissionResponseTest` ·
 `SubmitSolutionUseCaseTest` · `ClaimJudgeJobUseCaseTest` · `JwtTest`). Đó chặn được
@@ -191,14 +197,20 @@ cmd.source())`, và **không một test nào bắt output log thật** rồi soi
 #5 có script riêng, #10 và #12 có ArchUnit, #3 có test riêng — #9 là cái duy nhất chỉ có
 javadoc. Lỗ này rẻ nhất trong bảy lỗ và nằm ở bất biến đắt nhất.
 
-### Lỗ 4 · `innerHTML` duy nhất không bị ép là duy nhất
+### Lỗ 4 · ✅ ĐÃ SỬA 2026-09-24 · `innerHTML` duy nhất không bị ép là duy nhất
+
+> **Đã sửa:** `TaiNguyenGiaoDienTest.mot_inner_html_duy_nhat` — đúng một phép gán, ở `problem.js`,
+> gán `statementHtml`; thêm cái thứ hai (kể cả `outerHTML`, `insertAdjacentHTML`) là đỏ.
 
 `js/problem.js:30` — `khung.innerHTML = de.statementHtml` — là chỗ **duy nhất** của cả giao
 diện. Ba file JS khác mang javadoc hứa *"không một innerHTML nào"*. Đó là lời hứa, không phải
 lưới: thêm cái thứ hai không làm đỏ gì cả. `BeMatFrontendTest` đã đọc và phân tích file JS
 cho bốn luật khác — thêm luật này gần như miễn phí.
 
-### Lỗ 5 · SEC3 kiểm bằng "rà soát thủ công"
+### Lỗ 5 · ✅ ĐÃ QUÉT 2026-09-24 · SEC3 kiểm bằng "rà soát thủ công"
+
+> **Biên bản** ở `ra-soat-bao-mat-2026-09-24.md` Phần 7: 0 đường rò ở HTTP, log, thông báo lỗi;
+> prompt LLM N/A (module `ai` chưa có). Nội dung testcase chỉ có hai đường ra, cả hai có test.
 
 Bảng SLO ghi thẳng: cách đo của SEC3 là *rà soát thủ công*. Có bốn test điểm rất tốt, nhưng
 chúng canh **bốn đường đã biết**. Đường thứ năm — một trường mới thêm vào một DTO — không làm

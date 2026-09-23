@@ -67,7 +67,7 @@ Mỗi mục: **đường đi** (từ đâu, vai trò nào, tới gì) · **bằn
 - **Mức:** xác suất thấp (hai lớp phải cùng thủng; `isolate` qua 14 ca tấn công), **hậu quả
   toàn phần** — đúng thứ thứ ba trong ba thứ hệ thống này bán (CLAUDE.md §0).
 - **Chưa đo:** OrbStack có cho giới hạn thư mục chia sẻ cho Docker engine không; quyền nào
-  trong bốn `cap-add` là thật sự cần cho `isolate` (có thể `NET_ADMIN` thừa).
+  trong bốn `cap-add` là thật sự cần cho `isolate`. **→ Đo ở Phần 7: `NET_ADMIN` CẦN; seccomp `unconfined` thì không.**
 
 ### F2 · 🔴 Trần dò mã TOTP chỉ tính theo IP — IPv6 vô hiệu hoá nó
 
@@ -203,8 +203,9 @@ Sau đó, ba phương án:
 
 - **(a) Siết container** theo D0b, giữ nguyên OrbStack. Rẻ; giảm xác suất thoát container, **không**
   đổi hậu quả khi đã thoát.
-- **(b) Worker trong máy ảo Linux riêng không chia sẻ thư mục** (Lima/UTM, hoặc OrbStack nếu
-  D0a cho phép). Thoát sandbox chỉ tới một máy ảo không có gì. Tốn công dựng + đo lại hiệu
+- **(b) Worker trong máy ảo Linux riêng, KERNEL RIÊNG, không chia sẻ thư mục** (UTM, hoặc Lima dùng
+  Virtualization.framework). **Không** dùng "isolated machine" của OrbStack — chung kernel, chính
+  OrbStack nói không dành cho mã cố thoát sandbox (Phần 7). Thoát sandbox chỉ tới một máy ảo không có gì. Tốn công dựng + đo lại hiệu
   chuẩn `host_factor` (ADR 006).
 - **(c) Máy chấm là một máy riêng.** Sạch nhất, tốn phần cứng.
 
@@ -250,3 +251,78 @@ chỉ cần mã. C nhỏ và đóng R3. D0 chỉ là đo, nhưng mọi quyết �
 - **Chạy lại toàn bộ rà soát theo lịch.** Những gì lặp lại được đã thành máy: `kiem-tunnel.sh`,
   Trivy hằng ngày, `sandbox-attack.yml`. Phần còn lại (F1, cấu hình máy) đổi khi đổi hạ tầng —
   rà lại vào lúc ấy.
+
+---
+
+## PHẦN 7 — Tiến độ thực hiện (2026-09-24, cùng ngày)
+
+Làm theo khuyến nghị của Phần 5: dải **/64**, trần TOTP **10 lần / 15 phút**, vendor theo cách **(a)**.
+Mỗi đợt có gỡ-cơ-chế-cho-đỏ; số ca đỏ ghi trong commit tương ứng.
+
+| Đợt | Trạng thái | Bằng chứng |
+|---|---|---|
+| **A** | ⏳ việc tay — xem cuối phần này | — |
+| **B** | ✅ `10daa81` | `ClientIp.khoaGioiHan` (IPv6 /64) cho khoá đăng nhập, trần đăng ký, trần API ẩn danh; khoá đăng nhập dùng `<<=`/`>>=` trên `inet` (không migration). V15: 10 mã sai liên tiếp / tài khoản → khoá bước 2FA 15 phút, kể cả mã đúng; `noRollbackFor` cho đường tắt 2FA. 6 biến thể gỡ-cơ-chế đều đỏ; biến thể `noRollbackFor` **chỉ IT** thấy. Kèm: `ClientIp.hopLe` từng nhận `bad.cafe` và tra DNS 211ms |
+| **C** | ✅ `964a5fd` | 43 module CodeMirror + KaTeX + qrcode vào `static/vendor/` (giống từng byte CDN, 4 SRI cũ khớp), `SHA256SUMS`; CSP chỉ `'self'` + Turnstile. Mở thật trong trình duyệt với CSP mới: 0 request ra ngoài, 0 lỗi CSP, KaTeX render + font nạp |
+| **D0** | ✅ đo xong | Xem "D0 — kết quả" dưới |
+| **D(a)** | ✅ worker đang chạy với seccomp mặc định | `/proc/1/status` trong container: `Seccomp: 2`; 14/14 tấn công + 9/9 chấm thật trên đúng bộ cờ ấy |
+| **D(b)/(c)** | ⏳ cần quyết | Xem D0 — OrbStack "isolated" KHÔNG đủ |
+| **E1–E2** | ✅ | `~/oj-backup` 700, không file nào đọc được bởi người khác (trước: WAL `777`, 19 file 644); `umask 077` trong hai script sao lưu (file mới ra `600` — đo) |
+| **E3** | ⏳ cần quyết | nơi để bản ngoài máy + nơi giữ khoá |
+| **F-1** | ✅ | `LogKhongBiMatTest` + `LogKhongLoBiMatIT` (Lỗ 3) |
+| **F-2** | ✅ | luật "một innerHTML" (Lỗ 4) |
+| **F-3** | ✅ | biên bản SEC3 dưới |
+| **F-4, F-5** | ⏳ việc người | ký OWASP; buổi tấn công chéo 2×3h |
+| **F-6** | ❌ chưa làm | "đề trong hai kỳ thi chồng giờ": không commit nào ngoài `ae7e81c` chạm việc ấy — chip vẫn chờ |
+| **F-7** | ✅ | `KhongMatKhauMacDinhOProd`: profile prod mà mật khẩu DB/Rabbit/Redis/MinIO còn mặc định hoặc rỗng → không khởi động. Đo trước trên env prod thật: cả 6 khoá QUA |
+
+### D0 — kết quả đo
+
+- **Bỏ `NET_ADMIN` → 21/23 đỏ** (`SIOCSIFFLAGS on 'lo' failed`): isolate phải bật `lo` trong
+  network namespace của box. Nhận định "có thể `NET_ADMIN` thừa" ở F1 là **sai** — quyền ấy cần.
+- **Seccomp mặc định của Docker → 23/23 xanh.** Đã áp (`trien-khai-mac.sh`, `kiem-sandbox.sh`).
+- **AppArmor:** máy ảo OrbStack không có (`docker info` chỉ liệt kê seccomp) — cờ `unconfined` là no-op, đã bỏ.
+- **OrbStack "isolated machine" KHÔNG phải ranh giới cho mô hình đe doạ của ta.** Tài liệu của chính
+  OrbStack: mọi máy và container chạy trong MỘT máy ảo Linux, chung một kernel; không khuyến nghị cho
+  "code that will actively try to exploit the kernel and escape the sandbox — use a full virtual
+  machine with its own kernel". Nên D(b) phải là **máy ảo đầy đủ có kernel riêng** (UTM, hoặc Lima
+  dùng Virtualization.framework), không phải `machine.docker.isolated`.
+- **OrbStack không áp quyền macOS cho uid trong container:** uid 70 ghi được vào thư mục `700` của
+  chủ máy qua bind mount (đo). Hệ quả tốt: WAL không cần `777`. Hệ quả xấu: củng cố F1 — mọi tiến
+  trình trong một container được mount thư mục nào thì ghi được mọi thứ tài khoản macOS ghi được.
+
+### Biên bản SEC3 (F-3, Lỗ 5)
+
+| Đường ra | Kết quả |
+|---|---|
+| HTTP | `testcases` chỉ lưu `input_sha256`/`output_sha256` + kích thước; nội dung ở kho content-addressed. Hai đường đọc kho: `/internal/judge/testdata/{sha}` (secret + chặn header Cloudflare, `InternalJudgeHttpIT`, `InternalQuaTunnelHttpIT`) và `GET /api/v1/problems/{id}/testdata` (SETTER + chủ sở hữu **trong query**; USER 403, SETTER đề khác **404** — `VanHanhHttpIT.tai_testdata`). Không DTO nào ở `*/api` có trường input/output. `sample_testcase_contents`: khoá ngoại `(testcase_id, is_sample)` + `CHECK (is_sample)` — testcase ẩn **không thể** có hàng ở đó |
+| Log | LUẬT 10 + IT log thật (F-1) |
+| Thông báo lỗi | `VerdictExplainer` không in nguyên `isolateStatus` (`VerdictExplainerTest`); không factory ngoại lệ nào mang đường dẫn box hay tên tệp testcase |
+| Prompt LLM | N/A — module `ai` chưa có (tuần 14–15) |
+
+Kết luận: **0 đường rò** tại thời điểm quét. 59 endpoint (`grep -rhE '^\s*@(Get|Post|Put|Delete|Patch)Mapping'`).
+
+### Phát hiện thêm trong lúc làm
+
+- **CodeMirror chưa từng chạy được** — cả trên CDN gốc lẫn bản vendor: cây import kéo 4 bản
+  `@codemirror/state` ("multiple instances … breaking instanceof checks"). Trang nộp bài lùi về
+  `<textarea>` từ lâu, không ai biết vì `catch {}` nuốt lỗi. Nộp bài vẫn chạy (đúng thiết kế). Giờ
+  `console.warn`. Sửa tận gốc cần một bundle MỘT bản state — cần một bước build JS, **chờ quyết**.
+- **Base backup vật lý không chạy định kỳ**: job `dev.oj.sao-luu-goc` chưa từng được cài; bản gần
+  nhất 51 giờ tuổi, `kiem-wal.sh` báo **không PITR được**. Đã cài theo hướng dẫn trong plist, kích
+  chạy qua launchd (exit 0, 12M, file `600`); `kiem-wal.sh` xanh toàn bộ — R4 = 1 phút.
+- **F9 · 🟡 Xác minh mật khẩu trong phiên không có trần**: `TwoFactorUseCase.tat` và đổi mật khẩu
+  kiểm mật khẩu cũ mà không đếm lần sai. Cần một phiên hợp lệ (token đã bị lấy) mới khai thác; trần
+  BCrypt toàn cục (~16/giây) là giới hạn duy nhất. Nên đếm như FR-AUTH-08 — chưa làm.
+
+### Việc còn lại cho anh
+
+| # | Việc |
+|---|---|
+| A1 | Branch protection `main`: bắt buộc `ci`, `sandbox-attack`, `quet-phu-thuoc`, `buildx` |
+| A2 | Bật Dependabot *security updates* |
+| A3 | Bật firewall macOS + stealth; tắt AirPlay Receiver |
+| A4 | Đăng ký thử một tài khoản (xác nhận hostname Turnstile) |
+| A5 | Dọn jar cũ `~/oj-release`, ảnh `oj-worker:truoc-cve-20260924` |
+| Deploy | Bản API hiện chạy chưa có B, C, F-7 (V15 sẽ chạy khi khởi động bản mới) |
+| Quyết | D(b) máy ảo riêng cho worker · E3 bản sao lưu ngoài máy · bundle CodeMirror · F9 |
