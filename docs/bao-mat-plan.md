@@ -74,7 +74,7 @@ thì kỳ thi ấy hỏng vĩnh viễn. Thứ tự ưu tiên ở Phần 3 theo �
 | `/internal` không tới được từ internet | ✅ ba lớp: ingress không neo · 404 cho request mang header Cloudflare · secret — `InternalQuaTunnelHttpIT` · `InternalSecretFilterTest` (Lỗ 11) |
 | `.secrets-dev` không vào git | ✅ `.gitignore:47`, chưa từng được track |
 | `audit_log` append-only | ✅ `AuditLogChiGhiThemIT`, chạy bằng `oj_app` (V14). Trước 2026-09-23 dòng này dẫn `VanHanhHttpIT` — test ấy không kiểm append-only, và kiểm thật thì thủng qua partition (Lỗ 9) |
-| Quét phụ thuộc | ✅ **có răng** từ 2026-09-24 — lần quét thật đầu tiên (`85f2f79`) tìm 11 CVE CRITICAL/HIGH có bản vá; `7d542e9` vá 10 (Tomcat 11.0.26 · bcprov 1.85.2 · amqp-client 5.34.0), lượt sau vá nốt CVE-2025-59952 (MinIO 8.6.0 + `okhttp-jvm`, có `MinioTestdataStoreIT` trên MinIO thật); cả hai đã chạy trên prod. ⚠️ Trivy quét **pom**, không quét jar — xem Lỗ 2 |
+| Quét phụ thuộc | ✅ **có răng** từ 2026-09-24 — lần quét thật đầu tiên (`85f2f79`) tìm 11 CVE CRITICAL/HIGH có bản vá; `7d542e9` vá 10 (Tomcat 11.0.26 · bcprov 1.85.2 · amqp-client 5.34.0), lượt sau vá nốt CVE-2025-59952 (MinIO 8.6.0 + `okhttp-jvm`, có `MinioTestdataStoreIT` trên MinIO thật); cả hai đã chạy trên prod. Từ 2026-09-24 cổng quét **hai fat jar sẽ triển khai** (`rootfs`), không quét pom — xem Lỗ 2 |
 
 ### Tầng 4 — Công bằng kỳ thi · ✅
 
@@ -150,7 +150,12 @@ bước Trivy). Đây là mục duy nhất của `nfrplan.md` Phần 4 chỉ có
   bảng tổng hợp chỉ có bốn target, cả bốn là `pom.xml` — jar trong `target/` không được đọc.
   Trivy tự giải cây phụ thuộc từ pom (kể cả bản do parent Spring Boot quản) và đã bắt đúng
   Tomcat 11.0.24 đi vào bắc cầu, nên cổng vẫn có răng; nhưng nó quét cây **suy ra**, không phải
-  jar sẽ chạy. Đọc jar thật cần `scan-type: rootfs` trên `target/` — chờ người quyết.
+  jar sẽ chạy. **Đã chuyển** sang `scan-type: rootfs` trên đúng hai fat jar (chép vào `quet/`,
+  không quét cả repo — `maven-wrapper.jar` và `*.jar.original` không chạy ở đâu). Kèm chốt
+  **"Cổng có thật sự đọc jar?"**: xuất danh sách gói Trivy nhận ra ra JSON, đỏ nếu không thấy
+  `tomcat-embed-core` trong jar API hoặc `amqp-client` trong jar worker — để một ngày Trivy thôi
+  đọc `BOOT-INF/lib` thì cổng đỏ vì mù, không xanh vì không thấy gì. Chốt "Cổng vẫn còn răng?"
+  thêm điều kiện: đủ ba bước `scan-type: rootfs`.
 
 Kèm một chốt tự canh theo khuôn `sandbox-attack.yml`: nếu ai hạ `exit-code` hoặc thu hẹp
 `severity`, chính job ấy đỏ.

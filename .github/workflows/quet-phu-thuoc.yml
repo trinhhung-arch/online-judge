@@ -46,18 +46,23 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # ⚠️ Ý định ban đầu: dựng jar rồi quét cả thư mục, để Trivy đọc các jar thật trong target/.
-      #   ĐO 2026-09-24 THÌ KHÔNG PHẢI VẬY: ở scan-type fs, bảng "Report Summary" chỉ có bốn
-      #   target, cả bốn là pom.xml — jar không được đọc. Trivy tự giải cây phụ thuộc từ pom
-      #   (kể cả bản do parent Spring Boot quản), và lần quét ấy đã bắt đúng tomcat 11.0.24 đi
-      #   vào bắc cầu, nên cổng vẫn có răng. Nhưng "quét đúng thứ sẽ chạy" là CHƯA đúng: một
-      #   phiên bản Maven giải khác Trivy thì cổng không thấy. Muốn đọc jar thật phải chuyển sang
-      #   scan-type rootfs trên target/ — đổi cách cổng làm việc, chờ người quyết.
-      #   Bước dựng này vì thế hiện chưa góp gì cho phép quét; giữ tới khi quyết xong.
+      # ★ QUÉT JAR SẼ TRIỂN KHAI, KHÔNG QUÉT pom.xml.
+      #   Bản trước dùng scan-type fs trên cả repo, với chú thích "Trivy đọc luôn jar trong target/".
+      #   Đo 2026-09-24: sai — "Report Summary" chỉ có bốn target, cả bốn là pom.xml. Trivy tự giải
+      #   cây phụ thuộc từ pom; nó bắt đúng tomcat 11.0.24 đi vào qua parent, nhưng đó là cây SUY
+      #   RA, không phải thứ chạy trên host. Maven giải khác Trivy một bản là cổng mù.
+      #   Nên: rootfs trên đúng HAI fat jar (Spring Boot lồng thư viện trong BOOT-INF/lib). Không
+      #   rootfs cả repo: maven-wrapper.jar và *.jar.original không chạy ở đâu, quét chúng là ồn.
+      #   Chốt "Cổng có thật sự đọc jar?" bên dưới đỏ nếu Trivy không thấy thư viện lồng bên trong.
       #
       # -DskipTests là cố ý: ci.yml đã chạy test rồi. Job này trả lời một câu khác.
-      - name: Dựng jar để quét đúng thứ sẽ chạy
-        run: ./mvnw -B --no-transfer-progress -DskipTests package
+      - name: Dựng hai jar sẽ triển khai
+        run: |
+          ./mvnw -B --no-transfer-progress -DskipTests package
+          mkdir -p quet
+          # `*.jar` không khớp `*.jar.original` (bản mỏng, không kèm thư viện) — cố ý.
+          cp oj-api/target/oj-api-*.jar oj-worker/target/oj-worker-*.jar quet/
+          ls -la quet
 
       # ignore-unfixed: true — KHÔNG phải để cho dễ thở.
       #
@@ -74,8 +79,8 @@ jobs:
       - name: Trivy — CRITICAL/HIGH có bản vá thì CHẶN
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
-          scan-type: fs
-          scan-ref: .
+          scan-type: rootfs
+          scan-ref: quet
           scanners: vuln
           severity: CRITICAL,HIGH
           ignore-unfixed: true
@@ -88,13 +93,51 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
-          scan-type: fs
-          scan-ref: .
+          scan-type: rootfs
+          scan-ref: quet
           scanners: vuln
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false
           exit-code: '0'
           format: table
+
+      # ⛔ Chốt: Trivy có THẬT SỰ đọc được thư viện lồng trong jar không. Không có chốt này thì
+      # một ngày Trivy thôi đọc BOOT-INF/lib (đổi phiên bản, đổi cách đóng gói) là cổng xanh vì
+      # KHÔNG THẤY GÌ — đúng kiểu hỏng vừa gặp với fs. Đòi hai thư viện đã biết chắc có mặt:
+      # tomcat-embed-core trong jar API, amqp-client trong jar worker, và đếm tổng số gói.
+      - name: Liệt kê gói Trivy nhận ra trong jar
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: quet
+          scanners: vuln
+          list-all-pkgs: true
+          exit-code: '0'
+          format: json
+          output: trivy-goi.json
+
+      - name: Cổng có thật sự đọc jar?
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("trivy-goi.json"))
+          def goi(jar):
+              return {p.get("Name", "") for r in d.get("Results") or []
+                      for p in r.get("Packages") or []
+                      if jar in r.get("Target", "") or jar in p.get("FilePath", "")}
+          hong = []
+          for jar, phai_co in (("oj-api-", "org.apache.tomcat.embed:tomcat-embed-core"),
+                               ("oj-worker-", "com.rabbitmq:amqp-client")):
+              g = goi(jar)
+              print(f"{jar}*.jar: {len(g)} gói Trivy nhận ra; có {phai_co}: {phai_co in g}")
+              if phai_co not in g:
+                  hong.append(f"Trivy không thấy {phai_co} trong {jar}*.jar — cổng đang quét mù")
+          for h in hong:
+              print(f"::error::{h}")
+          sys.exit(1 if hong else 0)
+          PY
 
       # ⛔ Chốt cuối, cùng tinh thần với sandbox-attack.yml: cổng này KHÔNG được biến mất
       # trong im lặng. Nếu ai đó đổi severity, bật ignore-unfixed cho cả cổng, hay hạ
@@ -107,7 +150,9 @@ jobs:
             echo "::error::Cổng chặn không còn quét đủ CRITICAL,HIGH"; exit 1; }
           grep -q "exit-code: '1'" "$f" || {
             echo "::error::Cổng chặn không còn làm CI đỏ (exit-code khác 1)"; exit 1; }
-          echo "Cổng còn nguyên: CRITICAL,HIGH · exit-code 1."
+          [ "$(grep -c 'scan-type: rootfs' "$f")" -ge 3 ] || {
+            echo "::error::Có bước Trivy không còn quét jar (scan-type rootfs) — quay về quét pom là mù"; exit 1; }
+          echo "Cổng còn nguyên: CRITICAL,HIGH · exit-code 1 · quét jar."
 
 # -----------------------------------------------------------------------------
 # CÁI FILE NÀY VẪN KHÔNG LÀM: chặn merge.
