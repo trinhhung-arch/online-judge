@@ -108,8 +108,8 @@
 			</dependency>
 
 			<!--
-				★ Bouncy Castle vào qua MinIO client, không do ta khai. MinIO 8.5.17 kéo 1.78.1,
-				và ngay cả 8.6.0 cũng chỉ kéo 1.81 — còn bản vá của CVE-2026-8763 và
+				★ Bouncy Castle vào qua MinIO client, không do ta khai. MinIO 8.6.0 kéo 1.81
+				(8.5.17 kéo 1.78.1) — còn bản vá của CVE-2026-8763 và
 				CVE-2025-14813 (CRITICAL) và CVE-2026-13506 (HIGH) là 1.85. Nên phải ghim ở
 				đây; nâng MinIO không đủ. Gỡ khối này khi MinIO tự kéo bản ≥ 1.85. Trivy 2026-09-24.
 			-->
@@ -246,15 +246,33 @@
 			Chỉ sống trong problems.infrastructure, sau port TestdataStore. oj-worker KHÔNG
 			có dependency này và không được có — bất biến #3.
 
-			⚠️ CÒN MỞ: CVE-2025-59952 (HIGH, vá ở 8.6.0). Chưa nâng vì 8.6.0 kéo OkHttp 5,
-			mà artifact `okhttp` 5.x trên Maven Central là gốc Kotlin đa nền tảng KHÔNG có
-			class JVM (767 byte, đo 2026-09-24) — biên dịch hỏng ở `okhttp3.HttpUrl`. Nâng
-			thì phải thêm `okhttp-jvm`, tức một dependency mới (mục 5.2). Chờ người quyết.
+			8.6.0 chứ không 8.5.17: CVE-2025-59952 (HIGH — thay biến môi trường vào giá trị
+			thẻ XML), Trivy 2026-09-24. Không lên 9.x: đổi bản chính là việc riêng.
+			Được canh bởi MinioTestdataStoreIT, chạy trên MinIO thật.
 		-->
 		<dependency>
 			<groupId>io.minio</groupId>
 			<artifactId>minio</artifactId>
-			<version>8.5.17</version>
+			<version>8.6.0</version>
+		</dependency>
+
+		<!--
+			★ Phần JVM của OkHttp 5 — MinIO 8.6.0 cần nó mà không tự kéo được.
+			ĐÃ ĐƯỢC DUYỆT (CLAUDE.md mục 5.2), 2026-09-24.
+
+			OkHttp 5 là thư viện Kotlin đa nền tảng. Artifact `okhttp` mà MinIO khai chỉ là
+			gốc: trên Maven Central nó nặng 767 byte, không có một class nào — Gradle đọc
+			module metadata để tự chọn biến thể JVM, Maven thì không. Thiếu dòng này thì biên
+			dịch hỏng ở `okhttp3.HttpUrl` (đo 2026-09-24).
+
+			Phiên bản PHẢI khớp bản `okhttp` mà MinIO khai trong pom của nó. MinIO nâng OkHttp
+			mà quên dòng này thì hai nửa lệch nhau: nửa rỗng mới, nửa chạy cũ.
+			kotlin-stdlib đi theo kotlin.version do Spring Boot quản (2.3.x ≥ 2.2 OkHttp đòi).
+		-->
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp-jvm</artifactId>
+			<version>5.1.0</version>
 		</dependency>
 
 		<!--

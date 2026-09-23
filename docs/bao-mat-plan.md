@@ -74,7 +74,7 @@ thì kỳ thi ấy hỏng vĩnh viễn. Thứ tự ưu tiên ở Phần 3 theo �
 | `/internal` không tới được từ internet | ✅ ba lớp: ingress không neo · 404 cho request mang header Cloudflare · secret — `InternalQuaTunnelHttpIT` · `InternalSecretFilterTest` (Lỗ 11) |
 | `.secrets-dev` không vào git | ✅ `.gitignore:47`, chưa từng được track |
 | `audit_log` append-only | ✅ `AuditLogChiGhiThemIT`, chạy bằng `oj_app` (V14). Trước 2026-09-23 dòng này dẫn `VanHanhHttpIT` — test ấy không kiểm append-only, và kiểm thật thì thủng qua partition (Lỗ 9) |
-| Quét phụ thuộc | ✅ **có răng** từ 2026-09-24 — lần quét thật đầu tiên (`85f2f79`) tìm 11 CVE CRITICAL/HIGH có bản vá; `7d542e9` vá 10 (Tomcat 11.0.26 · bcprov 1.85.2 · amqp-client 5.34.0, đã chạy trên prod). ⚠️ **Còn mở:** CVE-2025-59952 (MinIO client, HIGH) — nâng cần thêm `okhttp-jvm`, chờ quyết. ⚠️ Trivy quét **pom**, không quét jar — xem Lỗ 2 |
+| Quét phụ thuộc | ✅ **có răng** từ 2026-09-24 — lần quét thật đầu tiên (`85f2f79`) tìm 11 CVE CRITICAL/HIGH có bản vá; `7d542e9` vá 10 (Tomcat 11.0.26 · bcprov 1.85.2 · amqp-client 5.34.0), lượt sau vá nốt CVE-2025-59952 (MinIO 8.6.0 + `okhttp-jvm`, có `MinioTestdataStoreIT` trên MinIO thật); cả hai đã chạy trên prod. ⚠️ Trivy quét **pom**, không quét jar — xem Lỗ 2 |
 
 ### Tầng 4 — Công bằng kỳ thi · ✅
 
@@ -161,7 +161,10 @@ Kèm một chốt tự canh theo khuôn `sandbox-attack.yml`: nếu ai hạ `exi
 > Castle ×2 CRITICAL + 1 HIGH, amqp-client ×4 HIGH, MinIO ×1 HIGH. Spring Boot 4.1.1 là bản
 > 4.1.x mới nhất và chính nó ghim bản có lỗ, nên `7d542e9` ghi đè thuộc tính của parent; đã
 > deploy cả API lẫn worker, broker thấy hai client 5.34.0, sandbox 14/14 + chấm thật 9/9 trên
-> ảnh mới. IT **không** chạm MinIO hay RabbitMQ thật — hai bản nâng ấy được đo trên prod.
+> ảnh mới. IT **không** chạm RabbitMQ thật — bản nâng ấy được đo trên prod (broker thấy hai client
+> 5.34.0). MinIO thì từ lượt vá cuối có `MinioTestdataStoreIT` (4 ca, MinIO thật; gỡ tạo bucket
+> trong `luu` → 1/4 đỏ). MinIO 8.6.0 cần thêm `okhttp-jvm`: `okhttp` 5.x trên Central là gốc Kotlin
+> đa nền tảng không có class JVM (767 byte), Maven không tự chọn biến thể như Gradle.
 
 > **Còn lại, và KHÔNG commit vào repo được:** biến dấu đỏ thành *không merge được* là branch
 > protection cho `main` (đặt `ci` · `sandbox-attack` · `quet-phu-thuoc` làm required check), và
