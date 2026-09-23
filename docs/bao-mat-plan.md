@@ -8,6 +8,9 @@
 > phải danh sách việc mới: một kế hoạch bảo mật viết như thể chưa có gì sẽ dẫn tới làm lại
 > thứ đã chạy trong CI 400 lần, và bỏ sót đúng những chỗ chưa ai canh.
 
+> **Rà soát toàn hệ thống 2026-09-24** (mã, cấu hình, máy chủ, CI, chuỗi cung ứng) và kế hoạch
+> tiếp theo: xem `ra-soat-bao-mat-2026-09-24.md`.
+
 ---
 
 ## PHẦN 0 — Ba nguyên tắc
