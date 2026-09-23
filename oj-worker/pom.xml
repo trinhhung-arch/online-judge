@@ -19,6 +19,13 @@
 
 	<properties>
 		<java.version>21</java.version>
+
+		<!--
+			Ghi đè vì CVE-2026-63337 · 69219 · 69220 · 75516 (HIGH) — Spring Boot 4.1.1 ghim
+			5.30.0. CÙNG giá trị với oj-api/pom.xml, xem lý do đầy đủ ở đó. Gỡ khi Boot tự
+			quản bản ≥ 5.34.0. Trivy 2026-09-24.
+		-->
+		<rabbit-amqp-client.version>5.34.0</rabbit-amqp-client.version>
 	</properties>
 
 	<!--

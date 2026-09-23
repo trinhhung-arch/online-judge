@@ -69,6 +69,23 @@
 			như vậy trước khi neo bằng basedir.
 		-->
 		<flyway.locations>filesystem:${project.basedir}/src/main/resources/db/migration,filesystem:${project.basedir}/src/main/resources/db/dev-seed</flyway.locations>
+
+		<!--
+			★ GHI ĐÈ VÌ CVE — gỡ từng dòng khi Spring Boot tự quản một bản ≥ bản ghi ở đây.
+
+			Trivy (quet-phu-thuoc.yml) đỏ ở lần quét thật đầu tiên, 2026-09-24. Spring Boot
+			4.1.1 là bản 4.1.x mới nhất lúc ấy và chính nó ghim hai bản có lỗ — nâng Boot
+			không đủ, phải ghi đè thuộc tính mà parent dùng.
+
+			tomcat 11.0.24 → 11.0.26: CVE-2026-65182 · 65905 · 68525, cả ba CRITICAL, vá từ
+			  11.0.25. Hai cái sau nằm ở DIGEST/FORM authenticator của Tomcat, thứ ta không
+			  dùng. Cái đầu là lỗi kiểm soát truy cập và CHƯA loại trừ được — mà Tomcat là
+			  thứ nhận request từ internet.
+			amqp-client 5.30.0 → 5.34.0: CVE-2026-63337 · 69219 · 69220 · 75516, HIGH.
+			  oj-worker/pom.xml ghi đè CÙNG giá trị — sửa ở đây thì sửa cả ở đó.
+		-->
+		<tomcat.version>11.0.26</tomcat.version>
+		<rabbit-amqp-client.version>5.34.0</rabbit-amqp-client.version>
 	</properties>
 
 	<!--
@@ -88,6 +105,18 @@
 				<version>${testcontainers.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
+			</dependency>
+
+			<!--
+				★ Bouncy Castle vào qua MinIO client, không do ta khai. MinIO 8.5.17 kéo 1.78.1,
+				và ngay cả 8.6.0 cũng chỉ kéo 1.81 — còn bản vá của CVE-2026-8763 và
+				CVE-2025-14813 (CRITICAL) và CVE-2026-13506 (HIGH) là 1.85. Nên phải ghim ở
+				đây; nâng MinIO không đủ. Gỡ khối này khi MinIO tự kéo bản ≥ 1.85. Trivy 2026-09-24.
+			-->
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.85.2</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -216,6 +245,11 @@
 
 			Chỉ sống trong problems.infrastructure, sau port TestdataStore. oj-worker KHÔNG
 			có dependency này và không được có — bất biến #3.
+
+			⚠️ CÒN MỞ: CVE-2025-59952 (HIGH, vá ở 8.6.0). Chưa nâng vì 8.6.0 kéo OkHttp 5,
+			mà artifact `okhttp` 5.x trên Maven Central là gốc Kotlin đa nền tảng KHÔNG có
+			class JVM (767 byte, đo 2026-09-24) — biên dịch hỏng ở `okhttp3.HttpUrl`. Nâng
+			thì phải thêm `okhttp-jvm`, tức một dependency mới (mục 5.2). Chờ người quyết.
 		-->
 		<dependency>
 			<groupId>io.minio</groupId>
