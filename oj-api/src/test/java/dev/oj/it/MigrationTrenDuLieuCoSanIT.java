@@ -237,6 +237,43 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
+    /**
+     * ★ V15 trên host đã có người bật 2FA. Dòng cũ phải nhận {@code failed_attempts = 0} và
+     * không có hạn khoá (deploy không khoá oan ai), và câu ghi của jar ĐANG CHẠY — không biết
+     * hai cột mới — phải còn chạy (lùi jar không cần lùi schema).
+     */
+    @Test
+    @DisplayName("★ V15 chạy trên tài khoản đang bật 2FA: không khoá oan, jar cũ vẫn ghi được")
+    void v15_chay_duoc_khi_da_co_nguoi_bat_hai_lop() throws SQLException {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
+            pg.start();
+            flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("14")).load()
+                    .migrate();
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, role)
+                        VALUES ('co-2fa', 'a@oj.test', 'A', 'x', 'ADMIN'),
+                               ('chua-2fa', 'b@oj.test', 'B', 'x', 'USER');
+                        INSERT INTO user_two_factor (user_id, secret_enc, enabled, last_step, confirmed_at)
+                        VALUES (1, 'bi-mat-da-ma-hoa', TRUE, 12345, now());
+                        """);
+            }
+            flyway(pg).load().migrate();
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                var rs = st.executeQuery(
+                        "SELECT failed_attempts, locked_until FROM user_two_factor WHERE user_id = 1");
+                rs.next();
+                assertThat(rs.getObject(1)).as("dòng cũ nhận DEFAULT 0, không phải NULL").isEqualTo(0);
+                assertThat(rs.getObject(2)).as("★ không ai bị khoá bước hai lớp chỉ vì deploy").isNull();
+                // Đúng câu LUU_BAN_NHAP của jar đang chạy trên host (52727b6).
+                assertThat(chenDuocKhong(st, """
+                        INSERT INTO user_two_factor (user_id, secret_enc, enabled)
+                        VALUES (2, 'ban-nhap', FALSE)
+                        """)).as("★ jar cũ vẫn ghi được sau V15").isTrue();
+            }
+        }
+    }
+
     private static org.flywaydb.core.api.configuration.FluentConfiguration flyway(
             PostgreSQLContainer pg) {
         return Flyway.configure()
