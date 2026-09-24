@@ -326,3 +326,159 @@ Kết luận: **0 đường rò** tại thời điểm quét. 59 endpoint (`grep
 | A5 | Dọn jar cũ `~/oj-release`, ảnh `oj-worker:truoc-cve-20260924` |
 | Deploy | Bản API hiện chạy chưa có B, C, F-7 (V15 sẽ chạy khi khởi động bản mới) |
 | Quyết | D(b) máy ảo riêng cho worker · E3 bản sao lưu ngoài máy · bundle CodeMirror · F9 |
+
+---
+
+## PHẦN 8 — Rà soát lần 2 (2026-09-24, sau khi làm xong Phần 7)
+
+Lần 1 soi **biên công khai** kỹ. Lần 2 đổi góc nhìn: đứng **bên trong container worker** — chỗ
+kẻ thoát được `isolate` sẽ đứng — và hỏi nó với tới được gì. Câu trả lời lật lại một giả định
+của Phần 2 ("dịch vụ nội bộ chỉ nghe loopback" là đủ).
+
+### Phát hiện mới
+
+#### N1 · 🟠 Từ container worker tới được mọi cổng loopback của máy Mac, mạng compose và internet
+
+Đo bằng `/dev/tcp` từ trong `oj-worker`: **mở** hết — `host.docker.internal` :8080 (API)
+:8081 (actuator) :5432 :6379 :9000/:9001 :5672/:15672 :11434 (Ollama) :20241 (metrics
+cloudflared) :32222 (OrbStack) :57898 (một extension của VS Code); `192.168.97.2–5` (MinIO,
+RabbitMQ, Postgres, Redis — mạng compose, dù worker ở mạng `bridge` riêng); `1.1.1.1:443`,
+`github.com:443`.
+
+OrbStack đưa `host.docker.internal` vào **loopback của macOS**. Dịch vụ nghe `127.0.0.1` không
+có nghĩa là container không tới được. Không cần xác thực: Ollama (`GET /api/tags` → 200),
+cổng 57898 (trả `ok`). Có mật khẩu: Postgres, Redis, MinIO, và RabbitMQ — nhưng worker đang cầm
+mật khẩu RabbitMQ (N3).
+
+**Khác F1 ở điều kiện:** F1 cần thoát `isolate` **và** thoát container. N1 chỉ cần thoát
+`isolate` — một lớp. Box vẫn không có mạng (14 ca tấn công), nên ai chỉ nộp bài thì không chạm
+được thứ này.
+
+**Đề xuất (cần quyết, đo lại 14 ca tấn công + 9 ca chấm):** worker vào một mạng Docker
+`internal: true`, kèm một container chuyển tiếp **đúng hai cổng** (API :8080, RabbitMQ :5672).
+Hoặc gộp vào D(b): máy ảo có kernel riêng, tường lửa chặn mặc định.
+
+#### N2 · 🟠 "Kết nối từ loopback = đến từ Cloudflare" sai trên máy này
+
+`ClientIp.cua` chỉ tin `CF-Connecting-IP` / `X-Forwarded-For` khi `getRemoteAddr()` là
+loopback. Đo: giữ một kết nối từ container tới `host.docker.internal:8080` thì `lsof` phía API
+thấy `127.0.0.1:8080 ← 127.0.0.1:50652`, **tiến trình OrbStack** làm đầu kia. Mọi container
+trong OrbStack, máy ảo Lima (N5), và mọi tiến trình cục bộ đều được đối xử như tunnel, và tự
+khai được IP bất kỳ.
+
+Hậu quả khi đã đứng trong một container:
+- Vượt trần theo IP của FR-AUTH-08, trần đăng ký, trần API ẩn danh. Trần mã hai lớp theo tài
+  khoản (V15) **vẫn giữ** — lợi ích của đợt B đúng ở chỗ này.
+- Khoá đăng nhập của IP người khác: khai IP nạn nhân rồi sai 5 lần. Với đếm /64 của đợt B, một
+  địa chỉ giả khoá **cả dải /64** của họ.
+- Làm bẩn IP trong `login_attempts`, `audit_log` — dữ liệu điều tra sau sự cố.
+
+**Đề xuất (cần quyết — có bước trên dashboard Cloudflare):** một Transform Rule của Cloudflare
+gắn header bí mật tĩnh (ví dụ `X-OJ-Bien: <48 ký tự>`) vào mọi request qua edge. `ClientIp`
+chỉ tin `CF-Connecting-IP` khi header ấy khớp (so thời gian hằng, như `InternalSecretFilter`).
+Phương án khác: cloudflared → origin `unix:` socket; container không tới được socket nếu không
+được mount — sạch hơn nhưng cần cấu hình connector Unix-socket cho Tomcat.
+
+#### N3 · 🟡 RabbitMQ: một user `administrator`, quyền `.* .* .*`, dùng chung cho API và worker
+
+`rabbitmqctl list_users` → chỉ `ojuser [administrator]`. Worker cầm đúng user này, và :15672
+(management) tới được từ container (N1). Thoát `isolate` là có quyền quản trị broker: xoá
+queue, đổi policy, tạo user mới để bám trụ. Không mất bài nộp — Postgres là nguồn sự thật,
+reaper đẩy lại — nhưng không có lý do để worker cầm quyền quản trị.
+
+**Đề xuất:** user riêng cho worker (chỉ `read` trên queue chấm, không tag), user API không tag
+`administrator`, user quản trị riêng cho UI. Chạm cấu hình cả `oj-api` lẫn `oj-worker` —
+CLAUDE.md §5.6, cần hỏi.
+
+#### N4 · 🟡 `AuditPartitionScheduler` hỏng ở MỌI lần chạy — partition tháng cạn vào 31/12/2026
+
+`jdbc.sql("SELECT create_audit_log_partition(...)").update()` — gọi `update()` cho một câu
+`SELECT` → PgJDBC: *"A result was returned when none was expected."* Hàm đã chạy xong (autocommit)
+nên tháng hiện tại không sao; nhưng vòng lặp `return` ngay ở lần lặp đầu, nên **tháng +1..+3
+không bao giờ được thử**. `api.log`: 7/7 lần chạy lỗi, cả 7 đều ở `2026-09-01`. Partition hiện có
+(`audit_log_2026_09`…`_12`) là do V5 tạo sẵn lúc migrate.
+
+Từ **00:00 01/01/2027 (+07)** dòng audit rơi vào `audit_log_default`. Lượt 03:15 ngày 02/01 tạo
+partition tháng 1 sẽ vỡ vì DEFAULT đã có dòng thuộc khoảng ấy — chính cảnh mà thông báo lỗi của
+job này mô tả. Không mất dòng audit nào, nhưng từ đó mỗi tháng lại vỡ thêm. Và một dòng ERROR mỗi
+ngày dạy người trực bỏ qua ERROR.
+
+Vì sao test không bắt được: `AuditLogChiGhiThemIT` gọi thẳng hàm SQL bằng `execute`. Chưa có
+test nào chạy `baoDamPartition()`. Quét toàn repo: đây là chỗ **duy nhất** `.update()` chạy một
+câu `SELECT`.
+
+**Đề xuất:** đổi sang `.query(...)`, thêm IT gọi `baoDamPartition()` trên Testcontainers rồi
+khẳng định có partition tháng +3 (IT này đỏ với mã hiện tại). **Hạn chót: trước 31/12/2026.**
+
+#### N5 · 🟡 Máy ảo Lima `judge` còn chạy — gắn nguyên home, sudo không mật khẩu
+
+`limactl list` → `judge` Running (vz, 4 CPU, 4GiB, đĩa 100GiB), tạo 19/08, chạy liên tục 14
+ngày. Bên trong có Ubuntu 26.04, `isolate` + `isolate-cg-keeper`, containerd rootless, một bản
+clone `online-judge`. Home macOS gắn **chỉ đọc** (`virtiofs ro`), user có **sudo NOPASSWD**, không
+container nào đang chạy. Hostagent chuyển tiếp UDP `*:323` (chronyd) ra **mọi giao diện** của máy
+Mac — firewall đang tắt (F6). Phần 2 bỏ sót vì chỉ đếm TCP.
+
+Không có đường nào từ internet vào đây (SSH chỉ `127.0.0.1:49435`), và không phần nào của OJ
+dùng nó. Nhưng đó là một máy đọc được mọi secret mà không ai trông.
+
+**Đề xuất:** `limactl stop judge` nếu không dùng (xoá hẳn là quyết định của anh). Nếu giữ làm
+nền cho D(b) thì bỏ mount home.
+
+#### N6 · 🟢 Người lạ tạo được 500 + stack trace theo ý muốn
+
+- `POST /api/v1/auth/login` với `Content-Type: application/xml` → **500** `internal.error`
+  (lẽ ra 415).
+- `PUT /index.html` → **500** (lẽ ra 405).
+- `GET /error` → **500** `{"status":999}`.
+
+Hai lỗi đầu rơi vào nhánh `Exception.class` của `GlobalExceptionHandler`, mỗi lượt để lại
+`log.error` kèm stack trace **6,5KB / 65 dòng**. Đường tĩnh không qua trần API ẩn danh.
+`api.log` không xoay vòng (19MB). Không lộ gì ra response. Nhưng số 5xx do người lạ tạo ra lẫn
+vào số 5xx thật.
+
+**Đề xuất:** map `HttpMediaTypeNotSupportedException` → 415 và
+`HttpRequestMethodNotSupportedException` → 405, cả hai ở mức WARN, không stack trace. Xoay vòng
+`api.log`.
+
+#### N7 · 🟢 Container worker không có trần tài nguyên, không bỏ capability thừa
+
+`PidsLimit=<nil>`, `Memory=0`, `CapDrop=[]`: giữ nguyên bộ mặc định của Docker (`NET_RAW`,
+`MKNOD`…) cộng với 4 capability đã thêm. `isolate` đã giới hạn từng box bằng cgroup, nên đây là
+lớp phòng thủ thứ hai. Worker dùng chung kernel và RAM với Postgres (cùng máy ảo OrbStack).
+
+**Đề xuất:** `--pids-limit`, `--memory`, `--cap-drop ALL` rồi thêm lại đúng những gì `isolate` cần.
+Đo lại 14 + 9 ca, giống D0.
+
+### F-6 · kết quả kiểm "đề trong hai kỳ thi chồng giờ"
+
+**Không có đường rò.** `BI_KHOA` là một `EXISTS` trên **mọi** kỳ thi chứa đề: chỉ cần một kỳ thi
+chưa mở, hoặc người xem chưa đăng ký, là đề bị khoá. Nghĩa là hệ thống hỏng theo hướng đóng.
+
+Còn **một cách tính sai điểm:** hai kỳ thi cùng đang chạy, cùng chứa đề, A tự do, B cần đăng ký,
+thí sinh đã đăng ký B. `contestDangChayChuaDe` lấy `min(id)`, nên bài nộp có thể được tính cho
+A thay vì B.
+
+Chỉ chủ đề hoặc ADMIN dựng được cấu hình này — `themDe` chỉ gắn **đề của chính mình**. Không
+người ngoài nào kích hoạt được nó.
+
+**Đề xuất:** `themDe` / `soanDeRieng` từ chối gắn một đề vào kỳ thi có khung giờ chồng lên một
+kỳ thi khác đang chứa đề ấy.
+
+### Đo lại và vẫn ổn
+
+| Vùng | Bằng chứng lần 2 |
+|---|---|
+| Mã vừa viết (B) | `TotpChecker` kiểm khoá **trước** khi so mã. Bộ đếm là một câu `UPDATE … RETURNING` nguyên tử. `LoginUseCase` không `@Transactional`, nên số đếm không bị cuộn lại. `tat` có `noRollbackFor`. Chỉ 3 chỗ gọi `TotpChecker`, và `DatabaseTwoFactorGate` chỉ gọi `dangBat` |
+| Phân quyền | Bài nộp: `user_id = :requesterId OR ADMIN` **trong SQL**, luồng SSE đi qua cùng đường ấy. Job: `created_by` trong SQL. Gắn đề vào kỳ thi: chỉ đề của mình. Bảng xếp hạng lúc đóng băng: luồng SSE lọc lại cho đúng người mở luồng |
+| Biên công khai | `kiem-tunnel.sh` **36/36**. `.env`, `.git/config`, `application.yml`, `/v3/api-docs`, `swagger-ui`, `h2-console` → 404. `..%2f` → 400. JWT `alg:none` / HS256 giả / RS256 → 401. JSON hỏng → 400, không stack trace. `TRACE` → 405 |
+| Đề bài | CommonMark `escapeHtml(true)` + `sanitizeUrls(true)`. KaTeX không bật `trust`, nên `\href{javascript:…}` / `\htmlData` không chạy |
+| ZIP testdata | Đếm byte thật, có trần tỉ lệ nén và số entry. Không dùng tên entry làm đường dẫn |
+| Secret | `.env` 600 · credentials tunnel 400 · `~/oj-backup` 700. Placeholder trong `.env.example` để rỗng, và thiếu hoặc ngắn hơn 32 ký tự thì crash lúc boot. Actuator :8081 chỉ mở `health` |
+| CI `f6cfbb5` | `ci` đỏ: Maven Central trả **429** cho `surefire-junit-platform:3.5.6`, dù log ghi "Cache hit". Gốc: `cache: maven` cho ba workflow **chung một khoá**; `quet-phu-thuoc` (`-DskipTests`, xong trước) ghi một cache thiếu provider test, nên `ci` tải lại từ Central mỗi lượt và không bao giờ ghi bù. Đã sửa: mỗi workflow một khoá `actions/cache` riêng có `restore-keys`, retry 429 lên 6 lần, `upload-artifact@v6` (Node 24) |
+
+### Thứ tự đề xuất
+
+1. **N4** — có hạn chót, sửa nhỏ, có test đỏ trước.
+2. **N6** — sửa nhỏ, cùng vùng `platform/error`.
+3. **N2 + N1 + N3** — cùng một câu hỏi: container được nói chuyện với ai. Làm cùng D(b), cần quyết.
+4. **N5, N7, F-6** — theo thời gian rảnh.
