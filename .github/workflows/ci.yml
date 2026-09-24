@@ -86,7 +86,7 @@ jobs:
       # cách duy nhất để biết test nào hỏng là chạy lại CI.
       - name: Báo cáo test
         if: always()
-        uses: actions/upload-artifact@v6     # v5 chạy Node 20 — GitHub đã đánh dấu lỗi thời
+        uses: actions/upload-artifact@v7     # v5 chạy Node 20 — GitHub đã đánh dấu lỗi thời
         with:
           name: test-reports
           path: |

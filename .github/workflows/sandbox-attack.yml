@@ -74,7 +74,7 @@ jobs:
 
       - name: Báo cáo
         if: always()
-        uses: actions/upload-artifact@v6     # v5 chạy Node 20 — GitHub đã đánh dấu lỗi thời
+        uses: actions/upload-artifact@v7     # v5 chạy Node 20 — GitHub đã đánh dấu lỗi thời
         with:
           name: sandbox-reports
           path: 'oj-worker/target/failsafe-reports/'
