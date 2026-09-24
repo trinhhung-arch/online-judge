@@ -36,6 +36,11 @@ updates:
     commit-message:
       prefix: deps
     groups:
+      # Lõi và bảng GFM PHẢI cùng một version — mỗi cái một PR là merge cái đầu thì main
+      # chạy lõi 0.30 với bảng 0.24 (2026-09-24: #7, #8). Đứng TRƯỚC ban-va: Dependabot
+      # xếp một phụ thuộc vào nhóm khớp đầu tiên.
+      commonmark:
+        patterns: ["org.commonmark:*"]
       ban-va:
         update-types: [patch]
 

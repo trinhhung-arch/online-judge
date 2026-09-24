@@ -319,8 +319,8 @@ Kết luận: **0 đường rò** tại thời điểm quét. 59 endpoint (`grep
 
 | # | Việc |
 |---|---|
-| A1 | Branch protection `main`: bắt buộc `ci`, `sandbox-attack`, `quet-phu-thuoc`, `buildx` |
-| A2 | Bật Dependabot *security updates* |
+| A1 | ✅ 2026-09-24 — `main` protected: 5 check bắt buộc (`build`, `attacks`, `trivy`, `linux/amd64`, `linux/arm64`, ghim app GitHub Actions 15368), bắt buộc qua PR (0 lượt duyệt), áp cả admin, cấm force-push/xoá nhánh. Không đòi nhánh cập nhật theo `main` (strict=false) |
+| A2 | ✅ 2026-09-24 — Dependabot **alerts** (trước đó cũng TẮT) và **security updates** đã bật; `security_and_analysis.dependabot_security_updates = enabled` |
 | A3 | Bật firewall macOS + stealth; tắt AirPlay Receiver |
 | A4 | Đăng ký thử một tài khoản (xác nhận hostname Turnstile) |
 | A5 | Dọn jar cũ `~/oj-release`, ảnh `oj-worker:truoc-cve-20260924` |
