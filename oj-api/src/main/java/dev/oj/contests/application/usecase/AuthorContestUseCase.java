@@ -1,11 +1,13 @@
 package dev.oj.contests.application.usecase;
 
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormats;
 import dev.oj.contests.domain.ContestsException;
 import dev.oj.platform.audit.AuditLog;
 import dev.oj.platform.security.CurrentUserProvider;
+import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import dev.oj.platform.security.RequiresRole;
 import dev.oj.problems.application.usecase.AuthorProblemUseCase;
 import dev.oj.platform.security.Role;
@@ -26,6 +28,12 @@ import java.util.regex.Pattern;
  *
  * <p>Vì thế mọi thao tác ở đây ghi {@code audit_log}: câu hỏi <i>"vì sao đề này biến mất"</i>
  * phải có câu trả lời truy được.
+ *
+ * <h2>★ {@code @RequiresRole(SETTER)} là SÀN, không phải toàn bộ phép kiểm</h2>
+ * Chỉ chủ kỳ thi (hoặc ADMIN) sửa được nó, và chỉ chủ đề (hoặc ADMIN) gắn được đề ấy. Bản
+ * trước chỉ có cái sàn, nên SETTER bất kỳ gỡ được đề khỏi kỳ thi của người khác và giấu được
+ * đề công khai của người khác (rà bảo mật 2026-09-23). Điều kiện chủ sở hữu nằm trong câu SQL
+ * của {@link ContestAuthoringRepository}; {@code ContestChuSoHuuIT} ghim từng đường.
  */
 @RequiresRole(Role.SETTER)
 @Service
@@ -46,15 +54,18 @@ public class AuthorContestUseCase {
 
     private final CurrentUserProvider currentUser;
     private final ContestRepository contests;
+    private final ContestAuthoringRepository soanKyThi;
     private final AuthorProblemUseCase authorProblem;
     private final AuditLog auditLog;
     private final Clock clock;
 
     public AuthorContestUseCase(CurrentUserProvider currentUser, ContestRepository contests,
+                                ContestAuthoringRepository soanKyThi,
                                 AuthorProblemUseCase authorProblem,
                                 AuditLog auditLog, Clock clock) {
         this.currentUser = currentUser;
         this.contests = contests;
+        this.soanKyThi = soanKyThi;
         this.authorProblem = authorProblem;
         this.auditLog = auditLog;
         this.clock = clock;
@@ -73,24 +84,26 @@ public class AuthorContestUseCase {
     }
 
     /**
-     * Gắn một đề vào kỳ thi.
+     * Gắn một <b>đề của chính mình</b> vào <b>kỳ thi của chính mình</b> — ADMIN thì mọi đề,
+     * mọi kỳ thi.
      *
-     * <p><b>Không kiểm được rằng đề tồn tại từ đây</b>: luật ArchUnit 3 cấm {@code contests}
-     * import {@code problems}... đúng ra là cho phép ({@code problems ◀── contests}), nhưng
-     * chốt thật vẫn nên là khoá ngoại {@code contest_problems.problem_id → problems(id)}. Nó
-     * không quên được, và nó không lệch được với dữ liệu.
+     * <p>Chốt nằm trong câu SQL của {@link ContestAuthoringRepository#themDe}, không ở đây:
+     * một câu {@code EXISTS} trên {@code problems} vừa kiểm đề có thật, vừa kiểm đề là của
+     * người gọi. Đề không có thật và đề của người khác cho <b>cùng một câu</b>.
      *
-     * <p><b>Nhưng khoá ngoại chỉ là một nửa.</b> Nó bắt được mọi id sai và không nói được id
-     * nào sai, nên phải có ai đó dịch nó ra tiếng người —
-     * {@code JdbcContestRepository.themDe} làm việc đó. Trước khi có bản dịch ấy, một id gõ
-     * nhầm ra HTTP 500 "lỗi phía hệ thống", và người dùng đi tìm lỗi ở đúng chỗ không có lỗi.
+     * <p><b>Vì sao đề của người khác không gắn được</b>, kể cả đề đã công khai: gắn nó là giấu
+     * nó khỏi kho với mọi người tới hết kỳ thi (FR-CON-03), khoá chủ đề không sửa được, và
+     * làm nó không bao giờ xoá được nữa — ba việc làm trên tài sản của người khác. Kỳ thi
+     * nhiều người ra đề thì ADMIN ghép, hoặc chủ kỳ thi soạn đề ngay trong kỳ thi
+     * ({@link #soanDeRieng}).
      */
     public void themDe(long contestId, long problemId, String nhan, int diem) {
         // Thêm đề sau khi kỳ thi đã bắt đầu là đổi luật giữa chừng: người vào sớm đã thấy một
         // bộ đề khác người vào muộn, và bảng xếp hạng so hai thứ không so được. Phép kiểm ấy
         // nằm trong kiemGanDe cùng hai phép kia.
-        kiemGanDe(contestId, nhan, diem);
-        contests.themDe(contestId, problemId, nhan, diem);
+        CurrentUser nguoiGoi = currentUser.current();
+        kiemGanDe(contestId, nhan, diem, nguoiGoi);
+        soanKyThi.themDe(contestId, problemId, nhan, diem, nguoiGoi.id(), nguoiGoi.isAdmin());
         auditLog.ghi("CONTEST_PROBLEM_ADDED", "contest", contestId,
                 Map.of("problemId", problemId, "nhan", nhan));
     }
@@ -117,9 +130,13 @@ public class AuthorContestUseCase {
     @Transactional
     public long soanDeRieng(long contestId, AuthorProblemUseCase.Command deMoi,
                             String nhan, int diem) {
-        kiemGanDe(contestId, nhan, diem);
+        // Kiểm quyền trên kỳ thi TRƯỚC khi soạn đề: bị từ chối thì không được để lại một đề
+        // DRAFT nào — kể cả khi transaction rollback, ID của nó đã bị tiêu.
+        CurrentUser nguoiGoi = currentUser.current();
+        kiemGanDe(contestId, nhan, diem, nguoiGoi);
         long problemId = authorProblem.tao(deMoi);
-        contests.themDeSoanRieng(contestId, problemId, nhan, diem);
+        soanKyThi.themDeSoanRieng(contestId, problemId, nhan, diem,
+                nguoiGoi.id(), nguoiGoi.isAdmin());
         auditLog.ghi("CONTEST_PROBLEM_AUTHORED", "contest", contestId,
                 Map.of("problemId", problemId, "nhan", nhan));
         return problemId;
@@ -140,13 +157,14 @@ public class AuthorContestUseCase {
      * nó thành một đề bình thường như mọi đề khác — người ra đề tự quyết xoá hay giữ.
      */
     public void goDeKhoiKyThi(long contestId, long problemId) {
-        Contest contest = contests.timTheoId(contestId)
+        CurrentUser nguoiGoi = currentUser.current();
+        Contest contest = soanKyThi.timDeSoan(contestId, nguoiGoi.id(), nguoiGoi.isAdmin())
                 .orElseThrow(ContestsException::khongTimThay);
         if (!contest.chuaMo(clock.instant())) {
             throw ContestsException.khongHopLe("contest.da_bat_dau",
                     "Kỳ thi đã bắt đầu, không gỡ đề ra được nữa.");
         }
-        if (!contests.goDe(contestId, problemId)) {
+        if (!soanKyThi.goDe(contestId, problemId, nguoiGoi.id(), nguoiGoi.isAdmin())) {
             throw ContestsException.khongHopLe("contest.de_khong_trong_ky_thi",
                     "Đề này không nằm trong kỳ thi.");
         }
@@ -154,9 +172,13 @@ public class AuthorContestUseCase {
                 Map.of("problemId", problemId));
     }
 
-    /** Ba phép kiểm dùng chung cho cả {@link #themDe} lẫn {@link #soanDeRieng}. */
-    private void kiemGanDe(long contestId, String nhan, int diem) {
-        Contest contest = contests.timTheoId(contestId)
+    /**
+     * Bốn phép kiểm dùng chung cho cả {@link #themDe} lẫn {@link #soanDeRieng}. Quyền trên kỳ
+     * thi đứng ĐẦU: người không soạn được kỳ thi này nhận 404 trước khi nghe bất cứ điều gì
+     * về nhãn, điểm hay giờ mở của nó.
+     */
+    private void kiemGanDe(long contestId, String nhan, int diem, CurrentUser nguoiGoi) {
+        Contest contest = soanKyThi.timDeSoan(contestId, nguoiGoi.id(), nguoiGoi.isAdmin())
                 .orElseThrow(ContestsException::khongTimThay);
         if (nhan == null || !NHAN.matcher(nhan).matches()) {
             throw ContestsException.khongHopLe("contest.nhan_khong_hop_le",

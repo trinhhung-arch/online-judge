@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Sao lưu Postgres — hiện thân của R4 (RPO ≤ 15 phút, nfrplan.md 5.3).
+# Sao lưu Postgres LOGIC (`pg_dump`) — MỘT trong hai vế của R4 (nfrplan.md 5.3).
+#
+# ★ TỪ 2026-09-21 FILE NÀY KHÔNG CÒN LÀ THỨ QUYẾT ĐỊNH RPO. WAL archiving đã bật, và R4
+#   xuống 1 phút nhờ `archive_timeout=60s` + `scripts/sao-luu-goc.sh`. Nhịp 15 phút ở đây
+#   giữ nguyên vì nó trả lời một câu hỏi khác: bản dump logic chạy được trên Postgres phiên
+#   bản khác và kiến trúc khác (host Mac ARM, dev WSL x86 — ADR 006), còn base backup vật lý
+#   thì không. Đây là đường thoát khi bản vật lý không dùng được.
 #
 #   ./scripts/sao-luu-db.sh              # một lượt sao lưu
 #   ./scripts/sao-luu-db.sh --kiem       # chỉ kiểm: lần cuối thành công là bao giờ
@@ -31,6 +37,9 @@
 #   "một backup chưa từng được restore không phải là backup".
 # =============================================================================
 set -uo pipefail
+# ★ umask 077: bản sao lưu chứa băm mật khẩu, email, mã nguồn mọi bài nộp — chỉ chủ máy đọc
+#   được. Trước 2026-09-24 file ra 644 (rà soát bảo mật, F5).
+umask 077
 
 CONTAINER=${OJ_PG_CONTAINER:-oj-postgres}
 DB=${OJ_DB_NAME:-ojdb}
@@ -69,12 +78,12 @@ if [ "${1:-}" = "--kiem" ]; then
     echo "Lần sao lưu thành công gần nhất: $(date -r "$truoc" '+%Y-%m-%d %H:%M:%S') (${phut} phút trước)"
     ls -lh "$THU_MUC/gio" 2>/dev/null | tail -n +2 | awk '{print "   " $9 "  " $5}'
     if [ "$phut" -gt 20 ]; then
-        loi "Quá 20 phút — R4 đòi RPO ≤ 15 phút. Job launchd có còn chạy không?"
+        loi "Quá 20 phút — nhịp dump là 15 phút. Job launchd có còn chạy không?"
         echo "     launchctl list | grep dev.oj.sao-luu    (cột giữa khác 0 = job chết)" >&2
         echo "     tail ~/oj-backup/sao-luu.log             (lý do thật nằm ở đây)" >&2
         exit 1
     fi
-    ok "Trong ngưỡng RPO 15 phút."
+    ok "Trong nhịp 15 phút. (RPO thật do WAL quyết định — ./scripts/kiem-wal.sh)"
     exit 0
 fi
 

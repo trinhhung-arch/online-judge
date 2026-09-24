@@ -13,6 +13,8 @@
 # ★ TUNNEL RIÊNG "oj-do", KHÔNG SỬA ~/.cloudflared/config.yml. Thêm luật vào tunnel prod là phải khởi
 #   động lại cloudflared của prod (site thật rớt kết nối), và một lần sai thứ tự luật là mở /internal
 #   của prod. Cái giá: đo một cloudflared THỨ HAI trên cùng máy — cùng phần mềm, cùng đường Cloudflare.
+#   Từ 2026-09-23 tunnel này KHÔNG giữ sẵn: đã xoá cùng lúc cert.pem rời máy (docs/bao-mat-plan.md Tầng 3).
+#   Mỗi lượt đo: chép cert.pem vào → script tự tạo lại tunnel + trỏ lại DNS → đo xong xoá cert.pem.
 #
 # ★ DNS PHẢI TRỎ BẰNG CẤU HÌNH CỦA TUNNEL ĐO. Đo 2026-09-11: `cloudflared tunnel route dns oj-do <tên>`
 #   đọc ~/.cloudflared/config.yml (tunnel: <id PROD>) và trỏ bản ghi vào TUNNEL PROD — tên miền đo trả
@@ -82,6 +84,8 @@ dang_chay && { ok "Tunnel đo đã chạy (PID $(cat "$PID")). Tắt: $0 --xoa";
 mkdir -p "$NHA"
 
 echo "── 1 · Tunnel '$TEN' ──"
+[ -f "$HOME/.cloudflared/cert.pem" ] || [ -n "${TUNNEL_ORIGIN_CERT:-}" ] \
+    || loi "Thiếu ~/.cloudflared/cert.pem — nó không nằm thường trực trên máy này. Chép lại từ trình quản lý mật khẩu (hoặc 'cloudflared tunnel login'), chạy lại, đo xong thì xoá."
 uuid=$(id_tunnel)
 if [ -z "$uuid" ]; then
     cloudflared tunnel create "$TEN" || loi "Không tạo được tunnel '$TEN'."
@@ -99,10 +103,10 @@ credentials-file: $HOME/.cloudflared/$uuid.json
 loglevel: info
 ingress:
   - hostname: $MIEN
-    path: ^/internal(/|\$)
+    path: (^|/)internal(;[^/]*)?/
     service: http_status:404
   - hostname: $MIEN
-    path: ^/actuator(/|\$)
+    path: (^|/)actuator(;[^/]*)?(/|\$)
     service: http_status:404
   - hostname: $MIEN
     service: http://127.0.0.1:$CONG_API
@@ -143,7 +147,8 @@ echo $! > "$PID"
 for _ in $(seq 30); do grep 'Registered tunnel connection' "$LOG" >/dev/null && break; sleep 1; done
 grep 'Registered tunnel connection' "$LOG" >/dev/null || { kill "$(cat "$PID")"; rm -f "$PID"; tail -5 "$LOG" >&2; loi "Tunnel đo không lên sau 30s. Log: $LOG"; }
 for _ in $(seq 20); do [ "$(ma_http 6)" = 200 ] || [ "$(ma_http 4)" = 200 ] && break; sleep 3; done
-"$GOC/scripts/kiem-tunnel.sh" "$MIEN" || { kill "$(cat "$PID")"; rm -f "$PID"; loi "Tunnel đo KHÔNG đạt kiểm — đã TẮT lại. Log: $LOG"; }
+# CLOUDFLARED_CONFIG bắt buộc: thiếu nó thì mục 2b đọc config PROD, nơi $MIEN rơi vào luật bắt-tất-cả 404 → xanh mà không đo gì.
+CLOUDFLARED_CONFIG="$CAU_HINH" "$GOC/scripts/kiem-tunnel.sh" "$MIEN" || { kill "$(cat "$PID")"; rm -f "$PID"; loi "Tunnel đo KHÔNG đạt kiểm — đã TẮT lại. Log: $LOG"; }
 cat <<EOF
 
 ✓ Tunnel đo ĐANG MỞ: https://$MIEN → stack đo. ĐỂ NGUYÊN nó chạy suốt lượt đo.

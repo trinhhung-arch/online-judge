@@ -12,7 +12,7 @@
 "Hệ thống phải nhanh" là câu vô nghĩa. "p95 verdict < 2s khi hàng đợi rỗng, đo bằng Micrometer, alert khi > 4s trong 5 phút" mới là một yêu cầu. Mỗi mục dưới đây đều có: **con số · cách đo · ngưỡng báo động**. Cái nào không đặt được con số thì bị loại khỏi danh sách, không giữ lại làm khẩu hiệu.
 
 **2. NFR làm rải theo tuần, không dồn vào cuối.**
-Bẫy kinh điển của đồ án: 12 tuần làm tính năng, tuần 13 "làm phần bảo mật và hiệu năng". Không kịp, và những thứ như ranh giới module hay stateless API mà sửa muộn thì phải viết lại. Phần 10 gắn từng NFR vào tuần cụ thể.
+Bẫy kinh điển của đồ án: 12 tuần làm tính năng, tuần 13 "làm phần bảo mật và hiệu năng". Không kịp, và những thứ như ranh giới module hay stateless API mà sửa muộn thì phải viết lại. Phần 11 gắn từng NFR vào tuần cụ thể.
 
 **3. Các NFR xung đột nhau — phải chọn trước, không chọn giữa chừng.**
 
@@ -25,7 +25,7 @@ Bẫy kinh điển của đồ án: 12 tuần làm tính năng, tuần 13 "làm 
 | Usability (AI review) ↔ Tính công bằng contest | AI review = trợ lý giải bài nếu bật lúc đang thi | **Chọn công bằng.** Tắt AI review trong thời gian contest diễn ra |
 | Performance ↔ Chi phí (AI) | Review mọi submission tự động thì tốn tiền LLM khủng khiếp | **Chọn chi phí.** Chỉ review khi user bấm nút, có quota |
 
-> Ba dòng đầu là quyết định kiến trúc, không phải sở thích. Ghi vào ADR (xem mục 7.3) để 2 tháng nữa không ai lôi ra bàn lại.
+> Ba dòng đầu là quyết định kiến trúc, không phải sở thích. Ghi vào ADR (xem mục 8.3) để 2 tháng nữa không ai lôi ra bàn lại.
 
 ---
 
@@ -49,10 +49,10 @@ Bẫy kinh điển của đồ án: 12 tuần làm tính năng, tuần 13 "làm 
 | SEC1 | Bộ test tấn công sandbox bị chặn | 100% (≥ 14 case) | bất kỳ case fail | CI mỗi push |
 | SEC2 | Lỗ hổng CRITICAL/HIGH trong dependency | 0 | ≥ 1 | Trivy/Dependabot |
 | SEC3 | Testdata rò rỉ ra ngoài (API, log, prompt LLM) | 0 đường | ≥ 1 | rà soát thủ công |
-| R1 | Bài nộp bị mất | **0, tuyệt đối** | ≥ 1 | chaos test |
+| R1 | Bài nộp bị mất **khi hệ thống đang chạy** | **0, tuyệt đối** | ≥ 1 | chaos test |
 | R2 | Bài bị chấm 2 lần / verdict trùng | 0 | ≥ 1 | chaos test |
 | R3 | Tỉ lệ IE (Internal Error) | < 0.1% | > 0.5% | metric |
-| R4 | RPO (dữ liệu mất tối đa khi hỏng) | ≤ 15 phút | — | backup interval |
+| R4 | RPO (dữ liệu mất tối đa khi hỏng) | **≤ 1 phút** | — | `archive_timeout` + `kiem-wal.sh` |
 | R5 | RTO (thời gian khôi phục) | ≤ 30 phút | — | diễn tập restore |
 | U1 | Người lạ tự nộp bài không cần hướng dẫn | 3/3 người test được | — | usability test |
 | U2 | Từ vào trang đến nộp được bài đầu | < 3 phút | — | usability test |
@@ -61,7 +61,7 @@ Bẫy kinh điển của đồ án: 12 tuần làm tính năng, tuần 13 "làm 
 | A2 | Uptime trong contest | 99.9% | bất kỳ downtime | UptimeRobot |
 | A3 | Deploy worker không downtime | 0s mất bài | — | rolling test |
 | M1 | Người thứ 3 dựng lại hệ thống từ README | < 30 phút | — | thử thật |
-| M2 | Coverage domain + application | ≥ 80% | < 70% | JaCoCo |
+| M2 | Coverage domain + application | ≥ 80% | < 80% → **build đỏ** | JaCoCo, cổng `jacoco:check` trong `verify` |
 | M3 | Thời gian chạy CI | < 10 phút | > 15 phút | GitHub Actions |
 | M4 | Thêm 1 ngôn ngữ chấm | 1 dòng config, 0 dòng code | — | thử thật |
 | C1 | Image chạy được cả amd64 và arm64 | 100% service | build fail | buildx |
@@ -142,7 +142,9 @@ Phía API:
 - **Tuần 4:** đo baseline trên Mac, ghi vào README. Đây là con số tham chiếu cho cả dự án.
 - **Tuần 12:** load test bằng k6 hoặc Gatling — 3 kịch bản: (a) 500 submit đồng thời, (b) tải ổn định 2 bài/s trong 30 phút, (c) 1000 kết nối SSE đồng thời.
 
-> ⚠️ **Bẫy:** tối ưu trước khi đo. Không được đụng vào mục 2.3 trước khi dashboard Prometheus lên sóng. Nguyên tắc 4 của plan gốc — "đừng tối ưu thứ chưa đo" — áp dụng nguyên vẹn ở đây.
+> ⚠️ **Bẫy:** tối ưu trước khi đo. Không được đụng vào mục 2.3 trước khi **có số đo**. Nguyên tắc 4 của plan gốc — "đừng tối ưu thứ chưa đo" — áp dụng nguyên vẹn ở đây.
+>
+> **Cổng đo đã đổi hình, không đổi ý** *(đối chiếu 2026-09-21)*: bản này từng viết "trước khi dashboard Prometheus lên sóng". `infra/prometheus/` và `grafana/` **không được dựng ở M6** và sẽ không dựng — số đo đi đường Micrometer + `GET /api/v1/admin/ops` (README 6.10, `cau-truc-source.md` mục 1). Cổng vẫn là *có số đo trước khi tối ưu*; chỉ tên công cụ là sai.
 
 ---
 
@@ -217,7 +219,7 @@ Tuần 12: chạy worker đồng thời trên **Mac host + WSL của người A 
 | Nhóm | Biện pháp | Tuần |
 |---|---|---|
 | Xác thực | BCrypt cost 12 · JWT ngắn hạn (15ph) + refresh token · không bao giờ lưu mật khẩu thô | 7 |
-| Phân quyền | Chặn ở **tầng use-case**, không chỉ controller. ArchUnit ép: mọi use-case sửa dữ liệu phải qua một `@RequiresRole` | 7 |
+| Phân quyền | Chặn ở **tầng use-case**, không chỉ controller. ArchUnit LUẬT 8 ép **mọi** `*UseCase` — kể cả use-case chỉ ĐỌC — phải mang một trong ba tuyên bố `@RequiresRole` · `@PublicAccess` · `@InternalAccess` | 7 |
 | **IDOR** | User chỉ xem được submission của mình. Kiểm ở tầng repository, không phải tầng controller | 7 |
 | Rate limit | Submit: 1 bài/10s/user · Login: 5 lần/phút/IP (chống brute force) · API chung: 100 req/phút/user | 7 |
 | **Upload ZIP đề bài** | Zip bomb (giới hạn tỉ lệ nén + kích thước giải nén) · path traversal (`../../etc`) · symlink trong archive · đường dẫn tuyệt đối | 8 |
@@ -244,7 +246,7 @@ Tuần 12: chạy worker đồng thời trên **Mac host + WSL của người A 
 | Xem submission người khác đang thi | Chặn hoàn toàn trong thời gian contest, kể cả qua API trực tiếp |
 | Đoán kết quả qua thời gian phản hồi | Verdict trả về đồng nhất, không lộ "sai ở test 3" nếu thể thức không cho |
 | Lộ scoreboard cuối giờ | Frozen scoreboard *(task 5.5 plan gốc)* |
-| **Dùng AI review để giải bài** | **Tắt AI review trong thời gian contest** — xem Phần 9 |
+| **Dùng AI review để giải bài** | **Tắt AI review trong thời gian contest** — xem Phần 10 |
 
 ### 4.5 — Kiểm chứng
 
@@ -294,13 +296,31 @@ Tuần 12: chạy worker đồng thời trên **Mac host + WSL của người A 
 
 ### 5.3 — Backup và khôi phục
 
+> **R4 đổi từ 15 phút xuống 1 phút ngày 2026-09-21** — WAL archiving được bật, đúng quyết định F
+> của `build-order.md` PHẦN 0. Đây là một con số đã chốt bị đổi có chủ ý (`CLAUDE.md` mục 5
+> tình huống 4), không phải một chỉnh sửa tài liệu.
+
 | Hạng mục | Cấu hình |
 |---|---|
-| Tần suất | `pg_dump` mỗi 15 phút (RPO ≤ 15 phút) |
+| **WAL archiving** | `archive_mode=on` · `archive_timeout=60s` · nén gzip → `OJ_WAL_ARCHIVE_DIR` (**RPO ≤ 1 phút**) |
+| **Base backup vật lý** | `pg_basebackup` mỗi ngày 03:15 — `scripts/sao-luu-goc.sh`. **Không thừa**: WAL không replay lên một bản `pg_dump` logic được |
+| **Canh sự cố** | `scripts/kiem-wal.sh` — archive hỏng liên tục làm `pg_wal` phình tới khi **đầy đĩa và database dừng** |
+| Tần suất `pg_dump` | mỗi 15 phút — giữ nguyên, làm đường thoát khi bản vật lý không dùng được (khác phiên bản/kiến trúc, ADR 006) |
 | Nơi lưu | Ổ ngoài gắn Mac **+** cloud (rclone → Backblaze B2 hoặc Google Drive) |
 | Giữ | 7 bản gần nhất theo giờ + 4 bản theo ngày |
 | Testdata / source | Content-addressed trên MinIO, backup riêng theo tuần |
 | **Diễn tập restore** | **Tuần 12, bắt buộc, có bấm giờ.** Mục tiêu RTO ≤ 30 phút |
+
+> **R1 và R4 KHÔNG mâu thuẫn — chúng đo hai vùng hỏng khác nhau** *(đối chiếu 2026-09-21)*.
+> R1 nói *0 bài mất* cho việc **đang chạy**: kill worker giữa chừng, kill API lúc publish, queue
+> chết — và nó được đo bằng **chaos test**, không bằng backup. R4 nói *RPO ≤ 1 phút* cho việc
+> **mất ổ đĩa** — một vùng hỏng mà không hệ thống nào hứa 0 nếu không có replication đồng bộ.
+> Ba tài liệu từng đọc hai dòng này như một nghịch lý và coi WAL archiving là việc quá hạn;
+> thật ra **không SLO nào đang bị vi phạm**: `scripts/sao-luu-db.sh` tự nhận là hiện thân của R4
+> và tự kiểm đúng ngưỡng 15 phút.
+>
+> **WAL archiving đã được bật 2026-09-21**, và R4 theo đó xuống 1 phút. Điều đó KHÔNG đổi phần
+> trên: R1 vẫn nói về việc đang chạy và vẫn đo bằng chaos test. Hai chỉ số vẫn là hai vùng hỏng.
 
 > ⚠️ **Task diễn tập restore không được cắt.** Một backup chưa từng được restore không phải là backup — nó là một thư mục file mà bạn hy vọng dùng được. Rất nhiều dự án phát hiện backup hỏng đúng lúc cần nó nhất.
 
@@ -377,6 +397,7 @@ Một máy Mac ở nhà **không thể** đạt HA thật. Nói thẳng điều 
 | Toàn bộ worker | Vẫn nhận bài, hiện "đang chờ chấm", không báo lỗi cho user |
 | MinIO | Đề đã cache vẫn xem được, không upload đề mới được |
 | LLM API | AI review hiện "tạm không khả dụng", **verdict không bị ảnh hưởng** |
+| SMTP (V13) | Không ai xác minh được email hôm ấy. **Không ai mất quyền vào hệ thống** — đăng nhập, nộp bài, dự thi đều không đi qua đây. Đăng ký vẫn thành công, thư gửi hụt thì nuốt lỗi và người dùng bấm gửi lại ([ADR 016](adr/016-xac-minh-email-muc-mem.md)) |
 
 ### 7.3 — Kế hoạch riêng cho ngày contest
 
@@ -404,11 +425,18 @@ Với team 2 người, rủi ro số 1 không phải là code xấu — mà là 
 
 ### 8.2 — Ranh giới và cấu trúc
 
-- **ArchUnit từ tuần 1** *(đã có)*: `domain` không import Spring/JPA · module không import `infrastructure` của module khác · chiều phụ thuộc `identity ← problems ← judging ← contests ← api`. **Vi phạm = fail CI.**
+- **ArchUnit từ tuần 1** *(đã có)*: `domain` không import Spring/JPA · module không import
+  `infrastructure` của module khác · chiều phụ thuộc `identity ← problems ← judging ← contests`
+  (đọc là *"contests được phép import judging"*). **Vi phạm = fail CI.**
+  `api` KHÔNG thuộc chuỗi này — nó là một **tầng bên trong mỗi module**
+  (`api → application → domain`), không phải module thứ năm.
 - Bổ sung 3 rule ArchUnit mới cho NFR:
-  - Cấm nối chuỗi trong SQL (chống injection)
-  - Cấm gọi LLM API từ ngoài package `ai` (giữ AI review tách biệt hoàn toàn)
-  - Cấm `System.out.println` — bắt buộc dùng logger có traceId
+  - Cấm nối chuỗi trong SQL (chống injection) — LUẬT 5
+  - Cấm `System.out.println`, bắt buộc logger có traceId — LUẬT 6
+  - Cấm gọi LLM API từ ngoài package `ai` — LUẬT 7
+- Thực tế đã vượt bản phác này: còn **LUẬT 8** (mọi use-case phải tuyên bố lập trường phân
+  quyền) và **LUẬT 9** (đường đọc đề không được chạm kho đối tượng, giữ lời hứa degraded mode
+  ở 7.2). Nguồn sự thật là `ArchitectureTest` + `CodingRulesTest`, không phải danh sách này.
 - Giới hạn mềm: file ≤ 300 dòng, method ≤ 50 dòng. Không ép bằng CI, nhưng nêu trong review.
 
 ### 8.3 — ADR — Architecture Decision Record
@@ -433,7 +461,7 @@ Chi phí: 15 phút/file. Lợi ích: tháng sau không ai lôi ra bàn lại, v�
 
 | Việc | Chi tiết |
 |---|---|
-| Coverage | Domain + application ≥ 80% · tổng ≥ 60% · JaCoCo báo cáo trong CI |
+| Coverage | Domain + application ≥ 80% — **đã đo và đã ép** từ 2026-09-21: `jacoco-maven-plugin` trong `oj-api/pom.xml`, goal `check` ở phase `verify`, ngưỡng 0.80. Số thật hôm chốt: domain 83.2% · application 85.6% · tổng **84.9%**. ⚠️ Chỉ chạy unit test thì là 64.4% — phần lớn `application` do bộ IT che, nên `-DskipITs` làm cổng đỏ, và đỏ đúng |
 | Migration | Flyway, **không bao giờ sửa file đã commit** *(đã có — với 2 người đây là cách nhanh nhất làm lệch 2 DB)* |
 | Logging | JSON có cấu trúc + `traceId` xuyên API → queue → worker → kết quả |
 | Config | Mọi giới hạn là hằng số có tên trong config, không có magic number rải rác |
@@ -647,7 +675,7 @@ Xếp theo (xác suất × hậu quả):
 Mỗi dòng phải có **bằng chứng** (link CI run, ảnh dashboard, hoặc file kết quả test), không phải chỉ tick.
 
 **Performance**
-- [ ] Dashboard Prometheus hiển thị đủ P1–P8, có ảnh chụp
+- [ ] `GET /api/v1/admin/ops` hiển thị đủ P1–P8, có ảnh chụp — **không phải** Prometheus/Grafana, xem 2.3
 - [ ] Load test 500 bài đồng thời: rút cạn < 3 phút, 0 bài mất
 - [ ] Cùng 1 bài chạy 20 lần: độ lệch < 5%
 - [ ] Ngân sách thời gian mục 2.1 được xác nhận bằng số đo thật
@@ -681,7 +709,7 @@ Mỗi dòng phải có **bằng chứng** (link CI run, ảnh dashboard, hoặc 
 
 **Maintainability**
 - [ ] Người thứ 3 dựng lại hệ thống từ README < 30 phút
-- [ ] Coverage domain+application ≥ 80%
+- [ ] Coverage domain+application ≥ 80% — ✅ 84.9% (2026-09-21), ép bằng `jacoco:check`
 - [ ] 8 file ADR đã viết
 - [ ] Thêm 1 ngôn ngữ mới chỉ bằng config — có video chứng minh
 

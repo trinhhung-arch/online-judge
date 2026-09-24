@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -32,6 +33,9 @@ class TurnstileVerifierTest {
 
     private static final String URL = "https://vi-du.test/siteverify";
 
+    /** Tên miền của ta trong test. Viết hoa một chữ để ca so khớp chứng minh được phép so không phân biệt hoa thường. */
+    private static final List<String> MIEN_CUA_TA = List.of("OJ.vi-du.test");
+
     /** Máy chủ Cloudflare giả — test này KHÔNG được gọi ra internet. */
     private MockRestServiceServer cloudflareGia;
 
@@ -40,8 +44,16 @@ class TurnstileVerifierTest {
         cloudflareGia = MockRestServiceServer.bindTo(builder).build();
         return new TurnstileVerifier(
                 AppPropertiesGia.voiTurnstile(new TurnstileProperties(
-                        bat, bat ? "site" : "", bat ? "secret" : "", URL, Duration.ofSeconds(3))),
+                        bat, bat ? "site" : "", bat ? "secret" : "", bat ? MIEN_CUA_TA : List.of(),
+                        URL, Duration.ofSeconds(3))),
                 builder);
+    }
+
+    /** Cloudflare trả {@code success=true} kèm {@code hostname} — hoặc không kèm, khi {@code null}. */
+    private void cloudflareTraThanhCong(String hostname) {
+        String than = hostname == null ? "{\"success\":true}"
+                : "{\"success\":true,\"hostname\":\"" + hostname + "\"}";
+        cloudflareGia.expect(requestTo(URL)).andRespond(withSuccess(than, MediaType.APPLICATION_JSON));
     }
 
     @Test
@@ -65,14 +77,48 @@ class TurnstileVerifierTest {
     }
 
     @Test
-    @DisplayName("Cloudflare trả success=true thì cho qua")
+    @DisplayName("success=true, giải trên tên miền của ta (khác hoa thường vẫn khớp) → cho qua")
     void thanh_cong() {
         var v = verifier(true);
-        cloudflareGia.expect(requestTo(URL))
-                .andRespond(withSuccess("{\"success\":true}", MediaType.APPLICATION_JSON));
+        cloudflareTraThanhCong("oj.vi-du.test");
 
         assertThatCode(() -> v.kiem("token-that", "203.0.113.1")).doesNotThrowAnyException();
         cloudflareGia.verify();
+    }
+
+    @Test
+    @DisplayName("★ success=true nhưng giải trên localhost của người lạ → TỪ CHỐI")
+    void hostname_la_thi_tu_choi() {
+        var v = verifier(true);
+        cloudflareTraThanhCong("localhost");
+
+        assertThatThrownBy(() -> v.kiem("token-giai-o-noi-khac", "203.0.113.1"))
+                .as("token có thật chỉ nói nó chưa dùng — không nói nó được giải trên trang của ta")
+                .isInstanceOf(IdentityException.class)
+                .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
+        cloudflareGia.verify();
+    }
+
+    @Test
+    @DisplayName("★ tên miền con / tên miền mượn tên ta KHÔNG khớp — so nguyên chuỗi, không so đuôi")
+    void khong_so_duoi() {
+        for (String gia : new String[]{"x.oj.vi-du.test", "oj.vi-du.test.ke-la.com"}) {
+            var v = verifier(true);
+            cloudflareTraThanhCong(gia);
+
+            assertThatThrownBy(() -> v.kiem("token", "203.0.113.1")).as(gia)
+                    .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
+        }
+    }
+
+    @Test
+    @DisplayName("success=true mà KHÔNG có hostname → từ chối: không biết nơi giải là không chứng minh gì")
+    void thieu_hostname_thi_tu_choi() {
+        var v = verifier(true);
+        cloudflareTraThanhCong(null);
+
+        assertThatThrownBy(() -> v.kiem("token", "203.0.113.1"))
+                .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
     }
 
     @Test
@@ -127,7 +173,7 @@ class TurnstileVerifierTest {
         cloudflareTreo.start();
         try {
             var props = AppPropertiesGia.voiTurnstile(new TurnstileProperties(true, "site", "secret",
-                    "http://127.0.0.1:" + cloudflareTreo.getAddress().getPort() + "/siteverify",
+                    MIEN_CUA_TA, "http://127.0.0.1:" + cloudflareTreo.getAddress().getPort() + "/siteverify",
                     Duration.ofMillis(300)));
             var v = new TurnstileVerifier(props, new TurnstileVerifier.HttpConfig().turnstileHttp(props));
 

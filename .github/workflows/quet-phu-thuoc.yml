@@ -1,0 +1,177 @@
+# ★ Quét lỗ hổng phụ thuộc — SEC2, nfrplan.md 4.3 và §14 ("Trivy: 0 CRITICAL/HIGH").
+#
+# nfrplan 4.3 viết: "Trivy hoặc Dependabot, CHẶN MERGE nếu có CRITICAL/HIGH".
+# `.github/dependabot.yml` lo phần "biết" — nó mở PR nâng version hằng tuần. File này là
+# phần "chặn": nó làm CI ĐỎ. Hai thứ khác nhau, và trước 2026-09-21 chỉ có phần đầu tồn tại,
+# nên §14 đòi một bằng chứng mà không có gì trong repo sinh ra được.
+#
+# ★ VÌ SAO LÀ WORKFLOW RIÊNG, KHÔNG PHẢI MỘT BƯỚC TRONG ci.yml
+# Cùng lý do với sandbox-attack.yml: khi nó đỏ, dấu X phải nói ngay "có CVE trong phụ thuộc"
+# chứ không phải "build hỏng". Và nó chạy SONG SONG, nên không tiêu một phút nào của ngân
+# sách CI < 10 phút (nfrplan M3) — đó là điều kiện để thêm cổng này mà không đánh đổi SLO.
+#
+# ★ VÌ SAO CÓ LỊCH CHẠY HẰNG NGÀY
+# Một CVE công bố ngày mai ảnh hưởng tới mã đã merge hôm nay. Nếu chỉ chạy theo push thì một
+# kho code đứng yên hai tuần là hai tuần không ai biết. Lịch 06:00 giờ VN, cùng giờ với
+# dependabot.yml, để hai thứ nói về cùng một trạng thái.
+name: quet-phu-thuoc
+
+on:
+  push:
+    branches: [main, 'a/**', 'b/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 23 * * *'        # 23:00 UTC = 06:00 Asia/Ho_Chi_Minh
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Java 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # Khoá cache RIÊNG — không `cache: maven`. Chính job này (`-DskipTests`, xong sớm nhất)
+      # từng ghi một cache thiếu provider test dưới khoá chung, làm ci phải tải lại từ Maven
+      # Central mỗi lượt cho tới khi Central trả 429 (2026-09-24). Xem bước cache của ci.yml.
+      - name: Cache Maven của quet-phu-thuoc
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          key: maven-quet-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: maven-quet-
+
+      # ★ QUÉT JAR SẼ TRIỂN KHAI, KHÔNG QUÉT pom.xml.
+      #   Bản trước dùng scan-type fs trên cả repo, với chú thích "Trivy đọc luôn jar trong target/".
+      #   Đo 2026-09-24: sai — "Report Summary" chỉ có bốn target, cả bốn là pom.xml. Trivy tự giải
+      #   cây phụ thuộc từ pom; nó bắt đúng tomcat 11.0.24 đi vào qua parent, nhưng đó là cây SUY
+      #   RA, không phải thứ chạy trên host. Maven giải khác Trivy một bản là cổng mù.
+      #   Nên: rootfs trên đúng HAI fat jar (Spring Boot lồng thư viện trong BOOT-INF/lib). Không
+      #   rootfs cả repo: maven-wrapper.jar và *.jar.original không chạy ở đâu, quét chúng là ồn.
+      #   Chốt "Cổng có thật sự đọc jar?" bên dưới đỏ nếu Trivy không thấy thư viện lồng bên trong.
+      #
+      # -DskipTests là cố ý: ci.yml đã chạy test rồi. Job này trả lời một câu khác.
+      - name: Dựng hai jar sẽ triển khai
+        run: |
+          ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 -DskipTests package
+          mkdir -p quet
+          # `*.jar` không khớp `*.jar.original` (bản mỏng, không kèm thư viện) — cố ý.
+          cp oj-api/target/oj-api-*.jar oj-worker/target/oj-worker-*.jar quet/
+          ls -la quet
+
+      # ignore-unfixed: true — KHÔNG phải để cho dễ thở.
+      #
+      # Một CVE chưa có bản vá thì đỏ CI không đổi được gì: không ai nâng version được, nên
+      # lựa chọn duy nhất còn lại là tắt cổng hoặc thêm ngoại lệ — và một cổng bị tắt một lần
+      # thì hiếm khi được bật lại. Cổng này chỉ đỏ khi CÓ VIỆC ĐỂ LÀM, và vì thế nó đáng được
+      # giữ đỏ. CVE chưa vá vẫn hiện trong log của bước "Báo cáo đầy đủ" bên dưới.
+      #
+      # ★ GHIM THEO SHA, KHÔNG THEO TAG. Bản đầu ghi `@0.28.0` — tag ấy bị gỡ khỏi repo của
+      # action (từ 2026-03 chỉ còn dạng `v0.x.y`), và lần chạy đầu tiên 2026-09-24 đỏ ngay ở
+      # "Set up job" mà chưa quét gì. Tag gỡ được thì cũng GẮN LẠI được sang mã khác; một action
+      # quét bảo mật mà chạy mã lạ trong CI là đúng thứ nó được đặt ra để bắt. SHA thì không đổi.
+      # Dependabot (hệ github-actions) vẫn mở PR nâng SHA, kèm chú thích phiên bản ở cuối dòng.
+      - name: Trivy — CRITICAL/HIGH có bản vá thì CHẶN
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: quet
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      # Chạy kể cả khi bước trên đỏ, và KHÔNG chặn: đây là bản đầy đủ để đọc, gồm cả MEDIUM
+      # và cả CVE chưa có bản vá. Bước trên quyết định đỏ/xanh, bước này trả lời "còn gì nữa".
+      - name: Báo cáo đầy đủ (không chặn)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: quet
+          scanners: vuln
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: false
+          exit-code: '0'
+          format: table
+
+      # ⛔ Chốt: Trivy có THẬT SỰ đọc được thư viện lồng trong jar không. Không có chốt này thì
+      # một ngày Trivy thôi đọc BOOT-INF/lib (đổi phiên bản, đổi cách đóng gói) là cổng xanh vì
+      # KHÔNG THẤY GÌ — đúng kiểu hỏng vừa gặp với fs. Đòi hai thư viện đã biết chắc có mặt:
+      # tomcat-embed-core trong jar API, amqp-client trong jar worker, và đếm tổng số gói.
+      - name: Liệt kê gói Trivy nhận ra trong jar
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: quet
+          scanners: vuln
+          list-all-pkgs: true
+          exit-code: '0'
+          format: json
+          output: trivy-goi.json
+
+      - name: Cổng có thật sự đọc jar?
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("trivy-goi.json"))
+          def goi(jar):
+              return {p.get("Name", "") for r in d.get("Results") or []
+                      for p in r.get("Packages") or []
+                      if jar in r.get("Target", "") or jar in p.get("FilePath", "")}
+          hong = []
+          for jar, phai_co in (("oj-api-", "org.apache.tomcat.embed:tomcat-embed-core"),
+                               ("oj-worker-", "com.rabbitmq:amqp-client")):
+              g = goi(jar)
+              print(f"{jar}*.jar: {len(g)} gói Trivy nhận ra; có {phai_co}: {phai_co in g}")
+              if phai_co not in g:
+                  hong.append(f"Trivy không thấy {phai_co} trong {jar}*.jar — cổng đang quét mù")
+          for h in hong:
+              print(f"::error::{h}")
+          sys.exit(1 if hong else 0)
+          PY
+
+      # ⛔ Chốt cuối, cùng tinh thần với sandbox-attack.yml: cổng này KHÔNG được biến mất
+      # trong im lặng. Nếu ai đó đổi severity, bật ignore-unfixed cho cả cổng, hay hạ
+      # exit-code về 0, thì job vẫn xanh — và §14 lại thành một lời hứa.
+      - name: Cổng vẫn còn răng?
+        if: always()
+        run: |
+          f=.github/workflows/quet-phu-thuoc.yml
+          grep -q "severity: CRITICAL,HIGH$" "$f" || {
+            echo "::error::Cổng chặn không còn quét đủ CRITICAL,HIGH"; exit 1; }
+          grep -q "exit-code: '1'" "$f" || {
+            echo "::error::Cổng chặn không còn làm CI đỏ (exit-code khác 1)"; exit 1; }
+          [ "$(grep -c 'scan-type: rootfs' "$f")" -ge 3 ] || {
+            echo "::error::Có bước Trivy không còn quét jar (scan-type rootfs) — quay về quét pom là mù"; exit 1; }
+          echo "Cổng còn nguyên: CRITICAL,HIGH · exit-code 1 · quét jar."
+
+# -----------------------------------------------------------------------------
+# CÁI FILE NÀY VẪN KHÔNG LÀM: chặn merge.
+#
+# Nó làm CI đỏ. Biến dấu đỏ thành "không merge được" là branch protection cho `main`, với
+# `ci`, `sandbox-attack` và `quet-phu-thuoc` đặt làm required check. Đó là cấu hình trên
+# GitHub, không phải file trong repo — không có cách nào commit nó vào đây.
+#
+# Cần bật thêm một công tắc nữa ở Settings > Code security: Dependabot *security updates*.
+# Nó mở PR NGAY khi có CVE thay vì chờ thứ Hai. File này phát hiện, công tắc đó vá.
+# -----------------------------------------------------------------------------

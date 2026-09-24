@@ -4,7 +4,7 @@ package dev.oj.platform.security;
  * Hỏi xem một tài khoản đã đủ điều kiện 2FA để dùng quyền ADMIN chưa.
  *
  * <h2>★ Vì sao là interface ở {@code platform}, không phải lời gọi thẳng sang {@code identity}</h2>
- * {@link RequiresRoleAdvisorConfig} sống ở {@code platform}, mà {@code platform} không được
+ * {@link JwtCurrentUserProvider} sống ở {@code platform}, mà {@code platform} không được
  * import {@code identity} — chiều phụ thuộc chỉ đi một hướng ({@code CLAUDE.md} mục 3).
  * Nên {@code platform} khai báo cái nó cần, {@code identity} cài đặt. Chiều import vẫn là
  * {@code identity → platform}, ArchUnit vẫn xanh.
@@ -15,8 +15,12 @@ package dev.oj.platform.security;
  * ({@code AuthProperties}); với 2FA thì không nên, vì 2FA tồn tại đúng cho tình huống tài
  * khoản đang bị chiếm.
  *
- * <p>Cái giá là một lượt đọc database mỗi lời gọi use-case ADMIN. Đó là bề mặt hiếm được
- * gọi nhất trong hệ thống — không có ADMIN nào bấm 100 lần một giây.
+ * <p>Cái giá là một lượt đọc database mỗi request mang token ADMIN — một lần, dù request ấy
+ * gọi {@code current()} bao nhiêu lần. Token ADMIN là thứ hiếm nhất hệ thống — không có ADMIN
+ * nào bấm 100 lần một giây.
+ *
+ * <p>Trả {@code false} thì người ấy <b>không mất đăng nhập</b>: họ bị hạ xuống SETTER cho tới
+ * khi bật 2FA — xem {@link JwtCurrentUserProvider}.
  */
 public interface TwoFactorGate {
 

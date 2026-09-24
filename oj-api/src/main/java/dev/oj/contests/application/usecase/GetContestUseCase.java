@@ -52,22 +52,28 @@ public class GetContestUseCase {
             userId = null;
         }
 
+        // Cùng luật với ContestAuthoringRepository.timDeSoan: chủ kỳ thi hoặc ADMIN.
+        boolean duocSoan = laAdmin || contest.createdBy() == (userId == null ? -1L : userId);
+
         // ★ Xem javadoc của class. Người tổ chức xem được trước để chuẩn bị.
-        boolean hienDe = laAdmin || !contest.chuaMo(clock.instant())
-                || contest.createdBy() == (userId == null ? -1L : userId);
+        boolean hienDe = duocSoan || !contest.chuaMo(clock.instant());
 
         return new ChiTiet(
                 contest,
                 hienDe ? contests.deCua(contest.id()) : List.of(),
-                userId != null && contests.daDangKy(contest.id(), userId));
+                userId != null && contests.daDangKy(contest.id(), userId),
+                duocSoan);
     }
 
     /**
      * @param cacDe    rỗng khi kỳ thi chưa mở — <b>không</b> phải khi kỳ thi không có đề nào.
      *                 UI phải phân biệt bằng thời gian, không bằng độ dài danh sách
      * @param daDangKy luôn {@code false} với khách chưa đăng nhập
+     * @param duocSoan người gọi là chủ kỳ thi hoặc ADMIN. Chỉ để giao diện biết có nên hiện
+     *                 khu gắn/gỡ đề không — <b>không phải chốt</b>: chốt nằm trong câu SQL của
+     *                 {@code ContestAuthoringRepository}, và một request gọi thẳng API vẫn gặp nó
      */
     public record ChiTiet(Contest contest, List<ContestRepository.DeCuaContest> cacDe,
-                          boolean daDangKy) {
+                          boolean daDangKy, boolean duocSoan) {
     }
 }

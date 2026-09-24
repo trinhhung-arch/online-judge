@@ -98,6 +98,44 @@ class InternalSecretFilterTest {
         assertThat(response.getContentAsString()).isEqualTo(khongHeader.getContentAsString());
     }
 
+    /**
+     * ★ Lớp 2: request đi qua Cloudflare bị từ chối <b>kể cả khi mang đúng secret</b> — lộ
+     * secret không còn là đủ để ghi verdict từ internet. Mỗi header được thử RIÊNG: bỏ một cái
+     * khỏi danh sách thì ca của nó đỏ.
+     */
+    @Test
+    @DisplayName("★ đúng secret nhưng mang dấu Cloudflare → 404, không tới controller")
+    void dung_secret_nhung_qua_cloudflare_thi_404() throws Exception {
+        for (String dau : java.util.List.of("CF-Ray", "CF-Connecting-IP", "CDN-Loop")) {
+            var req = new MockHttpServletRequest("POST", "/internal/judge/result");
+            req.addHeader(InternalSecretFilter.HEADER, SECRET);
+            req.addHeader(dau, "bat-ky");
+            var res = new MockHttpServletResponse();
+            chainCalled.set(false);
+
+            filter.doFilter(req, res, chain);
+
+            assertThat(res.getStatus()).as(dau).isEqualTo(404);
+            assertThat(chainCalled).as(dau).isFalse();
+        }
+    }
+
+    /**
+     * Qua Cloudflare mà KHÔNG có secret cũng phải là 404, không phải 401: phép kiểm tunnel đứng
+     * trước. {@code kiem-tunnel.sh} đọc 401 là "hai lớp đầu cùng thủng" — nếu thứ tự đảo, mọi
+     * lần chạy script trên một host lành đều báo động giả.
+     */
+    @Test
+    @DisplayName("qua Cloudflare mà không có secret → vẫn 404, không phải 401")
+    void qua_cloudflare_khong_secret_van_404() throws Exception {
+        request.addHeader("CF-Ray", "8c1f2a-SIN");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(chainCalled).isFalse();
+    }
+
     private static AppProperties properties(String secret) {
         return dev.oj.platform.config.AppPropertiesGia.voiInternalSecret(secret);
     }

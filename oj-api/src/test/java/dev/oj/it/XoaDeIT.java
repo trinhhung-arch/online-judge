@@ -1,5 +1,6 @@
 package dev.oj.it;
 
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.contests.application.usecase.AuthorContestUseCase;
 import dev.oj.platform.error.DomainException;
@@ -40,6 +41,7 @@ class XoaDeIT extends PostgresIT {
     @Autowired AuthorProblemUseCase authorProblem;
     @Autowired AuthorContestUseCase authorContest;
     @Autowired ContestRepository contests;
+    @Autowired ContestAuthoringRepository soanKyThi;
     @Autowired dev.oj.problems.application.port.ProblemAuthoringRepository problemsRepo;
 
     private static final Instant MOC = Instant.now();
@@ -86,10 +88,14 @@ class XoaDeIT extends PostgresIT {
                 """).param("u", USER_ID).param("p", problemId).update();
     }
 
+    /**
+     * Của {@code SETTER_ID} — người sở hữu đề nháp và là người gỡ nó ra ở các ca dưới. Từ
+     * 2026-09-23 chỉ chủ kỳ thi (hoặc ADMIN) gỡ được đề khỏi kỳ thi ({@code ContestChuSoHuuIT}).
+     */
     private long kyThi(Instant batDau, Instant ketThuc) {
         return contests.tao(new ContestRepository.ContestMoi(
                 "xoa-de-" + System.nanoTime(), "Thi thử", "ICPC",
-                batDau, ketThuc, null, 20, true, true, ADMIN_ID));
+                batDau, ketThuc, null, 20, true, true, SETTER_ID));
     }
 
     // =========================================================================
@@ -128,7 +134,7 @@ class XoaDeIT extends PostgresIT {
     void de_thuoc_ky_thi_da_ket_thuc_van_khong_xoa_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.minus(Duration.ofHours(4)), MOC.minus(Duration.ofHours(1)));
-        contests.themDe(ky, id, "A", 100);
+        soanKyThi.themDe(ky, id, "A", 100, ADMIN_ID, true);
 
         assertThatThrownBy(() -> xoaBoi(id, SETTER_ID, "setter", Role.SETTER))
                 .isInstanceOf(DomainException.class)
@@ -201,7 +207,7 @@ class XoaDeIT extends PostgresIT {
     void go_khoi_ky_thi_roi_thi_xoa_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.plus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(4)));
-        contests.themDe(ky, id, "A", 100);
+        soanKyThi.themDe(ky, id, "A", 100, ADMIN_ID, true);
 
         try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
             assertThat(phien).isNotNull();
@@ -218,7 +224,7 @@ class XoaDeIT extends PostgresIT {
     void ky_thi_da_bat_dau_thi_khong_go_duoc() {
         long id = deNhap();
         long ky = kyThi(MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)));
-        contests.themDe(ky, id, "A", 100);
+        soanKyThi.themDe(ky, id, "A", 100, ADMIN_ID, true);
 
         try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
             assertThat(phien).isNotNull();

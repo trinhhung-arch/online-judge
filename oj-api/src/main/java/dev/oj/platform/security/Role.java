@@ -27,7 +27,7 @@ public enum Role {
      * Thấy mọi thứ, kể cả {@code audit_log} và bảng xếp hạng đã đóng băng.
      *
      * <p>Vẫn <b>không</b> xoá được bài nộp — đó không phải giới hạn của vai trò mà là quyền
-     * ở tầng Postgres: {@code REVOKE DELETE, TRUNCATE ON submissions FROM oj_app} (V9).
+     * ở tầng Postgres: {@code REVOKE DELETE, TRUNCATE ON submissions FROM oj_app} (V8).
      * FR-SUB-09 là một quyền hệ thống, không phải một nút bị ẩn.
      */
     ADMIN;

@@ -66,6 +66,14 @@ public class IdentityException extends DomainException {
                 "Đăng nhập thất bại (không ghi handle đã thử vào đây — bất biến #9)");
     }
 
+    /** V15 · trần mã hai lớp theo tài khoản. Cùng hình dạng 429 + Retry-After với {@link #daKhoaTam}. */
+    public static IdentityException haiLopTamKhoa(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.hai_lop_tam_khoa",
+                "Nhập sai mã xác thực quá nhiều lần. Thử lại sau "
+                        + Math.max(1, conLai.toMinutes()) + " phút.",
+                "Bước mã hai lớp của tài khoản bị khoá tạm (V15)", conLai);
+    }
+
     public static IdentityException daKhoaTam(Duration conLai) {
         return new IdentityException(Kind.RATE_LIMITED, "identity.khoa_tam",
                 "Sai quá nhiều lần. Thử lại sau " + conLai.toMinutes() + " phút.",
@@ -166,6 +174,78 @@ public class IdentityException extends DomainException {
         return new IdentityException(Kind.FORBIDDEN, "identity.admin_can_2fa",
                 "Tài khoản quản trị phải bật xác thực hai lớp mới dùng được quyền quản trị.",
                 "ADMIN chưa bật 2FA — oj.auth.require-admin-two-factor đang bật");
+    }
+
+    // ------------------------- Xác minh email (V13, FR-AUTH-09) --------------
+
+    /**
+     * Mã sai, hết hạn, đã dùng, hoặc chưa từng có mã nào — cùng một câu cho cả bốn.
+     *
+     * <p>Cùng lập luận với {@link #totpSai()}: phân biệt "sai" với "hết hạn" là nói cho người
+     * dò biết mã họ thử có từng đúng không. Với một mã chỉ có một triệu khả năng thì thông
+     * tin ấy không cho không được. Câu công khai vẫn chỉ ra lối đi tiếp — xin một mã mới.
+     */
+    public static IdentityException maXacMinhSai() {
+        return new IdentityException(Kind.INVALID, "identity.ma_xac_minh_sai",
+                "Mã xác minh không đúng hoặc đã hết hạn. Hãy bấm gửi lại để nhận mã mới.",
+                "Mã xác minh email không khớp (không ghi mã đã thử vào đây — bất biến #9)");
+    }
+
+    /**
+     * Gõ sai quá {@code max-attempts} lần: mã đã bị khai tử.
+     *
+     * <p>Nói thẳng được vì người nhận câu này đã đăng nhập — họ là chủ tài khoản, và cần
+     * biết vì sao mã trong hộp thư của mình đột nhiên không dùng được nữa.
+     */
+    public static IdentityException maXacMinhDaChet() {
+        return new IdentityException(Kind.INVALID, "identity.ma_xac_minh_da_chet",
+                "Đã nhập sai quá nhiều lần nên mã này không còn dùng được. "
+                        + "Hãy bấm gửi lại để nhận mã mới.",
+                "Mã xác minh email chạm trần max-attempts và đã bị khai tử");
+    }
+
+    /**
+     * Bấm gửi lại quá nhanh — {@code resend-cooldown}.
+     *
+     * <p>Giới hạn này bảo vệ <b>hộp thư của người dùng</b>, không bảo vệ hệ thống: không có
+     * khoảng chờ thì một vòng lặp là một trận dội thư vào đúng địa chỉ của chính chủ tài khoản.
+     */
+    public static IdentityException guiLaiQuaNhanh(Duration conLai) {
+        return new IdentityException(Kind.RATE_LIMITED, "identity.gui_lai_qua_nhanh",
+                "Vừa gửi một mã rồi. Kiểm tra hộp thư, hoặc thử lại sau "
+                        + Math.max(1, conLai.toSeconds()) + " giây.",
+                "Chạm oj.auth.email-verification.resend-cooldown", conLai);
+    }
+
+    /** Đã xác minh rồi — nói ra để giao diện khỏi mời bấm lần nữa. */
+    public static IdentityException emailDaXacMinh() {
+        return new IdentityException(Kind.CONFLICT, "identity.email_da_xac_minh",
+                "Email của tài khoản này đã được xác minh.",
+                "Gọi gửi/xác minh khi email_verified_at đã có giá trị");
+    }
+
+    /**
+     * Máy chủ này chưa bật xác minh email.
+     *
+     * <p>Nói thẳng thay vì im lặng trả 204: bấm "gửi mã" rồi ngồi chờ một lá thư không bao
+     * giờ tới là kiểu hỏng tệ nhất — không có gì trên màn hình sai, và không có gì nói vì sao.
+     */
+    public static IdentityException xacMinhEmailTat() {
+        return new IdentityException(Kind.CONFLICT, "identity.xac_minh_email_tat",
+                "Máy chủ này chưa bật xác minh email.",
+                "oj.auth.email-verification.enabled = false");
+    }
+
+    /**
+     * Không gửi được thư — SMTP không trả lời, từ chối, hoặc timeout.
+     *
+     * <p>{@code UNAVAILABLE} chứ không phải {@code INVALID}: người gọi không làm gì sai. Câu
+     * chữ không nhắc tên máy chủ hay nội dung lỗi — đó là thông tin hạ tầng, thuộc về log.
+     */
+    public static IdentityException khongGuiDuocThu() {
+        return new IdentityException(Kind.UNAVAILABLE, "identity.khong_gui_duoc_thu",
+                "Không gửi được thư xác minh lúc này. Hãy thử lại sau ít phút.",
+                "SMTP từ chối hoặc không kết nối được");
     }
 
     // -------------------------------------------------------------------------

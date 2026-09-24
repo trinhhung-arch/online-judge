@@ -2,6 +2,7 @@ package dev.oj.identity.application.port;
 
 import dev.oj.identity.domain.TwoFactor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,6 +45,21 @@ public interface TwoFactorRepository {
 
     /** @return {@code true} nếu CHÍNH lời gọi này tiêu được mã; {@code false} nếu mã đã bị dùng */
     boolean danhDauDaDung(long maDuPhongId);
+
+    /** @return lúc hết khoá bước hai lớp (V15), hoặc rỗng nếu chưa từng bị khoá */
+    Optional<Instant> khoaHaiLopToi(long userId);
+
+    /**
+     * Ghi một mã sai. Đủ {@code nguong} lần LIÊN TIẾP thì đặt khoá tới {@code khoaToi} và đếm lại
+     * từ 0 — cả hai trong CÙNG một câu lệnh, để hai request song song không cùng đọc một số đếm
+     * cũ rồi cùng ghi đè nhau.
+     *
+     * @return {@code true} nếu chính lần ghi này bật khoá
+     */
+    boolean ghiMaSai(long userId, int nguong, Instant khoaToi);
+
+    /** Mã đúng: đếm lại từ 0. Không ghi gì nếu đã là 0 — đăng nhập bình thường không tốn thêm một lần ghi. */
+    void xoaDemMaSai(long userId);
 
     record MaDuPhong(long id, String codeHash) {
     }

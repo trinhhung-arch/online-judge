@@ -14,6 +14,9 @@ bài nộp** · **an toàn**. Mọi quyết định trong repo phục vụ ba đ
 | [`docs/frplan.md`](docs/frplan.md) | chức năng (mã FR-*) |
 | [`docs/postgres-design.md`](docs/postgres-design.md) | schema |
 | [`docs/cau-truc-source.md`](docs/cau-truc-source.md) | file nào ở đâu |
+| [`docs/bao-mat-plan.md`](docs/bao-mat-plan.md) | kiểm thử bảo mật: lưới đã có, bảy lỗ, checklist OWASP |
+| [`docs/giao-dien-plan.md`](docs/giao-dien-plan.md) | giao diện — trang nào, gọi API nào |
+| [`docs/ai-review-plan.md`](docs/ai-review-plan.md) | AI review (tuần 14–15, **chưa hiện thực**) |
 | [`docs/adr/`](docs/adr/) | quyết định kiến trúc và lý do |
 
 ---
@@ -58,14 +61,26 @@ sudo ./scripts/mount-box-tmpfs.sh         # tuỳ chọn, chỉ trên máy nhi�
 ### Giao diện
 
 Sau `spring-boot:run`, mở **http://localhost:8080** — giao diện là trang tĩnh nằm trong
-`oj-api/src/main/resources/static/`, không có build step và không có Node trong CI. Bốn trang:
+`oj-api/src/main/resources/static/`, không có build step và không có Node trong CI. Mười hai trang:
 
-| Trang | Nội dung |
-|---|---|
-| `/` | danh sách đề, lọc theo tag và theo "đã giải", phân trang cursor |
-| `/problem.html?code=…` | đề bài (Markdown render server-side, KaTeX vẽ ở trình duyệt) + CodeMirror 6 + nộp bài |
-| `/submission.html?id=…` | chi tiết bài nộp, cập nhật realtime qua SSE, **fallback polling 3 giây** |
-| `/login.html` | đăng nhập và đăng ký |
+| Trang | Nội dung | Đợt |
+|---|---|---|
+| `/` | danh sách đề, lọc theo tag và theo "đã giải", phân trang cursor | 4.12 |
+| `/problem.html?code=…` | đề bài (Markdown render server-side, KaTeX vẽ ở trình duyệt) + CodeMirror 6 + nộp bài | 4.12 |
+| `/submission.html?id=…` | chi tiết bài nộp, cập nhật realtime qua SSE, **fallback polling 3 giây** | 4.12 |
+| `/login.html` | đăng nhập và đăng ký | 4.12 |
+| `/bai-nop.html` | lịch sử bài nộp của mình, lọc đề/verdict/ngôn ngữ | G1 |
+| `/ho-so.html` | hồ sơ · đổi mật khẩu · **xác minh email** · xác thực hai lớp | G2 · V11 · V13 |
+| `/trang-thai.html` | trạng thái công khai — hàng đợi, máy chấm, thời gian chờ ước tính | G3 |
+| `/contests.html` | danh sách kỳ thi | G4 |
+| `/contest.html?slug=…` | chi tiết kỳ thi · đăng ký · bảng xếp hạng (SSE) | G5, G6 |
+| `/ra-de.html` | soạn/sửa/xuất bản đề · nạp testdata + tiến độ job | G9, G10 |
+| `/quan-tri.html` | bảng điều khiển vận hành · rejudge · người dùng · bảo trì | G11 |
+| `/nhat-ky.html` | `audit_log` (chỉ ADMIN) | G12 |
+
+> Bảng này từng ghi **"Bốn trang"** và đứng yên suốt M5–M6 trong khi tám trang nữa được
+> thêm vào. Một bảng liệt kê thì hoặc đầy đủ, hoặc nói rõ nó chỉ là ví dụ — đứng giữa hai
+> điều đó là cách người đọc kết luận rằng `ra-de.html` chưa được viết.
 
 Nháp mã nguồn nằm trong `localStorage`, khoá theo *(đề, ngôn ngữ)* — đổi ngôn ngữ không xoá
 mất bản đang viết dở. Nháp **cố ý không gửi lên server**: đó là lời giải chưa nộp, và một
@@ -152,11 +167,19 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | **M4** | auth, quyền, upload đề, MinIO, giao diện | **xong 4.1–4.12** (xem dưới) |
 | **M5** | kỳ thi, bảng xếp hạng | **xong 5.1–5.11** (xem dưới) |
 | **M6** | RabbitMQ, giám sát, vận hành | **xong 6.1–6.15** (xem dưới) |
+| **v1.1** | xác minh email (FR-AUTH-09) — **mức mềm**, không chặn gì | **xong** — V13, [ADR 016](docs/adr/016-xac-minh-email-muc-mem.md) |
 
 ```
-./mvnw verify   →   541 test xanh, ~4 phút
-                    oj-api     287 unit + 157 IT (Postgres 16 + Redis 7 thật, Testcontainers)
-                    oj-worker   71 unit +  26 IT (isolate thật: 14 tấn công + 9 đường chấm + 3 benchmark)
+./mvnw verify   →   755 test xanh trên Linux/CI · 729 trên macOS   (đo 2026-09-21)
+
+                    oj-api      412 unit + 238 IT   Postgres 16 + Redis 7 thật, Testcontainers
+                    oj-worker    71 unit +  26 IT   isolate thật: 14 tấn công + 9 đường chấm
+                                                    + 3 benchmark — CHỈ chạy trên Linux
+                    oj-contract   8 unit
+
+                    ⚠️ macOS không chạy được 26 IT của oj-worker, và nó KHÔNG báo đỏ:
+                    Assumptions.abort() huỷ cả class rồi vẫn in BUILD SUCCESS. Dùng
+                    scripts/kiem-sandbox.sh — nó ĐẾM số ca.
 ```
 
 ### M4 — toàn bộ 12 bước
@@ -165,7 +188,7 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 |---|---|---|
 | 4.1 | migration **V5** — `refresh_tokens` · `login_attempts` · `login_lockouts` · `audit_log` phân mảnh theo tháng | chạy trên DB rỗng (Testcontainers) **và** DB dev đã có dữ liệu: 387ms |
 | 4.2–4.4 | `identity` đầy đủ: domain thuần · 8 use-case · BCrypt cost 12 · refresh token lưu **SHA-256** | `IdentityDomainTest` 14 · `IdentityUseCasesTest` 22 |
-| 4.5 | JWT HS256 **không thêm dependency** · `JwtAuthFilter` · `JwtCurrentUserProvider` thay `FixedDevUserProvider` | `JwtTest` 14 ca, gồm 4 lớp CVE của thư viện JWT · [ADR 012](docs/adr/012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) |
+| 4.5 | JWT HS256 **không thêm dependency** · `JwtAuthFilter` · `JwtCurrentUserProvider` thay `FixedDevUserProvider` | `JwtTest` 15 ca, gồm 4 lớp CVE của thư viện JWT · [ADR 012](docs/adr/012-tu-viet-jwt-hs256-thay-vi-them-thu-vien.md) |
 | 4.6 | `@RequiresRole` + advisor ở tầng use-case · **LUẬT 8** của ArchUnit | `AuthorizationIT` — gồm một ca hỏi thẳng Spring xem advisor có được gắn không |
 | 4.7 | khoá đăng nhập 5 lần/phút/IP (FR-AUTH-08) · rate limit nộp bài 1 bài/10s/user (FR-SUB-08), Redis là đường chính và Postgres là đường dự phòng | `SessionLifecycleHttpIT` · `SubmissionRateLimitIT` — cả hai đường, 429 kèm `Retry-After` |
 | 4.8 | rà IDOR: bài nộp của người khác trả **404**, vai trò sai trả **403 chứ không phải 200 rỗng** | `AuthorizationIT` · `IdentityHttpIT` |
@@ -246,7 +269,7 @@ và PHẦN 7 không liệt kê nó trong 5.1–5.11.
 | 6.3 | ★ `RejudgeJob`: hai hàng đợi · trần 30% · phanh khi live chờ >5s · cấm khi có kỳ thi | `RejudgeJobTest` 9 (domain thuần) · `RejudgeIT` 6 · `AdminJudgingUseCasesTest` 8 |
 | 6.4 | ★ Postgres queue → RabbitMQ: quorum queue · `prefetch=1` · ack tay · DLQ sau 3 lần | `RabbitJudgeJobPublisherTest` 4 · `JudgeDoorbellTest` 3 · kiểm tay: 3 quorum queue, 1 consumer mỗi hàng |
 | 6.5 | `audit_log` đọc được (ADMIN, phân trang) + job tạo partition hàng tháng | `VanHanhIT` — gồm ca phân trang khi trùng mốc thời gian |
-| 6.6 | `AdminUserController`: đổi vai trò, vô hiệu hoá — **không xoá cứng** | `AccountManagementUseCasesTest` 6 |
+| 6.6 | `AccountAdminController`: đổi vai trò, vô hiệu hoá — **không xoá cứng** | `AccountManagementUseCasesTest` 6 |
 | 6.7 | `/actuator/health` thật: cả **hai** pool Postgres · Redis · RabbitMQ · máy chấm sống | `SuyGiamIT` · kiểm tay ở cổng 8081 |
 | 6.8 | tắt worker êm bằng SIGTERM | `WorkerContextSmokeTest` · kiểm tay: SIGTERM → "Mọi slot đã chấm xong bài của mình và dừng" |
 | 6.9 | degraded mode 5 kịch bản | `SuyGiamIT` 5 · `CodingRulesTest` LUẬT 9 (MinIO) |
@@ -267,6 +290,27 @@ use-case nào, không một câu SQL nào phải sửa.
 không bao giờ cũ khi reaper tăng `attempt`. Đổi lại, mệnh đề *"ack sau khi kết quả đã vào DB"*
 của Bước 6.4 không áp dụng nguyên văn: ack xảy ra sau khi rung chuông. Bảo đảm mà nó nhắm tới
 vẫn còn và **mạnh hơn** — nó do `judge_queue` + lease 120s + reaper cung cấp, không do broker.
+
+### v1.1 — xác minh email (FR-AUTH-09)
+
+| Nội dung | Bằng chứng |
+|---|---|
+| migration **V13** — `email_verifications` · cột `users.email_verified_at` · `ck_users_anonymized` mở rộng | `MigrationTrenDuLieuCoSanIT` — chạy tới V12, chèn một tài khoản **đã ẩn danh hoá**, rồi migrate tiếp |
+| mã 6 chữ số · hạn 30 phút · 5 lần thử · mã mới huỷ mã cũ · lưu **SHA-256** | `MaXacMinhEmailTest` 7 · `XacMinhEmailUseCaseTest` 16 — mỗi hàng rào một ca riêng |
+| `POST /api/v1/me/xac-minh-email` + `/xac-nhan`, **cần đăng nhập** · SMTP có trần 10s, thiếu thì không boot | `XacMinhEmailHttpIT` 5 |
+
+**Mức mềm: nhãn `email_verified_at` không chặn gì cả** — chưa xác minh thì vẫn đăng nhập, vẫn
+nộp bài, vẫn dự thi. Đó là điều kiện để nhận thêm SMTP vào hệ thống: nhà cung cấp thư chết thì
+hôm ấy không ai xác minh được, và **không ai mất quyền vào hệ thống**. Chặn đăng nhập thì một
+sự cố của họ trở thành sự cố truy cập của ta, đúng vào ngày contest.
+
+**Mặc định TẮT** (`OJ_EMAIL_VERIFICATION_ENABLED=false`) vì máy dev và CI không có máy chủ thư.
+Bật thì cần `OJ_MAIL_HOST` + `OJ_MAIL_FROM`, và địa chỉ gửi phải thuộc tên miền đã cấu hình
+SPF/DKIM — "mã rơi vào spam" là trải nghiệm tệ hơn không có xác minh.
+
+**Nó KHÔNG thay Turnstile.** Hai hàng rào, hai mục tiêu: Turnstile chặn bot tạo tài khoản hàng
+loạt, xác minh email cho một kênh liên lạc đã xác minh. Tắt cái sau không hạ mức chống bot đi
+chút nào; tắt cái trước thì có.
 
 ### Kill RabbitMQ — bài test quan trọng nhất sau Bước 6.4
 

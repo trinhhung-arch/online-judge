@@ -197,6 +197,9 @@ class SubmissionSseIT extends PostgresIT {
                     HttpRequest.newBuilder(uri).header("Authorization", bearer).GET().build(),
                     HttpResponse.BodyHandlers.ofLines());
             assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Cache-Control"))
+                    .as("luồng SSE commit response sớm — KhongLuuDemApiFilter phải đặt header trước chain")
+                    .hasValue("no-store");
 
             reader = Thread.ofPlatform().daemon().start(() -> {
                 try (var body = response.body()) {

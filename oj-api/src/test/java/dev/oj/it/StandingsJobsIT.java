@@ -3,6 +3,7 @@ package dev.oj.it;
 import dev.oj.contests.application.RebuildStandingsJob;
 import dev.oj.contests.application.StandingsDriftCheckJob;
 import dev.oj.contests.application.StandingsUpdater;
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.contests.application.port.StandingsReader;
 import dev.oj.contests.domain.Contest;
@@ -37,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StandingsJobsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
+
+    @Autowired ContestAuthoringRepository soanKyThi;
     @Autowired StandingsReader standings;
     @Autowired dev.oj.contests.application.port.StandingsRepository standingsRepo;
     @Autowired StandingsUpdater updater;
@@ -53,7 +56,7 @@ class StandingsJobsIT extends PostgresIT {
                 Instant.now().minus(Duration.ofHours(1)),
                 Instant.now().plus(Duration.ofHours(2)), null,
                 20, true, true, ADMIN_ID));
-        contests.themDe(contestId, PROBLEM_ID, "A", 100);
+        soanKyThi.themDe(contestId, PROBLEM_ID, "A", 100, ADMIN_ID, true);
         contests.dangKy(contestId, USER_ID, Instant.now());
 
         nopVaCham("WA", 0);

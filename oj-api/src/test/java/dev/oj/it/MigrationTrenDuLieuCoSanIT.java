@@ -167,6 +167,113 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
+    /**
+     * ★ V13 thay được {@code ck_users_anonymized} trên một bảng {@code users} <b>đã có một
+     * tài khoản ẩn danh hoá</b>.
+     *
+     * <p>V13 làm hai việc mà không migration nào trước đó làm cùng lúc: thêm một cột vào
+     * {@code users}, rồi <b>DROP và ADD lại một CHECK đang có hiệu lực</b> trên chính bảng ấy.
+     * Câu {@code ADD CONSTRAINT} được Postgres kiểm lại trên <i>toàn bộ dữ liệu hiện có</i>,
+     * nên nếu một dòng nào đó không thoả, Flyway chết <b>giữa lúc deploy</b> — trên một
+     * database đã áp một nửa số migration.
+     *
+     * <p>Dòng duy nhất có thể không thoả là một tài khoản {@code ANONYMIZED}, vì ràng buộc
+     * mới chỉ nói về chúng. Ca này dựng đúng một dòng như thế trước khi V13 chạy.
+     *
+     * <p>Nó chốt luôn vế thứ hai, thứ mà phép kiểm lúc migrate không nói: sau V13, một tài
+     * khoản ẩn danh hoá <b>không nhận được</b> {@code email_verified_at}. Đó là lời hứa
+     * FR-AUTH-07 mở rộng sang cột mới, và nó là lý do cột ấy được đưa vào ràng buộc thay vì
+     * chỉ được nhớ trong câu {@code UPDATE} của {@code JdbcUserRepository}.
+     */
+    @Test
+    @DisplayName("★ V13 thay được ck_users_anonymized khi đã có tài khoản ẩn danh hoá")
+    void v13_chay_duoc_khi_da_co_tai_khoan_an_danh() throws SQLException {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
+            pg.start();
+
+            // 1. Chạy tới V12 — trạng thái ngay trước V13.
+            flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("12")).load()
+                    .migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, role)
+                        VALUES ('con-dung', 'con@oj.test', 'Còn dùng', 'x', 'USER')
+                        """);
+                // Đúng hình dạng mà AnonymizeAccountUseCase để lại: email và băm mật khẩu
+                // đã bị xoá thật, dòng thì vẫn còn vì submissions tham chiếu tới nó.
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, status)
+                        VALUES ('da-xoa', NULL, '[đã xoá #2]', NULL, 'ANONYMIZED')
+                        """);
+            }
+
+            // 2. Chạy nốt V13 trên database ĐÃ CÓ dòng ANONYMIZED.
+            flyway(pg).load().migrate();
+
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                var rs = st.executeQuery(
+                        "SELECT count(*) FROM users WHERE email_verified_at IS NOT NULL");
+                rs.next();
+                assertThat(rs.getInt(1))
+                        .as("★ V13 cố ý KHÔNG backfill: tài khoản cũ chưa từng xác minh, và "
+                                + "đánh dấu chúng là đã xác minh là ghi một điều không đúng")
+                        .isZero();
+
+                assertThat(chenDuocKhong(st, """
+                        UPDATE users SET email_verified_at = now() WHERE handle = 'con-dung'
+                        """))
+                        .as("tài khoản đang dùng thì xác minh được bình thường")
+                        .isTrue();
+
+                assertThat(chenDuocKhong(st, """
+                        UPDATE users SET email_verified_at = now() WHERE handle = 'da-xoa'
+                        """))
+                        .as("★ nhưng tài khoản đã ẩn danh hoá thì KHÔNG — FR-AUTH-07 hứa xoá "
+                                + "dữ liệu định danh, và một mốc 'đã xác minh email lúc 10:03' "
+                                + "là một khẳng định về một địa chỉ vừa bị xoá")
+                        .isFalse();
+            }
+        }
+    }
+
+    /**
+     * ★ V15 trên host đã có người bật 2FA. Dòng cũ phải nhận {@code failed_attempts = 0} và
+     * không có hạn khoá (deploy không khoá oan ai), và câu ghi của jar ĐANG CHẠY — không biết
+     * hai cột mới — phải còn chạy (lùi jar không cần lùi schema).
+     */
+    @Test
+    @DisplayName("★ V15 chạy trên tài khoản đang bật 2FA: không khoá oan, jar cũ vẫn ghi được")
+    void v15_chay_duoc_khi_da_co_nguoi_bat_hai_lop() throws SQLException {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
+            pg.start();
+            flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("14")).load()
+                    .migrate();
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                st.execute("""
+                        INSERT INTO users (handle, email, display_name, password_hash, role)
+                        VALUES ('co-2fa', 'a@oj.test', 'A', 'x', 'ADMIN'),
+                               ('chua-2fa', 'b@oj.test', 'B', 'x', 'USER');
+                        INSERT INTO user_two_factor (user_id, secret_enc, enabled, last_step, confirmed_at)
+                        VALUES (1, 'bi-mat-da-ma-hoa', TRUE, 12345, now());
+                        """);
+            }
+            flyway(pg).load().migrate();
+            try (Connection con = ket(pg); Statement st = con.createStatement()) {
+                var rs = st.executeQuery(
+                        "SELECT failed_attempts, locked_until FROM user_two_factor WHERE user_id = 1");
+                rs.next();
+                assertThat(rs.getObject(1)).as("dòng cũ nhận DEFAULT 0, không phải NULL").isEqualTo(0);
+                assertThat(rs.getObject(2)).as("★ không ai bị khoá bước hai lớp chỉ vì deploy").isNull();
+                // Đúng câu LUU_BAN_NHAP của jar đang chạy trên host (52727b6).
+                assertThat(chenDuocKhong(st, """
+                        INSERT INTO user_two_factor (user_id, secret_enc, enabled)
+                        VALUES (2, 'ban-nhap', FALSE)
+                        """)).as("★ jar cũ vẫn ghi được sau V15").isTrue();
+            }
+        }
+    }
+
     private static org.flywaydb.core.api.configuration.FluentConfiguration flyway(
             PostgreSQLContainer pg) {
         return Flyway.configure()

@@ -10,7 +10,7 @@ import java.time.Instant;
  * Bản ghi <b>bất biến</b> của một attempt — bảng {@code judge_runs} ở V3.
  *
  * <p>Một hàng mỗi lần chấm, không bao giờ UPDATE, không bao giờ DELETE. Hàng rào không phải
- * là lời hứa mà là quyền: {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V9) —
+ * là lời hứa mà là quyền: {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V8) —
  * trigger thì tắt được, quyền thì không.
  *
  * <p><b>Vì sao giữ cả lịch sử:</b> rejudge tạo attempt mới thay vì ghi đè (FR-ADM-01). Ngày

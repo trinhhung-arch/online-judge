@@ -4,7 +4,7 @@ import dev.oj.judging.domain.JudgeRun;
 
 /**
  * Port ghi lịch sử chấm bài. <b>Chỉ có INSERT</b> — không sửa, không xoá, và đó không phải
- * quy ước mà là quyền: {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V9).
+ * quy ước mà là quyền: {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V8).
  */
 public interface JudgeRunRepository {
 

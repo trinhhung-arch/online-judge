@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * ★ Render đề bài — FR-PROB-02, Bước 4.9.
  *
- * <h2>Vì sao nửa số ca ở đây là ca tấn công</h2>
+ * <h2>Vì sao khối ca đầu tiên ở đây toàn là ca tấn công</h2>
  * Đề bài do SETTER soạn và hiển thị cho <b>mọi thí sinh đang thi</b>. Một thẻ {@code <script>}
  * lọt qua bộ render là XSS trên trang mà cả kỳ thi đang mở, và nó đọc được access token trong
  * bộ nhớ trình duyệt của từng người.

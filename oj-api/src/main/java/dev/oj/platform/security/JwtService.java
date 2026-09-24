@@ -77,11 +77,18 @@ public class JwtService {
     }
 
     /**
+     * ★ Package-private, cố ý. Vai trò trả về ở đây là vai trò <b>thô</b> ghi trong token —
+     * chưa qua cổng 2FA. Chỉ {@link JwtAuthFilter} được đọc nó, và nó chỉ chuyển tiếp vào
+     * {@link CurrentUserHolder}; phần còn lại của hệ thống đọc danh tính qua
+     * {@link CurrentUserProvider}, nơi ADMIN chưa bật 2FA đã bị hạ. Mở hàm này thành
+     * {@code public} là mở lại đúng đường vòng mà {@link JwtCurrentUserProvider} đóng — và
+     * trình biên dịch, chứ không phải một luật có thể bị nới, là thứ đang chặn điều đó.
+     *
      * @throws AuthorizationException {@code auth.token_khong_hop_le} nếu chữ ký sai, định dạng
      *         hỏng, hoặc claim không đúng hình dạng ta phát ra;
      *         {@code auth.token_het_han} nếu quá {@code exp}
      */
-    public CurrentUser doc(String token) {
+    CurrentUser doc(String token) {
         byte[] payload = jwt.moKhoa(token);   // chữ ký đã đúng khi hàm này trả về
 
         Claims claims;

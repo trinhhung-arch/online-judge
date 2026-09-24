@@ -165,7 +165,7 @@ class SubmissionTest {
 
     /**
      * FR-SUB-09 — không ai xoá được bài nộp. Hàng rào thật là
-     * {@code REVOKE DELETE, TRUNCATE ... FROM oj_app} (V9); test này giữ cho phía Java không
+     * {@code REVOKE DELETE, TRUNCATE ... FROM oj_app} (V8); test này giữ cho phía Java không
      * mọc ra một phương thức mời gọi ai đó viết câu SQL tương ứng.
      */
     @Test

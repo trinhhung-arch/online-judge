@@ -135,9 +135,11 @@ updates:
 #      Settings > Code security, KHÔNG phải một khối trong file này. Bật nó thì
 #      GitHub mở PR ngay khi có CVE, không chờ tới thứ Hai.
 #
-#   3. Bắt CI đỏ khi có CRITICAL/HIGH. Muốn có răng thật thì cần một bước Trivy trong
-#      ci.yml với `exit-code: 1`, `severity: CRITICAL,HIGH`. Chưa thêm ở đây vì nó là
-#      một quyết định về tốc độ CI và về việc ai xử lý khi nó đỏ lúc 11 giờ đêm.
+#   3. ✅ ĐÃ CÓ từ 2026-09-21 — .github/workflows/quet-phu-thuoc.yml. Trivy với
+#      `severity: CRITICAL,HIGH` và `exit-code: 1`, chạy như một workflow RIÊNG và SONG
+#      SONG nên không tiêu ngân sách CI < 10 phút. `ignore-unfixed: true` là có chủ ý:
+#      cổng chỉ đỏ khi có việc để làm, vì một cổng đỏ mà không vá được sẽ bị tắt.
 #
-# Nói ngắn: file này làm cho phụ thuộc không tự già đi. Ba mục trên mới là "chặn".
+# Nói ngắn: file này làm cho phụ thuộc không tự già đi, quet-phu-thuoc.yml làm CI đỏ, và
+# hai mục 1–2 ở trên (branch protection + công tắc security updates) là phần còn lại.
 # =============================================================================

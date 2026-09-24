@@ -97,7 +97,7 @@ public class GioiHanApiFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        String khoa = userId != null ? "u:" + userId : "ip:" + ClientIp.cua(request);
+        String khoa = userId != null ? "u:" + userId : "ip:" + ClientIp.khoaGioiHan(request);   // IPv6 gom theo /64 — xem ClientIp.khoaGioiHan
         long luot;
         try {
             luot = dem.tang(khoa, gioiHan.window());

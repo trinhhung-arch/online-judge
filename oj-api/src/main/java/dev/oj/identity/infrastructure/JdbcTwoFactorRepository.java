@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,5 +126,45 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
     public boolean danhDauDaDung(long maDuPhongId) {
         return jdbc.sql("UPDATE user_scratch_code SET used_at = now() WHERE id = :id AND used_at IS NULL")
                 .param("id", maDuPhongId).update() == 1;
+    }
+
+    @Override
+    public Optional<Instant> khoaHaiLopToi(long userId) {
+        return jdbc.sql("""
+                        SELECT locked_until FROM user_two_factor
+                         WHERE user_id = :userId AND locked_until IS NOT NULL
+                        """)
+                .param("userId", userId)
+                .query(OffsetDateTime.class).optional().map(OffsetDateTime::toInstant);
+    }
+
+    /**
+     * {@code RETURNING failed_attempts = 0}: sau câu lệnh, số đếm chỉ bằng 0 khi CHÍNH lần này vừa
+     * chạm ngưỡng và bật khoá — mọi lần sai khác để lại số ≥ 1. Dòng bị khoá khi UPDATE, nên
+     * {@code CASE} luôn đọc giá trị của request trước, không phải bản đã đọc từ lâu.
+     */
+    @Override
+    public boolean ghiMaSai(long userId, int nguong, Instant khoaToi) {
+        return jdbc.sql("""
+                        UPDATE user_two_factor
+                           SET failed_attempts = CASE WHEN COALESCE(failed_attempts, 0) + 1 >= :nguong
+                                                      THEN 0 ELSE COALESCE(failed_attempts, 0) + 1 END,
+                               locked_until    = CASE WHEN COALESCE(failed_attempts, 0) + 1 >= :nguong
+                                                      THEN :khoaToi ELSE locked_until END
+                         WHERE user_id = :userId
+                        RETURNING failed_attempts = 0
+                        """)
+                .param("userId", userId).param("nguong", nguong)
+                .param("khoaToi", OffsetDateTime.ofInstant(khoaToi, ZoneOffset.UTC))
+                .query(Boolean.class).optional().orElse(false);
+    }
+
+    @Override
+    public void xoaDemMaSai(long userId) {
+        jdbc.sql("""
+                        UPDATE user_two_factor SET failed_attempts = 0
+                         WHERE user_id = :userId AND COALESCE(failed_attempts, 0) <> 0
+                        """)
+                .param("userId", userId).update();
     }
 }

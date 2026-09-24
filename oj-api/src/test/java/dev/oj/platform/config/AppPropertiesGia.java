@@ -1,6 +1,7 @@
 package dev.oj.platform.config;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * {@link AppProperties} dựng sẵn cho test — <b>một chỗ duy nhất</b>.
@@ -49,9 +50,10 @@ public final class AppPropertiesGia {
         var auth = new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                soSuat, cho, Duration.ofSeconds(2),
-                new TurnstileProperties(false, "", "",
-                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)));
+                soSuat, cho, Duration.ofSeconds(2), 10, Duration.ofMinutes(15),
+                new TurnstileProperties(false, "", "", List.of(),
+                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)),
+                xacMinhEmailMacDinh());
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
@@ -70,7 +72,30 @@ public final class AppPropertiesGia {
                 a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
                 a.maxRegistrationsPerIp(), a.registrationWindow(), a.totpKey(),
                 a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
-                a.loginMinInterval(), turnstile);
+                a.loginMinInterval(), a.totpMaxFailures(), a.totpLockout(),
+                turnstile, a.emailVerification());
+        return voi(internalMacDinh(), auth, submissionMacDinh());
+    }
+
+    /**
+     * Xác minh email TẮT — khớp mặc định của {@code application.yml}, và là trạng thái đúng
+     * cho mọi test không nói về nó: bật nghĩa là mọi lượt đăng ký trong bộ test đều đi qua
+     * một {@code EmailSender}, và một fake quên nạp ở đâu đó sẽ hỏng một ca không liên quan.
+     */
+    public static EmailVerificationProperties xacMinhEmailMacDinh() {
+        return new EmailVerificationProperties(false, "", Duration.ofMinutes(30), 5,
+                Duration.ofSeconds(60));
+    }
+
+    /** Cho các ca xác minh email — chúng cần nó BẬT, và đôi khi cần ngưỡng khác. */
+    public static AppProperties voiXacMinhEmail(EmailVerificationProperties xacMinh) {
+        var a = authMacDinh();
+        var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),
+                a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
+                a.maxRegistrationsPerIp(), a.registrationWindow(), a.totpKey(),
+                a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
+                a.loginMinInterval(), a.totpMaxFailures(), a.totpLockout(),
+                a.turnstile(), xacMinh);
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
@@ -78,9 +103,10 @@ public final class AppPropertiesGia {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                4, Duration.ofMillis(150), Duration.ofSeconds(2),
-                new TurnstileProperties(false, "", "",
-                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)));
+                4, Duration.ofMillis(150), Duration.ofSeconds(2), 10, Duration.ofMinutes(15),
+                new TurnstileProperties(false, "", "", List.of(),
+                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)),
+                xacMinhEmailMacDinh());
     }
 
     private static AppProperties.Submission submissionMacDinh() {

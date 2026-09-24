@@ -28,6 +28,10 @@ import java.util.regex.Pattern;
  * @param status              {@link UserStatus}
  * @param preferredLanguageId ngôn ngữ ưa dùng, {@code null} nếu chưa chọn (FR-AUTH-05)
  * @param createdAt           lúc đăng ký
+ * @param emailVerifiedAt     lúc xác minh email, {@code null} nếu chưa (V13, FR-AUTH-09).
+ *                            <b>Đây là một nhãn, không phải một cổng</b>: mức mềm không chặn
+ *                            đăng nhập, nộp bài hay dự thi. Xem ADR 016 trước khi viết một
+ *                            câu {@code if} nào dựa vào nó
  */
 public record User(
         long id,
@@ -37,7 +41,8 @@ public record User(
         Role role,
         UserStatus status,
         Short preferredLanguageId,
-        Instant createdAt) {
+        Instant createdAt,
+        Instant emailVerifiedAt) {
 
     /**
      * Khớp <b>từng ký tự</b> với {@code ck_users_handle_format} trong V1.
@@ -56,8 +61,12 @@ public record User(
      *
      * <p>Cố ý <b>không</b> dùng regex "đúng RFC 5322". Những biểu thức đó dài hàng trăm ký tự,
      * vẫn từ chối nhầm các địa chỉ hợp lệ, và không trả lời được câu hỏi thật sự quan trọng —
-     * hộp thư đó có tồn tại không. Câu đó chỉ có một cách trả lời là gửi thư tới, mà
-     * FR-AUTH-09 (quên mật khẩu qua email) đã bị hoãn sang v1.1 vì SMTP là một điểm hỏng nữa.
+     * hộp thư đó có tồn tại không.
+     *
+     * <p>Câu ấy giờ ĐÃ có người trả lời, và không phải là biểu thức này: V13 gửi một mã tới
+     * địa chỉ vừa nhập và chờ người dùng gõ lại ({@link #emailVerifiedAt}). Nghĩa là biểu
+     * thức ở đây càng không cần chặt — nó chỉ còn một việc, bắt lỗi gõ nhầm hiển nhiên trước
+     * khi tốn một lá thư.
      */
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
@@ -94,6 +103,16 @@ public record User(
             throw IdentityException.khongHopLe("identity.email_khong_hop_le",
                     "Địa chỉ email không hợp lệ.");
         }
+    }
+
+    /**
+     * Nhãn đọc được cho tầng {@code api} — V13.
+     *
+     * <p>Một phương thức chứ không để nơi gọi tự viết {@code emailVerifiedAt() != null}: câu
+     * ấy viết rải ở n chỗ là n cơ hội để một chỗ viết ngược dấu, và không có gì bắt được.
+     */
+    public boolean daXacMinhEmail() {
+        return emailVerifiedAt != null;
     }
 
     /** @throws IdentityException {@code INVALID} nếu rỗng hoặc quá dài */

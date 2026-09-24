@@ -43,11 +43,18 @@ class TaiNguyenNgoaiTest {
     private static final Path GOC = Path.of("src/main/resources/static");
 
     /** {@code src=} hoặc {@code href=} trỏ ra một máy chủ khác. Đường dẫn nội bộ bắt đầu bằng "/". */
+    /**
+     * Mã của BÊN THỨ BA: từ host ngoài, hoặc từ {@code /vendor/}. Từ 2026-09-24 (rà soát F3)
+     * KaTeX và qrcode được vendor về {@code static/vendor/} — không còn thẻ nào trỏ ra ngoài, nên
+     * luật mở rộng sang vendor: vẫn là mã người khác, vẫn chạy toàn quyền trên trang. Hash giữ
+     * nguyên từ bản CDN (file giống từng byte), nên SRI vẫn đúng và vẫn chặn được một lần sửa
+     * lén trong repo mà quên {@code SHA256SUMS}.
+     */
     private static final Pattern NGOAI =
-            Pattern.compile("<(script|link)\\b([^>]*\\b(?:src|href)=\"https?://[^\"]+\"[^>]*)>",
+            Pattern.compile("<(script|link)\\b([^>]*\\b(?:src|href)=\"(?:https?://|/vendor/)[^\"]+\"[^>]*)>",
                     Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern URL = Pattern.compile("(?:src|href)=\"(https?://[^\"]+)\"");
+    private static final Pattern URL = Pattern.compile("(?:src|href)=\"((?:https?://|/vendor/)[^\"]+)\"");
 
     private record ThamChieu(String tep, String the, String url, boolean coSri, boolean coCors) {
     }

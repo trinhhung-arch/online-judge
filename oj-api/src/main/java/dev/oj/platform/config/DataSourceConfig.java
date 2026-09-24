@@ -42,7 +42,7 @@ import javax.sql.DataSource;
  *
  * <h2>Flyway chạy bằng role thứ ba</h2>
  * Hai pool ở đây đều là {@code oj_app} — role bị {@code REVOKE DELETE, TRUNCATE ON submissions}
- * và {@code REVOKE UPDATE, DELETE ON audit_log} (V9). Flyway cần DDL, nên nó dùng
+ * và {@code REVOKE UPDATE, DELETE ON audit_log} (V8). Flyway cần DDL, nên nó dùng
  * {@code oj_migrator} qua {@code spring.flyway.user/password} — cấu hình riêng, không đi qua
  * class này. Đó chính là điều làm cho "audit_log append-only" là một quyền hệ thống chứ không
  * phải một quy ước ({@code postgres-design.md} mục 9).

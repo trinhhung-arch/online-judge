@@ -1,5 +1,6 @@
 package dev.oj.it;
 
+import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
 import dev.oj.platform.error.DomainException;
@@ -33,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ContestAccessIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
+
+    @Autowired ContestAuthoringRepository soanKyThi;
     @Autowired GetProblemUseCase getProblem;
     @Autowired SubmitSolutionUseCase submitSolution;
     @Autowired dev.oj.problems.application.usecase.AuthorProblemUseCase authorProblem;
@@ -48,7 +51,7 @@ class ContestAccessIT extends PostgresIT {
         long id = contests.tao(new ContestRepository.ContestMoi(
                 "thi-thu-" + System.nanoTime(), "Thi thử", "ICPC",
                 batDau, ketThuc, dongBang, 20, true, true, ADMIN_ID));
-        contests.themDe(id, PROBLEM_ID, "A", 100);
+        soanKyThi.themDe(id, PROBLEM_ID, "A", 100, ADMIN_ID, true);
         return id;
     }
 

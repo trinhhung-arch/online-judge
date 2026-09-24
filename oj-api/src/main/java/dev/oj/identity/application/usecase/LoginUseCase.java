@@ -10,6 +10,7 @@ import dev.oj.identity.domain.Credentials;
 import dev.oj.identity.domain.IdentityException;
 import dev.oj.identity.domain.User;
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.security.ClientIp;
 import dev.oj.platform.security.PublicAccess;
 import org.springframework.stereotype.Service;
 
@@ -140,12 +141,18 @@ public class LoginUseCase {
                 });
     }
 
+    /**
+     * Đếm và khoá theo DẢI, không theo địa chỉ: IPv6 gom về /64 ({@link ClientIp#khoaGioiHan}).
+     * Đếm theo địa chỉ thì một kết nối IPv6 đổi địa chỉ sau mỗi 5 lần sai là không bao giờ bị
+     * khoá — và mã TOTP 6 chữ số rơi vào đúng đường này (rà soát 2026-09-24, F2).
+     */
     private void khoaNeuQuaNhieu(String clientIp) {
         var auth = properties.auth();
         Instant bayGio = clock.instant();
-        int soLanSai = attempts.demThatBaiTu(clientIp, bayGio.minus(auth.loginWindow()));
+        String dai = ClientIp.khoaGioiHan(clientIp);
+        int soLanSai = attempts.demThatBaiTu(dai, bayGio.minus(auth.loginWindow()));
         if (soLanSai >= auth.maxLoginFailures()) {
-            attempts.khoa(clientIp, bayGio.plus(auth.lockout()),
+            attempts.khoa(dai, bayGio.plus(auth.lockout()),
                     "vượt ngưỡng đăng nhập sai (FR-AUTH-08)");
         }
     }

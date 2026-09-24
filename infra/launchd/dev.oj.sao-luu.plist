@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   =============================================================================
-  Chạy sao-luu-db.sh mỗi 15 phút cho ojdb_prod. Đây là thứ biến R4 (RPO 15 phút)
+  Chạy sao-luu-db.sh mỗi 15 phút cho ojdb_prod — vế LOGIC của sao lưu. Vế còn lại
+  là dev.oj.sao-luu-goc.plist (base backup vật lý) + WAL archiving, và từ 2026-09-21
+  chính vế ấy mới quyết định R4 (nay là 1 phút). Đây là thứ biến nhịp dump 15 phút
   từ một dòng trong nfrplan thành một sự thật trên máy.
 
   Cài (chạy từ gốc repo):

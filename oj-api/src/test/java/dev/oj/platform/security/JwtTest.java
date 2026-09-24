@@ -13,6 +13,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.List;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.GeneralSecurityException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,12 +26,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * ★ Bộ test tấn công cho JWT tự viết — Bước 4.5.
  *
  * <p>Quyết định "không thêm thư viện JWT" chỉ đúng nếu <b>những ca mà thư viện từng bị thủng
- * đều được kiểm ở đây</b>. Bốn ca đầu của {@link ChuKy} chính là bốn lớp CVE thật của các thư
- * viện JWT: {@code alg=none}, đổi thuật toán, sửa payload giữ nguyên chữ ký, và ký bằng khoá
- * khác.
+ * đều được kiểm ở đây</b>. {@link ChuKy} phủ bốn lớp CVE thật của các thư viện JWT:
+ * {@code alg=none}, đổi thuật toán, sửa payload giữ nguyên chữ ký, và ký bằng khoá khác.
  *
- * <p>Nếu một ngày có người đổi {@link Jwt} sang "đọc header từ token cho linh hoạt", bộ này
- * đỏ ngay ở ca đầu tiên.
+ * <p>Nếu một ngày có người đổi {@link Jwt} sang "đọc header từ token cho linh hoạt" — hoặc
+ * chỉ đơn giản là xoá Bước 2 vì tưởng Bước 3 đã đủ — thì
+ * {@link ChuKy#doi_thuat_toan_bi_loai()} và {@link ChuKy#alg_none_kem_chu_ky_hop_le()} đỏ.
+ * Hai ca ấy là hai ca DUY NHẤT chạm tới Bước 2: mọi ca còn lại mang chữ ký sai hoặc chữ ký
+ * rỗng, nên bị Bước 1 hoặc Bước 3 loại trước.
  */
 class JwtTest {
 
@@ -41,14 +48,37 @@ class JwtTest {
         var auth = new AuthProperties(khoa, Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
-                4, Duration.ofMillis(150), Duration.ofSeconds(2),
-                new TurnstileProperties(false, "", "",
-                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)));
+                4, Duration.ofMillis(150), Duration.ofSeconds(2), 10, Duration.ofMinutes(15),
+                new TurnstileProperties(false, "", "", List.of(),
+                        "https://vi-du.test/siteverify", Duration.ofSeconds(3)),
+                dev.oj.platform.config.AppPropertiesGia.xacMinhEmailMacDinh());
         return new JwtService(dev.oj.platform.config.AppPropertiesGia.voiAuth(auth),
                 Clock.fixed(luc, ZoneOffset.UTC));
     }
 
     private static final CurrentUser DEV = new CurrentUser(7L, "dev", Role.SETTER);
+
+    /**
+     * Ký <b>đúng</b> bằng khoá thật trên đoạn {@code header.payload} — kể cả khi header ấy
+     * không phải header của ta.
+     *
+     * <p>Không có hàm này thì ca alg confusion chỉ là một ca chữ ký sai đội lốt: token mang
+     * chữ ký rác bị Bước 3 loại, nên Bước 2 (so header với hằng số) <b>không được chạm tới</b>
+     * và việc gỡ Bước 2 đi vẫn để bộ test xanh. Đo ngày 2026-09-21: gỡ Bước 2 →
+     * {@code JwtTest} vẫn {@code Tests run: 14, Failures: 0}.
+     *
+     * <p>{@code US_ASCII} là để khớp {@code Jwt.hmac}: hai bên phải băm cùng một dãy byte.
+     */
+    private static String kyThat(String khoa, String phanDauKy) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(khoa.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return B64.encodeToString(
+                    mac.doFinal(phanDauKy.getBytes(StandardCharsets.US_ASCII)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     @Nested
     @DisplayName("Vòng đi–về")
@@ -108,19 +138,46 @@ class JwtTest {
         }
 
         @Test
-        @DisplayName("header đổi thuật toán thì loại, kể cả khi chữ ký HMAC vẫn đúng")
+        @DisplayName("★ đổi thuật toán bị loại KỂ CẢ khi chữ ký hoàn toàn hợp lệ")
         void doi_thuat_toan_bi_loai() {
-            // Kẻ tấn công ký ĐÚNG bằng khoá thật nhưng khai một alg khác. Nếu Jwt đọc trường
-            // alg thì đây là đường vào; vì nó so header với hằng số nên đây là ngõ cụt.
+            // Kẻ tấn công ký ĐÚNG bằng khoá thật nhưng khai một alg khác. Chữ ký dưới đây
+            // HỢP LỆ theo mọi nghĩa — nó được tính bằng chính KHOA trên chính đoạn
+            // header.payload này — nên Bước 3 của Jwt.moKhoa() cho nó đi qua. Thứ duy nhất
+            // loại được token này là Bước 2: so header với hằng số, không đọc trường alg.
+            //
+            // ★ Vì sao phải ký thật: bản trước dùng chữ ký rác "chu-ky-bat-ky", nên Bước 3
+            // loại nó và Bước 2 không bao giờ được chạm tới. Gỡ hẳn Bước 2 ra khỏi Jwt thì
+            // cả 14 ca của file này vẫn xanh — một lưới không canh gì. Xem kyThat().
             String header = B64.encodeToString(
                     "{\"alg\":\"HS512\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
             String payload = B64.encodeToString(
                     "{\"sub\":1,\"handle\":\"x\",\"role\":\"ADMIN\",\"exp\":99999999999}"
                             .getBytes(StandardCharsets.UTF_8));
-            String gia = header + "." + payload + ".chu-ky-bat-ky";
+            String phanDauKy = header + "." + payload;
+            String gia = phanDauKy + "." + kyThat(KHOA, phanDauKy);
 
             assertThatThrownBy(() -> service(KHOA, BAY_GIO).doc(gia))
-                    .isInstanceOf(AuthorizationException.class);
+                    .isInstanceOf(AuthorizationException.class)
+                    .hasFieldOrPropertyWithValue("code", "auth.token_khong_hop_le");
+        }
+
+        @Test
+        @DisplayName("★ alg=none KÈM chữ ký hợp lệ cũng bị loại — biến thể không bị Bước 1 bắt")
+        void alg_none_kem_chu_ky_hop_le() {
+            // Ca alg_none_bi_loai ở trên gửi chữ ký RỖNG, nên phép kiểm hình dạng ở Bước 1
+            // bắt nó trước và Bước 2 cũng không được chạm tới. Thư viện thật từng thủng đúng
+            // ở biến thể này: alg=none nhưng vẫn kèm một chuỗi chữ ký để qua cửa hình dạng.
+            String header = B64.encodeToString(
+                    "{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+            String payload = B64.encodeToString(
+                    "{\"sub\":1,\"handle\":\"ke-tan-cong\",\"role\":\"ADMIN\",\"exp\":99999999999}"
+                            .getBytes(StandardCharsets.UTF_8));
+            String phanDauKy = header + "." + payload;
+
+            assertThatThrownBy(() ->
+                    service(KHOA, BAY_GIO).doc(phanDauKy + "." + kyThat(KHOA, phanDauKy)))
+                    .isInstanceOf(AuthorizationException.class)
+                    .hasFieldOrPropertyWithValue("code", "auth.token_khong_hop_le");
         }
 
         @Test

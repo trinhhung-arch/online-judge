@@ -127,6 +127,68 @@ class SchemaInvariantsIT extends PostgresIT {
                 .isThrownBy(() -> insertJudgeRun(id));
     }
 
+    /**
+     * ★ {@code postgres-design.md} mục 15 cấm {@code ON DELETE CASCADE} trỏ vào {@code users}
+     * hay {@code submissions} — "không ai bị xoá, cascade chỉ tạo ảo giác là xoá được".
+     *
+     * <h2>Vì sao ca này là một DANH SÁCH TRẮNG chứ không phải một lệnh cấm</h2>
+     * Ba bảng dưới đây vi phạm câu chữ của luật và <b>được miễn có chủ ý</b>: chúng chỉ chứa
+     * <i>bí mật dẫn xuất của đúng một user</i> — bí mật TOTP, mã dự phòng, mã xác minh email —
+     * không chứa một dòng lịch sử nào. Với chúng, cascade không phải ảo giác xoá được: nếu một
+     * dòng {@code users} thật sự biến mất thì những bí mật ấy <b>phải</b> biến mất theo.
+     *
+     * <p>Thứ luật thật sự bảo vệ là {@code submissions} và mọi bảng mang lịch sử của người
+     * dùng: FR-AUTH-07 <b>ẩn danh hoá</b> chứ không xoá dòng, nên một cascade ở đó sẽ hứa một
+     * thao tác mà hệ thống cố ý không có.
+     *
+     * <h2>Vì sao viết thành test thay vì một câu trong tài liệu</h2>
+     * Tính tới 2026-09-20, ba khoá ngoại này đã nằm trong schema suốt từ V11 mà không ai biết,
+     * và mục 15 phải ghi chú "không có test nào bắt được chuyện này": ArchUnit không đọc SQL,
+     * {@code smoke_test.sql} không kiểm {@code confdeltype}. Một danh sách trắng thì cái thứ
+     * tư lọt vào là <b>đỏ ngay</b>, và người thêm nó buộc phải nói ra bảng ấy chứa gì.
+     */
+    @Test
+    @DisplayName("★ chỉ đúng ba bảng bí mật dẫn xuất được CASCADE tới users — cái thứ tư là đỏ")
+    void chi_ba_bang_duoc_cascade_toi_users() {
+        var cascade = jdbc.sql("""
+                SELECT con.conrelid::regclass::text
+                FROM pg_constraint con
+                JOIN pg_class ref ON ref.oid = con.confrelid
+                WHERE con.contype = 'f'
+                  AND ref.relname = :bang
+                  AND con.confdeltype = 'c'
+                ORDER BY 1
+                """).param("bang", "users").query(String.class).list();
+
+        assertThat(cascade)
+                .as("""
+                        Thêm một ON DELETE CASCADE → users là một quyết định, không phải một \
+                        chi tiết. Nếu bảng mới chỉ chứa bí mật dẫn xuất của một user thì thêm \
+                        tên nó vào đây VÀ vào postgres-design.md mục 15. Nếu nó chứa bất cứ \
+                        thứ gì là lịch sử của người dùng thì bỏ CASCADE đi — FR-AUTH-07 ẩn \
+                        danh hoá chứ không xoá.""")
+                .containsExactlyInAnyOrder(
+                        "user_two_factor", "user_scratch_code", "email_verifications");
+    }
+
+    /** Không bảng nào được CASCADE tới {@code submissions} — ở đó luật không có ngoại lệ. */
+    @Test
+    @DisplayName("★ KHÔNG bảng nào được CASCADE tới submissions")
+    void khong_bang_nao_cascade_toi_submissions() {
+        var cascade = jdbc.sql("""
+                SELECT con.conrelid::regclass::text
+                FROM pg_constraint con
+                JOIN pg_class ref ON ref.oid = con.confrelid
+                WHERE con.contype = 'f'
+                  AND ref.relname = :bang
+                  AND con.confdeltype = 'c'
+                """).param("bang", "submissions").query(String.class).list();
+
+        assertThat(cascade)
+                .as("submissions là lịch sử — xoá dây chuyền ở đây là mất bài nộp thật")
+                .isEmpty();
+    }
+
     // ---- trợ giúp ----
 
     private void insertBlob(String seed) {

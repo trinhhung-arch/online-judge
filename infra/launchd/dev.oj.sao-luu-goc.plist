@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  =============================================================================
+  Chạy sao-luu-goc.sh MỖI NGÀY 03:15 cho ojdb_prod — base backup VẬT LÝ.
+
+  Đây là vế thứ hai của R4. Vế thứ nhất (dev.oj.sao-luu.plist, mỗi 15 phút) là
+  pg_dump logic. Hai vế KHÔNG thừa nhau: WAL không replay lên một bản pg_dump
+  được, nên thiếu file này thì kho WAL chỉ là một đống byte không dùng được.
+  Xem đầu scripts/sao-luu-goc.sh.
+
+  Cài (chạy từ gốc repo):
+      launchctl unload ~/Library/LaunchAgents/dev.oj.sao-luu-goc.plist 2>/dev/null
+      mkdir -p ~/oj-backup/bin && cp scripts/sao-luu-goc.sh ~/oj-backup/bin/
+      sed "s|@HOME@|$HOME|g" infra/launchd/dev.oj.sao-luu-goc.plist > ~/Library/LaunchAgents/dev.oj.sao-luu-goc.plist
+      launchctl load ~/Library/LaunchAgents/dev.oj.sao-luu-goc.plist
+
+  Kiểm:  ~/oj-backup/bin/sao-luu-goc.sh với cờ `kiem` (hai gạch ngang phía
+         trước; chú thích XML cấm viết hai gạch liền nhau)
+
+  ★ BỐN CÁI BẪY CỦA dev.oj.sao-luu.plist ÁP DỤNG NGUYÊN VẸN Ở ĐÂY — đọc file đó
+  trước. Tóm tắt: script phải chép ra ~/oj-backup/bin vì TCC chặn launchd đọc
+  Desktop; PATH của launchd không có `docker`; thiếu OJ_DB_NAME là sao lưu nhầm
+  database; không có đường log thì mọi lỗi đi vào hư không.
+
+  ★ KHÁC BIỆT DUY NHẤT: StartCalendarInterval thay vì StartInterval.
+  Base backup đọc toàn bộ thư mục dữ liệu, nên nó nặng hơn pg_dump nhiều lần.
+  Chạy nó mỗi 15 phút là đổ tải I/O lên đúng con đường nộp bài. 03:15 là giờ
+  không ai nộp bài, và lệch 15 phút so với mốc tròn để không đụng những job
+  khác của hệ thống.
+
+  ★ RunAtLoad CỐ Ý ĐỂ FALSE, ngược với plist kia. `launchctl load` lúc 14 giờ
+  chiều không nên kéo một base backup chạy ngay giữa giờ cao điểm.
+  =============================================================================
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.oj.sao-luu-goc</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>@HOME@/oj-backup/bin/sao-luu-goc.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>@HOME@</string>
+        <key>OJ_DB_NAME</key>
+        <string>ojdb_prod</string>
+        <key>OJ_BASEBACKUP_DIR</key>
+        <string>@HOME@/oj-backup/goc</string>
+        <key>OJ_WAL_ARCHIVE_DIR</key>
+        <string>@HOME@/oj-backup/wal</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>@HOME@/oj-backup/sao-luu-goc.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/oj-backup/sao-luu-goc.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>@HOME@/oj-backup</string>
+</dict>
+</plist>

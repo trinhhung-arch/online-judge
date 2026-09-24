@@ -162,7 +162,11 @@ async function tai() {
     // ★ Quyền phải được xác định TRƯỚC khi vẽ bảng đề: veDe() đọc `laNguoiRaDe` để quyết
     //   định hai ô cuối. Đặt sau thì lần vẽ đầu tiên luôn ẩn chúng, và chúng chỉ hiện ra
     //   sau một lần tải lại — một lỗi chỉ thấy được khi bấm đúng thứ tự.
-    laNguoiRaDe = vaiTroItNhat('SETTER');
+    //
+    //   `duocSoan` do SERVER tính (chủ kỳ thi hoặc ADMIN), không phải "vai trò ≥ SETTER":
+    //   SETTER khác không soạn được kỳ thi này, và hiện form cho họ là hiện một cái nút
+    //   chắc chắn trả 404. Đây chỉ là chuyện hiển thị — chốt thật nằm trong câu SQL.
+    laNguoiRaDe = kyThi.duocSoan === true;
     for (const th of document.querySelectorAll('th.chi-ra-de')) th.hidden = !laNguoiRaDe;
 
     veDanhSachDe();

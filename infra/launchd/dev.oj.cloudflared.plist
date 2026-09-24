@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  =============================================================================
+  Cloudflare Tunnel `oj` dưới launchd — MỘT connector, tự lên lại khi chết và khi đăng nhập.
+
+  Cài (chạy từ gốc repo):
+      sed "s|@HOME@|$HOME|g" infra/launchd/dev.oj.cloudflared.plist \
+          > ~/Library/LaunchAgents/dev.oj.cloudflared.plist
+      plutil -lint ~/Library/LaunchAgents/dev.oj.cloudflared.plist
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.oj.cloudflared.plist
+  Kiểm:   curl -s http://127.0.0.1:20241/ready       ("status":200, readyConnections ≥ 1)
+          ./scripts/kiem-tunnel.sh <tên-miền>
+  Sửa ingress xong:   launchctl kickstart -k gui/$(id -u)/dev.oj.cloudflared
+  Nâng cấp:           brew upgrade cloudflared, rồi đúng lệnh kickstart ở trên
+  Gỡ:                 launchctl bootout gui/$(id -u)/dev.oj.cloudflared
+
+  ★ VÌ SAO FILE NÀY TỒN TẠI (rà 2026-09-23)
+  Trước đó tunnel chạy bằng tay, HAI tiến trình `cloudflared tunnel run oj` từ hai phiên
+  shell khác nhau. Hệ quả cụ thể: sửa ingress xong mà chỉ khởi động lại MỘT tiến trình thì
+  tiến trình kia vẫn giữ luật cũ, và Cloudflare chia request cho cả hai — nửa số request đi
+  qua luật đã sửa, nửa kia qua luật thủng. Khởi động lại máy thì không có cái nào lên.
+
+  ★ BỐN THỨ TRONG FILE NÀY KHÔNG PHẢI TRANG TRÍ
+  1. `run oj` CÓ TÊN, `config` CÓ ĐƯỜNG DẪN TUYỆT ĐỐI. launchd không có thư mục làm việc
+     quen thuộc, và cloudflared tìm config theo một danh sách mặc định — đổi máy, đổi phiên
+     bản là đổi danh sách. Ghi thẳng ra để không phải đoán nó đọc file nào.
+  2. `metrics 127.0.0.1:20241`. Chỉ nghe loopback — cổng này có /ready và /metrics, không
+     có lý do gì lộ ra LAN. Cổng cố định để lệnh kiểm ở trên không phải đi tìm.
+  3. `no-autoupdate`. cloudflared cài bằng Homebrew thì nâng cấp bằng Homebrew. Một tiến
+     trình dưới launchd tự thay binary của chính nó là một lần đổi phiên bản không ai thấy.
+  4. KeepAlive + hai đường dẫn log. Chết thì launchd dựng lại sau ThrottleInterval giây;
+     lý do chết nằm ở log, không đi vào hư không.
+
+  KHÔNG cần ~/.cloudflared/cert.pem: `tunnel run` chỉ dùng credentials-file trong config.
+  Đo 2026-09-23: dựng dịch vụ này khi cert.pem đã được cất đi — connector vẫn lên đủ.
+  cert.pem chỉ cần cho `tunnel create/route/delete/list`, và nó có quyền với cả tên miền,
+  nên đừng để nó nằm trên máy chạy mã người lạ.
+
+  LaunchAgent chỉ chạy khi có phiên đăng nhập của người dùng — giống các dev.oj.* khác.
+  =============================================================================
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.oj.cloudflared</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/cloudflared</string>
+        <string>tunnel</string>
+        <string>--no-autoupdate</string>
+        <string>--config</string>
+        <string>@HOME@/.cloudflared/config.yml</string>
+        <string>--metrics</string>
+        <string>127.0.0.1:20241</string>
+        <string>run</string>
+        <string>oj</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>@HOME@/Library/Logs/cloudflared-oj.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/Library/Logs/cloudflared-oj.log</string>
+</dict>
+</plist>

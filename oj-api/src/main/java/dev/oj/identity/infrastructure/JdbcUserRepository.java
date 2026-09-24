@@ -53,7 +53,7 @@ public class JdbcUserRepository implements UserRepository {
 
     private static final String TIM_THEO_ID = """
             SELECT id, handle, email, display_name, role, status,
-                   preferred_language_id, created_at
+                   preferred_language_id, created_at, email_verified_at
               FROM users
              WHERE id = :id
             """;
@@ -94,6 +94,12 @@ public class JdbcUserRepository implements UserRepository {
             UPDATE users SET password_hash = :passwordHash WHERE id = :id
             """;
 
+    /** FR-AUTH-09 · V13. Hai điều kiện trong WHERE — xem javadoc của port. */
+    private static final String DANH_DAU_XAC_MINH_EMAIL = """
+            UPDATE users SET email_verified_at = now()
+             WHERE id = :id AND email_verified_at IS NULL AND status <> 'ANONYMIZED'
+            """;
+
     /**
      * Một câu duy nhất đặt cả bốn thay đổi của FR-AUTH-07.
      *
@@ -101,12 +107,18 @@ public class JdbcUserRepository implements UserRepository {
      * {@code ck_users_anonymized} bị vi phạm — status đã {@code ANONYMIZED} nhưng email chưa
      * kịp xoá — và Postgres sẽ từ chối câu đầu tiên. Ràng buộc đó buộc thao tác này phải
      * nguyên tử, và đó chính là điều nó được viết ra để làm.
+     *
+     * <p>V13 đưa {@code email_verified_at} vào cùng ràng buộc ấy, nên nó phải có mặt ở đây.
+     * Dấu thời gian xác minh là một khẳng định VỀ một địa chỉ email, và FR-AUTH-07 hứa xoá,
+     * không hứa xoá một nửa. Quên dòng ấy thì câu này <b>không chạy được nữa</b> — đó là
+     * điểm của việc đưa cột mới vào ràng buộc thay vì chỉ nhớ.
      */
     private static final String AN_DANH_HOA = """
             UPDATE users
                SET status = 'ANONYMIZED',
                    email = NULL,
                    password_hash = NULL,
+                   email_verified_at = NULL,
                    display_name = :displayName
              WHERE id = :id
             """;
@@ -206,6 +218,11 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public boolean danhDauDaXacMinhEmail(long userId) {
+        return jdbc.sql(DANH_DAU_XAC_MINH_EMAIL).param("id", userId).update() > 0;
+    }
+
+    @Override
     public void anDanhHoa(long userId, String tenHienThiMoi) {
         jdbc.sql(AN_DANH_HOA).param("displayName", tenHienThiMoi).param("id", userId).update();
     }
@@ -225,12 +242,19 @@ public class JdbcUserRepository implements UserRepository {
             Role.fromCode(rs.getString("role")),
             UserStatus.fromCode(rs.getString("status")),
             ngonNgu(rs),
-            rs.getObject("created_at", java.time.OffsetDateTime.class).toInstant());
+            rs.getObject("created_at", java.time.OffsetDateTime.class).toInstant(),
+            mocXacMinh(rs));
 
     /** {@code SMALLINT} nullable: {@code getShort} trả 0 cho NULL, nên phải hỏi {@code wasNull}. */
     private static Short ngonNgu(ResultSet rs) throws SQLException {
         short value = rs.getShort("preferred_language_id");
         return rs.wasNull() ? null : value;
+    }
+
+    /** {@code TIMESTAMPTZ} nullable — V13. Không có bẫy {@code wasNull} như {@code getShort}. */
+    private static java.time.Instant mocXacMinh(ResultSet rs) throws SQLException {
+        var moc = rs.getObject("email_verified_at", java.time.OffsetDateTime.class);
+        return moc == null ? null : moc.toInstant();
     }
 
     @Override

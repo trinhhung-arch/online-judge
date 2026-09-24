@@ -38,6 +38,12 @@ export const DUONG = {
         haiLop:  '/api/v1/me/2fa',
         haiLopBatDau:  '/api/v1/me/2fa/bat-dau',
         haiLopXacNhan: '/api/v1/me/2fa/xac-nhan',
+
+        // FR-AUTH-09 (V13). Cả hai đều CẦN ĐĂNG NHẬP, cố ý: một cửa phát thư ra ngoài mà
+        // gọi được khi chưa đăng nhập thì phải có bộ đếm theo IP riêng, và phải trả lời
+        // giống hệt nhau cho địa chỉ có thật lẫn không có thật. Xem SendVerificationEmailUseCase.
+        xacMinhEmail:        '/api/v1/me/xac-minh-email',
+        xacMinhEmailXacNhan: '/api/v1/me/xac-minh-email/xac-nhan',
     },
 
     de: {

@@ -15,6 +15,16 @@ import java.time.Instant;
  * <p>Không có {@code status}: một người dùng đang gọi được API thì đương nhiên là
  * {@code ACTIVE}. Không có {@code passwordHash} — nó thậm chí không tồn tại trong
  * {@link User}, xem javadoc ở đó.
+ *
+ * <h2>★ {@code emailVerified} là {@code boolean}, không phải mốc thời gian</h2>
+ * {@code users.email_verified_at} là một {@code Instant}, nhưng cái ra tới client chỉ là
+ * có/không. Giao diện cần đúng chừng đó để quyết định có bày khối "xác minh email" hay
+ * không; ngày giờ xác minh là dữ liệu cho {@code audit_log}, không phải cho một nhãn trên
+ * trang hồ sơ.
+ *
+ * <p>Nguyên tắc chung: DTO trả về thứ ÍT nhất trả lời được câu hỏi của người gọi. Trả thêm
+ * vì "biết đâu sau này cần" là cách một trường không ai dùng trở thành một trường không ai
+ * dám bỏ.
  */
 public record ProfileResponse(
         long id,
@@ -23,11 +33,13 @@ public record ProfileResponse(
         String displayName,
         String role,
         Short preferredLanguageId,
-        Instant createdAt) {
+        Instant createdAt,
+        boolean emailVerified) {
 
     public static ProfileResponse tu(User user) {
         return new ProfileResponse(
                 user.id(), user.handle(), user.email(), user.displayName(),
-                user.role().name(), user.preferredLanguageId(), user.createdAt());
+                user.role().name(), user.preferredLanguageId(), user.createdAt(),
+                user.daXacMinhEmail());
     }
 }

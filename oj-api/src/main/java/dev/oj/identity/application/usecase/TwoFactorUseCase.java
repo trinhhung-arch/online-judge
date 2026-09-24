@@ -127,7 +127,12 @@ public class TwoFactorUseCase {
      * <p>Chỉ đòi mật khẩu thì ai cướp được phiên đang mở sẽ tắt được 2FA mà không cần chạm
      * vào điện thoại — tức là 2FA bảo vệ được mọi thứ trừ chính nó.
      */
-    @Transactional
+    /**
+     * {@code noRollbackFor}: mã sai phải để lại DẤU trong bộ đếm của {@code TotpChecker} (V15).
+     * Cuộn lại cùng ngoại lệ thì đường "tắt 2FA" thành chỗ dò mã không giới hạn cho ai đã có
+     * phiên + mật khẩu. An toàn vì trước {@code checker.kiem} method này không ghi gì.
+     */
+    @Transactional(noRollbackFor = IdentityException.class)
     public void tat(String matKhau, String ma) {
         var nguoi = currentUser.current();
         if (!checker.dangBat(nguoi.id())) {
