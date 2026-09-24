@@ -44,7 +44,18 @@ jobs:
         with:
           java-version: '21'
           distribution: temurin
-          cache: maven
+
+      # Khoá cache RIÊNG — không `cache: maven`. Chính job này (`-DskipTests`, xong sớm nhất)
+      # từng ghi một cache thiếu provider test dưới khoá chung, làm ci phải tải lại từ Maven
+      # Central mỗi lượt cho tới khi Central trả 429 (2026-09-24). Xem bước cache của ci.yml.
+      - name: Cache Maven của quet-phu-thuoc
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          key: maven-quet-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: maven-quet-
 
       # ★ QUÉT JAR SẼ TRIỂN KHAI, KHÔNG QUÉT pom.xml.
       #   Bản trước dùng scan-type fs trên cả repo, với chú thích "Trivy đọc luôn jar trong target/".
@@ -58,7 +69,7 @@ jobs:
       # -DskipTests là cố ý: ci.yml đã chạy test rồi. Job này trả lời một câu khác.
       - name: Dựng hai jar sẽ triển khai
         run: |
-          ./mvnw -B --no-transfer-progress -DskipTests package
+          ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 -DskipTests package
           mkdir -p quet
           # `*.jar` không khớp `*.jar.original` (bản mỏng, không kèm thư viện) — cố ý.
           cp oj-api/target/oj-api-*.jar oj-worker/target/oj-worker-*.jar quet/

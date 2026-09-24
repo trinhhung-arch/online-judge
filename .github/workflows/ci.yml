@@ -27,7 +27,27 @@ jobs:
         with:
           java-version: '21'
           distribution: temurin
-          cache: maven
+
+      # ★ CACHE RIÊNG CHO WORKFLOW NÀY — không dùng `cache: maven` của setup-java.
+      #
+      # Đỏ 2026-09-24 (f6cfbb5): Maven Central trả 429 Too Many Requests khi tải
+      # surefire-junit-platform 3.5.6, dù log ghi "Cache hit". `cache: maven` băm MỖI pom.xml
+      # làm khoá, nên ba workflow (ci, quet-phu-thuoc, sandbox-attack) dùng CHUNG một khoá.
+      # quet-phu-thuoc chạy `-DskipTests package` và xong trước nên ghi cache trước; bản ấy
+      # thiếu những gì chỉ cần khi CHẠY test (provider của surefire/failsafe…). Từ đó ci luôn
+      # "hit" một cache thiếu: lần nào cũng tải lại từ Central, và không bao giờ ghi bù được,
+      # vì khoá trùng thì actions/cache không lưu. Một lần Central giới hạn tốc độ runner là đỏ.
+      #
+      # `restore-keys`: đổi pom thì vẫn khôi phục bản cũ gần nhất và chỉ tải phần chênh, thay vì
+      # tải lại cả ~120MB từ Central. ~/.m2/wrapper là bản Maven mà mvnw tải về, cũng từ Central.
+      - name: Cache Maven của ci
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          key: maven-ci-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: maven-ci-
 
       # oj-worker giờ có IT cần sandbox thật (SandboxAttackIT, IsolateJudgeRunnerIT), và
       # chúng CỐ Ý fail thay vì skip khi thiếu isolate trên một máy Linux — một cái skip lặng
@@ -45,8 +65,13 @@ jobs:
       # Đó là nơi bốn chaos test chứng minh R1 ("0 bài mất") và R2 ("0 bài chấm 2 lần"):
       # những tính chất phụ thuộc FOR UPDATE SKIP LOCKED và hành vi transaction, tức là
       # những thứ mà không unit test nào với repository giả nhìn thấy được.
+      #
+      # retryHandler.count=6: resolver 1.9 (Maven 3.9.16) đã tự thử lại khi gặp 429/503, mặc
+      # định 3 lần — lần đỏ kể trên tiêu 61 giây cho ba lượt ấy mà vẫn thua. Cache ở trên mới
+      # là cách sửa; dòng này chỉ cho lượt đầu tiên của một khoá cache mới (lượt phải tải
+      # nhiều nhất) thêm chỗ thở.
       - name: mvnw verify
-        run: ./mvnw -B --no-transfer-progress verify
+        run: ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 verify
 
       # Luật 5d của CodingRulesTest — phần mà ArchUnit KHÔNG làm được.
       # Từ Java 9, `a + b` biên dịch thành invokedynamic nên ArchUnit không thấy nối chuỗi.
@@ -61,7 +86,7 @@ jobs:
       # cách duy nhất để biết test nào hỏng là chạy lại CI.
       - name: Báo cáo test
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6     # v5 chạy Node 20 — GitHub đã đánh dấu lỗi thời
         with:
           name: test-reports
           path: |
