@@ -324,7 +324,7 @@ Kết luận: **0 đường rò** tại thời điểm quét. 59 endpoint (`grep
 | A3 | Bật firewall macOS + stealth; tắt AirPlay Receiver |
 | A4 | Đăng ký thử một tài khoản (xác nhận hostname Turnstile) |
 | A5 | Dọn jar cũ `~/oj-release`, ảnh `oj-worker:truoc-cve-20260924` |
-| Deploy | Bản API hiện chạy chưa có B, C, F-7 (V15 sẽ chạy khi khởi động bản mới) |
+| Deploy | ✅ 2026-09-24 12:34 — `oj-api-8e78041` lên sau 5s, V15 áp dụng trong 8ms (schema 14 → 15), profile `prod` qua chốt F-7. Sao lưu ngay trước đó: `ojdb_prod/gio/oj-20260924-1234.dump`. Sau deploy: `kiem-tunnel.sh` 36/36, CSP mới không còn jsdelivr, 67/67 tệp vendor qua Cloudflare khớp SHA-256, Turnstile hiện đúng, worker nối lại sau 5s. Jar lùi: `oj-api-52727b6-20260924.jar` (chạy được trên schema 15 — `MigrationTrenDuLieuCoSanIT.v15_…`) |
 | Quyết | D(b) máy ảo riêng cho worker · E3 bản sao lưu ngoài máy · bundle CodeMirror · F9 |
 
 ---
