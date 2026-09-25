@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  =============================================================================
+  Giữ oj-api sống trên host Mac: bật lúc đăng nhập, dựng lại khi JVM chết.
+
+  Cài, gỡ, deploy: đều qua scripts/khoi-dong-api.sh (cai · go · doi-jar) — ĐỪNG
+  launchctl tay, vì script còn chép api.env và dừng bản chạy tay trước khi nạp job.
+
+  ★ VÌ SAO FILE NÀY TỒN TẠI
+  Đêm 2026-09-24 máy khởi động lại lúc 23:58. Postgres, Redis, RabbitMQ, MinIO
+  (restart: unless-stopped) và cloudflared (dev.oj.cloudflared) tự lên; API thì
+  chạy bằng nohup nên KHÔNG. Cloudflare trả 502 suốt 15 giờ 40 phút, và không có
+  dòng log nào ở chỗ người ta nhìn.
+
+  ★ BA THỨ TRONG FILE NÀY KHÔNG PHẢI TRANG TRÍ
+
+  1. KeepAlive + ThrottleInterval 30. Lúc đăng nhập, job này có thể lên TRƯỚC
+     container Postgres; Flyway không nối được thì Spring thoát mã 1, và launchd
+     dựng lại sau 30 giây cho tới khi DB sẵn sàng. Không có KeepAlive thì lần thử
+     đầu hỏng là API nằm chết tới lần đăng nhập sau.
+
+  2. Script chạy từ @HOME@/oj-release/bin và đọc @HOME@/oj-release/api.env, KHÔNG
+     đọc repo — cùng lý do mục 1 của dev.oj.sao-luu.plist: TCC chặn tiến trình
+     launchd đọc ~/Desktop. Đo lại 2026-09-25: một job `wc -c < …/.env` thoát 1.
+
+  3. Không có EnvironmentVariables chứa secret. Plist nằm ở ~/Library/LaunchAgents
+     với quyền 644; secret đi qua api.env (600) mà script nạp lúc chạy.
+  =============================================================================
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.oj.api</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>@HOME@/oj-release/bin/khoi-dong-api.sh</string>
+        <string>chay</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>@HOME@/oj-release/api.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/oj-release/api.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>@HOME@/oj-release</string>
+</dict>
+</plist>

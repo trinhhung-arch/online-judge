@@ -8,10 +8,10 @@
 #   ./scripts/trien-khai-mac.sh --xoa           # dừng và xoá container
 #
 # ★ SCRIPT NÀY CHỈ TRIỂN KHAI WORKER.
-# Postgres · Redis · RabbitMQ · MinIO · oj-api chạy thẳng trên Mac bằng
-# `docker compose up -d` và `./mvnw -pl oj-api spring-boot:run` như README. Bốn
-# ảnh hạ tầng đều có bản arm64 nên không cần gì đặc biệt. Chỉ WORKER là khó, vì
-# chỉ nó cần `isolate`.
+# Postgres · Redis · RabbitMQ · MinIO chạy bằng `docker compose up -d`; oj-api chạy
+# từ jar trong ~/oj-release, do launchd giữ sống — scripts/khoi-dong-api.sh (bản cũ
+# của dòng này ghi `spring-boot:run`, đã sai từ khi có ~/oj-release). Bốn ảnh hạ tầng
+# đều có bản arm64 nên không cần gì đặc biệt. Chỉ WORKER là khó, vì chỉ nó cần `isolate`.
 #
 # ★ VÌ SAO WORKER PHẢI NẰM TRONG CONTAINER TRÊN MAC
 # `isolate` là chương trình setuid root nói chuyện thẳng với cgroup v2 và
@@ -236,7 +236,10 @@ exec setpriv --reuid=1500 --regid=1500 --init-groups java -jar /app/oj-worker.ja
 #   apparmor=unconfined bỏ vì máy ảo OrbStack không có AppArmor (docker info: chỉ seccomp).
 #   Sửa bộ cờ ở đây thì sửa CẢ scripts/kiem-sandbox.sh — test một sandbox dựng khác cách với
 #   bản chạy thật là không chứng minh gì.
+# --restart unless-stopped: thiếu nó thì container Exited (255) sau lần khởi động lại máy
+# 2026-09-24 23:58 và nằm đó — hạ tầng lên, worker thì không. `--xoa` vẫn dừng hẳn được.
 docker run -d --name "$TEN" \
+    --restart unless-stopped \
     --user root \
     --entrypoint /bin/sh \
     --cgroupns=private \
