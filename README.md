@@ -106,8 +106,11 @@ Nháp mã nguồn nằm trong `localStorage`, khoá theo *(đề, ngôn ngữ)* 
 mất bản đang viết dở. Nháp **cố ý không gửi lên server**: đó là lời giải chưa nộp, và một
 bảng chứa nó là một bảng ADMIN đọc được giữa kỳ thi.
 
-CDN chết thì trình soạn mã hạ xuống `<textarea>` thường — mất tô màu cú pháp, **giữ nguyên
-khả năng nộp bài**.
+Trình soạn mã **hiện luôn hạ xuống `<textarea>` thường** — mất tô màu cú pháp, **giữ nguyên
+khả năng nộp bài**. CodeMirror được tự phục vụ từ `static/vendor/` (không còn CDN), nhưng cây
+import của nó kéo bốn bản `@codemirror/state` và chưa từng dựng được trình soạn, kể cả hồi còn
+nạp từ CDN; lỗi nay được ghi ra console thay vì bị nuốt. Sửa tận gốc cần một bundle MỘT bản
+state — xem [rà soát 2026-09-24](docs/ra-soat-bao-mat-2026-09-24.md), Phần 7.
 
 ### Đăng nhập — từ M4 thì mọi endpoint đều cần token
 
