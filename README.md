@@ -86,7 +86,7 @@ Khi API đã lên (`chay-dev.sh api`), mở **http://localhost:8080** — giao d
 | Trang | Nội dung | Đợt |
 |---|---|---|
 | `/` | danh sách đề, lọc theo tag và theo "đã giải", phân trang cursor | 4.12 |
-| `/problem.html?code=…` | đề bài (Markdown render server-side, KaTeX vẽ ở trình duyệt) + CodeMirror 6 + nộp bài | 4.12 |
+| `/problem.html?code=…` | đề bài (Markdown render server-side, KaTeX vẽ ở trình duyệt) + ô soạn mã (CodeMirror 6 — hiện lùi về `<textarea>`, xem dưới) + nộp bài | 4.12 |
 | `/submission.html?id=…` | chi tiết bài nộp, cập nhật realtime qua SSE, **fallback polling 3 giây** | 4.12 |
 | `/login.html` | đăng nhập và đăng ký | 4.12 |
 | `/bai-nop.html` | lịch sử bài nộp của mình, lọc đề/verdict/ngôn ngữ | G1 |
