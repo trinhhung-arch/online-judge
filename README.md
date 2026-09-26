@@ -23,17 +23,29 @@ bài nộp** · **an toàn**. Mọi quyết định trong repo phục vụ ba đ
 
 ## Chạy thử
 
+Trên **máy dev** (không phải host prod — xem [Chạy trên host](#chạy-trên-host-prod)):
+
 ```bash
-docker compose up -d                      # postgres · redis · rabbitmq · minio
-cp .env.example .env                      # điền HAI secret, mỗi cái >= 32 ký tự:
-                                          #   OJ_INTERNAL_SHARED_SECRET  (worker gọi /internal)
-                                          #   OJ_JWT_SECRET              (ký access token)
-                                          # Thiếu cái nào thì API KHÔNG khởi động — cố ý.
-./mvnw verify                             # phải xanh trước khi làm bất cứ gì khác
-./mvnw -pl oj-api spring-boot:run -Dspring-boot.run.profiles=dev
+cp .env.example .env                      # điền mật khẩu hạ tầng — trên máy dev giá trị gì cũng được
+docker compose up -d                      # postgres · redis · rabbitmq · minio — compose tự đọc .env
+./mvnw verify                             # phải xanh trước khi làm bất cứ gì khác (Testcontainers, không cần .env)
+( set -a && . ./.env && set +a && ./scripts/chay-dev.sh api )    # API ở :8080, profile dev
 ```
 
-> **★ `-Dspring-boot.run.profiles=dev` là bắt buộc trên máy dev, không phải tuỳ chọn.**
+Ba điều cú pháp trên che đi:
+
+* **`.env` dùng chung cho compose VÀ API**, nhưng **Spring không tự đọc tệp `.env`** — compose
+  thì có. Nên API phải chạy trong một shell đã nạp nó; cặp ngoặc `( … )` giữ các biến ấy chỉ sống
+  trong lệnh đó. Thiếu bước nạp thì API lùi về mặc định trong `application.yml` (`ojpass`, Redis
+  không mật khẩu…) và không nối được vào các container vừa dựng bằng mật khẩu trong `.env`.
+* **API bắt buộc BA khoá**, mỗi khoá ≥ 32 ký tự và KHÔNG có mặc định — thiếu là không khởi động,
+  cố ý: `OJ_JWT_SECRET` (ký token) · `OJ_INTERNAL_SHARED_SECRET` (worker gọi `/internal`) ·
+  `OJ_TOTP_KEY` (mã hoá bí mật 2FA). `chay-dev.sh` tự sinh cả ba **một lần** vào
+  `scripts/.secrets-dev` (gitignore) rồi nạp đè lên `.env`, nên máy dev không phải điền chúng.
+* **`chay-dev.sh` truyền sẵn `-Dspring-boot.run.profiles=dev`.** Gọi `./mvnw … spring-boot:run`
+  tay thì phải tự thêm cờ ấy — xem khung dưới.
+
+> **★ Profile `dev` là bắt buộc trên máy dev, không phải tuỳ chọn.**
 >
 > `db/dev-seed/` không nằm trong `spring.flyway.locations` mặc định — chỉ `application-dev.yml`
 > thêm nó vào. Thiếu profile thì:
@@ -48,19 +60,27 @@ cp .env.example .env                      # điền HAI secret, mỗi cái >= 32
 > Trên host thật thì ngược lại: **không** bật profile `dev`, và lúc đó DB cũng chưa bao giờ
 > có dòng lịch sử kia. Chạy nhầm nó trên host là tạo ba tài khoản có mật khẩu viết sẵn trong
 > mã nguồn công khai.
+>
+> ⛔ **Vì thế đừng bao giờ chạy lệnh `chay-dev.sh` ở trên TRÊN HOST PROD.** Ở đó `.env` trỏ vào
+> `ojdb_prod`: nạp nó rồi bật profile `dev` là Flyway ghi đè user id 1–3 của prod bằng ba tài
+> khoản kia — và việc ghi xảy ra TRƯỚC khi Tomcat kịp báo cổng 8080 đang bận. Chưa có chốt nào
+> trong mã chặn việc này.
 
-Worker cần `isolate` trên máy Linux. Cài một lần:
+Worker cần `isolate`, tức là **Linux**. Trên máy dev Linux, cài một lần rồi chạy:
 
 ```bash
 sudo ./scripts/build-isolate.sh           # build TỪ NGUỒN, không copy binary giữa hai máy
 sudo ./scripts/build-pch.sh "-std=gnu++20 -O2"   # tuỳ chọn: biên dịch C++ nhanh gấp ~3,7 lần
 sudo ./scripts/mount-box-tmpfs.sh         # tuỳ chọn, chỉ trên máy nhiều RAM
-./mvnw -pl oj-worker spring-boot:run
+( set -a && . ./.env && set +a && ./scripts/chay-dev.sh worker )  # CÙNG OJ_INTERNAL_SHARED_SECRET với API
 ```
+
+Trên **macOS** không có cgroup v2 hay namespace Linux, nên worker chạy trong container — đó cũng
+là cách máy chấm prod chạy, xem [Chạy trên host](#chạy-trên-host-prod).
 
 ### Giao diện
 
-Sau `spring-boot:run`, mở **http://localhost:8080** — giao diện là trang tĩnh nằm trong
+Khi API đã lên (`chay-dev.sh api`), mở **http://localhost:8080** — giao diện là trang tĩnh nằm trong
 `oj-api/src/main/resources/static/`, không có build step và không có Node trong CI. Mười hai trang:
 
 | Trang | Nội dung | Đợt |
@@ -156,6 +176,64 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 
 ---
 
+## Chạy trên host (prod)
+
+Host prod là **một máy Mac** (M1 Max, OrbStack) sau **Cloudflare Tunnel** — máy không mở cổng
+nào ra internet; mọi dịch vụ nghe `127.0.0.1`. Gập máy thì site đóng, và đó là chủ ý.
+
+| Thành phần | Chạy dưới dạng | Ai bật và giữ sống |
+|---|---|---|
+| **oj-api** | `java -jar ~/oj-release/oj-api-hien-tai.jar` (symlink tới bản đang chạy) | launchd `dev.oj.api` — [`scripts/khoi-dong-api.sh`](scripts/khoi-dong-api.sh) |
+| **oj-worker** | container `oj-worker`, ảnh `oj-worker:arm64` | Docker, `restart: unless-stopped` — [`scripts/trien-khai-mac.sh`](scripts/trien-khai-mac.sh) |
+| Postgres · Redis · RabbitMQ · MinIO | `docker compose` | Docker, `restart: unless-stopped` |
+| cloudflared | tiến trình | launchd `dev.oj.cloudflared` — [`infra/launchd/`](infra/launchd/) |
+| Sao lưu | `pg_dump` 15 phút · base backup 03:15 · WAL | launchd `dev.oj.sao-luu`, `dev.oj.sao-luu-goc` |
+
+**Khởi động lại máy:** đăng nhập là đủ — mọi thứ ở bảng trên tự lên; API thử lại mỗi 30 giây
+cho tới khi Postgres sẵn sàng. Kiểm: `curl -s http://127.0.0.1:8080/api/v1/status` có
+`"mayChamSong":1`. (LaunchAgent chỉ chạy **sau khi đăng nhập**.)
+
+**Deploy API** — từ gốc repo, trên `main` đã xanh CI:
+
+```bash
+./mvnw -B -q -DskipTests package -pl oj-api -am
+cp oj-api/target/oj-api-0.0.1-SNAPSHOT.jar ~/oj-release/oj-api-$(git rev-parse --short HEAD)-$(date +%Y%m%d).jar
+./scripts/khoi-dong-api.sh doi-jar ~/oj-release/oj-api-<sha>-<ngày>.jar
+```
+
+`doi-jar` từ chối nếu có kỳ thi đang chạy hoặc mở trong 30 phút · chép `.env` sang
+`~/oj-release/api.env` · sao lưu DB · đổi symlink · khởi động lại (downtime ~5 giây) · đợi dòng
+`Started` mới và `/status` 200 · **không lên thì tự lùi về jar cũ**. Migration Flyway chạy lúc
+bản mới khởi động — ngay sau bản sao lưu ấy.
+
+* **Lùi bản API:** `./scripts/khoi-dong-api.sh doi-jar ~/oj-release/<jar cũ>` — jar cũ không bị xoá.
+* **Sửa `.env`:** chạy lại `doi-jar` với jar đang dùng (`readlink ~/oj-release/oj-api-hien-tai.jar`).
+  API dưới launchd đọc **bản chép** `api.env`, vì macOS (TCC) chặn launchd đọc `~/Desktop`.
+  Đổi `OJ_INTERNAL_SHARED_SECRET` hay mật khẩu RabbitMQ thì deploy lại cả worker.
+* ⛔ **Đừng `kill` API hay `nohup java -jar …`** — launchd dựng lại bản cũ và hai bản giành
+  cổng 8080. Đừng chạy jar trong `target/` — mỗi lần build ghi đè nó.
+
+**Deploy worker** — chỉ khi đổi `oj-worker/`, `oj-contract/` hoặc `infra/isolate/`:
+
+```bash
+docker tag oj-worker:arm64 oj-worker:truoc-$(date +%Y%m%d)        # đường lùi
+( set -a && . ./.env && set +a && OJ_API_BASE_URL=http://host.docker.internal:8080 \
+    OJ_RABBIT_HOST=host.docker.internal ./scripts/trien-khai-mac.sh )
+./scripts/kiem-sandbox.sh                                          # 14 ca tấn công — bắt buộc
+```
+
+Hai biến `host.docker.internal` bắt buộc: `.env` ghi `localhost`, mà trong container `localhost`
+là chính container. Script **xoá container cũ, kể cả bài đang chấm dở** (reaper nhặt lại sau
+120 giây) — đừng deploy worker trong giờ thi. Đổi `oj-contract` thì API và worker phải lên cùng lúc.
+
+**Kiểm sau deploy:** `./scripts/kiem-tunnel.sh <tên-miền>` (36 phép kiểm biên công khai) · log API
+`~/oj-release/api.log` · log worker `docker logs -f oj-worker` · log tunnel
+`~/Library/Logs/cloudflared-oj.log`.
+
+**Khôi phục DB** — [`scripts/khoi-phuc-db.sh`](scripts/khoi-phuc-db.sh): mặc định là **diễn tập**
+(restore vào DB tạm, đối chiếu số dòng, xoá). Trên host luôn đặt `OJ_DB_NAME=ojdb_prod` — mặc
+định của script là `ojdb` (DB dev), kể cả với `--that`. Quy trình PITR nằm ở đầu chính file ấy.
+
 ## Trạng thái
 
 | Mốc | Nội dung | Trạng thái |
@@ -168,14 +246,15 @@ dưới đây đều đã gặp thật; `scripts/build-isolate.sh` giờ lo cả
 | **M5** | kỳ thi, bảng xếp hạng | **xong 5.1–5.11** (xem dưới) |
 | **M6** | RabbitMQ, giám sát, vận hành | **xong 6.1–6.15** (xem dưới) |
 | **v1.1** | xác minh email (FR-AUTH-09) — **mức mềm**, không chặn gì | **xong** — V13, [ADR 016](docs/adr/016-xac-minh-email-muc-mem.md) |
+| bảo mật · vận hành | rà soát 22–25/09: `audit_log` chỉ ghi thêm (V14) · trần mã 2FA theo tài khoản + IPv6 theo /64 (V15) · bỏ CDN khỏi đường chạy script · vá 12 CVE · API do launchd giữ sống | **xong** — [rà soát 2026-09-24](docs/ra-soat-bao-mat-2026-09-24.md), phần việc còn mở ở Phần 8 |
 
 ```
-./mvnw verify   →   755 test xanh trên Linux/CI · 729 trên macOS   (đo 2026-09-21)
+./mvnw verify   →   843 test xanh trên Linux/CI · 817 trên macOS   (CI trên main, 2026-09-25)
 
-                    oj-api      412 unit + 238 IT   Postgres 16 + Redis 7 thật, Testcontainers
-                    oj-worker    71 unit +  26 IT   isolate thật: 14 tấn công + 9 đường chấm
+                    oj-api      455 unit + 283 IT   Postgres 16 + Redis 7 + MinIO thật, Testcontainers
+                    oj-worker    79 unit +  26 IT   isolate thật: 14 tấn công + 9 đường chấm
                                                     + 3 benchmark — CHỈ chạy trên Linux
-                    oj-contract   8 unit
+                    oj-contract   0                 (bản trước ghi "8 unit" — hiện không còn test nào)
 
                     ⚠️ macOS không chạy được 26 IT của oj-worker, và nó KHÔNG báo đỏ:
                     Assumptions.abort() huỷ cả class rồi vẫn in BUILD SUCCESS. Dùng
@@ -388,7 +467,7 @@ trong container xanh, `OJ_HOST_REFERENCE_CPU_MS=461`.
 
 ```bash
 ./mvnw -pl oj-contract,oj-worker -am verify        # 14/14 phải xanh trước đã
-./mvnw -pl oj-worker spring-boot:run               # log dòng "Đo máy ... ms CPU"
+( set -a && . ./.env && set +a && ./scripts/chay-dev.sh worker )   # log dòng "Đo máy ... ms CPU"
 ```
 
 `HostBenchmark` gửi mỗi phép đo về `POST /internal/judge/benchmark`, nên lịch sử hiệu chuẩn
