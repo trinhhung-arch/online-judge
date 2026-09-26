@@ -252,7 +252,10 @@ là chính container. Script **xoá container cũ, kể cả bài đang chấm d
 | bảo mật · vận hành | rà soát 22–25/09: `audit_log` chỉ ghi thêm (V14) · trần mã 2FA theo tài khoản + IPv6 theo /64 (V15) · bỏ CDN khỏi đường chạy script · vá 12 CVE · API do launchd giữ sống | **xong** — [rà soát 2026-09-24](docs/ra-soat-bao-mat-2026-09-24.md), phần việc còn mở ở Phần 8 |
 
 ```
-./mvnw verify   →   843 test xanh trên Linux/CI · 817 trên macOS   (CI trên main, 2026-09-25)
+./mvnw verify   →   843 test xanh trên Linux · 817 trên macOS   (đo 2026-09-25)
+                    CI chạy 839: bỏ 4 ca MinioTestdataStoreIT (-DexcludedGroups=minio-that) vì
+                    MinIO thôi phát ảnh công khai từ 2026-09-26 — xem javadoc lớp ấy. Máy không
+                    có sẵn ảnh MinIO thì cũng thêm cờ ấy khi chạy verify.
 
                     oj-api      455 unit + 283 IT   Postgres 16 + Redis 7 + MinIO thật, Testcontainers
                     oj-worker    79 unit +  26 IT   isolate thật: 14 tấn công + 9 đường chấm
