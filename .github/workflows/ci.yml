@@ -70,8 +70,14 @@ jobs:
       # định 3 lần — lần đỏ kể trên tiêu 61 giây cho ba lượt ấy mà vẫn thua. Cache ở trên mới
       # là cách sửa; dòng này chỉ cho lượt đầu tiên của một khoá cache mới (lượt phải tải
       # nhiều nhất) thêm chỗ thở.
+      #
+      # ⚠️ excludedGroups=minio-that — TẠM, từ 2026-09-26: MinIO thôi phát ảnh công khai
+      # (Docker Hub 404, quay.io `unauthorized`), runner không kéo được ảnh, và MinioTestdataStoreIT
+      # chặn MỌI PR. Lớp ấy vẫn chạy trong `./mvnw verify` trên máy prod (ảnh còn trong cache).
+      # CI KHÔNG còn kiểm đường ghi/đọc testdata trên MinIO thật cho tới khi gỡ dòng này — xem
+      # javadoc MinioTestdataStoreIT.
       - name: mvnw verify
-        run: ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 verify
+        run: ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 -DexcludedGroups=minio-that verify
 
       # Luật 5d của CodingRulesTest — phần mà ArchUnit KHÔNG làm được.
       # Từ Java 9, `a + b` biên dịch thành invokedynamic nên ArchUnit không thấy nối chuỗi.

@@ -6,6 +6,7 @@ import io.minio.MinioClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.containers.GenericContainer;
@@ -33,9 +34,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Cùng ảnh MinIO với {@code docker-compose.yml}: đo đúng thứ sẽ chạy.
  * Container singleton, không {@code stop()} — cùng lý do với {@code PostgresIT}.
+ *
+ * <h2>⚠️ CI KHÔNG chạy lớp này (từ 2026-09-26) — chỉ {@code ./mvnw verify} trên máy</h2>
+ * MinIO đã thôi phát ảnh công khai cho bản cộng đồng: Docker Hub {@code minio/minio} 404 từ
+ * 2026-09-24, và {@code quay.io/minio/minio} trả {@code unauthorized} từ 2026-09-26 — kể cả với
+ * token ẩn danh, trong khi repo công khai khác trên quay.io vẫn kéo được. Runner CI không có
+ * ảnh nên cả bốn ca chết ở khởi tạo lớp; với {@code build} là check bắt buộc của {@code main},
+ * thế là MỌI PR bị chặn. Nên {@code ci.yml} loại nhãn {@link #NHAN}. Máy prod còn ảnh trong
+ * cache ({@code linux/arm64}, đúng digest ở dưới), nên {@code ./mvnw verify} trên máy ấy vẫn
+ * chạy đủ bốn ca; máy KHÔNG có ảnh thì chạy {@code ./mvnw verify -DexcludedGroups=minio-that}.
+ *
+ * <p>Gỡ việc loại trừ khi có nguồn ảnh mới — tự build MinIO từ mã nguồn lên GHCR, hoặc một
+ * S3 server khác cho riêng test (rà soát 2026-09-24, việc còn mở). Đừng để nó thành vĩnh viễn:
+ * đây là lưới DUY NHẤT của đường ghi/đọc testcase ẩn.
  */
+@Tag(MinioTestdataStoreIT.NHAN)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MinioTestdataStoreIT {
+
+    /** Nhãn mà {@code ci.yml} loại ra — xem javadoc của lớp. */
+    static final String NHAN = "minio-that";
 
     /**
      * Đúng chuỗi của {@code docker-compose.yml} — quay.io + digest, xem lý do ở đó. Bản đầu dùng
