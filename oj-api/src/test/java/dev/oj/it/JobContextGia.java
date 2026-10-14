@@ -26,6 +26,8 @@ final class JobContextGia implements JobContext {
 
     Map<String, Object> viTriDaLuu = new HashMap<>();
     final List<String> suKien = new ArrayList<>();
+    /** Mức của từng dòng trong {@link #suKien}, cùng thứ tự — {@code INFO}/{@code WARN}/{@code ERROR}. */
+    final List<String> mucSuKien = new ArrayList<>();
     int daXongCuoi;
     Integer tongCuoi;
     boolean huy;
@@ -69,6 +71,7 @@ final class JobContextGia implements JobContext {
     @Override
     public void ghiSuKien(String muc, String thongDiep) {
         suKien.add(thongDiep);
+        mucSuKien.add(muc);
     }
 
     @Override

@@ -224,6 +224,11 @@ class AdminJudgingUseCasesTest {
         }
 
         @Override
+        public Optional<Job> dangSong(JobType type, String khoaThucThe) {
+            return Optional.empty();
+        }
+
+        @Override
         public List<Job> ganDay(Long createdBy, Long sauId, int gioiHan) {
             return List.of();
         }

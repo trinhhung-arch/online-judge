@@ -38,141 +38,6 @@ import java.util.Optional;
 @Repository
 public class JdbcJobRepository implements JobRepository {
 
-    private static final String TAO = """
-            INSERT INTO jobs (type, params, created_by)
-            VALUES (:type, CAST(:params AS jsonb), :createdBy)
-            RETURNING id
-            """;
-
-    /**
-     * Danh sách cột được viết lại trọn vẹn ở mỗi câu, <b>cố ý</b>.
-     *
-     * <p>Ghép một hằng {@code CHON} với phần {@code WHERE} thì gọn hơn bốn dòng, nhưng nó là
-     * nối chuỗi trong tầng {@code infrastructure} — và bước {@code grep} của CI không phân
-     * biệt được một phép ghép vô hại với một mệnh đề {@code WHERE} dựng từ dữ liệu người dùng
-     * (bất biến #5, SEC2). Bộ lọc ấy thô là <b>đúng</b>: từ Java 9 phép cộng chuỗi biên dịch
-     * thành {@code invokedynamic} và ArchUnit không còn thấy nó nữa.
-     *
-     * <p>Cái giá là sự lặp lại dưới đây. {@code JdbcProblemRepository} trả đúng cái giá ấy
-     * cho cùng lý do, và ghi lại trong javadoc của nó.
-     */
-    private static final String TIM_THEO_ID = """
-            SELECT id, type, status, params, cursor_state, total_items, done_items,
-                   lease_owner, lease_until, created_by, created_at, started_at,
-                   finished_at, error_message
-              FROM jobs
-             WHERE id = :id
-            """;
-
-    private static final String TIM_CHO_NGUOI_GOI = """
-            SELECT id, type, status, params, cursor_state, total_items, done_items,
-                   lease_owner, lease_until, created_by, created_at, started_at,
-                   finished_at, error_message
-              FROM jobs
-             WHERE id = :id
-               AND (:laAdmin OR created_by = :requesterId)
-            """;
-
-    /**
-     * ★ {@code CAST(:x AS bigint)} quanh cả hai tham số có thể {@code NULL}.
-     *
-     * <p>Bản đầu viết {@code (:createdBy IS NULL OR ...)} không kèm CAST, và Postgres không
-     * suy được kiểu của một tham số chỉ xuất hiện trong {@code IS NULL} — nó từ chối cả câu
-     * lệnh. {@code createdBy} là {@code null} <b>đúng khi người gọi là ADMIN</b>
-     * ({@code GetJobUseCase}: admin xem job của mọi người), nên endpoint này trả 500 cho mọi
-     * quản trị viên và chạy bình thường cho mọi người khác — cách hỏng khó thấy nhất, vì người
-     * thử nó nhiều nhất lại là người duy nhất gặp lỗi.
-     *
-     * <p>Cùng cái bẫy đã ghi ở {@code JdbcContestRepository} và {@code JdbcProblemRepository}.
-     * {@code JdbcSubmissionRepository} dùng cú pháp {@code :x::BIGINT} cho cùng một việc.
-     */
-    private static final String GAN_DAY = """
-            SELECT id, type, status, params, cursor_state, total_items, done_items,
-                   lease_owner, lease_until, created_by, created_at, started_at,
-                   finished_at, error_message
-              FROM jobs
-             WHERE (CAST(:createdBy AS bigint) IS NULL
-                    OR created_by = CAST(:createdBy AS bigint))
-               AND (CAST(:sauId AS bigint) IS NULL OR id < CAST(:sauId AS bigint))
-             ORDER BY id DESC
-             LIMIT :gioiHan
-            """;
-
-    /**
-     * {@code FOR UPDATE SKIP LOCKED} đặt SAU {@code LIMIT} — đó là thứ tự Postgres đòi, và
-     * viết ngược lại là một lỗi cú pháp chứ không phải một câu chạy chậm.
-     */
-    private static final String CLAIM = """
-            UPDATE jobs
-               SET status = 'RUNNING',
-                   lease_owner = :owner,
-                   lease_until = :until,
-                   heartbeat_at = now(),
-                   started_at = COALESCE(started_at, now())
-             WHERE id = (SELECT id FROM jobs
-                          WHERE status IN ('PENDING', 'PAUSED')
-                          ORDER BY id
-                          LIMIT 1
-                          FOR UPDATE SKIP LOCKED)
-            RETURNING id, type, status, params, cursor_state, total_items, done_items,
-                      lease_owner, lease_until, created_by, created_at, started_at,
-                      finished_at, error_message
-            """;
-
-    private static final String NHIP_TIM = """
-            UPDATE jobs
-               SET done_items = :daXong,
-                   total_items = COALESCE(:tong, total_items),
-                   lease_until = :leaseMoi,
-                   heartbeat_at = now()
-             WHERE id = :id AND lease_owner = :owner AND status = 'RUNNING'
-            """;
-
-    private static final String LUU_VI_TRI = """
-            UPDATE jobs SET cursor_state = CAST(:viTri AS jsonb) WHERE id = :id
-            """;
-
-    private static final String THU_HOI_TREO = """
-            UPDATE jobs
-               SET status = 'PAUSED', lease_owner = NULL, lease_until = NULL
-             WHERE status = 'RUNNING' AND lease_until < :bayGio
-            """;
-
-    private static final String KET_THUC = """
-            UPDATE jobs
-               SET status = :status, error_message = :loi, finished_at = :luc,
-                   lease_owner = NULL, lease_until = NULL
-             WHERE id = :id
-            """;
-
-    /** Thả lease, giữ nguyên cursor_state, KHÔNG đặt finished_at. Xem JobRepository.tamNghi. */
-    private static final String TAM_NGHI = """
-            UPDATE jobs
-               SET status = 'PAUSED', error_message = :lyDo,
-                   lease_owner = NULL, lease_until = NULL
-             WHERE id = :id
-            """;
-
-    private static final String HUY = """
-            UPDATE jobs
-               SET status = 'CANCELLED', finished_at = :luc,
-                   lease_owner = NULL, lease_until = NULL
-             WHERE id = :id AND status IN ('PENDING', 'RUNNING', 'PAUSED')
-            """;
-
-    private static final String GHI_SU_KIEN = """
-            INSERT INTO job_events (job_id, level, message)
-            VALUES (:jobId, :muc, :thongDiep)
-            """;
-
-    private static final String SU_KIEN_GAN_DAY = """
-            SELECT at, level, message
-              FROM job_events
-             WHERE job_id = :jobId
-             ORDER BY id DESC
-             LIMIT :gioiHan
-            """;
-
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
@@ -184,7 +49,7 @@ public class JdbcJobRepository implements JobRepository {
     @Override
     public long tao(JobType type, Map<String, Object> params, Long createdBy) {
         try {
-            return jdbc.sql(TAO)
+            return jdbc.sql(JobSql.TAO)
                     .param("type", type.name())
                     .param("params", json.writeValueAsString(params == null ? Map.of() : params))
                     .param("createdBy", createdBy)
@@ -198,12 +63,12 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public Optional<Job> timTheoId(long jobId) {
-        return jdbc.sql(TIM_THEO_ID).param("id", jobId).query(mapper()).optional();
+        return jdbc.sql(JobSql.TIM_THEO_ID).param("id", jobId).query(mapper()).optional();
     }
 
     @Override
     public Optional<Job> timChoNguoiGoi(long jobId, long requesterId, boolean laAdmin) {
-        return jdbc.sql(TIM_CHO_NGUOI_GOI)
+        return jdbc.sql(JobSql.TIM_CHO_NGUOI_GOI)
                 .param("id", jobId)
                 .param("laAdmin", laAdmin)
                 .param("requesterId", requesterId)
@@ -212,8 +77,17 @@ public class JdbcJobRepository implements JobRepository {
     }
 
     @Override
+    public Optional<Job> dangSong(JobType type, String khoaThucThe) {
+        return jdbc.sql(JobSql.DANG_SONG)
+                .param("type", type.name())
+                .param("khoa", khoaThucThe)
+                .query(mapper())
+                .optional();
+    }
+
+    @Override
     public List<Job> ganDay(Long createdBy, Long sauId, int gioiHan) {
-        return jdbc.sql(GAN_DAY)
+        return jdbc.sql(JobSql.GAN_DAY)
                 .param("createdBy", createdBy)
                 .param("sauId", sauId)
                 .param("gioiHan", gioiHan)
@@ -223,7 +97,7 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public Optional<Job> claim(String leaseOwner, Instant leaseUntil) {
-        return jdbc.sql(CLAIM)
+        return jdbc.sql(JobSql.CLAIM)
                 .param("owner", leaseOwner)
                 .param("until", luc(leaseUntil))
                 .query(mapper())
@@ -233,7 +107,7 @@ public class JdbcJobRepository implements JobRepository {
     @Override
     public boolean nhipTim(long jobId, String leaseOwner, int daXong, Integer tong,
                            Instant leaseMoi) {
-        return jdbc.sql(NHIP_TIM)
+        return jdbc.sql(JobSql.NHIP_TIM)
                 .param("daXong", daXong)
                 .param("tong", tong)
                 .param("leaseMoi", luc(leaseMoi))
@@ -244,7 +118,7 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public void luuViTri(long jobId, Map<String, Object> viTri) {
-        jdbc.sql(LUU_VI_TRI)
+        jdbc.sql(JobSql.LUU_VI_TRI)
                 .param("viTri", json.writeValueAsString(viTri == null ? Map.of() : viTri))
                 .param("id", jobId)
                 .update();
@@ -252,12 +126,12 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public int thuHoiJobTreo(Instant bayGio) {
-        return jdbc.sql(THU_HOI_TREO).param("bayGio", luc(bayGio)).update();
+        return jdbc.sql(JobSql.THU_HOI_TREO).param("bayGio", luc(bayGio)).update();
     }
 
     @Override
     public void ketThuc(long jobId, JobStatus status, String errorMessage, Instant luc) {
-        jdbc.sql(KET_THUC)
+        jdbc.sql(JobSql.KET_THUC)
                 .param("status", status.name())
                 .param("loi", errorMessage)
                 .param("luc", luc(luc))
@@ -267,19 +141,19 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public void tamNghi(long jobId, String lyDo) {
-        jdbc.sql(TAM_NGHI).param("lyDo", lyDo).param("id", jobId).update();
+        jdbc.sql(JobSql.TAM_NGHI).param("lyDo", lyDo).param("id", jobId).update();
     }
 
     @Override
     public void huy(long jobId, Instant luc) {
-        if (jdbc.sql(HUY).param("luc", luc(luc)).param("id", jobId).update() == 0) {
+        if (jdbc.sql(JobSql.HUY).param("luc", luc(luc)).param("id", jobId).update() == 0) {
             throw JobsException.daKetThuc();
         }
     }
 
     @Override
     public void ghiSuKien(long jobId, String muc, String thongDiep) {
-        jdbc.sql(GHI_SU_KIEN)
+        jdbc.sql(JobSql.GHI_SU_KIEN)
                 .param("jobId", jobId)
                 .param("muc", muc)
                 .param("thongDiep", thongDiep)
@@ -288,7 +162,7 @@ public class JdbcJobRepository implements JobRepository {
 
     @Override
     public List<JobEvent> suKienGanDay(long jobId, int gioiHan) {
-        return jdbc.sql(SU_KIEN_GAN_DAY)
+        return jdbc.sql(JobSql.SU_KIEN_GAN_DAY)
                 .param("jobId", jobId)
                 .param("gioiHan", gioiHan)
                 .query((rs, i) -> new JobEvent(
