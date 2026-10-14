@@ -26,6 +26,13 @@
 			quản bản ≥ 5.34.0. Trivy 2026-09-24.
 		-->
 		<rabbit-amqp-client.version>5.34.0</rabbit-amqp-client.version>
+
+		<!--
+			Jackson 3 3.1.5 → 3.1.7: CVE-2026-89407 · 89425 · 68497 · 91776 · 91777 (HIGH) —
+			Boot 4.1.1 ghim 3.1.5. CÙNG giá trị với oj-api/pom.xml, xem lý do ở đó. Gỡ khi Boot
+			tự quản bản ≥ 3.1.7. Trivy 2026-10-14.
+		-->
+		<jackson-bom.version>3.1.7</jackson-bom.version>
 	</properties>
 
 	<!--

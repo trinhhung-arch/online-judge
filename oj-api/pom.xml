@@ -86,6 +86,19 @@
 		-->
 		<tomcat.version>11.0.26</tomcat.version>
 		<rabbit-amqp-client.version>5.34.0</rabbit-amqp-client.version>
+
+		<!--
+			Jackson — Trivy đỏ hằng ngày từ ~2026-09-28 trên CÙNG commit main 82d2aac: CVE mới
+			công bố, mã không đổi. Boot 4.1.1 vẫn là bản 4.1.x mới nhất (2026-10-14).
+
+			jackson 3 (tools.jackson, qua Spring Boot) 3.1.5 → 3.1.7: CVE-2026-89407 · 89425 ·
+			  68497 · 91776 · 91777, HIGH (DoS / CPU / cache không chặn). oj-worker/pom.xml ghi
+			  đè CÙNG giá trị.
+			jackson 2 (com.fasterxml, chỉ qua io.minio:minio) 2.21.5 → 2.21.7: CVE-2026-89407 ·
+			  68497, HIGH. Giữ nhánh 2.21 — minio 8.6 dựng với 2.19, không nhảy minor.
+		-->
+		<jackson-bom.version>3.1.7</jackson-bom.version>
+		<jackson-2-bom.version>2.21.7</jackson-2-bom.version>
 	</properties>
 
 	<!--
@@ -116,7 +129,7 @@
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bcprov-jdk18on</artifactId>
-				<version>1.85.2</version>
+				<version>1.86</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -272,7 +285,7 @@
 		<dependency>
 			<groupId>com.squareup.okhttp3</groupId>
 			<artifactId>okhttp-jvm</artifactId>
-			<version>5.1.0</version>
+			<version>5.5.0</version>
 		</dependency>
 
 		<!--
