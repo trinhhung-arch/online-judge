@@ -130,6 +130,9 @@ public abstract class PostgresIT {
         // được rằng chuông cửa là tối ưu chứ không phải cơ chế giao việc.
         // Cầu dao và hình trạng hàng đợi được kiểm riêng ở RabbitJudgeJobPublisherTest.
         registry.add("oj.judge.rabbit.enabled", () -> "false");
+        // Mặc định localhost:9000 là MinIO THẬT của máy dev — IT không được chạm nó. Cổng 1 từ
+        // chối ngay; kho chết là trạng thái API đã chịu được (MinioTestdataStoreIT).
+        registry.add("OJ_MINIO_ENDPOINT", () -> "http://127.0.0.1:1");
     }
 
     @Autowired

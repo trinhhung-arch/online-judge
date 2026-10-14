@@ -1,7 +1,10 @@
 package dev.oj.it;
 
 import dev.oj.platform.audit.AuditLog;
+import dev.oj.platform.jobs.JobParams;
+import dev.oj.platform.jobs.JobType;
 import dev.oj.platform.jobs.JobsException;
+import dev.oj.problems.application.NghiaVuChamLai;
 import dev.oj.problems.application.TestdataImportJob;
 import dev.oj.problems.application.ZipTestdataValidator;
 import dev.oj.problems.application.port.TestdataRepository;
@@ -61,7 +64,7 @@ class TestdataImportIT extends PostgresIT {
     @BeforeEach
     void dungJob() {
         kho = new KhoTestdataTrongBoNho();
-        job = new TestdataImportJob(validator, kho, testdata, auditLog, jobs);
+        job = new TestdataImportJob(validator, kho, testdata, auditLog, new NghiaVuChamLai(jobs));
     }
 
     // -------------------------------------------------------------------------
@@ -136,7 +139,7 @@ class TestdataImportIT extends PostgresIT {
     void chay_lai_khong_tao_ban_sao() {
         var lanDau = chay(goiChuan());
         // Mô phỏng instance chết rồi job được nhặt lại: cùng cursor, chạy lại từ đầu.
-        chayVoiViTri(goiChuan(), lanDau.viTriDaLuu);
+        var lanSau = chayVoiViTri(goiChuan(), lanDau.viTriDaLuu);
 
         assertThat(jdbc.sql("SELECT count(*) FROM testcases WHERE problem_id = :id")
                 .param("id", PROBLEM_ID).query(Integer.class).single())
@@ -146,6 +149,41 @@ class TestdataImportIT extends PostgresIT {
                 .param("id", PROBLEM_ID).query(Integer.class).single())
                 .describedAs("chạy lại phải dùng lại phiên bản đã lưu, không tạo phiên bản mới")
                 .isEqualTo(2);
+
+        // FR-PROB-10: lần chạy đầu đã tạo job chấm lại; lần chạy lại đụng CHÍNH job đó.
+        // Trước bản sửa, chỗ này ghi ERROR "phải tạo job chấm lại bằng tay" — một chỉ dẫn sai
+        // gửi thẳng tới người vận hành.
+        assertThat(lanSau.mucSuKien)
+                .describedAs("chạy lại gặp job chấm lại của chính mình là chuyện bình thường")
+                .doesNotContain("ERROR");
+        assertThat(soJobChamLaiDangSong())
+                .describedAs("chạy lại không được tạo thêm job chấm lại thứ hai")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★ FR-PROB-10 · đã có job chấm lại tạo TRƯỚC khi đổi testdata → vẫn báo ERROR")
+    void job_cham_lai_cu_van_bao_dong() {
+        // Job ADMIN bấm tay lúc testdata còn ở phiên bản 1 — không mang testdataVersion.
+        long cu = jobs.tao(JobType.REJUDGE, Map.of(JobParams.PROBLEM_ID, PROBLEM_ID), ADMIN_ID);
+
+        var ctx = chay(goiChuan());
+
+        assertThat(ctx.mucSuKien)
+                .describedAs("job #" + cu + " có thể đã chấm một phần bài bằng bộ test cũ")
+                .contains("ERROR");
+        assertThat(String.join("\n", ctx.suKien)).contains("#" + cu);
+        assertThat(jobs.dangSong(JobType.REJUDGE, String.valueOf(PROBLEM_ID)))
+                .get().extracting(j -> j.id()).isEqualTo(cu);
+    }
+
+    private int soJobChamLaiDangSong() {
+        return jdbc.sql("""
+                        SELECT count(*) FROM jobs
+                         WHERE type = 'REJUDGE' AND params->>'problemId' = :id
+                           AND status IN ('PENDING','RUNNING','PAUSED')
+                        """)
+                .param("id", String.valueOf(PROBLEM_ID)).query(Integer.class).single();
     }
 
     @Test

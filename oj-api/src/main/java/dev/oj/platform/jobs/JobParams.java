@@ -31,6 +31,15 @@ public final class JobParams {
     /** {@code LEADERBOARD_REBUILD}, {@code STANDINGS_DRIFT_CHECK}. Khớp nhánh hai của index V9. */
     public static final String CONTEST_ID = "contestId";
 
+    /**
+     * {@code REJUDGE} do việc nạp testdata tạo (FR-PROB-10): phiên bản testdata mà job này
+     * chấm lại <i>tới</i>. Job do ADMIN tạo bằng tay không mang khoá này.
+     *
+     * <p>Không thuộc index V9 — thêm nó không đổi khoá chống trùng. {@code RejudgeJobHandler}
+     * không đọc nó; chỉ {@code NghiaVuChamLai} đọc, để nhận ra job chấm lại của chính mình.
+     */
+    public static final String TESTDATA_VERSION = "testdataVersion";
+
     private JobParams() {
     }
 }

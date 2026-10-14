@@ -56,6 +56,9 @@ class WorkerContextSmokeTest {
                         "--oj.worker.rabbit.enabled=false",
                         "--oj.worker.sandbox.enabled=false",
                         "--oj.worker.slots=1",
+                        // Mặc định localhost:8080 là API THẬT nếu máy dev đang chạy nó — test
+                        // sẽ gõ /internal/judge/claim bằng secret giả. Cổng 1 từ chối ngay.
+                        "--oj.worker.api-base-url=http://127.0.0.1:1",
                         // Không để slot dội request vào một API không tồn tại trong lúc test chạy.
                         "--oj.worker.idle-poll=30s",
                         // Tắt context là gọi GracefulShutdown; 30 giây mặc định biến test này

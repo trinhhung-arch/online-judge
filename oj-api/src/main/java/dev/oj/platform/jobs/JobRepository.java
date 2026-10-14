@@ -38,6 +38,21 @@ public interface JobRepository {
      */
     Optional<Job> timChoNguoiGoi(long jobId, long requesterId, boolean laAdmin);
 
+    /**
+     * Job đang sống ({@code PENDING}/{@code RUNNING}/{@code PAUSED}) giữ khoá
+     * {@code ux_jobs_one_active_per_entity} của một (loại, thực thể).
+     *
+     * <p>Dùng sau khi {@link #tao} ném {@code job.dang_chay}, để biết mình vừa đụng <i>job
+     * nào</i> — "đã có job" và "đã có đúng job mình cần" là hai tình huống khác nhau
+     * ({@code NghiaVuChamLai}). Không có điều kiện chủ sở hữu: đây là đường của hệ thống,
+     * không phải của người dùng.
+     *
+     * @param khoaThucThe giá trị {@code params.problemId} hoặc {@code params.contestId} dạng
+     *                    chuỗi, hoặc {@code ""} cho loại không gắn thực thể — cùng khoá với index V9
+     * @return rỗng nếu job ấy đã kết thúc giữa lúc {@link #tao} đụng và lúc hỏi
+     */
+    Optional<Job> dangSong(JobType type, String khoaThucThe);
+
     /** Job của một người, mới nhất trước. ADMIN truyền {@code null} để thấy tất cả. */
     /**
      * @param createdBy {@code null} = mọi người (ADMIN). <b>Hiện thực phải CAST tham số này</b>

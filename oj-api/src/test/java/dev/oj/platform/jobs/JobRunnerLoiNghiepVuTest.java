@@ -154,6 +154,7 @@ class JobRunnerLoiNghiepVuTest {
             throw chuaCan();
         }
         @Override public List<Job> ganDay(Long c, Long s, int g) { throw chuaCan(); }
+        @Override public Optional<Job> dangSong(JobType t, String k) { throw chuaCan(); }
         @Override public boolean nhipTim(long j, String o, int d, Integer t, Instant l) {
             return true;
         }
