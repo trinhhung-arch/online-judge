@@ -49,7 +49,7 @@ jobs:
       # từng ghi một cache thiếu provider test dưới khoá chung, làm ci phải tải lại từ Maven
       # Central mỗi lượt cho tới khi Central trả 429 (2026-09-24). Xem bước cache của ci.yml.
       - name: Cache Maven của quet-phu-thuoc
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository

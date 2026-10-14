@@ -41,7 +41,7 @@ jobs:
       # `restore-keys`: đổi pom thì vẫn khôi phục bản cũ gần nhất và chỉ tải phần chênh, thay vì
       # tải lại cả ~120MB từ Central. ~/.m2/wrapper là bản Maven mà mvnw tải về, cũng từ Central.
       - name: Cache Maven của ci
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
