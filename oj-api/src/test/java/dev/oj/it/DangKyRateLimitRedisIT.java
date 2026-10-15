@@ -36,11 +36,12 @@ class DangKyRateLimitRedisIT extends PostgresIT {
     @Test
     @DisplayName("★ khoá mồ côi không hạn (từ bản cũ) tự lành ở lượt kế tiếp")
     void khoa_mo_coi_tu_lanh() {
-        redis.opsForValue().set(KHOA, "57");
+        int quaTran = properties.auth().maxRegistrationsPerIp() + 5;
+        redis.opsForValue().set(KHOA, String.valueOf(quaTran));
         assertThat(redis.getExpire(KHOA)).as("tiền đề: khoá không có hạn").isEqualTo(-1L);
 
         assertThatThrownBy(() -> limiter.kiemVaGhiNhan(IP))
-                .as("57 lượt là quá trần — lượt này vẫn bị chặn")
+                .as("đã quá trần — lượt này vẫn bị chặn")
                 .isInstanceOf(IdentityException.class);
 
         assertThat(redis.getExpire(KHOA))
@@ -69,8 +70,9 @@ class DangKyRateLimitRedisIT extends PostgresIT {
 
         assertThat(redis.opsForValue().get(KHOA)).isEqualTo("2");
         assertThat(redis.getExpire(KHOA))
-                .as("gia hạn ở mọi lượt thì một bot gọi đều giữ cửa sổ mở mãi")
-                .isLessThanOrEqualTo(30L);
+                .as("gia hạn ở mọi lượt thì một bot gọi đều giữ cửa sổ mở mãi; "
+                        + "mất hạn (-1) thì IP bị chặn mãi")
+                .isBetween(1L, 30L);
     }
 
     @Test

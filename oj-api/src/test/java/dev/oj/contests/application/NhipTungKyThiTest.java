@@ -65,13 +65,18 @@ class NhipTungKyThiTest {
     void chup_ky_thi_sau_du_ky_thi_dau_hong() {
         contests.danhSach = List.of(kyThi(1), kyThi(2));
         standings.nemKhiChup = 1L;
-        FreezeStandingsScheduler nhip = new FreezeStandingsScheduler(contests, standings, CLOCK);
+        KhoaGia khoa = new KhoaGia(null);
+        FreezeStandingsScheduler nhip =
+                new FreezeStandingsScheduler(contests, standings, khoa, CLOCK, new TxGia());
 
         assertThatCode(nhip::nhip).doesNotThrowAnyException();
 
         assertThat(standings.daChup)
                 .as("chụp trễ là lộ kết quả sau freeze_at — kỳ thi 2 không được chờ kỳ thi 1")
                 .containsExactly(2L);
+        assertThat(khoa.daKhoa)
+                .as("bản chụp đọc hai bảng bằng hai câu — phải đứng sau khoá của kỳ thi")
+                .containsExactly(1L, 2L);
     }
 
     @Test
@@ -82,7 +87,8 @@ class NhipTungKyThiTest {
                 new JudgingGia(), new BusGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
 
         assertThatCode(updater::nhip).doesNotThrowAnyException();
-        assertThatCode(new FreezeStandingsScheduler(contests, standings, CLOCK)::nhip)
+        assertThatCode(new FreezeStandingsScheduler(contests, standings, new KhoaGia(null),
+                CLOCK, new TxGia())::nhip)
                 .doesNotThrowAnyException();
     }
 

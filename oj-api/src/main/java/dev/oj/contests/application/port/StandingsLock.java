@@ -25,7 +25,9 @@ package dev.oj.contests.application.port;
  *
  * <p>Mọi đường ghi {@code contest_standings} / {@code contest_problem_standings} đều phải giữ
  * khoá này. Hôm nay có hai, và cả hai nằm trong {@code StandingsUpdater}: {@code capNhat} và
- * {@code xoaTrang}.
+ * {@code xoaTrang}. Thêm một đường <i>đọc</i> cũng giữ nó: bản chụp đóng băng của
+ * {@code FreezeStandingsScheduler} đọc hai bảng ấy bằng hai câu, và cần hai câu thấy cùng một
+ * bảng — một lô commit chen giữa là bản chụp vi phạm khoá ngoại.
  */
 public interface StandingsLock {
 

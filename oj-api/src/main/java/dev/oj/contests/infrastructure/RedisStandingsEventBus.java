@@ -22,8 +22,11 @@ import org.springframework.stereotype.Component;
  *
  * <h2>Mọi lỗi bị nuốt, và đó là quyết định</h2>
  * Hàm này được gọi <b>sau khi bảng xếp hạng đã commit</b>. Ném lỗi ở đây không cứu được gì —
- * dữ liệu đã đúng và đã bền — mà chỉ có thể phá: một {@code RuntimeException} lọt lên làm hỏng
- * nhịp {@code StandingsUpdater}, và bảng xếp hạng của <i>mọi</i> kỳ thi đứng im.
+ * dữ liệu đã đúng và đã bền — mà chỉ có thể phá: ở {@code StandingsUpdater} nó biến một lô
+ * đã commit thành một dòng ERROR "cập nhật hỏng" cho kỳ thi ấy (nhịp đó bắt lỗi theo từng kỳ
+ * thi, nên các kỳ thi khác không đứng im theo — trước 2026-10-15 thì có); còn ở
+ * {@code RevealStandingsUseCase} và {@code RebuildStandingsJob} nó đánh hỏng một request hay
+ * một job mà dữ liệu đã ghi xong.
  *
  * <p>Redis chết thì trang bảng xếp hạng chậm đi tới nhịp polling kế tiếp — fallback REST là
  * bắt buộc ở cả hai trang có SSE ({@code oj-api/CLAUDE.md} mục 4), chính vì ngày này.
