@@ -106,8 +106,11 @@ POST /internal/judge/result                  ┌─ 1 transaction ─┐
    COMMIT ───────────────────────────────────┘
 
 Reaper mỗi 15s
-   UPDATE judge_queue SET claimed_at=NULL WHERE lease_until < now()
+   UPDATE judge_queue SET claimed_at=NULL, reap_count=reap_count+1
+    WHERE lease_until < now() AND reap_count < max-reaps
    (KHÔNG tăng attempt ở đây — lần claim kế tiếp mới tăng)
+   Hết lượt (reap_count = max-reaps, V16): KHÔNG thả lại — mỗi bài một transaction
+   ghi verdict IE, mở đầu bằng đúng câu DELETE ... AND attempt=? ở trên (ADR 019)
 ```
 
 **Vì sao khoá lạc quan đặt ở `judge_queue` chứ không phải `submissions`?**
@@ -518,6 +521,7 @@ Ngang tầm quan trọng với danh sách việc phải làm:
 | `V13__xac_minh_email.sql` | v1.1 | `email_verifications` · cột `users.email_verified_at` · thay `ck_users_anonymized` (ADR 016) |
 | `V14__audit_log_khoa_ca_partition.sql` | v1.1 | `REVOKE ALL` trên partition `audit_log` + hàm tạo partition tự khoá — append-only thật (mục 5) |
 | `V15__tran_do_ma_hai_lop_theo_tai_khoan.sql` | v1.1 | `user_two_factor.failed_attempts` + `locked_until` — trần mã hai lớp THEO TÀI KHOẢN (rà soát 2026-09-24, F2). Nullable có mặc định (CLAUDE.md §7) |
+| `V16__tran_so_lan_thu_hoi_judge_queue.sql` | v1.1 | `judge_queue.reap_count` — trần số lần reaper thả một bài; hết lượt thì IE thay vì quay vòng mãi (ADR 019). Nullable có mặc định (CLAUDE.md §7) |
 | `R__seed_du_lieu_tham_chieu.sql` | mọi lúc | 3 ngôn ngữ · máy chấm chuẩn · tag. Thêm ngôn ngữ = sửa file này |
 
 M1 chỉ cần `V1`–`V3`. Đúng tinh thần "M1 vẫn là toàn bộ dự án".

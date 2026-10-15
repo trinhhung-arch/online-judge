@@ -249,6 +249,11 @@ oj:
     lease: 120s                   # FR-SUB-03 — kẹt JUDGING quá ngần này thì reaper thu hồi
     reaper-interval: 15s          # PHẢI nhỏ hơn lease, nếu không một bài kẹt chờ hai chu kỳ
     max-ie-retries: 2             # FR-SUB-12
+    # FR-SUB-03, ADR 019 — reaper thả bài hết lease về hàng đợi tối đa ngần này lần; lần hết
+    # lease KẾ TIẾP thì ghi IE thay vì thả lại. 2 = "trần 3 lần hết lease" mà chủ dự án chốt
+    # 2026-10-15, cùng con số "DLQ sau 3 lần" của nfrplan 5.1. Bài độc thôi quay vòng sau
+    # ~3 × (lease + reaper-interval) ≈ 7 phút thay vì mãi mãi.
+    max-reaps: 2
     result-batch-size: 20         # = JudgeProgressDto.BATCH_SIZE, dùng từ M3
     reference-host-name: mac-m1max-host # mọi con số thời gian quy chiếu về máy này (FR-SUB-11)
 

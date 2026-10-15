@@ -93,9 +93,10 @@ public class ClaimJudgeJobUseCase {
      * chấm bình thường. Hỏng có kiểm soát, không hỏng dây chuyền.
      *
      * <p>Trả {@code 204} là một lời nói dối nhỏ với worker ("hết việc") — đổi lấy việc hệ
-     * thống không đứng. Dòng ERROR này là thứ phải có người nhìn: M3 nên biến nó thành một
-     * verdict {@code IE} thật qua đường {@code retryIe} để người nộp bài biết chuyện gì xảy ra,
-     * thay vì thấy bài mình treo mãi ở {@code JUDGING}.
+     * thống không đứng. Dòng ERROR này là thứ phải có người nhìn. Bài không treo mãi ở
+     * {@code JUDGING} nữa: sau {@code oj.judge.max-reaps} lần thả lại, reaper bỏ cuộc và ghi
+     * {@code IE} (V16, ADR 019) — người nộp bài thấy "sự cố máy chấm", không thấy một vòng
+     * quay vô tận.
      */
     private Optional<JudgeJobDto> skipBrokenJob(ClaimedJob job) {
         log.error("Không dựng được job cho submission {}: đề {} không có testdata version {}. "

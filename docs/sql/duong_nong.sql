@@ -150,17 +150,29 @@ RETURNING submission_id, ie_retry_count;
 -- 4. REAPER — job nền, chạy mỗi 15 giây (nfrplan 5.1: một cơ chế, năm loại sự cố).
 --    Không tăng attempt ở đây: lần claim kế tiếp sẽ tăng, và chính điều đó vô
 --    hiệu hoá kết quả trả về muộn của worker đã chết.
+--    V16: chỉ thả bài CÒN lượt. reap_count nullable (CLAUDE.md §7) nên COALESCE.
 -- ─────────────────────────────────────────────────────────────────────────────
 UPDATE judge_queue
    SET claimed_at      = NULL,
        lease_until     = NULL,
-       claimed_by_host = NULL
+       claimed_by_host = NULL,
+       reap_count      = COALESCE(reap_count, 0) + 1
  WHERE claimed_at IS NOT NULL
    AND lease_until  < now()
+   AND COALESCE(reap_count, 0) < :maxReaps     -- 2 = trần 3 lần hết lease
 RETURNING submission_id;
 
 -- Đưa các bài đó về QUEUED trên bảng nóng
 UPDATE submissions SET status = 'QUEUED' WHERE id = ANY(:submissionIds);
+
+-- 4'. Hết lease mà HẾT lượt (V16, ADR 019) — chỉ đọc. Mỗi dòng: một transaction ghi
+--     verdict IE, mở đầu bằng truy vấn 3a (khoá lạc quan) như mọi verdict khác.
+SELECT submission_id, attempt, claimed_at
+  FROM judge_queue
+ WHERE claimed_at IS NOT NULL
+   AND lease_until  < now()
+   AND COALESCE(reap_count, 0) >= :maxReaps
+ ORDER BY submission_id;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. DỰNG LẠI HÀNG ĐỢI SAU KHI MẤT RABBITMQ (nfrplan 5.2, kịch bản "Kill RabbitMQ")

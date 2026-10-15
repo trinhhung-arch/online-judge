@@ -126,6 +126,8 @@ class JudgingFakes {
         boolean lockWins = true;
         boolean ieRetryAccepted;
         List<Long> expired = List.of();
+        List<ExhaustedJob> exhausted = List.of();
+        Integer maxReapsSeen;
 
         @Override
         public void enqueue(long submissionId, int priority) {
@@ -146,9 +148,16 @@ class JudgingFakes {
         }
 
         @Override
-        public List<Long> reapExpired() {
+        public List<Long> reapExpired(int maxReaps) {
             calls.add("queue.reapExpired");
+            maxReapsSeen = maxReaps;
             return expired;
+        }
+
+        @Override
+        public List<ExhaustedJob> exhaustedJobs(int maxReaps) {
+            calls.add("queue.exhaustedJobs");
+            return exhausted;
         }
 
         @Override

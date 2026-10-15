@@ -26,3 +26,4 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [016](016-xac-minh-email-muc-mem.md) | Xác minh email ở mức mềm — một cái nhãn, không phải một cánh cổng | v1.1 |
 | [017](017-cong-hai-lop-ha-vai-tro-tai-goc.md) | Cổng 2FA của ADMIN hạ vai trò tại gốc, không kiểm ở từng use-case | v1.1 |
 | [018](018-khoa-tu-van-cho-moi-luot-ghi-bang-xep-hang.md) | Mọi lượt ghi bảng xếp hạng của một kỳ thi xếp hàng sau một khoá tư vấn | v1.1 |
+| [019](019-tran-so-lan-reaper-tha-lai.md) | Reaper có trần: hết lease lần thứ 3 thì ghi IE, không quay vòng mãi | v1.1 |

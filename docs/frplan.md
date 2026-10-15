@@ -168,7 +168,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 |---|---|---|---|
 | FR-SUB-01 | Nộp bài: chọn ngôn ngữ, dán hoặc upload source **≤ 64KB** | AI2 (giới hạn prompt), SEC | Must |
 | FR-SUB-02 | **Hệ thống trả `submissionId` + trạng thái `QUEUED` trong ≤300ms. Verdict đến sau.** | **P2, R1, S1** | **Must** |
-| FR-SUB-03 | Vòng trạng thái `QUEUED → JUDGING → DONE`. Bài kẹt ở `JUDGING` quá 120s tự về `QUEUED` | R1, R3 | Must |
+| FR-SUB-03 | Vòng trạng thái `QUEUED → JUDGING → DONE`. Bài kẹt ở `JUDGING` quá 120s tự về `QUEUED` — tối đa 2 lần; kẹt lần thứ 3 thì nhận `IE` thay vì quay vòng mãi (V16, ADR 019) | R1, R3 | Must |
 | FR-SUB-04 | Bảy verdict: `AC` `WA` `TLE` `MLE` `RE` `CE` `IE` | — | Must |
 | FR-SUB-05 | Theo dõi tiến độ realtime qua SSE, **có fallback REST polling khi mất kết nối** | U, A (tunnel ngắt) | Must |
 | FR-SUB-06 | Trang chi tiết bài nộp hiển thị **đủ lý do cho cả 7 verdict** (bảng 6.2 nfrplan) | U3 | Must |

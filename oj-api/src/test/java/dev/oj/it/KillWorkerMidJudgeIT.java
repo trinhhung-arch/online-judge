@@ -9,6 +9,7 @@ import dev.oj.judging.application.usecase.ReapStaleJobsUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase.Outcome;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
+import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.trace.TraceIdFilter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ class KillWorkerMidJudgeIT extends PostgresIT {
     @Autowired ClaimJudgeJobUseCase claimJudgeJob;
     @Autowired RecordJudgeResultUseCase recordJudgeResult;
     @Autowired ReapStaleJobsUseCase reapStaleJobs;
+    @Autowired AppProperties properties;
 
     @Test
     @DisplayName("★ worker chết → reaper thu hồi → chấm lại với attempt=2, kết quả cũ bị loại")
@@ -72,6 +74,65 @@ class KillWorkerMidJudgeIT extends PostgresIT {
         assertThat(verdict(id)).isEqualTo("AC");
         assertThat(attempt(id)).isEqualTo(2);
         assertThat(queueDepth()).isZero();
+    }
+
+    /**
+     * ★ V16, ADR 019 — <b>bài độc</b>: worker chết ở MỌI lần chấm (bài làm sập worker, hoặc đề
+     * mất testdata). Bản trước thả lại mãi; giờ hết {@code oj.judge.max-reaps} lượt thả lại thì
+     * lần hết lease kế tiếp ghi IE. Kiểm cả hai nửa của R1/R2: bài có verdict (không kẹt), và
+     * đúng MỘT bản ghi chấm — kết quả muộn của attempt cuối vẫn bị khoá lạc quan loại.
+     */
+    @Test
+    @DisplayName("★ bài độc: hết lượt thả lại → IE, hàng đợi trống, một bản ghi chấm, kết quả muộn bị loại")
+    void bai_doc_het_luot_tha_lai_thi_ghi_IE() {
+        long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
+        int maxReaps = properties.judge().maxReaps();
+
+        for (int lan = 1; lan <= maxReaps; lan++) {
+            assertThat(claimJudgeJob.claim(REQUEST).orElseThrow().attempt()).isEqualTo(lan);
+            expireLease(id);
+            assertThat(reapStaleJobs.reap()).isEqualTo(1);
+            assertThat(status(id)).as("lần thả lại thứ %d", lan).isEqualTo("QUEUED");
+        }
+
+        // Lần giao cuối, rồi lại chết.
+        int cuoi = claimJudgeJob.claim(REQUEST).orElseThrow().attempt();
+        assertThat(cuoi).isEqualTo(maxReaps + 1);
+        expireLease(id);
+        assertThat(reapStaleJobs.reap()).isEqualTo(1);
+
+        assertThat(status(id)).as("bỏ cuộc, không thả lại nữa").isEqualTo("DONE");
+        assertThat(verdict(id)).isEqualTo("IE");
+        assertThat(queueDepth()).isZero();
+        assertThat(countJudgeRuns(id)).isEqualTo(1);
+        assertThat(claimJudgeJob.claim(REQUEST)).as("không còn gì để quay vòng").isEmpty();
+
+        // Worker của attempt cuối hồi sinh và trả AC muộn — khoá lạc quan loại, IE đứng yên.
+        assertThat(recordJudgeResult.record(result(id, cuoi, Verdict.AC))).isEqualTo(Outcome.IGNORED);
+        assertThat(verdict(id)).isEqualTo("IE");
+        assertThat(countJudgeRuns(id)).isEqualTo(1);
+    }
+
+    /**
+     * Vì sao trần đếm trên cột riêng {@code reap_count} chứ không trên {@code attempt}:
+     * rejudge chèn hàng với {@code attempt} đánh số TIẾP từ lượt chấm trước. Một bài đã rejudge
+     * vài lần vẫn phải được thả lại ở lần hết lease đầu tiên của lượt chấm mới.
+     */
+    @Test
+    @DisplayName("bài có attempt cao (như sau rejudge) vẫn được thả lại ở lần hết lease đầu tiên")
+    void attempt_cao_van_duoc_tha_lai() {
+        long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
+        jdbc.sql("UPDATE judge_queue SET attempt = 7 WHERE submission_id = :id")
+                .param("id", id).update();
+
+        assertThat(claimJudgeJob.claim(REQUEST).orElseThrow().attempt()).isEqualTo(8);
+        expireLease(id);
+        assertThat(reapStaleJobs.reap()).isEqualTo(1);
+
+        assertThat(status(id)).isEqualTo("QUEUED");
+        assertThat(queueDepth()).isEqualTo(1);
     }
 
     /**

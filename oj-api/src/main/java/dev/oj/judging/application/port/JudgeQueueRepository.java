@@ -57,17 +57,30 @@ public interface JudgeQueueRepository {
     Optional<ReleasedSubmission> releaseWithOptimisticLock(long submissionId, int attempt);
 
     /**
-     * Thu hồi mọi lease đã hết hạn: {@code UPDATE judge_queue SET claimed_at = NULL,
-     * lease_until = NULL, claimed_by_host = NULL WHERE lease_until < now() RETURNING submission_id}.
+     * Thu hồi những lease đã hết hạn của bài <b>còn lượt</b>: {@code UPDATE judge_queue SET
+     * claimed_at = NULL, lease_until = NULL, claimed_by_host = NULL, reap_count = reap_count + 1
+     * WHERE lease_until < now() AND reap_count < :maxReaps RETURNING submission_id}.
      *
      * <p><b>Không tăng {@code attempt} ở đây.</b> Lần claim kế tiếp mới tăng — nếu tăng ở cả
      * hai chỗ thì một bài bị thu hồi sẽ nhảy hai số, và kết quả của worker cũ (mang số cũ) vẫn
      * bị loại đúng như mong muốn nhưng {@code judge_runs} sẽ có lỗ hổng số thứ tự không ai
      * giải thích được.
      *
+     * @param maxReaps {@code oj.judge.max-reaps} — bài đã bị thả ngần này lần thì ở lại, chờ
+     *                 {@link #exhaustedJobs} (V16, ADR 019)
      * @return id các bài vừa được thả — người gọi đưa {@code submissions.status} về QUEUED
      */
-    List<Long> reapExpired();
+    List<Long> reapExpired(int maxReaps);
+
+    /**
+     * Bài hết lease mà <b>đã hết lượt thả lại</b> — {@code reap_count >= :maxReaps}. Chỉ đọc:
+     * mỗi bài được bỏ cuộc trong một transaction ghi verdict riêng, mở đầu bằng
+     * {@link #releaseWithOptimisticLock} như mọi verdict khác (bất biến #7).
+     *
+     * <p>Không có {@code LIMIT}, cùng lý do với {@link #reapExpired}: {@code judge_queue} là
+     * bảng vài trăm dòng, và tập này — bài độc, đề hỏng — còn nhỏ hơn nhiều.
+     */
+    List<ExhaustedJob> exhaustedJobs(int maxReaps);
 
     /**
      * FR-SUB-12 — bài {@code IE} được chấm lại tối đa {@code maxRetries} lần.
@@ -141,6 +154,15 @@ public interface JudgeQueueRepository {
      * @param testdataVersion phiên bản mà chính attempt này đã dùng, đọc từ {@code submissions}
      */
     record ReleasedSubmission(long submissionId, int attempt, int languageId, int testdataVersion) {
+    }
+
+    /**
+     * Một bài hết lượt thả lại — xem {@link #exhaustedJobs}.
+     *
+     * @param attempt   attempt đang giữ lease đã hết hạn — chìa của khoá lạc quan
+     * @param claimedAt lúc attempt ấy được giao; thành {@code started_at} của lần chấm IE
+     */
+    record ExhaustedJob(long submissionId, int attempt, Instant claimedAt) {
     }
 
     /**
