@@ -45,6 +45,18 @@ spring:
       # Trước 2026-09-16 Redis không có mật khẩu và nghe *:6379: một máy bất kỳ trong LAN xoá
       # được khoá rate limit, ghi đè cache bảng xếp hạng, và PUBLISH verdict giả vào kênh SSE.
       password: ${OJ_REDIS_PASSWORD:}
+      # ★ Cùng cái bẫy với RabbitMQ ngay dưới: để trống thì Lettuce chờ mỗi lệnh 60 GIÂY. Mọi
+      # đường gọi Redis đều có lối lùi (Postgres, hoặc cho qua), nhưng lối lùi chỉ chạy SAU khi
+      # lệnh hỏng — và một Redis treo thì không hỏng, nó im. Đo 2026-10-15 (RedisTreoHttpIT,
+      # `docker pause`): một POST /api/v1/submissions mất 121 giây — GioiHanApiFilter chờ 60s,
+      # rồi rate limit nộp bài chờ thêm 60s — trả 202, nhưng qua Cloudflare Tunnel (~100s) người
+      # dùng đã thấy 524 và bấm nộp lại. 200ms mỗi lệnh: hai lệnh trên đường nộp bài là ~0,4s
+      # khi Redis treo — vượt mục tiêu P2 300ms, dưới ngưỡng cảnh báo 800ms. Muốn giữ cả P2 khi
+      # Redis treo thì cần thêm cầu dao như RabbitJudgeJobPublisher (chưa làm, đã cân nhắc).
+      # Bình thường một lệnh tới Redis cùng máy mất dưới 1ms; lệnh nặng nhất là ZADD nạp cache
+      # bảng xếp hạng, vài mili giây.
+      timeout: 200ms
+      connect-timeout: 200ms
 
   rabbitmq:
     host: ${OJ_RABBIT_HOST:localhost}
