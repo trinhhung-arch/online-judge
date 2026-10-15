@@ -34,6 +34,15 @@ public final class IcpcFormat implements ContestFormat {
 
     @Override
     public KetQuaDe apDung(KetQuaDe hienTai, BaiDaCham bai, Contest contest) {
+        // ★ Bài đã nằm trong kết quả này rồi (bài nộp được tính theo thứ tự id tăng dần) thì
+        // áp lại là không việc gì cả. ICPC là thể thức duy nhất CỘNG DỒN — nhánh sai ở dưới
+        // là "+ 1" — nên thiếu dòng này thì áp lại một bài sai là thêm một lần sai, tức thêm
+        // penalty_minutes. Khoá của StandingsUpdater đã chặn đường dẫn tới chuyện đó; dòng
+        // này giữ cho lời hứa "idempotent" của ContestFormat đúng cả khi ai đó mở thêm một
+        // đường ghi thứ hai không qua khoá.
+        if (bai.submissionId() <= hienTai.baiCuoiDaTinh()) {
+            return hienTai;
+        }
         // Đã đạt rồi thì mọi bài nộp sau đó là không việc gì cả — xem quy tắc 1.
         if (hienTai.daDat()) {
             return new KetQuaDe(hienTai.problemId(), hienTai.diemCaoNhat(),

@@ -1,6 +1,7 @@
 package dev.oj.contests.application;
 
 import dev.oj.contests.application.port.ContestRepository;
+import dev.oj.contests.application.port.StandingsLock;
 import dev.oj.contests.application.port.StandingsRepository;
 import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormat;
@@ -56,6 +57,15 @@ import java.util.Set;
  *
  * <p>Một transaction làm cho hai kết cục duy nhất là "cả lô vào" hoặc "cả lô chưa vào".
  *
+ * <h2>★ Hai lượt cùng một kỳ thi thì xếp hàng — {@link StandingsLock}</h2>
+ * Transaction làm cho <i>một</i> lô nguyên tử, không làm cho <i>hai</i> lô tuần tự. Bản trước
+ * đọc watermark và lô <b>bên ngoài</b> transaction, nên nhịp 2 giây và
+ * {@code RebuildStandingsJob} (hoặc hai instance API) từng đọc chung một watermark, và lượt đến
+ * sau áp lại cả lô lên dòng mà lượt trước vừa ghi: ICPC đếm một lần sai thành hai. Giờ mỗi
+ * lượt khoá kỳ thi trước, rồi mới đọc watermark, lô và trạng thái — nên lượt sau thấy watermark
+ * mà lượt trước đã đẩy tới, và lô của nó rỗng. {@link #xoaTrang} của job dựng lại đứng sau
+ * cùng khoá ấy, nên nó không xoá chen vào giữa một lô đang ghi.
+ *
  * <h2>Nuốt ngoại lệ ở tầng ngoài — cùng lý do với {@code StaleJobReaper}</h2>
  * Spring huỷ hẳn một tác vụ {@code @Scheduled} nếu nó ném ra ngoài. Một kỳ thi có dữ liệu lạ
  * sẽ làm bảng xếp hạng của <b>mọi</b> kỳ thi khác đứng im cho tới lần deploy sau.
@@ -67,6 +77,7 @@ public class StandingsUpdater {
 
     private final ContestRepository contests;
     private final StandingsRepository standings;
+    private final StandingsLock khoa;
     private final JudgingQueries judging;
     private final StandingsEventBus publisher;
     private final AppProperties properties;
@@ -74,11 +85,13 @@ public class StandingsUpdater {
     private final TransactionTemplate tx;
 
     public StandingsUpdater(ContestRepository contests, StandingsRepository standings,
-                            JudgingQueries judging, StandingsEventBus publisher,
+                            StandingsLock khoa, JudgingQueries judging,
+                            StandingsEventBus publisher,
                             AppProperties properties, java.time.Clock clock,
                             @Qualifier("appTransactionManager") PlatformTransactionManager txManager) {
         this.contests = contests;
         this.standings = standings;
+        this.khoa = khoa;
         this.judging = judging;
         this.publisher = publisher;
         this.properties = properties;
@@ -106,32 +119,53 @@ public class StandingsUpdater {
      * tiến độ. Public vì chính lý do đó — không phải để test gọi.
      */
     public int capNhat(Contest contest) {
-        long watermark = standings.watermark(contest.id());
-        // ★ LIỀN MẠCH, không phải baiDaChamTrongContest. Câu kia lọc status='DONE' nên nó
-        // nhảy qua bài đang chấm dở, và watermark vượt qua thì bài ấy mất vĩnh viễn — xem
-        // javadoc JudgingQueries.baiDaChamLienMach.
-        List<ScoredSubmission> lo = judging.baiDaChamLienMach(
-                contest.id(), watermark, properties.contest().standingsBatchSize());
-        if (lo.isEmpty()) {
-            return 0;
-        }
-
-        Set<Long> nguoiBiCham = new LinkedHashSet<>();
-        for (ScoredSubmission bai : lo) {
-            nguoiBiCham.add(bai.userId());
-        }
-
-        Boolean daGhi = tx.execute(status -> {
-            ghiLo(contest, lo, nguoiBiCham);
-            return Boolean.TRUE;
+        Integer soBai = tx.execute(status -> {
+            // ★ KHOÁ TRƯỚC, ĐỌC SAU — và khoá là một câu lệnh riêng. Câu đọc watermark phải
+            // chụp ảnh dữ liệu SAU khi đã giữ khoá, nếu không nó đọc đúng cái watermark mà
+            // lượt vừa nhả khoá đã làm cũ. Xem javadoc StandingsLock.
+            khoa.khoaKyThi(contest.id());
+            long watermark = standings.watermark(contest.id());
+            // ★ LIỀN MẠCH, không phải baiDaChamTrongContest. Câu kia lọc status='DONE' nên nó
+            // nhảy qua bài đang chấm dở, và watermark vượt qua thì bài ấy mất vĩnh viễn — xem
+            // javadoc JudgingQueries.baiDaChamLienMach.
+            List<ScoredSubmission> lo = judging.baiDaChamLienMach(
+                    contest.id(), watermark, properties.contest().standingsBatchSize());
+            if (!lo.isEmpty()) {
+                ghiLo(contest, lo, nguoiBiCham(lo));
+            }
+            return lo.size();
         });
 
-        if (Boolean.TRUE.equals(daGhi)) {
+        int daTinh = soBai == null ? 0 : soBai;
+        if (daTinh > 0) {
             // Đẩy tin SAU khi commit. Trước commit thì một client đọc lại ngay có thể thấy
             // bảng cũ — cùng cái bẫy mà AfterCommit giải ở M3.
             publisher.bangDaDoi(contest.id());
         }
-        return lo.size();
+        return daTinh;
+    }
+
+    /**
+     * Xoá sạch bảng xếp hạng của một kỳ thi — bước đầu của {@code RebuildStandingsJob}.
+     *
+     * <p>Nằm ở đây chứ không để job gọi thẳng repository vì nó phải đứng sau <b>cùng một
+     * khoá</b> với {@link #capNhat}. Xoá chen vào giữa một lô đang ghi thì lô ấy ghi lên bảng
+     * vừa trống, watermark nhảy tới bài cuối của lô, và mọi bài trước đó — vừa bị xoá — không
+     * bao giờ được tính lại. Hai câu xoá cũng thành một khối, thay vì hai lần tự commit.
+     */
+    public void xoaTrang(long contestId) {
+        tx.executeWithoutResult(status -> {
+            khoa.khoaKyThi(contestId);
+            standings.xoaBangXepHang(contestId);
+        });
+    }
+
+    private static Set<Long> nguoiBiCham(List<ScoredSubmission> lo) {
+        Set<Long> nguoi = new LinkedHashSet<>();
+        for (ScoredSubmission bai : lo) {
+            nguoi.add(bai.userId());
+        }
+        return nguoi;
     }
 
     private void ghiLo(Contest contest, List<ScoredSubmission> lo, Set<Long> nguoiBiCham) {
