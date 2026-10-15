@@ -4,6 +4,7 @@ import dev.oj.judging.application.port.JudgeJobPublisher;
 import dev.oj.judging.application.port.RejudgeRepository;
 import dev.oj.judging.domain.RejudgeJob;
 import dev.oj.platform.config.AppProperties;
+import dev.oj.platform.config.RejudgeProperties;
 import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.jobs.JobContext;
 import dev.oj.platform.jobs.JobHandler;
@@ -104,7 +105,7 @@ public class RejudgeJobHandler implements JobHandler {
         long viTri = ctx.viTriDaLuu().containsKey(VI_TRI)
                 ? soNguyen(ctx.viTriDaLuu(), VI_TRI) : 0L;
 
-        AppProperties.Rejudge cauHinh = properties.judge().rejudge();
+        RejudgeProperties cauHinh = properties.judge().rejudge();
         int tong = rejudge.demBaiCuaDe(problemId);
         // Khôi phục CẢ HAI, không chỉ vị trí — xem javadoc DA_XONG.
         int daXong = ctx.viTriDaLuu().containsKey(DA_XONG)

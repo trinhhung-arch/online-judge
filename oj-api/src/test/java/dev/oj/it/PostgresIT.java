@@ -35,7 +35,7 @@ import java.util.List;
  * thật vỡ.
  */
 @SpringBootTest
-@org.springframework.context.annotation.Import({DemQuery.class,
+@org.springframework.context.annotation.Import({DemQuery.class, DiemHenSql.class,
         KhoTestdataTrongBoNho.Dang.class})
 public abstract class PostgresIT {
 

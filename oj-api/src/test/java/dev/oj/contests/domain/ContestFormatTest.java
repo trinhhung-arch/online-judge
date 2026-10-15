@@ -127,6 +127,23 @@ class ContestFormatTest {
             // StandingsUpdater SẼ chạy lại cùng một bài nộp sau restart hoặc sau rebuild.
             assertThat(haiLan).isEqualTo(motLan);
         }
+
+        @Test
+        @DisplayName("★ áp lại một bài SAI đã tính không thêm lần sai — ca mà ca trên không thấy")
+        void ap_lai_bai_sai_khong_them_lan_sai() {
+            // Ca `idempotent` ở trên áp lại bài AC, mà sau AC thì quy tắc 1 đã nuốt mọi thứ.
+            // Bài sai TRƯỚC khi đạt mới là nhánh cộng dồn — và là đúng ca mà hai lượt cập nhật
+            // chen nhau từng đếm thành hai (BangXepHangGhiSongSongIT).
+            KetQuaDe motLan = chay(bai(1, false, 0, 10));
+            KetQuaDe haiLan = chay(bai(1, false, 0, 10), bai(1, false, 0, 10));
+
+            assertThat(haiLan).isEqualTo(motLan);
+            assertThat(haiLan.soLanSaiTruocKhiDat()).isEqualTo(1);
+            assertThat(chay(bai(1, false, 0, 10), bai(1, false, 0, 10), bai(2, true, 100, 37))
+                    .soLanSaiTruocKhiDat())
+                    .as("penalty sau AC tính đúng một lần sai")
+                    .isEqualTo(1);
+        }
     }
 
     // =========================================================================

@@ -41,12 +41,22 @@ import java.util.Optional;
  * <p>Trả về {@code 204} cho worker trong <b>cả ba</b> trường hợp dưới đây. Worker không được
  * coi 204 là "đã ghi" — nó chỉ có nghĩa "API đã nhận và tự quyết định" (javadoc của
  * {@link JudgeResultDto}).
+ *
+ * <p>Người gọi thứ hai là reaper, qua {@link #boCuoc} (V16, ADR 019) — và nó đi qua <b>đúng ba
+ * câu lệnh ấy</b>, không có đường ghi verdict thứ hai.
  */
-@InternalAccess("worker, qua POST /internal/judge/result. Chủ sở hữu bài nộp đọc từ database, không hỏi request.")
+@InternalAccess("worker, qua POST /internal/judge/result; và reaper (lịch trong tiến trình) qua boCuoc. Chủ sở hữu bài nộp đọc từ database, không hỏi request.")
 @Service
 public class RecordJudgeResultUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(RecordJudgeResultUseCase.class);
+
+    /**
+     * Tên "máy chấm" của một lần chấm mà reaper bỏ cuộc. Không có dòng {@code judge_hosts}
+     * nào mang tên này, nên {@code judge_runs.host_id} là {@code NULL} — đúng sự thật: không
+     * máy nào trả kết quả cho attempt ấy.
+     */
+    static final String MAY_BO_CUOC = "reaper";
 
     private final JudgeQueueRepository queue;
     private final JudgeRunRepository judgeRuns;
@@ -113,6 +123,33 @@ public class RecordJudgeResultUseCase {
         }
 
         writeVerdict(released.get(), result);
+        return Outcome.RECORDED;
+    }
+
+    /**
+     * ★ Reaper bỏ cuộc — FR-SUB-03, V16, ADR 019. Bài đã hết lease {@code max-reaps + 1} lần
+     * mà chưa lần nào có kết quả: bài làm sập worker, hoặc đề mất testdata. Thả lại lần nữa là
+     * quay vòng mãi, chặn cả bảng xếp hạng kỳ thi phía sau nó (lô liền mạch). Nên ghi {@code IE}
+     * — verdict nói "không phải lỗi bài của bạn" — và dừng.
+     *
+     * <p><b>Không rẽ nhánh FR-SUB-12</b> như {@link #record}: thả lại vì IE ở đây chính là vòng
+     * quay vừa bị chặn. Câu lệnh đầu tiên vẫn là khoá lạc quan: worker trả kết quả thật kịp
+     * trước thì hàng đã biến mất và lượt bỏ cuộc này im lặng thành {@code IGNORED}; worker trả
+     * muộn sau đó thì đến lượt kết quả ấy bị từ chối — y hệt một attempt đã bị thu hồi.
+     *
+     * @param claimedAt lúc attempt ấy được giao — thành {@code started_at} của lần chấm IE
+     */
+    @JudgeTransactional
+    public Outcome boCuoc(long submissionId, int attempt, int soLanHetLease, Instant claimedAt) {
+        Optional<ReleasedSubmission> released = queue.releaseWithOptimisticLock(submissionId, attempt);
+        if (released.isEmpty()) {
+            return Outcome.IGNORED;
+        }
+        writeVerdict(released.get(), JudgeResultDto.internalError(submissionId, attempt,
+                MAY_BO_CUOC, java.math.BigDecimal.ONE, claimedAt,
+                "REAPER: het lease " + soLanHetLease + " lan, khong lan nao co ket qua"));
+        log.error("Bỏ cuộc submission {} attempt {} sau {} lần hết lease — đã ghi IE. Bài làm "
+                + "sập worker hoặc đề hỏng: cần người xem.", submissionId, attempt, soLanHetLease);
         return Outcome.RECORDED;
     }
 

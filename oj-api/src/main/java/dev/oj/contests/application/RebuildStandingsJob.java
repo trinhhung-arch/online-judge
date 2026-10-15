@@ -1,7 +1,6 @@
 package dev.oj.contests.application;
 
 import dev.oj.contests.application.port.ContestRepository;
-import dev.oj.contests.application.port.StandingsRepository;
 import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestsException;
 import dev.oj.platform.jobs.JobContext;
@@ -38,6 +37,10 @@ import java.util.Map;
  * <p>Hệ quả trực tiếp: thêm một trường vào bảng xếp hạng là job này biết dựng lại nó
  * <b>miễn phí</b>, vì nó không biết trường nào tồn tại.
  *
+ * <p>Bước xoá cũng đi qua {@link StandingsUpdater#xoaTrang}, không gọi thẳng repository: nó
+ * phải đứng sau cùng một khoá với nhịp cập nhật 2 giây, vốn vẫn chạy song song trong lúc job
+ * dựng lại. Xoá chen vào giữa một lô đang ghi là mất những bài vừa bị xoá khỏi bảng.
+ *
  * <h2>Tiến độ không có tổng, và đó là câu trả lời trung thực</h2>
  * Biết tổng nghĩa là {@code COUNT(*)} trên {@code submissions} — thứ
  * {@code oj-api/CLAUDE.md} mục 3 cấm thẳng vì nó là một lần quét bảng. Nên job báo số bài đã
@@ -47,14 +50,12 @@ import java.util.Map;
 public class RebuildStandingsJob implements JobHandler {
 
     private final ContestRepository contests;
-    private final StandingsRepository standings;
     private final StandingsUpdater updater;
     private final StandingsEventBus bus;
 
-    public RebuildStandingsJob(ContestRepository contests, StandingsRepository standings,
-                               StandingsUpdater updater, StandingsEventBus bus) {
+    public RebuildStandingsJob(ContestRepository contests, StandingsUpdater updater,
+                               StandingsEventBus bus) {
         this.contests = contests;
-        this.standings = standings;
         this.updater = updater;
         this.bus = bus;
     }
@@ -74,7 +75,7 @@ public class RebuildStandingsJob implements JobHandler {
         // đã dựng và bắt đầu lại từ đầu — đúng thứ cursor_state sinh ra để tránh.
         if (!Boolean.TRUE.equals(ctx.viTriDaLuu().get("daXoa"))) {
             ctx.ghiSuKien("INFO", "Xoá bảng xếp hạng cũ và dựng lại từ đầu");
-            standings.xoaBangXepHang(contestId);
+            updater.xoaTrang(contestId);
             ctx.luuViTri(Map.of("daXoa", true));
         }
 

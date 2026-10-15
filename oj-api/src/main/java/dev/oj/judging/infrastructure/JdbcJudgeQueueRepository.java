@@ -17,7 +17,7 @@ import java.util.Optional;
  *   POOL   PHƯƠNG THỨC                                      TRANSACTION CỦA
  *   app    enqueue                                          @Transactional (nộp bài)
  *   judge  claim · releaseWithOptimisticLock · reapExpired   @JudgeTransactional
- *          · retryIe · queueDepth
+ *          · exhaustedJobs · retryIe · queueDepth
  * </pre>
  *
  * <p>{@code enqueue} <b>phải</b> chạy trong chính transaction nộp bài. Đẩy nó sang pool
@@ -147,15 +147,27 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING submission_id
             """;
 
-    // ---- truy vấn 4. KHÔNG tăng attempt: lần claim kế tiếp mới tăng ----
+    // ---- truy vấn 4. KHÔNG tăng attempt (lần claim kế tiếp mới tăng). V16: chỉ bài CÒN lượt ----
     private static final String REAP_EXPIRED = """
             UPDATE judge_queue
                SET claimed_at      = NULL,
                    lease_until     = NULL,
-                   claimed_by_host = NULL
+                   claimed_by_host = NULL,
+                   reap_count      = COALESCE(reap_count, 0) + 1
              WHERE claimed_at IS NOT NULL
                AND lease_until  < now()
+               AND COALESCE(reap_count, 0) < :maxReaps
             RETURNING submission_id
+            """;
+
+    // ---- truy vấn 4' (V16, ADR 019): hết lease mà hết lượt — chỉ đọc, bỏ cuộc từng bài ----
+    private static final String EXHAUSTED = """
+            SELECT submission_id, attempt, claimed_at
+              FROM judge_queue
+             WHERE claimed_at IS NOT NULL
+               AND lease_until  < now()
+               AND COALESCE(reap_count, 0) >= :maxReaps
+             ORDER BY submission_id
             """;
 
     /**
@@ -225,10 +237,20 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
     }
 
     @Override
-    public List<Long> reapExpired() {
-        // POOL judge — @JudgeTransactional, cùng transaction với markQueued().
+    public List<Long> reapExpired(int maxReaps) {
+        // POOL judge — transaction của reaper, cùng transaction với markQueued().
         return judgeJdbc.sql(REAP_EXPIRED)
+                .param("maxReaps", maxReaps)
                 .query(Long.class)
+                .list();
+    }
+
+    @Override
+    public List<ExhaustedJob> exhaustedJobs(int maxReaps) {
+        // POOL judge — chỉ đọc, ngoài transaction: mỗi bài bỏ cuộc có transaction riêng.
+        return judgeJdbc.sql(EXHAUSTED).param("maxReaps", maxReaps)
+                .query((rs, n) -> new ExhaustedJob(rs.getLong("submission_id"),
+                        rs.getInt("attempt"), rs.getTimestamp("claimed_at").toInstant()))
                 .list();
     }
 
