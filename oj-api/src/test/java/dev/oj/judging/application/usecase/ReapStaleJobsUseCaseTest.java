@@ -120,4 +120,25 @@ class ReapStaleJobsUseCaseTest {
         assertThat(fakes.calls).noneMatch(c -> c.contains("markDone") || c.contains("judgeRuns"));
         assertThat(events.published).isEmpty();
     }
+
+    /**
+     * ★ Một bài hết lượt mà ghi IE hỏng không được chặn các bài hết lượt xếp sau nó. Bản trước
+     * không bắt trong vòng lặp: bài đầu ném ở mọi chu kỳ thì bài sau quay vòng mãi — đúng thứ
+     * trần V16 sinh ra để chặn.
+     */
+    @Test
+    @DisplayName("★ bỏ cuộc một bài hỏng thì bài sau VẪN được ghi IE")
+    void bo_cuoc_mot_bai_hong_khong_chan_bai_sau() {
+        fakes.queue.exhausted = List.of(new ExhaustedJob(101L, 3, JudgingFakes.NOW),
+                new ExhaustedJob(102L, 3, JudgingFakes.NOW));
+        fakes.queue.releaseThrowsFor = 101L;
+
+        int reaped = useCase.reap();
+
+        assertThat(reaped).as("bài 102 vẫn phải được ghi").isEqualTo(1);
+        assertThat(fakes.calls.stream().filter("queue.releaseWithOptimisticLock"::equals))
+                .as("bài 102 phải tới lượt dù bài 101 vừa ném")
+                .hasSize(2);
+        assertThat(fakes.calls).containsOnlyOnce("submissions.markDone");
+    }
 }

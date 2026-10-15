@@ -6,9 +6,11 @@ import dev.oj.platform.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Đếm lượt đăng ký theo IP bằng Redis — FR-AUTH-01.
@@ -31,11 +33,20 @@ import java.time.Duration;
  * <p>Nói ngắn: mất một bài nộp là lỗi không sửa được; hoãn một lượt đăng ký thì người ta bấm
  * lại. Hai vế đó không cân nhau, nên hai class không được hỏng giống nhau.
  *
- * <h2>{@code INCR} rồi {@code EXPIRE}, và thứ tự ấy quan trọng</h2>
- * {@code INCR} trên khoá chưa tồn tại trả về 1 — đó là dấu hiệu duy nhất và đáng tin để biết
- * mình vừa mở một cửa sổ mới, nên chỉ khi ấy mới đặt hạn. Đặt hạn ở mọi lượt sẽ làm cửa sổ
- * trượt theo request cuối, và một bot gọi đều đặn sẽ giữ cửa sổ mở vĩnh viễn mà không bao giờ
- * chạm ngưỡng.
+ * <h2>★ Đếm và đặt hạn là MỘT lệnh, không phải hai</h2>
+ * Bản trước gọi {@code INCR}, rồi {@code EXPIRE} riêng khi giá trị bằng 1. Hai lệnh là có một
+ * khe giữa chúng: timeout 200ms của Redis, mạng chớp, hay tiến trình chết đúng lúc ấy thì khoá
+ * đã có số đếm mà <b>không có hạn</b> — và vì {@code EXPIRE} chỉ chạy khi đếm bằng 1, không
+ * lượt nào sau đó đặt lại hạn nữa. Mười lượt sau, IP ấy (với IPv6 là cả dải /64 — một phòng
+ * thi, một mạng 4G) bị chặn đăng ký <i>vĩnh viễn</i>, im lặng, cho tới khi ai đó xoá tay.
+ * {@code RedisDemTocDo} đã ghi đúng cái bẫy này; lớp này từng rơi vào nó.
+ *
+ * <p>Giờ cả hai bước nằm trong một script Lua, Redis chạy nguyên khối. Và điều kiện đặt hạn là
+ * "khoá <b>chưa có hạn</b>" chứ không phải "đếm bằng 1", nên khoá mồ côi do bản cũ để lại
+ * cũng tự lành ở lượt kế tiếp.
+ *
+ * <p>Vẫn <b>chỉ</b> đặt hạn khi chưa có: đặt ở mọi lượt sẽ làm cửa sổ trượt theo request cuối,
+ * và một bot gọi đều đặn sẽ giữ cửa sổ mở vĩnh viễn mà không bao giờ chạm ngưỡng.
  */
 @Component
 public class RedisRegistrationRateLimiter implements RegistrationRateLimiter {
@@ -43,6 +54,15 @@ public class RedisRegistrationRateLimiter implements RegistrationRateLimiter {
     private static final Logger log = LoggerFactory.getLogger(RedisRegistrationRateLimiter.class);
 
     private static final String KHOA_PREFIX = "oj:ratelimit:register:";
+
+    /** {@code PTTL} âm: khoá vừa sinh, hoặc mồ côi từ bản cũ. Cả hai đều cần hạn. */
+    private static final RedisScript<Long> DEM_VA_DAT_HAN = RedisScript.of("""
+            local dem = redis.call('INCR', KEYS[1])
+            if redis.call('PTTL', KEYS[1]) < 0 then
+                redis.call('PEXPIRE', KEYS[1], ARGV[1])
+            end
+            return dem
+            """, Long.class);
 
     private final StringRedisTemplate redis;
     private final int toiDa;
@@ -59,10 +79,7 @@ public class RedisRegistrationRateLimiter implements RegistrationRateLimiter {
         String khoa = KHOA_PREFIX + clientIp;
         Long dem;
         try {
-            dem = redis.opsForValue().increment(khoa);
-            if (dem != null && dem == 1L) {
-                redis.expire(khoa, cuaSo);
-            }
+            dem = redis.execute(DEM_VA_DAT_HAN, List.of(khoa), String.valueOf(cuaSo.toMillis()));
         } catch (RuntimeException e) {
             // Không ghi clientIp vào log ở mức WARN cùng với lỗi hạ tầng: dòng này nói về
             // Redis, không về người gọi. IP đã có trong audit_log của lượt đăng ký thành công.
@@ -78,8 +95,8 @@ public class RedisRegistrationRateLimiter implements RegistrationRateLimiter {
     /**
      * Thời gian còn lại của cửa sổ, để nói với người dùng khi nào thử lại được.
      *
-     * <p>{@code getExpire} trả về số âm khi khoá không có hạn hoặc vừa biến mất giữa hai lệnh.
-     * Cả hai đều hiếm và đều không đáng làm hỏng một response — rơi về đúng độ dài cửa sổ,
+     * <p>{@code getExpire} trả về số âm khi khoá vừa biến mất giữa hai lệnh (hết hạn đúng lúc
+     * ấy). Hiếm, và không đáng làm hỏng một response — rơi về đúng độ dài cửa sổ,
      * tức là ước lượng bi quan, và bi quan ở đây là an toàn.
      */
     private Duration conLai(String khoa) {

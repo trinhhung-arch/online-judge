@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.util.List;
 
 /**
  * ★ Chụp bảng xếp hạng đúng lúc {@code freeze_at} — FR-CON-05. Bước 5.8.
@@ -56,12 +57,23 @@ public class FreezeStandingsScheduler {
      */
     @Scheduled(fixedDelay = 5000)
     public void nhip() {
+        List<Contest> canDongBang;
         try {
-            for (Contest c : contests.canDongBang(clock.instant())) {
-                chup(c);
-            }
+            canDongBang = contests.canDongBang(clock.instant());
         } catch (RuntimeException e) {
-            log.error("Nhịp đóng băng hỏng — nuốt để bộ lập lịch không huỷ tác vụ", e);
+            log.error("Không đọc được danh sách kỳ thi cần đóng băng — thử lại ở nhịp sau", e);
+            return;
+        }
+        // Bắt theo TỪNG kỳ thi. Bọc cả vòng thì một kỳ thi ném ở mọi nhịp làm mọi kỳ thi xếp
+        // sau nó không được chụp — và chụp trễ là chụp kết quả SAU freeze_at, tức lộ đúng phần
+        // mà đóng băng sinh ra để giấu (javadoc lớp).
+        for (Contest c : canDongBang) {
+            try {
+                chup(c);
+            } catch (RuntimeException e) {
+                log.error("Đóng băng contest {} hỏng — các kỳ thi khác vẫn được chụp, contest "
+                        + "này thử lại ở nhịp sau", c.id(), e);
+            }
         }
     }
 

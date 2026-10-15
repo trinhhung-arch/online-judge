@@ -66,9 +66,10 @@ import java.util.Set;
  * mà lượt trước đã đẩy tới, và lô của nó rỗng. {@link #xoaTrang} của job dựng lại đứng sau
  * cùng khoá ấy, nên nó không xoá chen vào giữa một lô đang ghi.
  *
- * <h2>Nuốt ngoại lệ ở tầng ngoài — cùng lý do với {@code StaleJobReaper}</h2>
- * Spring huỷ hẳn một tác vụ {@code @Scheduled} nếu nó ném ra ngoài. Một kỳ thi có dữ liệu lạ
- * sẽ làm bảng xếp hạng của <b>mọi</b> kỳ thi khác đứng im cho tới lần deploy sau.
+ * <h2>Nuốt ngoại lệ theo TỪNG kỳ thi, không quanh cả vòng lặp</h2>
+ * Bản trước bọc try/catch quanh cả vòng: kỳ thi có id nhỏ ném lỗi ở mọi nhịp thì mọi kỳ thi
+ * xếp sau nó trong {@code canCapNhat} không bao giờ tới lượt — bảng xếp hạng của chúng đứng im
+ * mà không có dòng log nào nhắc tới chúng. Giờ một kỳ thi hỏng chỉ làm hỏng chính nó.
  */
 @Component
 public class StandingsUpdater {
@@ -102,13 +103,20 @@ public class StandingsUpdater {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${oj.contest.standings-interval}")
     public void nhip() {
+        List<Contest> canCapNhat;
         try {
-            for (Contest c : contests.canCapNhat(clock.instant(),
-                    properties.contest().standingsGrace())) {
-                capNhat(c);
-            }
+            canCapNhat = contests.canCapNhat(clock.instant(), properties.contest().standingsGrace());
         } catch (RuntimeException e) {
-            log.error("Nhịp StandingsUpdater hỏng — nuốt để bộ lập lịch không huỷ tác vụ", e);
+            log.error("Không đọc được danh sách kỳ thi cần cập nhật — thử lại ở nhịp sau", e);
+            return;
+        }
+        for (Contest c : canCapNhat) {
+            try {
+                capNhat(c);
+            } catch (RuntimeException e) {
+                log.error("Cập nhật bảng xếp hạng contest {} hỏng — các kỳ thi khác vẫn chạy "
+                        + "tiếp, contest này thử lại ở nhịp sau", c.id(), e);
+            }
         }
     }
 

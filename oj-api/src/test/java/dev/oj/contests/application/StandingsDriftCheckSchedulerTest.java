@@ -89,6 +89,20 @@ class StandingsDriftCheckSchedulerTest {
     }
 
     @Test
+    @DisplayName("★ lỗi KHÁC JobsException ở một kỳ thi cũng không chặn kỳ thi sau")
+    void loi_la_o_mot_ky_thi_khong_chan_ky_thi_khac() {
+        standings.canSoat = List.of(1L, 2L, 3L);
+        jobs.nemLoiLaChoContest = 2L;   // chẳng hạn mất kết nối database giữa chừng
+
+        nhip.nhip();
+
+        assertThat(jobs.daTao).extracting(v -> v.params().get("contestId"))
+                .as("bản trước chỉ bắt JobsException trong từng lượt, còn try/catch kia bọc "
+                        + "cả vòng — kỳ thi 3 không bao giờ được soát")
+                .containsExactly(1L, 3L);
+    }
+
+    @Test
     @DisplayName("★ repository ném thì NUỐT — Spring huỷ hẳn tác vụ @Scheduled nếu nó ném ra")
     void loi_khong_duoc_thoat_ra_ngoai() {
         standings.nem = true;
@@ -151,11 +165,15 @@ class StandingsDriftCheckSchedulerTest {
     private static final class JobGia implements JobRepository {
         final List<ViecDaTao> daTao = new ArrayList<>();
         Long nemChoContest;
+        Long nemLoiLaChoContest;
 
         @Override
         public long tao(JobType type, Map<String, Object> params, Long createdBy) {
             if (nemChoContest != null && nemChoContest.equals(params.get("contestId"))) {
                 throw JobsException.dangCoJobCungLoai(type);
+            }
+            if (nemLoiLaChoContest != null && nemLoiLaChoContest.equals(params.get("contestId"))) {
+                throw new IllegalStateException("mất kết nối database");
             }
             daTao.add(new ViecDaTao(type, params));
             return daTao.size();

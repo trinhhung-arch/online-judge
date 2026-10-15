@@ -110,14 +110,26 @@ public class ReapStaleJobsUseCase {
         return reclaimed.size();
     }
 
-    /** Mỗi bài hết lượt: một transaction ghi verdict riêng, qua khoá lạc quan. */
+    /**
+     * Mỗi bài hết lượt: một transaction ghi verdict riêng, qua khoá lạc quan.
+     *
+     * <p>★ Bắt lỗi theo TỪNG bài. Không bắt thì bài đầu danh sách ném ở mọi chu kỳ chặn mọi bài
+     * xếp sau nó — đúng loại "bài độc" mà trần V16 sinh ra để chặn, chỉ dời từ worker sang
+     * chính reaper. Bài hỏng thì transaction của riêng nó rollback, hàng của nó còn nguyên
+     * trong {@code judge_queue}, và chu kỳ sau thử lại.
+     */
     private int boCuoc() {
         int daGhi = 0;
         for (ExhaustedJob bai : queue.exhaustedJobs(config.maxReaps())) {
-            RecordJudgeResultUseCase.Outcome kq = verdicts.boCuoc(bai.submissionId(),
-                    bai.attempt(), config.maxReaps() + 1, bai.claimedAt());
-            if (kq == RecordJudgeResultUseCase.Outcome.RECORDED) {
-                daGhi++;
+            try {
+                RecordJudgeResultUseCase.Outcome kq = verdicts.boCuoc(bai.submissionId(),
+                        bai.attempt(), config.maxReaps() + 1, bai.claimedAt());
+                if (kq == RecordJudgeResultUseCase.Outcome.RECORDED) {
+                    daGhi++;
+                }
+            } catch (RuntimeException e) {
+                log.error("Bỏ cuộc submission {} attempt {} hỏng — các bài khác vẫn được xử lý, "
+                        + "bài này thử lại ở chu kỳ sau", bai.submissionId(), bai.attempt(), e);
             }
         }
         return daGhi;

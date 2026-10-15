@@ -128,6 +128,7 @@ class JudgingFakes {
         List<Long> expired = List.of();
         List<ExhaustedJob> exhausted = List.of();
         Integer maxReapsSeen;
+        Long releaseThrowsFor;
 
         @Override
         public void enqueue(long submissionId, int priority) {
@@ -144,6 +145,9 @@ class JudgingFakes {
         @Override
         public Optional<ReleasedSubmission> releaseWithOptimisticLock(long id, int attempt) {
             calls.add("queue.releaseWithOptimisticLock");
+            if (releaseThrowsFor != null && releaseThrowsFor == id) {
+                throw new IllegalStateException("dữ liệu lạ của submission " + id);
+            }
             return lockWins ? Optional.of(released) : Optional.empty();
         }
 
