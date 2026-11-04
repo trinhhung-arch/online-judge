@@ -169,12 +169,13 @@ public class GlobalExceptionHandler {
      * 400 chứ không phải 500 — worker nhìn 5xx sẽ retry mãi một payload không bao giờ hợp lệ,
      * còn 4xx thì nó biết là lỗi của chính nó và cho vào DLQ.
      *
-     * <p>Thông điệp gốc vẫn không ra ngoài: nó có thể chứa tên class và một đoạn payload —
-     * mà payload của {@code /api/v1/submissions} chính là mã nguồn người dùng.
+     * <p>Thông điệp gốc không ra ngoài, và <b>cũng không vào log</b>: nó chép một đoạn payload
+     * — mã nguồn người dùng ở {@code /api/v1/submissions}, mật khẩu ở {@code /api/v1/auth/*}.
+     * Log chỉ nhận loại lỗi, vị trí và tên trường; lý do ở {@link MoTaLoiAnToan}.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException e) {
-        log.warn("Không đọc được thân request: {}", rootMessage(e));
+        log.warn("Không đọc được thân request: {}", MoTaLoiAnToan.cua(e));
         return json(HttpStatus.BAD_REQUEST, ApiError.of(
                 "request.malformed", "Nội dung gửi lên không đọc được.", TraceIdFilter.current()));
     }
@@ -234,14 +235,6 @@ public class GlobalExceptionHandler {
         log.error("Lỗi ngoài dự kiến [traceId={}]", traceId, e);
         return json(HttpStatus.INTERNAL_SERVER_ERROR, ApiError.of(
                 "internal.error", GENERIC_MESSAGE, traceId));
-    }
-
-    private static String rootMessage(Throwable e) {
-        Throwable cur = e;
-        while (cur.getCause() != null && cur.getCause() != cur) {
-            cur = cur.getCause();
-        }
-        return cur.getClass().getSimpleName() + ": " + cur.getMessage();
     }
 
     // -------------------------------------------------------------------------
