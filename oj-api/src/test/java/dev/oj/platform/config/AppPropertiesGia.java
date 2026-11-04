@@ -99,6 +99,18 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
+    /** Cho {@code AesGcmSecretCipherTest} — nó cần một khoá TOTP khác để kiểm "khoá sai thì từ chối". */
+    public static AppProperties voiKhoaTotp(String khoa) {
+        var a = authMacDinh();
+        var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),
+                a.bcryptCost(), a.maxLoginFailures(), a.loginWindow(), a.lockout(),
+                a.maxRegistrationsPerIp(), a.registrationWindow(), khoa,
+                a.requireAdminTwoFactor(), a.bcryptConcurrency(), a.bcryptWait(),
+                a.loginMinInterval(), a.totpMaxFailures(), a.totpLockout(),
+                a.turnstile(), a.emailVerification());
+        return voi(internalMacDinh(), auth, submissionMacDinh());
+    }
+
     public static AuthProperties authMacDinh() {
         return new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),

@@ -62,4 +62,33 @@ class ClientIpTest {
 
         assertThat(ClientIp.khoaGioiHan(req)).isEqualTo("2001:db8:5:6:0:0:0:0/64");
     }
+
+    /**
+     * ★ GH-01 ({@code Claude outputs/identity-test-cases.md}): header chỉ đáng tin khi request đến
+     * từ {@code cloudflared} trên chính máy này. Một request nối thẳng vào cổng API (mạng LAN,
+     * cổng bị lộ) tự khai được mọi header — nhận chúng thì đổi một header là thoát mọi giới
+     * hạn theo IP, và còn đổ được lần khoá đăng nhập lên đầu một IP vô can.
+     * {@code bao-mat-plan.md} Đợt 3, kịch bản 10 định thử tay đúng chỗ này.
+     */
+    @Test
+    @DisplayName("★ KHÔNG qua tunnel mà mang CF-Connecting-IP / X-Forwarded-For giả → bỏ qua, đếm theo địa chỉ thật")
+    void ngoai_tunnel_khong_tin_header() {
+        var req = new MockHttpServletRequest();
+        req.setRemoteAddr("198.51.100.20");
+        req.addHeader("CF-Connecting-IP", "203.0.113.99");
+        req.addHeader("X-Forwarded-For", "203.0.113.98");
+
+        assertThat(ClientIp.cua(req)).isEqualTo("198.51.100.20");
+        assertThat(ClientIp.khoaGioiHan(req)).isEqualTo("198.51.100.20");
+    }
+
+    @Test
+    @DisplayName("qua tunnel, không có CF-Connecting-IP, X-Forwarded-For nhiều chặng → lấy chặng CUỐI, không lấy chặng client tự khai")
+    void xff_nhieu_chang_lay_chang_cuoi() {
+        var req = new MockHttpServletRequest();
+        req.setRemoteAddr("127.0.0.1");
+        req.addHeader("X-Forwarded-For", "203.0.113.98, 198.51.100.7");
+
+        assertThat(ClientIp.cua(req)).isEqualTo("198.51.100.7");
+    }
 }
