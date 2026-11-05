@@ -18,23 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Bật, xác nhận và tắt xác thực hai lớp — FR-AUTH-10 (V11).
- *
- * <h2>★ Ba bước, và bước giữa là bước không được bỏ</h2>
- * <ol>
- *   <li>{@link #batDau()} sinh bí mật, trả về URI để quét. 2FA <b>chưa</b> bật.</li>
- *   <li>{@link #xacNhan(String)} đòi một mã đúng rồi mới bật, và trả mã dự phòng.</li>
- *   <li>{@link #tat(String, String)} đòi cả mật khẩu lẫn mã.</li>
- * </ol>
- * Bật ngay ở bước 1 sẽ khoá người dùng ra ngoài mỗi khi họ quét hụt mã QR — và với tài
- * khoản ADMIN thì đó là khoá vĩnh viễn, vì không còn ai đủ quyền để gỡ.
- *
- * <h2>★ {@code @RequiresRole} mức USER, không phải ADMIN — cố ý</h2>
- * Nếu đòi ADMIN thì một ADMIN chưa bật 2FA sẽ bị {@code TwoFactorGate} chặn ở chính cái
- * endpoint dùng để bật 2FA. Đường vào phải nằm dưới cổng mà nó mở.
- */
-@RequiresRole  // mặc định USER: ai cũng bật được 2FA cho chính mình
+@RequiresRole
 @Service
 public class TwoFactorUseCase {
 
@@ -65,24 +49,10 @@ public class TwoFactorUseCase {
         this.issuer = "Online Judge";
     }
 
-    /**
-     * Trạng thái hiện tại, để giao diện biết vẽ nút "bật" hay khối "tắt".
-     *
-     * <p>Không gộp vào {@code GET /api/v1/me}: hồ sơ là dữ liệu hiển thị, còn đây là một
-     * câu hỏi về bảo mật. Gộp lại thì mọi chỗ đọc hồ sơ đều mang theo câu trả lời ấy, kể
-     * cả những chỗ không cần — và mỗi chỗ mang theo là một chỗ có thể lỡ log ra.
-     */
     public boolean daBat() {
         return checker.dangBat(currentUser.current().id());
     }
 
-    /**
-     * Bước 1 — sinh bí mật mới, chưa bật.
-     *
-     * @throws IdentityException {@code 2fa_da_bat} nếu đã bật rồi. Không âm thầm ghi đè:
-     *         ghi đè nghĩa là một request lạ thay được bí mật đang dùng thật và khoá chính
-     *         chủ ra ngoài
-     */
     @Transactional
     public BanNhap batDau() {
         var nguoi = currentUser.current();
@@ -93,12 +63,6 @@ public class TwoFactorUseCase {
         return new BanNhap(biMat, Totp.uriOtpauth(issuer, nguoi.handle(), biMat));
     }
 
-    /**
-     * Bước 2 — chứng minh quét được, rồi mới bật. Trả mã dự phòng ĐÚNG MỘT LẦN.
-     *
-     * @return mười mã dự phòng dạng thô. Server chỉ giữ bản băm, nên không có cách nào
-     *         xem lại chúng — mất là phải sinh bộ mới
-     */
     @Transactional
     public List<String> xacNhan(String ma) {
         var nguoi = currentUser.current();
@@ -111,7 +75,6 @@ public class TwoFactorUseCase {
         if (buoc == null) {
             throw IdentityException.totpSai();
         }
-        // Ghi luôn `buoc` làm last_step: mã vừa dùng để bật KHÔNG được dùng lại để đăng nhập.
         repository.bat(nguoi.id(), buoc);
 
         List<String> maDuPhong = sinhMaDuPhong();
@@ -121,24 +84,12 @@ public class TwoFactorUseCase {
         return maDuPhong;
     }
 
-    /**
-     * Bước 3 — tắt. Đòi CẢ mật khẩu lẫn mã hiện tại.
-     *
-     * <p>Chỉ đòi mật khẩu thì ai cướp được phiên đang mở sẽ tắt được 2FA mà không cần chạm
-     * vào điện thoại — tức là 2FA bảo vệ được mọi thứ trừ chính nó.
-     */
-    /**
-     * {@code noRollbackFor}: mã sai phải để lại DẤU trong bộ đếm của {@code TotpChecker} (V15).
-     * Cuộn lại cùng ngoại lệ thì đường "tắt 2FA" thành chỗ dò mã không giới hạn cho ai đã có
-     * phiên + mật khẩu. An toàn vì trước {@code checker.kiem} method này không ghi gì.
-     */
     @Transactional(noRollbackFor = IdentityException.class)
     public void tat(String matKhau, String ma) {
         var nguoi = currentUser.current();
         if (!checker.dangBat(nguoi.id())) {
             throw IdentityException.chuaBatHaiLop();
         }
-        // Ném saiThongTinDangNhap nếu mật khẩu sai — cùng câu chữ với đăng nhập.
         xacMinhMatKhau(nguoi.id(), matKhau);
         checker.kiem(nguoi.id(), ma);
 
@@ -146,12 +97,6 @@ public class TwoFactorUseCase {
         auditLog.ghi("TWO_FACTOR_DISABLED", "user", nguoi.id(), Map.of());
     }
 
-    /**
-     * Cùng đường mà {@code ChangePasswordUseCase} dùng: {@code timCredentialsTheoId}, chứ
-     * không phải một đường đọc băm mật khẩu mới. Javadoc của {@code Credentials} liệt kê
-     * đích danh những use-case được phép chạm vào nó — thêm chỗ này vào danh sách ấy là một
-     * quyết định có ý thức, vì tắt 2FA đòi hỏi chứng minh danh tính đúng như đổi mật khẩu.
-     */
     private void xacMinhMatKhau(long userId, String matKhau) {
         var c = users.timCredentialsTheoId(userId)
                 .orElseThrow(IdentityException::khongTimThayNguoiDung);
@@ -168,7 +113,6 @@ public class TwoFactorUseCase {
         return ra;
     }
 
-    /** Bí mật thô + URI để dựng mã QR ở phía client. Không bao giờ được ghi vào log. */
     public record BanNhap(String secretBase32, String otpauthUri) {
         @Override
         public String toString() {

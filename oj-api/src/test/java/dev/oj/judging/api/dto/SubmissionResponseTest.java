@@ -14,29 +14,16 @@ import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Hai điều mà tầng {@code api} quyết định, và cả hai đều là quyết định về rò rỉ. */
 class SubmissionResponseTest {
 
     private static final Instant T0 = Instant.parse("2026-03-01T10:00:00Z");
 
-    /**
-     * ★ Ranh giới rò rỉ, và nó ĐÃ DỊCH ở M3 — đó chính là điều test này ghi lại.
-     *
-     * <p>Ở M1, {@code failedTestOrdinal} vắng mặt ở <b>cả hai</b> response, vì
-     * {@code FeedbackPolicy} chưa tồn tại và trả con số đó ra là chạy bốn tuần với
-     * {@code feedback_level} bị bỏ qua hoàn toàn.
-     *
-     * <p>Ở M3 bộ lọc đã có, nên trang chi tiết được phép mang nó — <b>bản đã lọc</b>. Danh
-     * sách thì không: một endpoint trả 50 bài một lúc không có việc gì với chi tiết của từng
-     * bài, và mỗi trường thừa ở đó là 50 lần rò rỉ thay vì một.
-     */
     @Test
     @DisplayName("★ danh sách không mang chi tiết; chi tiết không mang source lẫn isolateStatus")
     void moi_response_chi_mang_dung_thu_no_duoc_phep_mang() {
         var chiTiet = fieldsOf(SubmissionDetailResponse.class);
         var danhSach = fieldsOf(SubmissionSummaryResponse.class);
 
-        // Cấm ở CẢ HAI, không có ngoại lệ nào và sẽ không bao giờ có (bất biến #1, #9).
         for (var fields : java.util.List.of(chiTiet, danhSach)) {
             assertThat(fields)
                     .as("mã nguồn và hash của nó không có việc gì ở response")
@@ -49,14 +36,11 @@ class SubmissionResponseTest {
                     .noneMatch(f -> f.contains("input") || f.contains("expected"));
         }
 
-        // Chỉ cấm ở DANH SÁCH.
         assertThat(danhSach)
                 .as("50 bài một trang, mỗi trường thừa là 50 lần rò rỉ thay vì một")
                 .noneMatch(f -> f.contains("failed") || f.contains("ordinal")
                         || f.contains("compile") || f.contains("log"));
 
-        // Và trang chi tiết PHẢI có chúng — nếu không thì FR-SUB-06 và FR-PROB-07 chỉ nằm
-        // trên giấy, đúng như tình trạng trước bước 3.11.
         assertThat(chiTiet).contains("failedtestordinal", "compilelog", "explanation");
     }
 
@@ -67,13 +51,6 @@ class SubmissionResponseTest {
                 .toList();
     }
 
-    /**
-     * FR-SUB-11 · P7 — cả hai response phải dùng <b>cùng một</b> bộ làm tròn.
-     *
-     * <p>Trước bước 3.12 có hai bản: một hàm riêng trong {@code SubmissionDetailResponse} và
-     * {@code RuntimeFormatter} vừa viết mà chưa ai gọi. Hai bản làm tròn cho cùng một con số
-     * là loại lỗi chỉ lộ ra khi ai đó sửa một bản.
-     */
     @Test
     void thoi_gian_chay_duoc_lam_tron_den_10ms() {
         var outcome = new JudgeOutcome(Verdict.AC, 100, 100, null, 234, 4096);
@@ -92,7 +69,7 @@ class SubmissionResponseTest {
         assertThat(response.status()).isEqualTo("QUEUED");
         assertThat(response.verdict()).isNull();
         assertThat(response.score()).isNull();
-        assertThat(response.timeMs()).isNull();      // KHÔNG phải 0 — xem SubmissionRowMappers
+        assertThat(response.timeMs()).isNull();
         assertThat(response.judgedAt()).isNull();
     }
 
@@ -108,7 +85,6 @@ class SubmissionResponseTest {
         assertThat(response.memoryKb()).isEqualTo(15_360);
     }
 
-    /** Request không được để mã nguồn lọt vào một dòng log (bất biến #9). */
     @Test
     void toString_cua_request_khong_chua_ma_nguon() {
         var request = new SubmitSolutionRequest(1L, "cpp20", "int main(){return 0;}");
@@ -116,12 +92,6 @@ class SubmissionResponseTest {
         assertThat(request.toString()).doesNotContain("main", "return");
     }
 
-    /**
-     * {@code failedTestOrdinal} truyền vào là bản ĐÃ LỌC — đúng như
-     * {@code GetSubmissionUseCase.detailById} trả ra. Ở đây để {@code null} với mọi ca, nên
-     * test này không vô tình khẳng định gì về bộ lọc; việc đó là của
-     * {@code FeedbackPolicyTest} và {@code SubmissionFeedbackIT}.
-     */
     private static dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission
             visible(SubmissionStatus status, JudgeOutcome outcome) {
         return new dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission(

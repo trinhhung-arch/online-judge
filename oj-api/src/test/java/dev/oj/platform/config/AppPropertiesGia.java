@@ -3,22 +3,6 @@ package dev.oj.platform.config;
 import java.time.Duration;
 import java.util.List;
 
-/**
- * {@link AppProperties} dựng sẵn cho test — <b>một chỗ duy nhất</b>.
- *
- * <h2>Vì sao file này tồn tại</h2>
- * {@code AppProperties} là một record bảy nhóm, và mọi compact constructor của nó đều ném lỗi
- * nếu con số không khớp hằng trong {@code oj-contract} hoặc không khớp một dòng trong bảng
- * giới hạn của {@code oj-api/CLAUDE.md} mục 8. Nghĩa là mỗi lớp test cần nó phải viết lại đủ
- * mười lăm dòng đúng chằn chặn — và ở M4 đã có <b>bốn bản sao</b> của khối ấy.
- *
- * <p>Cái giá của bốn bản sao không phải số dòng: mỗi lần thêm một nhóm thuộc tính mới (như
- * {@code Auth} vừa rồi) là bốn chỗ phải sửa, và trình biên dịch chỉ chỉ ra chúng lần lượt,
- * mỗi lần một lỗi.
- *
- * <p>Các con số dưới đây khớp {@code application.yml} của production, cố ý: một test dựng
- * cấu hình khác production là một test trả lời câu hỏi không ai hỏi.
- */
 public final class AppPropertiesGia {
 
     private AppPropertiesGia() {
@@ -28,25 +12,19 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), authMacDinh(), submissionMacDinh());
     }
 
-    /** Cho {@code InternalSecretFilterTest} — nó kiểm chính secret ấy. */
     public static AppProperties voiInternalSecret(String secret) {
         return voi(new AppProperties.Internal(secret), authMacDinh(), submissionMacDinh());
     }
 
-    /** Cho {@code JwtTest} — nó đổi khoá ký và mốc thời gian. */
     public static AppProperties voiAuth(AuthProperties auth) {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
-    /** Cho {@code SecurityHeadersFilterTest} — nó đổi chuỗi CSP và mốc HSTS. */
     public static AppProperties voiSecurityHeaders(SecurityHeadersProperties headers) {
         return voi(internalMacDinh(), authMacDinh(), submissionMacDinh(), headers);
     }
 
-    /** Cho {@code BCryptPasswordHasherTest} — nó đổi cost và trần song song. */
     public static AppProperties voiBcrypt(int soSuat, Duration cho) {
-        // cost GIỮ NGUYÊN 12: AuthProperties crash nếu khác, và guard đó bảo vệ toàn bộ mật
-        // khẩu đã băm trong database. Test này đo hàng rào, và nó chịu được 250ms mỗi lần băm.
         var auth = new AuthProperties("k".repeat(32), Duration.ofMinutes(15), Duration.ofDays(7),
                 12, 5, Duration.ofSeconds(60), Duration.ofMinutes(15),
                 10, Duration.ofHours(1), "t".repeat(32), true,
@@ -57,8 +35,6 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
-    /** Cho {@code TurnstileVerifierTest} — nó bật/tắt captcha và đổi URL siteverify. */
-    /** Trần API cho test bộ lọc: 0 = tắt hẳn xô đó. */
     public static AppProperties voiGioiHanApi(int moiNguoi, int moiIp) {
         var a = macDinh();
         return new AppProperties(a.submission(), a.judge(), a.page(), a.internal(), a.sse(),
@@ -77,17 +53,11 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
-    /**
-     * Xác minh email TẮT — khớp mặc định của {@code application.yml}, và là trạng thái đúng
-     * cho mọi test không nói về nó: bật nghĩa là mọi lượt đăng ký trong bộ test đều đi qua
-     * một {@code EmailSender}, và một fake quên nạp ở đâu đó sẽ hỏng một ca không liên quan.
-     */
     public static EmailVerificationProperties xacMinhEmailMacDinh() {
         return new EmailVerificationProperties(false, "", Duration.ofMinutes(30), 5,
                 Duration.ofSeconds(60));
     }
 
-    /** Cho các ca xác minh email — chúng cần nó BẬT, và đôi khi cần ngưỡng khác. */
     public static AppProperties voiXacMinhEmail(EmailVerificationProperties xacMinh) {
         var a = authMacDinh();
         var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),
@@ -99,7 +69,6 @@ public final class AppPropertiesGia {
         return voi(internalMacDinh(), auth, submissionMacDinh());
     }
 
-    /** Cho {@code AesGcmSecretCipherTest} — nó cần một khoá TOTP khác để kiểm "khoá sai thì từ chối". */
     public static AppProperties voiKhoaTotp(String khoa) {
         var a = authMacDinh();
         var auth = new AuthProperties(a.jwtSecret(), a.accessTtl(), a.refreshTtl(),

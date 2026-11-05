@@ -19,24 +19,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Bảng {@code contests}, {@code contest_problems}, {@code contest_registrations} (V7).
- * Pool {@code app}. Gắn/gỡ đề nằm ở {@link JdbcContestAuthoringRepository}.
- */
 @Repository
 public class JdbcContestRepository implements ContestRepository {
 
-    /**
-     * {@code (:sauId IS NULL OR id < :sauId)} thay vì nối chuỗi hai câu — đúng khuôn
-     * {@code duong_nong.sql} số 6, và là lý do bất biến #5 không cần ngoại lệ nào ở đây.
-     *
-     * <p>★ {@code ::bigint} là bắt buộc, không phải trang trí. Với một tham số bind, Postgres
-     * không có gì để suy ra kiểu của {@code :sauId} trong {@code :sauId IS NULL} — cả hai vế
-     * đều vô định — và nó từ chối ngay lúc parse với
-     * {@code could not determine data type of parameter}. Ép kiểu một lần ở đây trả lời câu
-     * hỏi ấy. Cùng họ với ghi chú {@code make_interval} ở {@code JdbcJudgeQueueRepository}:
-     * chỗ nào Postgres phải ĐOÁN kiểu của tham số thì chỗ đó sẽ hỏng.
-     */
     private static final String DANH_SACH = """
             SELECT id, slug, title, format, starts_at, ends_at, freeze_at, unfrozen_at,
                    penalty_minutes, registration_required, reveal_after_end, created_by
@@ -60,12 +45,6 @@ public class JdbcContestRepository implements ContestRepository {
              WHERE lower(slug) = lower(:slug)
             """;
 
-    /**
-     * Gồm cả kỳ thi <b>vừa kết thúc</b> trong khoảng ân hạn.
-     *
-     * <p>Bài nộp ở giây cuối vẫn đang chấm khi chuông reo, và verdict tới sau vài giây. Cắt
-     * đúng {@code ends_at} là bỏ rơi chúng — và chúng thường là những bài quyết định thứ hạng.
-     */
     private static final String CAN_CAP_NHAT = """
             SELECT id, slug, title, format, starts_at, ends_at, freeze_at, unfrozen_at,
                    penalty_minutes, registration_required, reveal_after_end, created_by
@@ -96,17 +75,6 @@ public class JdbcContestRepository implements ContestRepository {
             RETURNING id
             """;
 
-    /**
-     * {@code JOIN problems} chỉ để lấy {@code code}. Rẻ và không nằm trên đường nóng:
-     * {@code contest_problems} có vài chục dòng, và trang kỳ thi không phải
-     * {@code POST /submissions}.
-     *
-     * <p>★ {@code length(cp.label)} đứng TRƯỚC trong {@code ORDER BY} và không được rút gọn
-     * đi: sắp theo chữ cái trần thì {@code 'AA' < 'B'}, tức đề AA chen vào giữa A và B — sai
-     * với thứ tự ICPC. Và thứ tự này là <b>toàn phần</b>: {@code UNIQUE (contest_id, label)}
-     * cấm hai đề cùng nhãn, nên không có hai dòng nào bằng khoá sắp xếp và không cần
-     * tiebreaker. Đó là lý do V12 bỏ được cột {@code ordinal} — ADR 015.
-     */
     private static final String DE_CUA = """
             SELECT cp.problem_id, p.code, cp.label, cp.points,
                    cp.created_for_contest
@@ -230,7 +198,6 @@ public class JdbcContestRepository implements ContestRepository {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    /** Package-private: {@link JdbcContestAuthoringRepository} đọc cùng hình dạng dòng. */
     static final RowMapper<Contest> MAPPER = (rs, i) -> new Contest(
             rs.getLong("id"),
             rs.getString("slug"),

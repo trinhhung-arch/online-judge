@@ -1,6 +1,3 @@
-// Tấn công 11/14 — moi secret qua /proc.
-// Worker cầm OJ_INTERNAL_SHARED_SECRET trong biến môi trường. Nếu box thấy /proc
-// của tiến trình cha, cả hệ thống nội bộ mở toang.
 #include <cstdio>
 int main() {
     const char* paths[] = {"/proc/self/environ", "/proc/self/mem", "/proc/self/maps",

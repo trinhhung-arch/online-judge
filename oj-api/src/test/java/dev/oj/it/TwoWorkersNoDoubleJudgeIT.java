@@ -21,13 +21,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ <b>R2 — 0 bài bị chấm hai lần.</b> Hai worker, 20 bài, chạy thật trên Postgres.
- *
- * <p>Đây là test mà H2 không chạy được: nó phụ thuộc {@code FOR UPDATE SKIP LOCKED}. Bỏ mệnh
- * đề đó đi thì hai worker sẽ xếp hàng chờ nhau (throughput sập về một luồng) hoặc cùng nhận
- * một dòng (chấm trùng) — và cả hai đều không hiện ra trong unit test với repository giả.
- */
 class TwoWorkersNoDoubleJudgeIT extends PostgresIT {
 
     private static final int SUBMISSIONS = 20;
@@ -41,9 +34,6 @@ class TwoWorkersNoDoubleJudgeIT extends PostgresIT {
     @DisplayName("★ 2 worker + 20 bài → mỗi bài được chấm ĐÚNG MỘT LẦN")
     void hai_worker_khong_cham_trung_bai_nao() throws Exception {
         for (int i = 0; i < SUBMISSIONS; i++) {
-            // FR-SUB-08 cho phép 1 bài/10s/người — một quy tắc viết cho con người. Hai mươi
-            // bài trong một mili giây là điều kiện của phép thử này, không phải hành vi thật.
-            // Xem quenLuotNopVuaRoi(): chốt vẫn chạy, chỉ dấu vết lượt trước bị xoá.
             quenLuotNopVuaRoi(USER_ID);
             submitSolution.submit(new SubmitSolutionUseCase.Command(
                     PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){ return " + i + "; }"));
@@ -63,14 +53,9 @@ class TwoWorkersNoDoubleJudgeIT extends PostgresIT {
             t.join(TimeUnit.MINUTES.toMillis(1));
         }
 
-        // 1. Không bài nào được ghi verdict hai lần — khoá chính (submission_id, attempt)
-        //    và khoá lạc quan phải cùng đồng ý về điều đó.
         assertThat(judged).hasSize(SUBMISSIONS).doesNotHaveDuplicates();
-        // 2. judge_runs có đúng 20 dòng: không thừa (chấm trùng), không thiếu (mất bài).
         assertThat(countJudgeRuns()).isEqualTo(SUBMISSIONS);
-        // 3. Hàng đợi rỗng: mỗi hàng bị xoá đúng trong transaction ghi verdict của nó.
         assertThat(queueDepth()).isZero();
-        // 4. Mọi bài đều DONE — 0 bài mất (R1).
         assertThat(countByStatus("DONE")).isEqualTo(SUBMISSIONS);
     }
 
@@ -85,7 +70,7 @@ class TwoWorkersNoDoubleJudgeIT extends PostgresIT {
         while (true) {
             Optional<JudgeJobDto> job = claimJudgeJob.claim(request);
             if (job.isEmpty()) {
-                return;     // hàng đợi rỗng -> hết việc
+                return;
             }
             var outcome = recordJudgeResult.record(accepted(job.get()));
             if (outcome == RecordJudgeResultUseCase.Outcome.RECORDED) {

@@ -19,20 +19,6 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
-/**
- * ★ Bất biến #9 ở nhánh "thân request không đọc được" — {@code identity-test-cases.md} RR-03.
- *
- * <p>Bộ phân tích JSON chép chính dữ liệu người gửi vào câu lỗi: Jackson 3 viết
- * {@code Unrecognized token 'hunter2'} cho thân {@code {"password":hunter2}} (thiếu ngoặc kép),
- * và {@code from String "…"} cho một giá trị enum sai. Spring còn chép câu ấy vào câu của chính
- * nó ({@code JSON parse error: …}). Bản cũ của {@code handleUnreadable} ghi câu lỗi của nguyên
- * nhân sâu nhất ra log WARN — tức là ghi mật khẩu.
- *
- * <p>Ngoại lệ ở đây do <b>chính bộ chuyển đổi JSON của Spring</b> dựng ra, không dựng tay:
- * dựng tay thì test chỉ chứng minh được điều người viết test nghĩ Jackson sẽ làm. Bản
- * {@code LogIdentityKhongLoBiMatIT} đo cùng điều này qua HTTP thật; lớp này đo nó mà không cần
- * Docker.
- */
 class JsonHongKhongLoVaoLogTest {
 
     private static final String MOC = "MOC_BI_MAT_5e81c4";

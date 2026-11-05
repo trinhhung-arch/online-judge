@@ -1,23 +1,6 @@
-/**
- * Thanh điều hướng và tiện ích chung — Bước 4.12.
- *
- * ★ `chu()` là hàm quan trọng nhất file này.
- *
- * Mọi chuỗi đến từ server đi vào DOM qua `textContent`, không qua `innerHTML`. Tên đề, tên
- * người dùng, thông báo lỗi — tất cả đều là dữ liệu người khác nhập. Một chỗ dùng `innerHTML`
- * là một lỗ XSS, và trang này giữ access token trong localStorage.
- *
- * Ngoại lệ duy nhất: `statementHtml`, đã được server render và escape bằng
- * `CommonMarkStatementRenderer.escapeHtml(true)`. Nó được đánh dấu rõ ở chỗ dùng.
- *
- * Link "bỏ qua tới nội dung chính" KHÔNG dựng ở đây mà nằm trong HTML tĩnh của từng trang —
- * thứ giúp người dùng bàn phím không được phụ thuộc vào việc module này nạp thành công.
- */
-
 import { phien, xoaPhien, goi } from './api.js';
 import { DUONG } from './duong-dan.js';
 
-/** Tạo một phần tử với văn bản AN TOÀN. */
 export function chu(the, vanBan, lop) {
     const el = document.createElement(the);
     if (vanBan !== undefined && vanBan !== null) el.textContent = String(vanBan);
@@ -25,21 +8,6 @@ export function chu(the, vanBan, lop) {
     return el;
 }
 
-/**
- * ★ Thứ bậc vai trò, phản chiếu {@code Role.atLeast} của server.
- *
- * Server không kiểm bằng phép so BẰNG: `@RequiresRole(SETTER)` chấp nhận cả ADMIN, vì
- * `Role.atLeast` so theo thứ tự USER < SETTER < ADMIN. Giao diện viết `role === 'ADMIN'`
- * thì chặt HƠN server — và cái sai theo hướng đó không ai báo, vì không có lỗi nào cả:
- * người dùng chỉ đơn giản không thấy cái nút mà lẽ ra họ được bấm.
- *
- * Đó chính là lỗi đã xảy ra ở Đợt 2 — SETTER không tạo được kỳ thi trên giao diện dù
- * `POST /api/v1/contests` trả 201 cho họ.
- *
- * Đây KHÔNG phải phân quyền. Chốt thật nằm ở use-case (bất biến #11); hàm này chỉ quyết
- * định có bày ra một nút hay không, và bày ra một nút chắc chắn nhận 403 là nói dối về
- * những gì người ta làm được.
- */
 const THU_BAC = ['USER', 'SETTER', 'ADMIN'];
 
 export function vaiTroItNhat(canCo) {
@@ -47,7 +15,6 @@ export function vaiTroItNhat(canCo) {
     if (!dangCo) return false;
     const a = THU_BAC.indexOf(dangCo);
     const b = THU_BAC.indexOf(canCo);
-    // Vai trò lạ (server thêm vai trò mới mà quên file này) → từ chối, không đoán.
     return a >= 0 && b >= 0 && a >= b;
 }
 
@@ -62,13 +29,8 @@ export function veThanh() {
 
     const nav = chu('nav');
     nav.setAttribute('aria-label', 'Điều hướng chính');
-    // Trang cần đăng nhập chỉ hiện khi đã đăng nhập: một link dẫn thẳng tới màn hình
-    // đăng nhập là một link nói dối về nơi nó dẫn tới.
     const muc = [['/', 'Đề bài'], ['/contests.html', 'Kỳ thi']];
     if (p) muc.push(['/bai-nop.html', 'Bài nộp của tôi']);
-    // Trang theo vai trò. Đây KHÔNG phải phân quyền — mỗi use-case tự kiểm (bất biến #11).
-    // Nó chỉ tránh bày ra một link mà bấm vào là 403: mời rồi từ chối là một cách nói dối
-    // về những gì người ta làm được.
     if (vaiTroItNhat('SETTER')) muc.push(['/ra-de.html', 'Soạn đề']);
     if (vaiTroItNhat('ADMIN')) {
         muc.push(['/quan-tri.html', 'Vận hành']);
@@ -79,8 +41,6 @@ export function veThanh() {
     for (const [href, nhan] of muc) {
         const a = chu('a', nhan);
         a.href = href;
-        // ★ aria-current: người dùng trình đọc màn hình biết mình đang ở đâu trong menu.
-        // Rẻ, và là khác biệt giữa "một danh sách link" và "một thanh điều hướng".
         if (location.pathname === href) a.setAttribute('aria-current', 'page');
         nav.append(a);
     }
@@ -111,20 +71,11 @@ async function dangXuat() {
             await goi(DUONG.auth.dangXuat, { method: 'POST', body: { refreshToken: p.refreshToken } });
         }
     } catch {
-        // Đăng xuất là idempotent ở server, và frontend xoá token dù server trả gì.
-        // Giữ người dùng lại trong một phiên họ vừa nói là muốn rời khỏi là hành vi sai.
     }
     xoaPhien();
     location.href = '/';
 }
 
-/**
- * Hiện một thông báo cho người đọc màn hình VÀ cho người nhìn.
- *
- * Vùng thông báo mang `aria-live="polite"` trong HTML, nên chỉ cần đổi `textContent` là
- * trình đọc màn hình đọc lên. Đây là điều kiện để a11y mức A có nghĩa trên một trang mà
- * kết quả đến bất đồng bộ.
- */
 export function bao(o, thongDiep, loai = '') {
     o.textContent = thongDiep || '';
     o.className = `thong-bao ${loai}`;

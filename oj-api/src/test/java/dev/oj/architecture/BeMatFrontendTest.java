@@ -22,33 +22,6 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Giao diện chỉ được gọi những đường dẫn CÓ THẬT — Bước G1.
- *
- * <h2>Lỗ hổng mà ca này bịt</h2>
- * Giao diện là trang tĩnh, không build step, không type checking ({@code docs/giao-dien-plan.md}
- * mục 1.1). Cái giá của quyết định đó là: một đường dẫn viết sai trong JavaScript
- * <b>không có gì bắt được</b>. Backend đổi tên một endpoint, cả hai bên vẫn "biên dịch", test
- * hai bên vẫn xanh vì mỗi bên tự nói chuyện với chính mình, và triệu chứng duy nhất là một
- * nút không làm gì cả — phát hiện được bằng cách có người bấm thử.
- *
- * <p>Đây là đúng loại lỗi mà {@code HopDongVanHanhTest} sinh ra để chặn ở biên
- * API ↔ worker, và {@code HttpSurfaceTest} chặn ở biên hợp đồng ↔ controller. Biên thứ ba —
- * controller ↔ trình duyệt — cho tới giờ không ai canh.
- *
- * <h2>Hai luật, và luật thứ hai là thứ giữ cho luật thứ nhất có nghĩa</h2>
- * <ol>
- *   <li>Mọi đường dẫn khai trong {@code js/duong-dan.js} phải khớp một
- *       {@code @RequestMapping} có thật.</li>
- *   <li><b>Không file JS nào khác được chứa một đường dẫn API.</b> Thiếu luật này thì luật
- *       một chỉ canh những đường dẫn ai đó nhớ khai vào đúng chỗ — tức là canh những đường
- *       dẫn vốn đã ít sai nhất.</li>
- * </ol>
- *
- * <h2>Vì sao đọc văn bản chứ không chạy JavaScript</h2>
- * Chạy được thì cần Node, và {@code README} nói rõ CI không có Node. Đọc văn bản bắt được
- * đúng thứ cần bắt — một chuỗi đường dẫn — với chi phí bằng không.
- */
 class BeMatFrontendTest {
 
     private static final Path THU_MUC_JS =
@@ -56,11 +29,9 @@ class BeMatFrontendTest {
 
     private static final Path KHAI_BAO = THU_MUC_JS.resolve("duong-dan.js");
 
-    /** {@code '/api/v1/...'}, {@code "/api/v1/..."} hoặc {@code `/api/v1/...`}. */
     private static final Pattern DUONG_DAN =
             Pattern.compile("[\"'`](/api/v1/[^\"'`\\s]*)[\"'`]");
 
-    /** Chỉ để phát hiện "có nhắc tới API" ở luật 2 — lỏng hơn, cố ý. */
     private static final Pattern NHAC_TOI_API = Pattern.compile("/api/v1/");
 
     private static final JavaClasses CLASSES = new ClassFileImporter()
@@ -113,19 +84,6 @@ class BeMatFrontendTest {
                 .isEmpty();
     }
 
-    /**
-     * ★ Thứ bậc vai trò ở giao diện phải trùng {@link dev.oj.platform.security.Role}.
-     *
-     * <h2>Lỗi có thật mà hai ca này canh</h2>
-     * Server kiểm quyền bằng {@code Role.atLeast} — {@code @RequiresRole(SETTER)} chấp nhận
-     * cả ADMIN. Giao diện Đợt 2 viết {@code phien().role === 'ADMIN'} để bày biểu mẫu tạo kỳ
-     * thi, tức là <b>chặt hơn server</b>: một SETTER gọi thẳng API nhận 201, nhưng trên trang
-     * thì không có nút nào để bấm.
-     *
-     * <p>Sai theo hướng ấy không ai báo. Không có lỗi, không có 403, không có dòng log —
-     * người dùng chỉ đơn giản không thấy thứ họ được phép làm, và kết luận là tính năng chưa
-     * viết xong.
-     */
     @Test
     @DisplayName("★ thứ bậc vai trò trong khung.js trùng đúng enum Role của server")
     void thu_bac_vai_tro_trung_server() throws IOException {
@@ -167,8 +125,6 @@ class BeMatFrontendTest {
                 .isEmpty();
     }
 
-    // -------------------------------------------------------------------------
-
     private static Set<String> docDuongDan(String ma) {
         Set<String> ra = new TreeSet<>();
         Matcher m = DUONG_DAN.matcher(boChuThich(ma));
@@ -178,12 +134,6 @@ class BeMatFrontendTest {
         return ra;
     }
 
-    /**
-     * Đưa mọi đoạn thay thế về một dấu {@code *}.
-     *
-     * <p>Phía JS là {@code ${...}} của template literal, phía Java là {@code {id}} của
-     * {@code @PathVariable}. Hai cú pháp, một ý nghĩa: "chỗ này là biến".
-     */
     private static String chuanHoa(String duong) {
         String d = duong.replaceAll("\\$\\{[^}]*\\}", "*");
         return Stream.of(d.split("/", -1))
@@ -192,7 +142,6 @@ class BeMatFrontendTest {
                 .orElse(d);
     }
 
-    /** Bỏ chú thích khối và chú thích dòng — javadoc ở đây nhắc đường dẫn rất nhiều. */
     private static String boChuThich(String ma) {
         String khongKhoi = ma.replaceAll("(?s)/\\*.*?\\*/", "");
         return Stream.of(khongKhoi.split("\n", -1))
@@ -247,7 +196,6 @@ class BeMatFrontendTest {
         return List.of();
     }
 
-    /** {@code *} khớp đúng một đoạn — không khớp xuyên qua dấu gạch chéo. */
     private static boolean khop(String mau, String that) {
         String[] a = mau.split("/", -1);
         String[] b = that.split("/", -1);

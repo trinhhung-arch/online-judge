@@ -11,18 +11,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Đầu vào hỏng ở các endpoint quản trị tài khoản và hồ sơ phải ra 400 với mã ổn định, không
- * ra 500. Thiết kế: {@code Claude outputs/identity-test-cases.md}, ca QT-05 và HS-03.
- *
- * <p>500 ở đây là hai lỗi một lúc: người dùng nhận "có lỗi phía hệ thống" cho một lỗi của chính
- * họ, và bảng theo dõi lỗi máy chủ đầy những sự cố không có thật — đúng kiểu phân loại sai đã
- * từng làm một sự cố MinIO biến mất khỏi mọi biểu đồ (README, mục M6). Mỗi ca còn kiểm rằng dữ
- * liệu hỏng không chạm vào dữ liệu: tài khoản đích và hồ sơ giữ nguyên.
- *
- * <p>Gọi bằng ADMIN dù Spring đọc thân request trước khi use-case kiểm quyền: đo đúng thứ một
- * quản trị viên thật nhận được.
- */
 class IdentityDauVaoHongHttpIT extends HttpIT {
 
     private static final String VAI_TRO = "/api/v1/admin/users/" + SETTER_ID + "/role";
@@ -70,9 +58,6 @@ class IdentityDauVaoHongHttpIT extends HttpIT {
         assertThat(tenHienThi(USER_ID)).isEqualTo("Người dùng dev");
     }
 
-    // =========================================================================
-
-    /** Thân JSON viết tay — các ca này cần chính những chuỗi một client hỏng sẽ gửi. */
     private ResponseEntity<Map<String, Object>> gui(HttpMethod phuongThuc, String duongDan,
                                                     String token, String thanJson) {
         var spec = http.method(phuongThuc).uri(duongDan)

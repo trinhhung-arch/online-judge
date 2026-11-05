@@ -21,20 +21,6 @@ import java.time.ZoneOffset;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Ba use-case <b>đổi trạng thái một tài khoản</b>: đổi mật khẩu (FR-AUTH-04), ẩn danh hoá
- * (FR-AUTH-07), và quản trị vai trò/vô hiệu hoá (FR-ADM-03, Bước 6.6).
- *
- * <h2>Vì sao tách khỏi {@code IdentityUseCasesTest}</h2>
- * Trần 300 dòng của {@code CLAUDE.md} mục 7 là lý do trực tiếp, nhưng ranh giới thì không tuỳ
- * tiện: ba nhóm ca ở đây có <b>chung một bất biến</b> mà đăng ký và đăng nhập không có —
- * <i>đổi thứ gì thuộc về một tài khoản thì phải thu hồi mọi phiên của tài khoản đó</i>.
- *
- * <p>Access token sống 15 phút và không tra database ở mỗi request; đó là cái giá đã chọn khi
- * chọn JWT. Nên "thu hồi refresh token" là toàn bộ thứ kiến trúc này cho phép, và nó biến
- * "vô hạn" thành "tối đa 15 phút". Mọi ca trong file này kiểm đúng điều đó ở một tình huống
- * khác nhau.
- */
 class AccountManagementUseCasesTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-08-29T10:00:00Z");
@@ -47,10 +33,6 @@ class AccountManagementUseCasesTest {
     private IdentityFakes.BamGia hasher;
     private IdentityFakes.HaiLopGia haiLop;
 
-    /**
-     * Không bật 2FA cho ai trong các ca cũ, nên nó là một cổng luôn mở — trừ ca 2FA
-     * riêng bên dưới, nơi test tự nạp dữ liệu vào `haiLop`.
-     */
     private dev.oj.identity.application.TotpChecker totpChecker() {
         return new dev.oj.identity.application.TotpChecker(
                 haiLop, new IdentityFakes.MaHoaGia(), dev.oj.platform.config.AppPropertiesGia.macDinh(),
@@ -82,9 +64,6 @@ class AccountManagementUseCasesTest {
         return users.them(handle, handle + "@oj.test", role, UserStatus.ACTIVE,
                 hasher.bam("matkhau-tot-123"));
     }
-
-
-    // =========================================================================
 
     @Nested
     @DisplayName("FR-AUTH-04 · đổi mật khẩu")
@@ -133,8 +112,6 @@ class AccountManagementUseCasesTest {
                     .hasFieldOrPropertyWithValue("code", "identity.mat_khau_qua_ngan");
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("FR-AUTH-07 · ẩn danh hoá")
@@ -198,8 +175,6 @@ class AccountManagementUseCasesTest {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-ADM-03 · đổi vai trò và vô hiệu hoá — Bước 6.6")
     class QuanTriTaiKhoan {
@@ -210,14 +185,6 @@ class AccountManagementUseCasesTest {
                     users, tokens, nhatKy);
         }
 
-        /**
-         * ★ Ca quan trọng nhất của FR-ADM-03.
-         *
-         * <p>Hạ vai trò mà không thu hồi phiên nghĩa là người đó <b>giữ quyền cũ vô hạn</b>:
-         * access token sống 15 phút và không tra database, còn refresh token thì đổi lấy một
-         * access token mới mãi mãi. Thu hồi biến "vô hạn" thành "tối đa 15 phút" — và 15 phút
-         * là trần không xoá được của việc chọn JWT, không phải một thiếu sót.
-         */
         @Test
         @DisplayName("★ đổi vai trò thì thu hồi MỌI phiên của người đó")
         void doi_vai_tro_thi_thu_hoi_phien() {
@@ -245,7 +212,6 @@ class AccountManagementUseCasesTest {
             assertThat(users.theoId.get(nanNhan).status()).isEqualTo(UserStatus.DISABLED);
             assertThat(tokens.timTheoBam(RefreshTokenSecret.bam(phien.refreshToken())))
                     .get().extracting("revokedAt").isNotNull();
-            // Chặn cả đường vào mới: Credentials.canLogIn() đọc status.
             assertThatThrownBy(() ->
                     dangNhap().thucHien("gian-lan-7", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
@@ -265,11 +231,6 @@ class AccountManagementUseCasesTest {
                     .isNotNull();
         }
 
-        /**
-         * Hệ thống có thể còn đúng <b>một</b> ADMIN. Tự hạ vai trò hoặc tự vô hiệu hoá khi đó
-         * khoá vĩnh viễn mọi đường quản trị — không có "quên mật khẩu" nào lấy lại được một
-         * vai trò. Cùng lập luận với {@code AnonymizeAccountUseCase}.
-         */
         @Test
         @DisplayName("★ ADMIN không tự hạ vai trò và không tự vô hiệu hoá mình")
         void khong_tu_thao_tac_voi_minh() {
@@ -286,11 +247,6 @@ class AccountManagementUseCasesTest {
             assertThat(users.theoId.get(admin).status()).isEqualTo(UserStatus.ACTIVE);
         }
 
-        /**
-         * Tài khoản đã ẩn danh hoá không nhận lại được vai trò nào. Điều kiện nằm trong câu
-         * {@code UPDATE} chứ không phải một câu {@code if} ở use-case — nên một đường ghi thứ
-         * hai sau này cũng không đi vòng qua được.
-         */
         @Test
         @DisplayName("tài khoản đã ẩn danh hoá thì không đổi vai trò được")
         void da_an_danh_thi_khong_doi_duoc() {

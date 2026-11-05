@@ -12,20 +12,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bước 6.9 — <b>bài test quan trọng nhất sau Bước 6.4: kill RabbitMQ.</b>
- *
- * <p>{@code docs/build-order.md} nói thẳng điều đó. Ở tầng integration nó được chứng minh bằng
- * việc <b>cả bộ IT chạy xanh mà không có broker nào</b> ({@code PostgresIT} tắt
- * {@code oj.judge.rabbit.enabled}). File này kiểm phần còn lại, thứ một IT không nhìn thấy:
- * <i>hỏng cho đúng thì tốn bao nhiêu thời gian</i>.
- *
- * <h2>Vì sao "nuốt ngoại lệ" chưa đủ, và ca thứ hai ở đây là ca thật sự quan trọng</h2>
- * {@code SubmitSolutionUseCase.publishQuietly} đã bọc try/catch từ M1, nên broker chết thì bài
- * nộp vẫn <b>đúng</b>. Nhưng nó không vì thế mà <b>nhanh</b>: mỗi lần nộp vẫn phải mở một kết
- * nối TCP và chờ nó hỏng. Với timeout mặc định 60 giây, P2 không còn là 300ms mà là một sự cố
- * toàn hệ thống — và không có test nào ở tầng trên bắt được, vì kết quả vẫn đúng.
- */
 class RabbitJudgeJobPublisherTest {
 
     @Test
@@ -42,14 +28,6 @@ class RabbitJudgeJobPublisherTest {
                 RabbitJudgeJobPublisher.HANG_REJUDGE + "=78");
     }
 
-    /**
-     * ★ Cầu dao. Không có nó thì mỗi bài nộp trả giá một lần timeout kết nối trong suốt thời
-     * gian broker chết — 200ms là hai phần ba ngân sách 300ms của P2.
-     *
-     * <p>Cầu dao ở đây rẻ vì <b>mất một tiếng chuông không mất gì</b>: bài đã nằm trong
-     * {@code judge_queue}, worker thấy nó ở nhịp poll kế tiếp. Đây là chỗ hiếm hoi mà "thôi
-     * không thử" đúng hơn "thử lại".
-     */
     @Test
     @DisplayName("★ broker chết: thử ĐÚNG MỘT LẦN rồi thôi, không thử lại ở mỗi bài nộp")
     void cau_dao_mo_sau_lan_hong_dau() {
@@ -73,16 +51,10 @@ class RabbitJudgeJobPublisherTest {
         amqp.hong = true;
         var publisher = new RabbitJudgeJobPublisher(amqp);
 
-        // Không assertThatNoException: gọi thẳng là đủ, ném thì test đỏ ngay tại đây.
         publisher.publishEnqueued(1L);
         publisher.publishRejudgeEnqueued(2L);
     }
 
-    /**
-     * Cầu dao phải <b>đóng lại</b> khi broker sống. Một cầu dao chỉ mở là một cầu dao biến
-     * một sự cố mười giây thành một sự cố vĩnh viễn — và triệu chứng của nó (độ trễ chấm bài
-     * lặng lẽ quay về nhịp poll) không có ngoại lệ nào và không có test nào ở tầng trên bắt được.
-     */
     @Test
     @DisplayName("broker sống lại thì cầu dao đóng và chuông kêu tiếp")
     void cau_dao_dong_lai_khi_broker_song() throws Exception {
@@ -93,9 +65,6 @@ class RabbitJudgeJobPublisherTest {
         publisher.publishEnqueued(1L);
         assertThat(amqp.daGui).isEmpty();
 
-        // Cầu dao nghỉ 10 giây trong hiện thực. Không chờ thật — dựng một publisher mới là
-        // tương đương với "đã hết thời gian nghỉ", và một test chờ mười giây là một test sẽ
-        // bị đánh dấu @Disabled.
         var sauKhiHoiPhuc = new RabbitJudgeJobPublisher(amqp);
         amqp.hong = false;
         sauKhiHoiPhuc.publishEnqueued(2L);
@@ -103,7 +72,6 @@ class RabbitJudgeJobPublisherTest {
         assertThat(amqp.daGui).containsExactly(RabbitJudgeJobPublisher.HANG_LIVE + "=2");
     }
 
-    /** {@link AmqpTemplate} giả — chỉ một phương thức publisher dùng tới. */
     private static final class AmqpGia implements AmqpTemplate {
 
         final List<String> daGui = new ArrayList<>();
@@ -120,7 +88,6 @@ class RabbitJudgeJobPublisherTest {
             daGui.add(routingKey + "=" + message);
         }
 
-        // ---- phần còn lại của interface: không dùng tới ----
         @Override
         public void send(Message message) {
             throw new UnsupportedOperationException();

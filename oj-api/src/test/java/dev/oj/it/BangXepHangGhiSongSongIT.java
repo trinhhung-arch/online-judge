@@ -26,33 +26,8 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ <b>Hai lượt ghi bảng xếp hạng cùng một kỳ thi không được chen vào nhau.</b> FR-CON-04, FR-CON-08.
- *
- * <p>{@code StandingsUpdater.capNhat} đọc watermark, đọc lô bài, đọc kết quả từng đề, rồi mới
- * ghi. Hai lượt chạy cùng lúc — nhịp 2 giây và {@code RebuildStandingsJob}, hoặc hai instance
- * API ({@code nfrplan.md} Phần 14) — từng đọc chung một watermark, và lượt đến sau áp lại cả
- * lô lên trạng thái mà lượt trước vừa ghi. Với ICPC, một lần sai thành hai: thí sinh mất thêm
- * {@code penalty_minutes} cho một bài họ chỉ nộp một lần, và không ai thấy cho tới khi có
- * người khiếu nại thứ hạng.
- *
- * <h2>Vì sao phải dàn cảnh chứ không chỉ thả hai luồng rồi cầu may</h2>
- * Cửa sổ của race này rộng vài mili giây; thả tự do thì test xanh gần như mọi lần trên bản lỗi,
- * tức là không chứng minh được gì. {@link DiemHenSql} dừng một luồng ngay trước câu đọc kết quả
- * từng đề ({@link #CAU_DOC_KET_QUA}) cho tới khi luồng kia đã chen vào — hoặc tới khi luồng
- * kia <b>đứng chờ khoá</b>, dấu hiệu bản đã sửa đang xếp hai lượt thành hàng. Cả hai ca race
- * dưới đây đều ĐỎ trên bản trước khi có khoá: {@code 2} lần sai thay vì 1, và {@code 0} thay vì 1.
- *
- * <h2>Kỳ thi được giấu khỏi nhịp 2 giây, có chủ ý</h2>
- * {@code oj.contest.standings-interval} không đặt được quá 2 giây ({@code ContestProperties}),
- * nên bộ lập lịch vẫn chạy. Nếu nó xử lý trước chính lô mà hai luồng cần tranh nhau, race không
- * xảy ra và test xanh trên bản lỗi. Nên bài được nộp khi kỳ thi đang mở (để mang
- * {@code contest_id}), rồi khung giờ bị dời về quá khứ — ra ngoài {@code canCapNhat} —
- * <b>trước</b> khi có bài nào {@code DONE}.
- */
 class BangXepHangGhiSongSongIT extends PostgresIT {
 
-    /** Câu đọc kết quả từng đề — {@code KET_QUA_THEO_NGUOI} của {@code JdbcStandingsRepository}. */
     private static final String CAU_DOC_KET_QUA = "AND user_id IN (";
 
     @Autowired ContestRepository contests;
@@ -82,8 +57,6 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
         DiemHenSql.huyHet();
     }
 
-    // =========================================================================
-
     @Test
     @DisplayName("★ hai lượt cập nhật chen nhau KHÔNG đếm một lần sai thành hai")
     void hai_luot_cap_nhat_khong_dem_trung() throws InterruptedException {
@@ -99,8 +72,6 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
             updater.capNhat(contest());
             aXong.countDown();
         });
-        // B đã đọc watermark và lô [WA], dừng trước câu đọc kết quả. A chạy trọn lượt của nó
-        // — hoặc đứng chờ khoá mà B đang giữ.
         DiemHenSql.hen(b, CAU_DOC_KET_QUA, bDaToi,
                 () -> aXong.getCount() == 0 || coLuotDangChoKhoa());
 
@@ -119,8 +90,8 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
         long ac = nop();
         giauKhoiNhipHaiGiay();
         cham(wa, "WA", 0);
-        updater.capNhat(contest());          // WA đã vào bảng
-        cham(ac, "AC", 100);                 // AC chưa vào
+        updater.capNhat(contest());
+        cham(ac, "AC", 100);
 
         CountDownLatch bDaToi = new CountDownLatch(1);
         CountDownLatch rDaToi = new CountDownLatch(1);
@@ -133,8 +104,6 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
             cho(bDaToi);
             rebuild.chay(new JobContextGia(Map.of("contestId", contestId), ADMIN_ID));
         });
-        // B đã đọc lô [AC] và dừng; R xoá bảng rồi tới chính câu đọc kết quả của nó. Bản lỗi:
-        // B ghi lên bảng vừa bị xoá, watermark nhảy tới AC, và lần sai WA biến khỏi bảng.
         DiemHenSql.hen(b, CAU_DOC_KET_QUA, bDaToi,
                 () -> rDaToi.getCount() == 0 || coLuotDangChoKhoa());
         DiemHenSql.hen(r, CAU_DOC_KET_QUA, rDaToi,
@@ -155,9 +124,6 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    // =========================================================================
-
-    /** Có lượt nào đang đứng chờ một khoá tư vấn (advisory lock) không. */
     private boolean coLuotDangChoKhoa() {
         return Boolean.TRUE.equals(jdbc.sql("""
                 SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted)
@@ -197,7 +163,6 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
         }
     }
 
-    /** Dời khung giờ về quá khứ: {@code canCapNhat} không còn thấy kỳ thi này. */
     private void giauKhoiNhipHaiGiay() {
         jdbc.sql("""
                 UPDATE contests
@@ -243,3 +208,4 @@ class BangXepHangGhiSongSongIT extends PostgresIT {
                 .query(Boolean.class).single());
     }
 }
+

@@ -13,24 +13,8 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bất biến #3 — <b>worker không có {@code DataSource}</b> — ép bằng CI, không bằng lời hứa.
- *
- * <p>{@code docs/build-order.md} Bước M1-9 yêu cầu đúng test này: đọc {@code pom.xml} và fail
- * nếu thấy một trong những cái tên dưới đây.
- *
- * <h2>Vì sao kiểm ở tầng {@code pom.xml} chứ không phải tầng import</h2>
- * Vì đây là chỗ vi phạm <i>bắt đầu</i>. Một dòng {@code import java.sql.Connection} chỉ viết
- * được sau khi đã có ai đó thêm driver vào pom; chặn ở pom là chặn trước một bước, và sửa
- * pom là việc phải hỏi người (CLAUDE.md mục 5.2). Test này biến quy tắc đó thành một cái
- * chuông thay vì một câu trong tài liệu.
- *
- * <p>Worker có DB là worker không scale ngang được (S1, S2) và không đổi transport được:
- * cả đường chuyển Postgres → RabbitMQ ở M6 chỉ rẻ vì worker chưa bao giờ biết DB tồn tại.
- */
 class WorkerHasNoDataSourceTest {
 
-    /** Mỗi tên ở đây là một cách khác nhau để worker chạm tới hạ tầng của API. */
     private static final List<String> BI_CAM = List.of(
             "spring-boot-starter-data-jdbc",
             "spring-boot-starter-jdbc",
@@ -59,16 +43,9 @@ class WorkerHasNoDataSourceTest {
         }
     }
 
-    /**
-     * Đọc <b>giá trị</b> của các thẻ {@code <artifactId>}, không phải văn bản thô của file.
-     *
-     * <p>Quét thô thì chính đoạn chú thích trong {@code pom.xml} — đoạn liệt kê những thứ bị
-     * cấm để người đọc biết — sẽ làm test đỏ. Một test đỏ vì lời giải thích về chính nó là
-     * loại test sẽ bị xoá thay vì được sửa.
-     */
     private static List<String> artifactIds() throws IOException {
         String pom = Files.readString(Path.of("pom.xml"));
-        int build = pom.indexOf("<build>");     // plugin không phải dependency
+        int build = pom.indexOf("<build>");
         String deps = build < 0 ? pom : pom.substring(0, build);
 
         List<String> ids = new ArrayList<>();
@@ -80,7 +57,6 @@ class WorkerHasNoDataSourceTest {
         return ids;
     }
 
-    /** Mặt còn lại: worker chỉ nói chuyện với API qua HTTP, nên nó cần đúng một client. */
     @Test
     void worker_van_phai_co_duong_HTTP_toi_API() throws IOException {
         String pom = Files.readString(Path.of("pom.xml"));

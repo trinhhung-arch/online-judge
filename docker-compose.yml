@@ -1,18 +1,3 @@
-# ★ HAI LUẬT CHO MỌI SERVICE Ở ĐÂY — đọc trước khi thêm service thứ năm.
-#
-#   1. Cổng publish LUÔN có tiền tố 127.0.0.1. Viết trần "6379:6379" là Docker nghe trên mọi
-#      địa chỉ, tức cả mạng LAN. Đo ngày 2026-09-16 trên host Mac: tường lửa macOS tắt, cả sáu
-#      cổng mở ra 192.168.x.x, và Redis trả PONG cho một máy lạ không cần mật khẩu.
-#      Container worker vẫn tới được cổng 127.0.0.1 qua host.docker.internal (--add-host
-#      host-gateway) — đã thử cùng ngày trên OrbStack.
-#
-#   2. Mật khẩu LUÔN là ${BIEN:?}, không bao giờ là chữ viết thẳng hay ${BIEN:-mac_dinh}.
-#      Chữ viết thẳng nằm trong git, nên ai có repo cũng có mật khẩu. Mặc định cũng vậy.
-#      Thiếu biến thì `docker compose` dừng NGAY với tên biến — thà vậy còn hơn lên bằng một
-#      mật khẩu ai cũng biết.
-#
-#   Đóng cổng KHÔNG thay được mật khẩu: chính phép thử trên cho thấy container worker tới
-#   được các cổng này, nên một lần thoát sandbox là tới được Postgres và Redis.
 services:
   postgres:
     image: postgres:16-alpine
@@ -21,32 +6,9 @@ services:
     environment:
       POSTGRES_DB: ojdb
       POSTGRES_USER: ojuser
-      # CHỈ có tác dụng lúc volume còn trống. Đổi trên DB đang chạy thì dùng
-      # `ALTER ROLE ojuser PASSWORD ...` — sửa biến này rồi `up -d` KHÔNG đổi gì cả.
       POSTGRES_PASSWORD: ${OJ_POSTGRES_PASSWORD:?Thiếu OJ_POSTGRES_PASSWORD trong .env — xem .env.example}
     ports:
       - "127.0.0.1:5432:5432"
-    # ★ WAL archiving — R4. Bật 2026-09-21 theo quyết định F của build-order.md PHẦN 0.
-    #
-    # `archive_mode` là tham số mức postmaster: đổi nó PHẢI khởi động lại container, không
-    # `pg_reload_conf()` được. Đó là lý do nó nằm ở đây chứ không ở một file conf nóng.
-    #
-    # archive_command dùng .tmp rồi `mv`: `mv` trong cùng một filesystem là nguyên tử, nên một
-    # lần container chết giữa chừng để lại file .tmp rác chứ KHÔNG để lại một segment cụt trông
-    # như segment hợp lệ. Cùng nỗi lo với "đĩa đầy thì pg_dump vẫn thoát 0" ở sao-luu-db.sh.
-    #
-    # `test ! -f` ở đầu: Postgres có thể gọi lại archive_command cho cùng một segment sau khi
-    # crash. Ghi đè một segment đã lưu là cách đánh mất nó.
-    #
-    # archive_timeout=60s là thứ BIẾN RPO THÀNH MỘT CON SỐ. Không có nó, một segment đang ghi
-    # dở không bao giờ được lưu trong lúc hệ thống rảnh, và RPO lúc rảnh là vô hạn. Với 60s,
-    # R4 = "mất tối đa 1 phút". Giá phải trả: một segment 16MB mỗi phút kể cả khi không ai nộp
-    # bài — nhưng segment rỗng nén gzip còn khoảng 20KB, nên ~30MB/ngày lúc nhàn rỗi.
-    #
-    # ⛔ HIỂM HOẠ PHẢI BIẾT: archive_command hỏng LIÊN TỤC thì Postgres GIỮ LẠI mọi WAL chưa
-    # lưu được, pg_wal phình cho tới khi đầy đĩa và database DỪNG HẲN. Một cải tiến sao lưu
-    # biến thành một sự cố mất dịch vụ. `scripts/kiem-wal.sh` tồn tại chỉ vì điều này —
-    # cắm nó vào bảng vận hành, đừng chờ tới lúc đĩa đầy.
     command:
       - postgres
       - -c
@@ -61,11 +23,7 @@ services:
       - wal_compression=zstd
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Quyết định D — hai role oj_app / oj_migrator, tạo lúc khởi tạo volume.
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
-      # Đích WAL. PHẢI là bind mount ra host, không phải named volume: mục đích của nó là
-      # sống sót qua việc mất chính cái volume dữ liệu. Thư mục này phải GHI ĐƯỢC bởi uid 70
-      # (user postgres của ảnh alpine) — xem kiem-wal.sh, phép kiểm đầu tiên.
       - ${OJ_WAL_ARCHIVE_DIR:?Thiếu OJ_WAL_ARCHIVE_DIR trong .env — xem .env.example}:/wal-archive
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ojuser -d ojdb"]
@@ -79,16 +37,12 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${OJ_REDIS_PASSWORD:?Thiếu OJ_REDIS_PASSWORD trong .env — xem .env.example}"]
     environment:
-      # redis-cli tự đọc biến này, nên healthcheck không phải đặt mật khẩu lên dòng lệnh.
       REDISCLI_AUTH: ${OJ_REDIS_PASSWORD:?Thiếu OJ_REDIS_PASSWORD trong .env — xem .env.example}
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      # `grep PONG`, KHÔNG tin mã thoát. Đo 2026-09-16 trên redis 7.4: redis-cli in
-      # "AUTH failed: ERR ..." mà vẫn thoát 0. Chỉ gọi `redis-cli ping` thì healthcheck xanh
-      # trên một Redis mà ứng dụng không vào được.
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
@@ -97,74 +51,23 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: oj-rabbitmq
-    # ★ KHÔNG được bỏ dòng này. Node name của RabbitMQ là `rabbit@$(hostname -s)`, và nếu
-    # không đặt `hostname` thì Docker lấy CONTAINER ID làm hostname. Hệ quả: mỗi lần container
-    # được tạo lại — đổi image, sửa healthcheck, `up -d` sau khi sửa compose — là một node
-    # name MỚI, tức mnesia rỗng: mọi hàng đợi durable biến mất, mọi message trong đó mất theo.
-    #
-    # Đã xảy ra 2026-09-10: một lần `docker compose up -d rabbitmq` để nhận healthcheck mới
-    # làm node đổi từ rabbit@098937e9b66b sang rabbit@0fe2b03d893e, judge.live/judge.rejudge/
-    # judge.dead biến sạch, và worker chết với `NOT_FOUND - no queue 'judge.live'` (nó khai
-    # báo THỤ ĐỘNG, chỉ oj-api tạo hàng đợi). Lần ấy hàng đợi rỗng nên không mất bài nộp —
-    # đó là may, không phải thiết kế. Với một hệ thống mà lời hứa số hai là "không mất bài
-    # nộp", một broker tự xoá mình theo container ID là thứ không được phép tồn tại.
-    #
-    # Đổi giá trị này = đổi node name = một lần reset nữa. Đặt rồi thì đừng đụng vào.
     hostname: oj-rabbitmq
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ojuser
-      # CHỈ có tác dụng lúc mnesia còn trống — y như POSTGRES_PASSWORD. Đổi trên broker đang
-      # chạy: `docker exec -i oj-rabbitmq rabbitmqctl change_password ojuser`, rồi khởi động lại
-      # oj-api VÀ worker (scripts/trien-khai-mac.sh --khong-build) để chúng nối bằng mật khẩu mới.
       RABBITMQ_DEFAULT_PASS: ${OJ_RABBIT_PASSWORD:?Thiếu OJ_RABBIT_PASSWORD trong .env — xem .env.example}
     ports:
-      - "127.0.0.1:5672:5672"    # AMQP - backend va judge worker (qua host.docker.internal) ket noi
-      - "127.0.0.1:15672:15672"  # Management UI - mo http://localhost:15672 tren trinh duyet
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      # ★ Healthcheck này KHÔNG được dựng một máy ảo Erlang. Đọc trước khi "nâng cấp" nó.
-      #
-      # Lệnh hiển nhiên ở đây là `rabbitmq-diagnostics -q ping` — tài liệu RabbitMQ khuyên thế,
-      # và nó từng nằm đúng chỗ này. Nó hỏng theo hai tầng, đo thật ngày 2026-09-10:
-      #
-      #   Tầng 1 — CHÍ MẠNG. CLI dựng một node Erlang phân tán trong dải cổng CHỈ 11 chỗ
-      #   (`inet_dist_listen_min 35672 … max 35682`, do chính CLI đặt). Lần ping bị Docker
-      #   SIGKILL khi hết `timeout` để lại tiến trình beam con giữ luôn một cổng trong dải ấy.
-      #   Đủ 11 lần là dải cạn, và từ đó MỌI lần ping đều hỏng — mỗi lần hỏng đẻ thêm một xác.
-      #   Kết quả: 460 tiến trình treo, 11,2 GiB, FailingStreak 4118, trong khi broker chạy tốt.
-      #
-      #   Tầng 2 — âm ỉ. Thêm `--timeout 5` (< `timeout` của Docker) chặn được tầng 1: epmd
-      #   sạch, dải cổng không còn bị giữ, healthcheck xanh trở lại. Nhưng ĐO LẠI SAU 2 GIỜ
-      #   vẫn thấy 17 tiến trình beam mồ côi (ppid=1, sleeping, 36 luồng) — ping THÀNH CÔNG
-      #   mà tiến trình vẫn không thoát. Nguyên nhân nằm trong CLI của RabbitMQ, không phải
-      #   ở cấu hình này, nên không vá được từ đây.
-      #
-      # `nc -z` không dựng VM nào: một tiến trình busybox vài chục KB, không đụng epmd, không
-      # đụng dải cổng dist. Đổi lại nó chỉ trả lời được "cổng AMQP có nhận kết nối không" —
-      # KHÔNG phát hiện được resource alarm (đĩa/bộ nhớ) khiến broker chặn publisher. Đó là
-      # đánh đổi có chủ đích: một chỉ số hẹp mà đúng, thay cho một chỉ số rộng mà tự phá hỏng
-      # chính thứ nó đo. Cần bắt cả alarm thì đường đi là một sidecar gọi HTTP management API,
-      # không phải mang CLI quay lại đây.
-      #
-      # Đã kiểm ca âm: `nc -z localhost 5672` trả 0, `nc -z localhost 5699` trả khác 0.
       test: ["CMD", "nc", "-z", "localhost", "5672"]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 60s
 
-  # Testdata content-addressed. Chưa ai gọi tới trước M4, nhưng nó nằm trong bộ bốn
-  # service của build-order.md Bước 0.4 — dựng sẵn để "docker compose up là chạy được"
-  # đúng như README hứa, thay vì phát hiện thiếu vào tuần 8.
-  #
-  # ★ quay.io, KHÔNG phải Docker Hub, và ghim digest. Đo 2026-09-24: repo `minio/minio` trên
-  # Docker Hub trả 404 ("repository does not exist") — máy nào chưa có sẵn ảnh thì
-  # `docker compose up` hỏng ngay ở đây, và CI không kéo được ảnh cho MinioTestdataStoreIT.
-  # quay.io/minio/minio còn đúng tag này với CÙNG digest ảnh cũ, nên đổi nguồn không đổi một
-  # byte nào. Digest ghim để tag có biến mất hay bị gắn lại thì ảnh vẫn là ảnh này.
-  # Sửa dòng này thì sửa cả MinioTestdataStoreIT.ANH.
   minio:
     image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z@sha256:9535594ad4122b7a78c6632788a989b96d9199b483d3bd71a5ceae73a922cdfa
     container_name: oj-minio
@@ -189,5 +92,3 @@ volumes:
   redis-data:
   rabbitmq-data:
   minio-data:
-
-

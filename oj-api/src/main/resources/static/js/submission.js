@@ -1,16 +1,3 @@
-/**
- * Chi tiết bài nộp, cập nhật realtime — FR-SUB-05, 06. Bước 4.12.
- *
- * ★ SSE LÀ ĐƯỜNG CHÍNH, POLLING LÀ ĐƯỜNG BẮT BUỘC PHẢI CÓ
- *
- * `oj-api/CLAUDE.md` mục 4: <i>"Fallback REST bắt buộc. Kết nối SẼ đứt — Cloudflare Tunnel
- * giới hạn thời gian sống. Không có fallback = tính năng chưa xong."</i>
- *
- * Nên trang này có hai nguồn sự thật và một quy tắc rõ ràng giữa chúng: sự kiện SSE cập nhật
- * phần trạng thái ngay lập tức, còn REST là thứ dựng lại toàn bộ chi tiết. Khi luồng đứt,
- * polling 3 giây tiếp quản cho tới khi bài chấm xong.
- */
-
 import { goi, accessToken, LoiApi } from './api.js';
 import { veThanh, bao, chu, thamSo, canDangNhap } from './khung.js';
 import { moLuong } from './sse.js';
@@ -75,8 +62,6 @@ function veChiTiet(ct) {
         hangs.push(hang('Bộ nhớ', `${Math.round(ct.memoryKb / 1024)} MB`));
     }
     if (ct.measurementNote) hangs.push(hang('Ghi chú đo', ct.measurementNote));
-    // Server đã lọc theo feedback_level (FR-PROB-07): trường này là null khi đề đặt NONE.
-    // Frontend KHÔNG tự quyết định hiện gì — nó chỉ hiện thứ được gửi tới.
     if (ct.failedTestOrdinal !== null && ct.failedTestOrdinal !== undefined) {
         hangs.push(hang('Sai từ test', String(ct.failedTestOrdinal)));
     }
@@ -108,7 +93,6 @@ function ngungTheoDoi() {
     clearTimeout(henPoll);
 }
 
-/** Đường dự phòng: 3 giây một lần, và dừng ngay khi bài chấm xong. */
 function poll() {
     clearTimeout(henPoll);
     henPoll = setTimeout(async () => {
@@ -116,7 +100,7 @@ function poll() {
             const ct = await taiChiTiet();
             if (!xong(ct.status)) poll();
         } catch {
-            poll();   // sự cố tạm thời không được làm trang đứng im mãi mãi
+            poll();
         }
     }, 3000);
 }
@@ -128,12 +112,10 @@ function theoDoi() {
             veTrangThai(e);
             if (xong(e.status)) {
                 ngungTheoDoi();
-                taiChiTiet().catch(() => {});   // lấy nốt phần chi tiết SSE cố ý không mang
+                taiChiTiet().catch(() => {});
             }
         },
         onDut: () => {
-            // Không báo lỗi cho người dùng: đứt kết nối là chuyện BÌNH THƯỜNG với tunnel,
-            // và một dòng cảnh báo đỏ mỗi năm phút chỉ dạy người ta bỏ qua cảnh báo.
             dongLuong = null;
             poll();
         },
@@ -154,6 +136,4 @@ function theoDoi() {
     }
 })();
 
-// Rời trang thì đóng luồng. Thiếu dòng này là để lại một listener Redis và một tác vụ nhịp
-// tim ở server cho mỗi lần người dùng bấm F5 — và đây là trang người ta bấm F5 nhiều nhất.
 window.addEventListener('pagehide', ngungTheoDoi);

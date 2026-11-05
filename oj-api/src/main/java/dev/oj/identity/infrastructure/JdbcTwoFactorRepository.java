@@ -12,10 +12,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Pool {@code app} — mọi câu ở đây nằm trên đường request của người dùng, không phải đường
- * verdict. Named parameter khắp nơi (bất biến #5).
- */
 @Repository
 public class JdbcTwoFactorRepository implements TwoFactorRepository {
 
@@ -25,11 +21,6 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
              WHERE user_id = :userId
             """;
 
-    /**
-     * {@code WHERE enabled = FALSE} trong nhánh {@code DO UPDATE} là chốt an toàn, không phải
-     * tối ưu: thiếu nó thì một lời gọi "bắt đầu đăng ký" sẽ thay được bí mật của một tài
-     * khoản ĐANG dùng 2FA — và khoá chính chủ ra ngoài trong khi kẻ gọi thì vào được.
-     */
     private static final String LUU_BAN_NHAP = """
             INSERT INTO user_two_factor (user_id, secret_enc, enabled)
             VALUES (:userId, :secret, FALSE)
@@ -75,11 +66,6 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
         jdbc.sql(BAT).param("userId", userId).param("buoc", buocDaDung).update();
     }
 
-    /**
-     * Điều kiện {@code last_step < :buoc} nằm TRONG câu lệnh, không ở Java: hai request cùng một
-     * mã thì request sau chờ khoá dòng, rồi đánh giá lại mệnh đề trên giá trị request trước vừa
-     * ghi — và đổi được 0 dòng. Xem {@code TotpChecker}.
-     */
     @Override
     public boolean ghiBuoc(long userId, long buoc) {
         return jdbc.sql("""
@@ -110,8 +96,6 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
 
     @Override
     public List<MaDuPhong> maDuPhongChuaDung(long userId) {
-        // Không có LIMIT vì bảng này tối đa 10 dòng mỗi người theo thiết kế — bất biến #8
-        // nói về danh sách trả ra API, còn đây là tra cứu nội bộ có trần cứng.
         return jdbc.sql("""
                         SELECT id, code_hash FROM user_scratch_code
                          WHERE user_id = :userId AND used_at IS NULL
@@ -138,11 +122,6 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
                 .query(OffsetDateTime.class).optional().map(OffsetDateTime::toInstant);
     }
 
-    /**
-     * {@code RETURNING failed_attempts = 0}: sau câu lệnh, số đếm chỉ bằng 0 khi CHÍNH lần này vừa
-     * chạm ngưỡng và bật khoá — mọi lần sai khác để lại số ≥ 1. Dòng bị khoá khi UPDATE, nên
-     * {@code CASE} luôn đọc giá trị của request trước, không phải bản đã đọc từ lâu.
-     */
     @Override
     public boolean ghiMaSai(long userId, int nguong, Instant khoaToi) {
         return jdbc.sql("""
@@ -168,3 +147,4 @@ public class JdbcTwoFactorRepository implements TwoFactorRepository {
                 .param("userId", userId).update();
     }
 }
+

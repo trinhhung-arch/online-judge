@@ -15,27 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/**
- * ★ Bảng xếp hạng realtime — FR-CON-04. Trang SSE <b>thứ hai và cuối cùng</b> của hệ thống
- * ({@code oj-api/CLAUDE.md} mục 4: <i>"không thêm chỗ thứ ba mà không hỏi"</i>).
- *
- * <h2>Sự kiện KHÔNG mang nội dung bảng, và đó là quyết định về bảo mật</h2>
- * {@link StandingsEventBus} chỉ báo "bảng của kỳ thi X vừa đổi". Mỗi kết nối tự đọc lại qua
- * {@link GetStandingsUseCase} — <b>và bộ lọc đóng băng chạy lại ở đó</b>.
- *
- * <p>Nếu sự kiện mang sẵn nội dung thì nội dung ấy là <i>một</i> bản, còn người xem thì có hai
- * loại: ADMIN thấy bảng đầy đủ, mọi người thấy bản chụp (FR-CON-05). Đẩy chung một bản nghĩa
- * là một trong hai nhóm nhận nhầm bản của nhóm kia — và nhóm nhận nhầm sẽ là nhóm thí sinh,
- * nhận bảng chưa công bố.
- *
- * <p>Cái giá: mỗi lần đổi là mỗi kết nối đọc lại một lượt. Với nhịp 2 giây và top 50 dòng thì
- * đó là cái giá rẻ, và nó mua lấy việc <b>không thể</b> lộ bảng chưa công bố.
- *
- * <h2>Fallback REST là bắt buộc</h2>
- * {@code GET /api/v1/contests/{id}/standings} tồn tại và trả cùng một thứ. Kết nối SSE
- * <i>sẽ</i> đứt — Cloudflare Tunnel giới hạn thời gian sống — và không có fallback thì tính
- * năng chưa xong.
- */
 @RestController
 @RequestMapping("/api/v1/contests")
 public class StandingsSseController {
@@ -60,29 +39,17 @@ public class StandingsSseController {
     public SseEmitter stream(@PathVariable long contestId) {
         SseEmitter emitter = new SseEmitter(properties.sse().timeout().toMillis());
 
-        // ★ Phân giải danh tính NGAY TẠI ĐÂY, còn đang trên thread của request, rồi giữ lại.
-        // Bên trong lambda dưới thì đã muộn: nó chạy trên thread điều phối của Redis, nơi
-        // ThreadLocal của JwtAuthFilter rỗng, nên `thucHien(contestId)` sẽ coi mọi khung sau
-        // khung đầu là ẩn danh — và dòng của chính thí sinh biến mất khỏi bảng ở lần cập nhật
-        // đầu tiên (FR-CON-04). Xem javadoc của GetStandingsUseCase#thucHien(long, CurrentUser).
         CurrentUser nguoiGoi = getStandings.nguoiGoiHienTai();
 
-        // Đọc một lần ngay TRƯỚC khi đăng ký nghe: nếu kỳ thi không tồn tại thì ném ở đây,
-        // trước khi có bất kỳ kết nối nào được mở. Và nó cũng gửi trạng thái hiện tại, để
-        // client không phải chờ thay đổi đầu tiên mới có gì hiển thị.
         SseEmitters.send(emitter,
                 ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId, nguoiGoi)));
 
         AutoCloseable dangKy = bus.subscribe(contestId, () -> {
-            // Đọc lại qua use-case — bộ lọc đóng băng chạy lại cho đúng người đã mở luồng này.
             SseEmitters.send(emitter,
                     ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId, nguoiGoi)));
         });
         AutoCloseable ping = heartbeat.start(emitter);
 
-        // Cả BA nhánh phải dọn: hết hạn, client đóng, và lỗi. Thiếu một nhánh là rò rỉ một
-        // listener Redis cộng một tác vụ nhịp tim cho mỗi lần bấm F5 — và trang bảng xếp hạng
-        // là trang người ta bấm F5 nhiều nhất trong cả kỳ thi.
         Runnable donDep = () -> {
             dongIm(ping);
             dongIm(dangKy);

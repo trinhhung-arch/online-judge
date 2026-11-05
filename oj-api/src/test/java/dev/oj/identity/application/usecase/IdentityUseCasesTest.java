@@ -22,11 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Use-case của {@code identity} — Bước 4.3, FR-AUTH-01 → 08.
- *
- * <p>Chạy bằng fake nên cả lớp mất chưa tới một giây; xem javadoc của {@link IdentityFakes}.
- */
 class IdentityUseCasesTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-08-29T10:00:00Z");
@@ -39,7 +34,6 @@ class IdentityUseCasesTest {
     private IdentityFakes.BamGia hasher;
     private IdentityFakes.HaiLopGia haiLop;
 
-    /** Đếm được, và ném được — để đo cả hai nhánh của hàng rào giãn nhịp đăng nhập. */
     private final java.util.List<Long> gioiHanDaGoi = new java.util.ArrayList<>();
     private boolean gioiHanNem = false;
     private final dev.oj.identity.application.port.LoginRateLimiter gioiHanDangNhap = (id) -> {
@@ -49,10 +43,6 @@ class IdentityUseCasesTest {
         }
     };
 
-    /**
-     * Không bật 2FA cho ai trong các ca cũ, nên nó là một cổng luôn mở — trừ ca 2FA
-     * riêng bên dưới, nơi test tự nạp dữ liệu vào `haiLop`.
-     */
     private dev.oj.identity.application.TotpChecker totpChecker() {
         return new dev.oj.identity.application.TotpChecker(
                 haiLop, new IdentityFakes.MaHoaGia(), dev.oj.platform.config.AppPropertiesGia.macDinh(),
@@ -91,18 +81,10 @@ class IdentityUseCasesTest {
                 hasher.bam("matkhau-tot-123"));
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("FR-AUTH-01 · đăng ký")
     class DangKy {
 
-        /**
-         * {@code props} mặc định có xác minh email TẮT, nên {@code EmailVerificationIssuer}
-         * ở đây không gửi gì cả — đúng thứ các ca dưới đây cần: chúng nói về vai trò, băm mật
-         * khẩu và trùng handle, không nói về thư. Ca về thư nằm ở
-         * {@code XacMinhEmailUseCaseTest}, nơi nó được bật lên tường minh.
-         */
         private RegisterUserUseCase useCase() {
             return new RegisterUserUseCase(users, hasher, nhatKy, chanDangKy, (t, ip) -> { },
                     new dev.oj.identity.application.EmailVerificationIssuer(
@@ -161,8 +143,6 @@ class IdentityUseCasesTest {
             var uc = useCase();
 
             uc.thucHien("nguoi-1", "mot@oj.test", "Một", "matkhau-tot-123", IP, "captcha-gia");
-            // Lượt thứ hai hỏng vì handle sai định dạng — nhưng nó VẪN được đếm. Nếu không,
-            // một bot chỉ cần gửi handle rác là dò được handle nào còn trống mà không tốn gì.
             assertThatThrownBy(() -> uc.thucHien("x", "hai@oj.test", "Hai", "matkhau-tot-123", IP, "captcha-gia"))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.INVALID);
@@ -186,8 +166,6 @@ class IdentityUseCasesTest {
                     .doesNotThrowAnyException();
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("FR-AUTH-02 · đăng nhập")
@@ -213,9 +191,9 @@ class IdentityUseCasesTest {
 
             String cauChung = null;
             for (String[] ca : new String[][]{
-                    {"khong-ton-tai", "matkhau-tot-123"},   // handle không có
-                    {"co-that", "sai-mat-khau-roi"},        // mật khẩu sai
-                    {"bi-khoa", "matkhau-tot-123"}}) {      // tài khoản bị vô hiệu hoá
+                    {"khong-ton-tai", "matkhau-tot-123"},
+                    {"co-that", "sai-mat-khau-roi"},
+                    {"bi-khoa", "matkhau-tot-123"}}) {
                 try {
                     dangNhap().thucHien(ca[0], ca[1], "curl", IP, null);
                     throw new AssertionError("đáng lẽ phải ném với " + ca[0]);
@@ -227,7 +205,6 @@ class IdentityUseCasesTest {
                     assertThat(e.publicMessage())
                             .describedAs("ca '%s' phải cho cùng một câu", ca[0])
                             .isEqualTo(cauChung);
-                    // Và câu đó không được nhắc tới handle đã thử.
                     assertThat(e.publicMessage()).doesNotContain(ca[0]);
                 }
             }
@@ -255,8 +232,6 @@ class IdentityUseCasesTest {
             assertThatThrownBy(() -> uc.thucHien("khong-ai-ca", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class);
 
-            // Nếu use-case thoát sớm khi không tìm thấy thì con số này là 0, và thời gian phản
-            // hồi trở thành câu trả lời cho "email này có tồn tại không".
             assertThat(demBam).hasValue(1);
         }
 
@@ -271,7 +246,6 @@ class IdentityUseCasesTest {
             }
             assertThat(lanThu.khoaToi).isEqualTo(BAY_GIO.plus(Duration.ofMinutes(15)));
 
-            // Lần thứ 6: khoá chặn TRƯỚC cả khi mật khẩu đúng.
             assertThatThrownBy(() -> dangNhap().thucHien("nan-nhan", "matkhau-tot-123", "curl", IP, null))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.RATE_LIMITED)
@@ -290,8 +264,6 @@ class IdentityUseCasesTest {
             assertThat(lanThu.ghiNhan).containsExactly("nguoi-b:false", "nguoi-b:true");
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("FR-AUTH-02 · xoay vòng refresh token")
@@ -322,13 +294,10 @@ class IdentityUseCasesTest {
             SessionIssuer.Session mot = dangNhap().thucHien("bi-trom", "matkhau-tot-123", "curl", IP, null);
             SessionIssuer.Session hai = useCase().thucHien(mot.refreshToken(), "curl", IP);
 
-            // Kẻ tấn công trình lại bản đã bị thu hồi.
             assertThatThrownBy(() -> useCase().thucHien(mot.refreshToken(), "curl", IP))
                     .isInstanceOf(IdentityException.class)
                     .hasFieldOrPropertyWithValue("code", "identity.phien_bi_dung_lai");
 
-            // Cả phiên đang hợp lệ của chủ tài khoản cũng chết — cố ý: không biết ai vừa
-            // trình token cũ, nên phải xử lý như thể đó là kẻ tấn công.
             assertThatThrownBy(() -> useCase().thucHien(hai.refreshToken(), "curl", IP))
                     .isInstanceOf(IdentityException.class);
             assertThat(nhatKy.hanhDong).contains("REFRESH_TOKEN_REUSE_DETECTED");
@@ -375,8 +344,6 @@ class IdentityUseCasesTest {
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.UNAUTHENTICATED);
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ Giãn nhịp đăng nhập theo tài khoản")

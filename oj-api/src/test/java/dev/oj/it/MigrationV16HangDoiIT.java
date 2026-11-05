@@ -14,18 +14,6 @@ import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ V16 trên một host <b>đang chấm dở</b> — {@code CLAUDE.md} mục 6: migration chạy được trên
- * DB rỗng <i>và</i> DB đã có dữ liệu. Nửa "DB rỗng" cả bộ IT đã chứng minh.
- *
- * <p>Lúc deploy, {@code judge_queue} có bài đang chờ và bài đang được chấm. Dòng cũ phải nhận
- * {@code reap_count = 0} — không thì bài đang chấm dở bị tính như đã thả lại, và chạm trần sớm
- * hơn lời hứa. Và câu thu hồi của jar <b>đang chạy</b> — không biết cột mới — phải còn chạy:
- * lùi jar không cần lùi schema.
- *
- * <p>Lớp riêng chứ không thêm vào {@link MigrationTrenDuLieuCoSanIT}: lớp ấy đã chạm trần 300
- * dòng ({@code CLAUDE.md} mục 7). Cùng cách dựng: container riêng, không Spring context.
- */
 class MigrationV16HangDoiIT {
 
     @Test
@@ -35,7 +23,6 @@ class MigrationV16HangDoiIT {
             pg.start();
             flyway(pg).target(MigrationVersion.fromVersion("15")).load().migrate();
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
-                // Người dùng 1, đề 1, ngôn ngữ 1 đến từ seed dev và seed tham chiếu.
                 st.execute("""
                         INSERT INTO source_blobs (sha256, content, byte_size)
                         VALUES (repeat('a', 64), 'int main(){}', 12);
@@ -61,7 +48,6 @@ class MigrationV16HangDoiIT {
                 assertThat(rs.getObject(2)).as("dòng cũ nhận DEFAULT 0, không phải NULL").isEqualTo(0);
                 assertThat(rs.getObject(3)).isEqualTo(0);
 
-                // Đúng câu REAP_EXPIRED của jar trước V16 — không biết reap_count tồn tại.
                 ResultSet thaLai = st.executeQuery("""
                         UPDATE judge_queue
                            SET claimed_at = NULL, lease_until = NULL, claimed_by_host = NULL

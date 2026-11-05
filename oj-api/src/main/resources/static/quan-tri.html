@@ -19,8 +19,6 @@
             <span id="cap-nhat-luc">—</span>
             <button type="button" id="lam-moi" class="phu">Làm mới</button>
         </p>
-        <!-- Các số đến từ metrics, không từ một truy vấn đếm: `COUNT(*)` trên `submissions`
-             là một lần quét bảng hàng triệu dòng (bất biến #8 cùng lý do). -->
         <dl id="bang-so" class="so-lieu"></dl>
     </section>
 
@@ -28,9 +26,6 @@
 
     <section class="the" aria-labelledby="tieu-cham-lai">
         <h2 id="tieu-cham-lai">Chấm lại một đề</h2>
-        <!-- ★ Chấm lại chạy ở ưu tiên 10 (thấp nhất) và có phanh theo thời gian chờ của bài
-             LIVE — nó không được phép làm chậm người đang nộp bài. Nói ra ở đây để người
-             vận hành không tưởng rằng bấm nút là dừng cả hệ thống chấm. -->
         <p class="goi-y">Việc chạy nền ở ưu tiên thấp nhất và tự phanh khi hàng đợi bài nộp
             trực tiếp bắt đầu chờ lâu. Bấm được giữa giờ cao điểm, nhưng nó sẽ chạy chậm lại.</p>
         <form id="form-cham-lai">
@@ -70,9 +65,6 @@
             <p><button type="submit">Tìm</button></p>
         </form>
 
-        <!-- ★ KHÔNG có cột email. Danh sách này liệt kê mọi người dùng, và javadoc của
-             ProfileResponse đã cảnh báo đúng về endpoint kiểu này: một trường email ở đây là
-             một lần rò rỉ toàn bộ danh sách email. Quản lý vai trò cần handle, không cần email. -->
         <div class="cuon-ngang">
             <table>
                 <caption class="goi-y">Mới nhất trước</caption>
@@ -100,8 +92,6 @@
     <section class="the" aria-labelledby="tieu-bao-tri">
         <h2 id="tieu-bao-tri">Công tắc hệ thống</h2>
         <p id="trang-thai-bao-tri">Đang kiểm tra…</p>
-        <!-- ★ Danh sách công tắc do MÁY CHỦ liệt kê, kể cả câu mô tả hậu quả. Viết lại câu ấy
-             ở đây là tạo bản mô tả thứ hai cho cùng một công tắc, và hai bản sẽ lệch nhau. -->
         <div id="cong-tac"></div>
         <p class="goi-y">Mỗi lần đổi để lại một dòng trong
             <a href="/nhat-ky.html">nhật ký</a> kèm tên người đổi và giờ. Tắt nhận bài chỉ chặn

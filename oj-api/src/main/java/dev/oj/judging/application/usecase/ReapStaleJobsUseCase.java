@@ -14,42 +14,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
-/**
- * Thu hồi những bài kẹt ở {@code JUDGING} quá hạn lease — FR-SUB-03.
- *
- * <h2>Task có tỉ lệ giá trị/công sức cao nhất toàn dự án</h2>
- * Ba chục dòng này là mạng an toàn cho <b>năm loại sự cố khác nhau</b>
- * ({@code nfrplan.md} 5.1):
- *
- * <pre>
- *   worker chết giữa chừng          lease hết hạn -> bài về QUEUED -> worker khác chấm
- *   RabbitMQ chết                   không ai được báo, nhưng hàng vẫn nằm trong judge_queue
- *   publish thất bại sau COMMIT     y hệt trên — đây là lý do SubmitSolution dám nuốt lỗi publish
- *   mạng đứt giữa lúc chấm          kết quả không về được, lease hết hạn, chấm lại
- *   deploy worker giữa chừng        graceful shutdown lo phần lớn, reaper lo phần còn lại
- * </pre>
- *
- * Một cơ chế, năm sự cố. Và nó là thứ biến R1 ("0 bài mất, tuyệt đối") từ một lời hứa thành
- * một tính chất.
- *
- * <h2>★ Nhưng không phải vô hạn lần — V16, ADR 019</h2>
- * Bản trước thả lại mãi. Một bài làm sập worker, hay một đề mất testdata
- * ({@code ClaimJudgeJobUseCase.skipBrokenJob}), thì quay vòng mãi: treo trước mắt người nộp,
- * tốn một lease mỗi vòng, và chặn bảng xếp hạng kỳ thi phía sau nó. Giờ một bài được thả lại
- * tối đa {@code oj.judge.max-reaps} lần; lần hết lease kế tiếp, reaper <b>bỏ cuộc</b> và bài
- * nhận {@code IE} qua {@link RecordJudgeResultUseCase#boCuoc}.
- *
- * <h2>Điều tuyệt đối không làm ở đây</h2>
- * <ul>
- *   <li><b>Không tăng {@code attempt}.</b> Lần claim kế tiếp mới tăng. Tăng ở cả hai chỗ thì
- *       {@code judge_runs} có lỗ hổng số thứ tự mà sau này không ai giải thích được.</li>
- *   <li><b>Không tự ghi verdict.</b> Bỏ cuộc đi qua {@code RecordJudgeResultUseCase} — đúng
- *       khoá lạc quan mà mọi kết quả của worker đi qua. Một reaper tự ghi {@code IE} bằng câu
- *       lệnh của riêng nó là đường ghi verdict thứ hai, thứ ghi đè được kết quả thật của một
- *       worker chỉ đang chậm. Qua khoá lạc quan thì không: ai tới trước thắng, ai tới sau bị
- *       từ chối im lặng.</li>
- * </ul>
- */
 @InternalAccess("bộ lập lịch @Scheduled trong chính tiến trình này — lời gọi không đến từ mạng, nên không có tầng xác thực nào để đi qua.")
 @Service
 public class ReapStaleJobsUseCase {
@@ -72,28 +36,10 @@ public class ReapStaleJobsUseCase {
         this.judgeTx = new TransactionTemplate(tx);
     }
 
-    /**
-     * Gọi định kỳ bởi {@code StaleJobReaper} ({@code @Scheduled}, chu kỳ
-     * {@code oj.judge.reaper-interval}) — bộ hẹn giờ nằm ở infrastructure, luật nghiệp vụ nằm ở đây.
-     *
-     * <p><b>Không mang {@code @JudgeTransactional}</b>, và đó là cố ý: mỗi bài bỏ cuộc cần một
-     * transaction <i>của riêng nó</i> mở đầu bằng khoá lạc quan (bất biến #7). Bọc cả phương
-     * thức thì lượt bỏ cuộc nhập vào transaction ngoài — khoá lạc quan không còn là câu lệnh
-     * đầu tiên, và một bài hỏng kéo cả lượt thả lại rollback theo.
-     *
-     * @return số bài đã xử lý — thả lại cộng bỏ cuộc. {@code > 0} là tín hiệu vận hành: hoặc
-     *         có worker vừa chết, hoặc lease đang ngắn hơn thời gian chấm thật của bài nặng nhất
-     */
     public int reap() {
         return thaLai() + boCuoc();
     }
 
-    /**
-     * Hai câu ghi trong <b>một</b> transaction: thả lease, rồi đưa ảnh chụp trạng thái về
-     * {@code QUEUED}. Tách ra hai transaction là có một cửa sổ mà bài đã nằm chờ trong hàng đợi
-     * nhưng trang chi tiết vẫn hiện "đang chấm" — và nếu tiến trình chết đúng giữa cửa sổ đó,
-     * nó hiện như thế mãi mãi.
-     */
     private int thaLai() {
         List<Long> reclaimed = judgeTx.execute(status -> {
             List<Long> ids = queue.reapExpired(config.maxReaps());
@@ -110,7 +56,6 @@ public class ReapStaleJobsUseCase {
         return reclaimed.size();
     }
 
-    /** Mỗi bài hết lượt: một transaction ghi verdict riêng, qua khoá lạc quan. */
     private int boCuoc() {
         int daGhi = 0;
         for (ExhaustedJob bai : queue.exhaustedJobs(config.maxReaps())) {

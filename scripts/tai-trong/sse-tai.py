@@ -1,30 +1,4 @@
 #!/usr/bin/env python3
-"""Kịch bản SSE — nfrplan 2.4 (c): "1000 kết nối SSE đồng thời". Chạy qua `chay.sh sse` và `chay.sh ky-thi`.
-
-    sse-tai.py --base http://10.0.0.5:8080 --contest-id 7 [--so-ket-noi 1000 --giu 180 --json out.json]
-    sse-tai.py ... --kich-ban ky-thi --dang-nhap --phien-ra F --san-sang F --su-kien-ra F
-
-★ VÌ SAO KHÔNG DÙNG k6: k6 đọc HẾT thân response rồi mới trả về, mà luồng SSE không bao giờ hết —
-nó chỉ đo được "treo tới timeout". Ở đây mỗi kết nối được đọc từng dòng, nên biết CHÍNH XÁC kết
-nối nào còn sống, nhận bao nhiêu nhịp tim, và đứt lúc nào. Chỉ dùng thư viện chuẩn: không thêm công cụ.
-
-★ BA CÁCH HỎNG MÀ PHẢI PHÂN BIỆT (nguong.json):
-  mở hỏng    — không nhận được 200 + text/event-stream
-  đứt        — server đóng TRƯỚC khi hết --giu (không tính lần đóng ở oj.sse.timeout — --giu phải nhỏ hơn)
-  thiếu nhịp — còn mở mà nhận < giu/nhịp − 1 dòng ':ping'. Đây là loại nguy hiểm nhất: client
-               tưởng đang nghe, thực ra không có gì chảy qua.
-Song song, một luồng đọc `GET /api/v1/problems` 5 lần/giây trong lúc giữ kết nối: P1 phải giữ
-nguyên khi 1000 luồng đang mở, nếu không thì SSE đang ăn tài nguyên của đường đọc.
-
-★ ky-thi: NGƯỜI XEM ĐĂNG NHẬP, VÀ ĐÓ LÀ THỨ LÀM NÊN PHÉP ĐO P8. Trang thật mở luồng bằng fetch +
-Authorization (static/js/sse.js), nên mỗi kết nối mang token của đúng một tài khoản tai-k: máy chủ đọc
-thêm dòng và hạng của người xem ở MỖI lần bảng đổi — tải thật, không phải bản ẩn danh rẻ hơn. Và khung
-đầu tiên có cuaToi.soBaiDat ≥ 1 là lúc bài AC của tai-k HIỆN LÊN màn hình của tai-k; bao-cao-db.py trừ
-judged_at. Đăng nhập một lần ở đây rồi ghi phiên cho k6 dùng lại: hai lần là gấp đôi bcrypt.
-
-★ THÂN CHUNKED. Luồng không có Content-Length nên đến dạng Transfer-Encoding: chunked; dòng kích thước
-khúc chen giữa một dòng data: và JSON vỡ. Nhịp tim vẫn đếm đúng, nên kịch bản sse cũ không lộ lỗi này.
-"""
 import argparse
 import asyncio
 import io
@@ -41,17 +15,15 @@ from urllib import error as urlerr, request as urlreq
 from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong  # noqa: E402
+from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong
 
-TIMEOUT_SERVER_S = 300      # oj.sse.timeout = 5m trong application.yml
+TIMEOUT_SERVER_S = 300
 TOC_DO_DOC = 5
-LO_BCRYPT = 3               # dưới oj.auth.bcrypt-concurrency (4) — cùng lý do với chung.js
-UA = 'oj-tai-trong/1.0'     # User-Agent rỗng hoặc "Python-urllib" là thứ Cloudflare hay chặn
+LO_BCRYPT = 3
+UA = 'oj-tai-trong/1.0'
 MAT_KHAU = os.environ.get('MAT_KHAU', 'matkhau-dev-123')
 
-
 def kiem_dich(base):
-    """Cùng luật với chung.js: chỉ máy nội bộ, trừ khi gõ lại đúng BASE vào biến cho phép."""
     host = urlsplit(base).hostname or ''
     try:
         noi_bo = ipaddress.ip_address(host).is_private or ipaddress.ip_address(host).is_loopback
@@ -60,10 +32,8 @@ def kiem_dich(base):
     if not noi_bo and os.environ.get('CHO_PHEP_DICH_CONG_KHAI') != base:
         raise SystemExit(f'BASE {base} không phải máy nội bộ. Cố ý thì đặt CHO_PHEP_DICH_CONG_KHAI={base}')
 
-
 def phan_vi(xs, q):
     return sorted(xs)[math.ceil(q * len(xs)) - 1] if xs else None
-
 
 def dang_nhap_mot(base, handle):
     than = json.dumps({'dinhDanh': handle, 'password': MAT_KHAU}).encode()
@@ -81,14 +51,12 @@ def dang_nhap_mot(base, handle):
         time.sleep(1)
     raise SystemExit(f'Đăng nhập {handle} vẫn 429 sau 6 lần thử.')
 
-
 def dang_nhap_het(base, n):
     t0 = time.monotonic()
     with ThreadPoolExecutor(LO_BCRYPT) as ex:
         phien = dict(ex.map(lambda i: dang_nhap_mot(base, f'tai-{i + 1}'), range(n)))
     print(f'  đăng nhập {n} tài khoản qua {base}: {time.monotonic() - t0:.0f}s', flush=True)
     return phien
-
 
 async def mo(u, duong_dan, headers):
     ctx = ssl.create_default_context() if u.scheme == 'https' else None
@@ -97,15 +65,12 @@ async def mo(u, duong_dan, headers):
     await w.drain()
     return r, w
 
-
 async def doc_header(r):
     dau = await r.readuntil(b'\r\n\r\n')
     dong = dau.decode('latin-1').split('\r\n')
     return int(dong[0].split()[1]), dau.lower()
 
-
 async def doc_khoi(r, chunked, con):
-    """Một khối thân đã bỏ khung chunked. b'' = server đóng; hết giờ giữ thì ném TimeoutError."""
     if not chunked:
         return await asyncio.wait_for(r.read(4096), con)
     dong = await asyncio.wait_for(r.readline(), con)
@@ -114,14 +79,12 @@ async def doc_khoi(r, chunked, con):
         return b''
     return (await asyncio.wait_for(r.readexactly(co + 2), con))[:-2]
 
-
 def da_giai(du_lieu):
     try:
         toi = json.loads(du_lieu).get('cuaToi')
     except ValueError:
         return False
     return bool(toi) and toi.get('soBaiDat', 0) >= 1
-
 
 async def mot_ket_noi(u, duong_dan, giu, kq, token, handle):
     t0 = time.monotonic()
@@ -154,7 +117,7 @@ async def mot_ket_noi(u, duong_dan, giu, kq, token, handle):
             except (asyncio.IncompleteReadError, ConnectionError, ValueError):
                 khoi = b''
             if not khoi:
-                kq['dut'] += 1          # server đóng trước khi hết thời gian giữ
+                kq['dut'] += 1
                 break
             kq['byte'] += len(khoi)
             du += khoi
@@ -171,7 +134,6 @@ async def mot_ket_noi(u, duong_dan, giu, kq, token, handle):
         kq['nhip'].append(nhip)
         w.close()
 
-
 async def doc_song_song(u, het, kq):
     while time.monotonic() < het:
         t0 = time.monotonic()
@@ -185,7 +147,6 @@ async def doc_song_song(u, het, kq):
         except Exception:
             kq['doc_hong'] += 1
         await asyncio.sleep(max(0.0, 1 / TOC_DO_DOC - (time.monotonic() - t0)))
-
 
 async def chay(a, phien):
     u = urlsplit(a.base)
@@ -204,12 +165,10 @@ async def chay(a, phien):
     if a.san_sang:
         io.open(a.san_sang, 'w').close()
         print(f'  mở xong {kq["mo_duoc"]} kết nối ({kq["mo_hong"]} hỏng) — báo sẵn sàng', flush=True)
-    # Đo đường đọc CHỈ khi mọi kết nối đã mở — trước đó là đo lúc đang dốc lên.
     het_giu_chung = time.monotonic() + max(1.0, a.giu - a.so_ket_noi / a.toc_do_mo)
     viec.append(asyncio.ensure_future(doc_song_song(u, het_giu_chung, kq)))
     await asyncio.gather(*viec)
     return kq
-
 
 def tham_so():
     p = argparse.ArgumentParser()
@@ -226,7 +185,6 @@ def tham_so():
     p.add_argument('--su-kien-ra', help='JSON từng kết nối: giờ mở, đóng, và giờ thấy bài AC của mình')
     p.add_argument('--json')
     return p.parse_args()
-
 
 def main():
     a = tham_so()
@@ -276,7 +234,6 @@ def main():
         with io.open(a.su_kien_ra, 'w', encoding='utf-8') as fh:
             json.dump({'dong_ho': 'time.time() của máy chạy sse-tai.py', 'ket_noi': kq['ket_noi']}, fh)
     return 0 if dat else 1
-
 
 if __name__ == '__main__':
     sys.exit(main())

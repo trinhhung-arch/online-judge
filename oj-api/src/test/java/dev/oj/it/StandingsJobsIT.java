@@ -22,19 +22,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Hai job giữ bất biến của M5 — FR-CON-08 và FR-CON-09.
- *
- * <h2>Vì sao {@code oj-api/CLAUDE.md} mục 6 bắt job rebuild PHẢI có test</h2>
- * Bất biến của mốc này là <i>"Redis là cache, {@code contest_standings} là sự thật"</i>. Câu
- * ấy chỉ là một lời nói cho tới khi có ai chứng minh rằng bảng xếp hạng <b>dựng lại được</b>
- * từ Postgres. Không có ca kiểm ở đây thì ngày phải dựng lại thật là ngày đầu tiên biết là
- * không dựng lại được — và ngày đó, theo định nghĩa, là một ngày đã hỏng.
- *
- * <p>Cùng lý do với job đối soát: nó tồn tại để phát hiện lệch, nên nó phải được chứng minh là
- * <b>phát hiện được</b> lệch. Một job đối soát luôn báo "không lệch" thì không phân biệt được
- * với một job không chạy.
- */
 class StandingsJobsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
@@ -94,8 +81,6 @@ class StandingsJobsIT extends PostgresIT {
                 """).param("id", contestId).query(Integer.class).single();
     }
 
-    // =========================================================================
-
     @Test
     @DisplayName("★ FR-CON-09 — kỳ thi đang chạy lọt vào danh sách cần soát")
     void ky_thi_dang_chay_can_soat() {
@@ -110,8 +95,6 @@ class StandingsJobsIT extends PostgresIT {
     @DisplayName("★ vừa soát xong thì KHÔNG soát lại — chốt chống quét lặp")
     void vua_soat_thi_thoi() {
         Instant bayGio = Instant.now();
-        // Mỗi lần soát là một lần tính lại toàn bộ kỳ thi từ submissions. Không có chốt này
-        // thì cửa sổ bảy ngày với nhịp mười lăm phút là gần bảy trăm lần quét cho mỗi kỳ thi.
         drift.chay(ctx());
 
         assertThat(standingsRepo.canSoatLech(bayGio,
@@ -125,7 +108,6 @@ class StandingsJobsIT extends PostgresIT {
         drift.chay(ctx());
         Instant bayGio = Instant.now();
 
-        // `chuaSoatTu` ở tương lai: mọi bản soát đều "cũ hơn" nó.
         assertThat(standingsRepo.canSoatLech(bayGio,
                 bayGio.minus(Duration.ofDays(7)), bayGio.plus(Duration.ofMinutes(1))))
                 .contains(contestId);
@@ -136,7 +118,6 @@ class StandingsJobsIT extends PostgresIT {
     void ngoai_cua_so_thi_thoi() {
         Instant bayGio = Instant.now();
 
-        // `ketThucSau` ở tương lai: không kỳ thi nào kết thúc sau mốc ấy.
         assertThat(standingsRepo.canSoatLech(bayGio,
                 bayGio.plus(Duration.ofDays(1)), bayGio.minus(Duration.ofMinutes(15))))
                 .doesNotContain(contestId);
@@ -150,7 +131,6 @@ class StandingsJobsIT extends PostgresIT {
 
         rebuild.chay(ctx());
 
-        // Đây là toàn bộ bằng chứng cho câu "Postgres là sự thật". Nếu ca này đỏ, câu ấy sai.
         assertThat(standings.top(contestId, 50, false)).isEqualTo(truoc);
     }
 
@@ -192,7 +172,6 @@ class StandingsJobsIT extends PostgresIT {
 
         drift.chay(ctx());
 
-        // Một job đối soát luôn báo "không lệch" thì không phân biệt được với một job không chạy.
         assertThat(soDongLechDaGhi()).isEqualTo(1);
     }
 
@@ -204,8 +183,6 @@ class StandingsJobsIT extends PostgresIT {
 
         drift.chay(ctx());
 
-        // Tự sửa nghe hấp dẫn nhưng sai: nếu chính nó tính sai thì nó vừa phá bảng đúng, và
-        // thứ hạng đổi giữa kỳ thi mà không ai biết vì sao. Sửa là việc của RebuildStandingsJob.
         assertThat(jdbc.sql("SELECT total_score FROM contest_standings WHERE contest_id = :id")
                 .param("id", contestId).query(Integer.class).single()).isEqualTo(999);
     }

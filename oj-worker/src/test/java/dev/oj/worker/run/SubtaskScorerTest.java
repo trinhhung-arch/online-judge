@@ -17,15 +17,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bước 3.3 · FR-PROB-06. Toàn bộ chạy trong bộ nhớ, không cần {@code isolate}: điểm số là
- * một phép tính thuần, và nó phải kiểm được trên mọi máy trong mọi lần push.
- */
 class SubtaskScorerTest {
 
     private static final String SHA = Sha256.hexOf("x");
 
-    /** Ghi lại NHỮNG TEST NÀO đã chạy — với phụ thuộc thì đó mới là điều đáng khẳng định. */
     private static final class RecordingExecutor implements SubtaskScorer.TestExecutor {
 
         private final Set<Integer> failing;
@@ -55,11 +50,6 @@ class SubtaskScorerTest {
         assertThat(executor.ran).containsExactly(1, 2, 3, 4);
     }
 
-    /**
-     * ★ Sai một test là cả nhóm 0 điểm, nên những test còn lại CỦA NHÓM ĐÓ không đổi được gì
-     * nữa — nhưng nhóm sau vẫn phải chạy. Đây đúng là chỗ mà một early exit áp cho cả bài sẽ
-     * chấm sai điểm.
-     */
     @Test
     @DisplayName("★ MIN — sai test 1 thì bỏ nốt nhóm 1, NHƯNG vẫn chấm nhóm 2")
     void min_sai_thi_bo_not_nhom_do_nhung_van_cham_nhom_sau() {
@@ -84,15 +74,10 @@ class SubtaskScorerTest {
         var result = SubtaskScorer.score(job(SubtaskScoring.SUM), executor);
 
         assertThat(executor.ran).containsExactly(1, 2, 3, 4);
-        assertThat(result.subtasks().get(0).score()).isEqualTo(20);   // 40 điểm, 1/2 test
+        assertThat(result.subtasks().get(0).score()).isEqualTo(20);
         assertThat(result.score()).isEqualTo(80);
     }
 
-    /**
-     * ★ Điểm chính của phụ thuộc: nhóm 2 <b>không được chấm</b>, chứ không phải được chấm rồi
-     * cho 0. Một đề IOI có nhóm cuối dữ liệu lớn nhất; chạy nó cho bài đã hỏng ở nhóm 1 là
-     * đốt vài chục giây máy chấm để nhận một con số biết trước.
-     */
     @Test
     @DisplayName("★ phụ thuộc không đạt thì nhóm sau KHÔNG CHẠY, và được đánh dấu bỏ qua")
     void phu_thuoc_khong_dat_thi_bo_qua() {
@@ -125,10 +110,6 @@ class SubtaskScorerTest {
         assertThat(result.verdict()).isEqualTo(Verdict.AC);
     }
 
-    /**
-     * ★ Một bài ăn 90/100 mà hiện AC thì bảng xếp hạng nói một đằng, trang bài nộp nói một
-     * nẻo — và người ta chỉ phát hiện ra lúc công bố kết quả.
-     */
     @Test
     @DisplayName("★ AC khi và chỉ khi TRỌN điểm")
     void AC_chi_khi_tron_diem() {
@@ -139,14 +120,12 @@ class SubtaskScorerTest {
         assertThat(result.verdict()).isNotEqualTo(Verdict.AC);
     }
 
-    /** Nhóm 1: test 1,2 (40đ) · Nhóm 2: test 3,4 (60đ). */
     private static JudgeJobDto job(SubtaskScoring scoring) {
         return baseJob(List.of(
                 new SubtaskSpecDto(1, 40, scoring, List.of()),
                 new SubtaskSpecDto(2, 60, scoring, List.of())));
     }
 
-    /** Như trên, nhưng nhóm 2 phụ thuộc nhóm 1. */
     private static JudgeJobDto jobWithDependency() {
         return baseJob(List.of(
                 new SubtaskSpecDto(1, 40, SubtaskScoring.MIN, List.of()),

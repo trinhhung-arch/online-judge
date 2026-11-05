@@ -19,26 +19,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-/**
- * FR-AUTH-02 và FR-AUTH-08 — đăng nhập, và khoá tạm 5 lần sai / phút / IP.
- *
- * <h2>★ Ba chỗ cố ý làm chậm hoặc cố ý im lặng</h2>
- *
- * <ol>
- *   <li><b>Không tìm thấy tài khoản vẫn phải băm một lần.</b> BCrypt cost 12 tốn ~250ms. Nếu
- *       nhánh "không tồn tại" trả lời trong 2ms còn nhánh "sai mật khẩu" tốn 250ms thì thời
- *       gian phản hồi <i>chính là</i> câu trả lời cho <i>"tài khoản này có thật không"</i> —
- *       và người dò không cần đọc nội dung response nữa.</li>
- *   <li><b>Bốn nguyên nhân, một thông báo.</b> Xem javadoc của {@link IdentityException}.</li>
- *   <li><b>Khoá theo IP chứ không theo tài khoản.</b> Xem javadoc của
- *       {@link LoginAttemptRepository} — khoá theo tài khoản là trao cho người lạ một nút
- *       khoá tài khoản của người khác.</li>
- * </ol>
- *
- * <h2>Ghi nhận lần thử TRƯỚC khi ném lỗi</h2>
- * Nếu ghi sau thì một ngoại lệ giữa chừng làm mất bản ghi, và bộ đếm 5 lần sai không bao giờ
- * chạm ngưỡng — tức là FR-AUTH-08 tồn tại trên giấy mà không tồn tại lúc chạy.
- */
 @PublicAccess("Đăng nhập là cách người dùng LẤY token — đòi token ở đây là một vòng lặp vô tận.")
 @Service
 public class LoginUseCase {
@@ -66,10 +46,6 @@ public class LoginUseCase {
         this.clock = clock;
     }
 
-    /**
-     * @param maHaiLop mã TOTP hoặc mã dự phòng. {@code null} là bình thường ở lần gọi đầu —
-     *                 client chưa biết tài khoản này có bật 2FA hay không
-     */
     public SessionIssuer.Session thucHien(String handleHoacEmail, String matKhau,
                                           String userAgent, String clientIp, String maHaiLop) {
         kiemKhoa(clientIp);
@@ -78,7 +54,6 @@ public class LoginUseCase {
                 ? Optional.empty()
                 : users.timCredentials(User.chuanHoaHandle(handleHoacEmail));
 
-        // Băm LUÔN chạy, kể cả khi không tìm thấy — xem điểm 1 trong javadoc.
         String bamDaLuu = tim.map(Credentials::passwordHash).orElse(null);
         boolean khop = hasher.khop(matKhau == null ? "" : matKhau, bamDaLuu);
 
@@ -91,20 +66,6 @@ public class LoginUseCase {
 
         Credentials c = tim.get();
 
-        // ★ YẾU TỐ THỨ HAI — và ba chi tiết ở đây đều là bảo mật, không phải tiện dụng.
-        //
-        // 1. Lượt đăng nhập chỉ được ghi THÀNH CÔNG sau khi qua CẢ HAI yếu tố. Bản trước
-        //    ghi ngay sau khi mật khẩu khớp; giữ nguyên thì một người có mật khẩu nhưng
-        //    không có điện thoại vẫn để lại dấu vết "đăng nhập thành công" trong
-        //    login_attempts, và người trực đọc nhật ký sẽ tin là họ đã vào được.
-        //
-        // 2. Mã SAI phải tính là một lần đăng nhập hỏng. Không tính thì FR-AUTH-08 (5 lần
-        //    sai/phút/IP) không còn áp cho TOTP, và một mã sáu chữ số chỉ có một triệu khả
-        //    năng — dò được trong vài giờ.
-        //
-        // 3. THIẾU mã thì KHÔNG tính là hỏng. Đó là bước bình thường của luồng: client gọi
-        //    lần đầu chưa biết tài khoản này có 2FA. Tính nó là hỏng nghĩa là mọi người bật
-        //    2FA đều tự khoá IP của mình sau năm lần đăng nhập bình thường.
         if (totp.dangBat(c.userId())) {
             if (maHaiLop == null || maHaiLop.isBlank()) {
                 throw IdentityException.canTotp();
@@ -118,14 +79,6 @@ public class LoginUseCase {
             }
         }
 
-        // ★ Giãn nhịp SAU khi đã qua cả hai yếu tố — xem javadoc LoginRateLimiter.
-        //
-        // Đặt ở đây chứ không ở đầu hàm là bắt buộc: đầu hàm ta chưa biết người gọi là ai,
-        // và chặn theo chuỗi họ GÕ VÀO nghĩa là bất kỳ ai cũng khoá được người khác ra ngoài
-        // bằng cách gõ handle của họ liên tục. Tới được dòng này thì người gọi đã chứng minh
-        // họ có mật khẩu — đó là tài khoản của chính họ, không có nạn nhân nào để khoá.
-        //
-        // Nó KHÔNG cứu CPU (bcrypt đã chạy xong); trần CPU nằm ở bcrypt-concurrency.
         gioiHan.kiemVaGhiNhan(c.userId());
 
         attempts.ghiNhan(handleHoacEmail, clientIp, true);
@@ -141,11 +94,6 @@ public class LoginUseCase {
                 });
     }
 
-    /**
-     * Đếm và khoá theo DẢI, không theo địa chỉ: IPv6 gom về /64 ({@link ClientIp#khoaGioiHan}).
-     * Đếm theo địa chỉ thì một kết nối IPv6 đổi địa chỉ sau mỗi 5 lần sai là không bao giờ bị
-     * khoá — và mã TOTP 6 chữ số rơi vào đúng đường này (rà soát 2026-09-24, F2).
-     */
     private void khoaNeuQuaNhieu(String clientIp) {
         var auth = properties.auth();
         Instant bayGio = clock.instant();

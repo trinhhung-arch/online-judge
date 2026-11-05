@@ -4,7 +4,6 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### STS ###
 .apt_generated
 .classpath
 .factorypath
@@ -13,13 +12,11 @@ target/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
 .idea
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -29,32 +26,16 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
 .vscode/
 
-# Thư mục output của Eclipse/JDT (VS Code Java tạo khi nạp dự án).
-# 520 file: .class, bản sao của src/main/resources, và một pom.xml nữa.
-# Nó sinh lại được hoàn toàn, và một lần `git add .` mà thiếu dòng này là 454 file .class
-# vào lịch sử repo.
 bin/
 
-# ★ Secret của máy dev. README bảo `cp .env.example .env` rồi điền HAI secret thật vào —
-# thiếu dòng này thì một lần `git add .` là chúng vào lịch sử repo vĩnh viễn, và
-# OJ_JWT_SECRET là thứ ai biết cũng tự phát được token ADMIN.
-# `.env.example` KHÔNG bị bỏ qua: nó là bản mẫu, và nó phải được commit.
 .env
 .env.local
 scripts/.secrets-dev
 
-# Credentials của Cloudflare Tunnel. File thật sống ở ~/.cloudflared/ và KHÔNG bao giờ
-# vào repo — nhưng người ta hay chép nó cạnh config.yml cho tiện. Chặn sẵn ở đây.
 infra/cloudflared/*.json
 
-# ★ Khoá riêng SSH/TLS. Dòng này sinh ra từ một sự cố thật: ngày 2026-09-06 một cặp
-# ED25519 vào repo qua commit d4b9a4c vì cả câu `eval "$(ssh-agent -s)"` bị dán vào ô
-# hỏi tên file của ssh-keygen — nên khoá rơi ra thư mục gốc dự án thay vì ~/.ssh, và
-# `git add .` cuốn nó đi. Repo này CÔNG KHAI, nên nó nằm ngoài internet 9 ngày.
-# Chặn theo NỘI DUNG thì git không làm được; chặn theo tên là thứ rẻ nhất có tác dụng.
 id_rsa
 id_ecdsa
 id_ed25519
@@ -63,5 +44,4 @@ id_*.pem
 *.key
 *.p12
 *.pfx
-# Tên file lạ do gõ nhầm lệnh vào ô hỏi tên — đúng cái đã xảy ra một lần.
 eval *

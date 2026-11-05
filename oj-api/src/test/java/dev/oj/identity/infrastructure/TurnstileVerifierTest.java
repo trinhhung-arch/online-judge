@@ -25,18 +25,12 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-/**
- * ★ Widget ở trình duyệt không chứng minh gì cả — nó chỉ sinh ra một chuỗi. Thứ duy nhất
- * bảo vệ cửa đăng ký là lượt hỏi lại Cloudflare ở đây.
- */
 class TurnstileVerifierTest {
 
     private static final String URL = "https://vi-du.test/siteverify";
 
-    /** Tên miền của ta trong test. Viết hoa một chữ để ca so khớp chứng minh được phép so không phân biệt hoa thường. */
     private static final List<String> MIEN_CUA_TA = List.of("OJ.vi-du.test");
 
-    /** Máy chủ Cloudflare giả — test này KHÔNG được gọi ra internet. */
     private MockRestServiceServer cloudflareGia;
 
     private TurnstileVerifier verifier(boolean bat) {
@@ -49,7 +43,6 @@ class TurnstileVerifierTest {
                 builder);
     }
 
-    /** Cloudflare trả {@code success=true} kèm {@code hostname} — hoặc không kèm, khi {@code null}. */
     private void cloudflareTraThanhCong(String hostname) {
         String than = hostname == null ? "{\"success\":true}"
                 : "{\"success\":true,\"hostname\":\"" + hostname + "\"}";
@@ -62,7 +55,7 @@ class TurnstileVerifierTest {
         var v = verifier(false);
 
         assertThatCode(() -> v.kiem(null, "203.0.113.1")).doesNotThrowAnyException();
-        cloudflareGia.verify();   // không có lời gọi nào được mong đợi, và không có lời gọi nào xảy ra
+        cloudflareGia.verify();
     }
 
     @Test
@@ -148,14 +141,6 @@ class TurnstileVerifierTest {
                 .hasFieldOrPropertyWithValue("code", "identity.captcha_khong_hop_le");
     }
 
-    /**
-     * ★ Cloudflare không trả lời mà cũng không từ chối — nó chỉ im. Đây là ca {@code
-     * hong_thi_tu_choi} không bắt được, vì máy chủ giả trả lỗi NGAY.
-     *
-     * <p>Chạy trên một máy chủ HTTP thật cục bộ (JDK, không thêm dependency), và đi qua
-     * CHÍNH bean {@link TurnstileVerifier.HttpConfig#turnstileHttp} mà ứng dụng dùng: timeout
-     * phải đến từ cấu hình thật, không phải từ một builder test dựng riêng.
-     */
     @Test
     @DisplayName("★ Cloudflare TREO → từ chối sau đúng trần timeout, không giữ luồng đăng ký")
     void treo_thi_cat_theo_timeout() throws Exception {

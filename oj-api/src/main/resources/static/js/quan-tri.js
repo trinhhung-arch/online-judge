@@ -1,25 +1,3 @@
-/**
- * Vận hành — FR-ADM-01, 03, 04, 06 và FR-SUB-09. Bước G11.
- *
- * ★ MỌI THAO TÁC Ở ĐÂY ĐỀU ĐI VÀO `audit_log`, VÀ ĐÓ LÀ LÝ DO CÓ TRANG NÀY
- *
- * Cùng những việc này làm bằng `psql` thì không ai ghi lại. Một hệ thống bán sự công bằng
- * mà quyền admin dùng được không dấu vết là một hệ thống không chứng minh được điều nó bán.
- * Nên trang này không phải để tiện — nó là để mọi lần dùng quyền đều có tên và có giờ.
- *
- * ★ VIỆC MỘT CHIỀU THÌ HỎI LẠI, VIỆC HOÀN TÁC ĐƯỢC THÌ KHÔNG
- *
- * Ẩn bài nộp hoàn tác được bằng nút ngay cạnh, nên không hỏi. Ẩn danh hoá thì không, nên
- * hỏi — và hỏi bằng cách bắt gõ lại mã số, vì một hộp thoại "Bạn chắc chứ?" là thứ người ta
- * bấm Đồng ý theo phản xạ.
- *
- * ★ BẢNG SỐ KHÔNG TỰ LÀM MỚI
- *
- * Một trang vận hành tự poll là một trang chạy suốt đêm trên màn hình bỏ quên, gửi request
- * mãi. Người vận hành bấm khi cần; con số luôn kèm giờ đọc được để không ai nhìn số cũ mà
- * tưởng là số bây giờ.
- */
-
 import { goi, LoiApi } from './api.js';
 import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
@@ -37,7 +15,6 @@ const oCongTac = document.getElementById('cong-tac');
 
 let dangTheoDoi = null;
 
-/** Nhãn và cách đọc từng số. Thứ tự ở đây là thứ tự hiển thị. */
 const SO_LIEU = [
     ['hangDoiDangCho', 'Đang chờ chấm', (v) => v],
     ['hangDoiDangCham', 'Đang chấm', (v) => v],
@@ -49,8 +26,6 @@ const SO_LIEU = [
     ['drift', 'Lệch bảng xếp hạng', (v) => v],
     ['apiP95Ms', 'API p95', (v) => `${Math.round(v)} ms`],
 ];
-
-// ---------------------------------------------------------------------------
 
 async function taiBangSo() {
     bao(o, '');
@@ -81,13 +56,6 @@ async function taiBaoTri() {
     }
 }
 
-/**
- * ★ Câu hỏi xác nhận chỉ dành cho chiều TẮT.
- *
- * Bật lại một công tắc là hoàn tác; tắt nó là dừng một phần hệ thống cho tất cả mọi người.
- * Hỏi cả hai chiều là dạy người ta bấm Đồng ý mà không đọc, và khi đó câu hỏi ở chiều nguy
- * hiểm cũng mất tác dụng.
- */
 function duocPhepDoi(ct, batMoi) {
     if (batMoi) return true;
     return confirm(`Tắt "${ct.moTa}"\n\nĐiều này ảnh hưởng tới mọi người dùng ngay lập tức. `
@@ -118,11 +86,8 @@ function veCongTac(ct) {
         ct.bat ? 'verdict AC' : 'verdict WA'));
     khoi.append(tieu);
 
-    // Câu mô tả đến từ máy chủ — xem javadoc của ToggleSystemSwitchUseCase.
     khoi.append(chu('p', ct.moTa, 'goi-y'));
 
-    // Một nút, và nó nói ra việc nó sắp làm chứ không nói trạng thái hiện tại. "Tắt nhận bài"
-    // rõ hơn một ô đánh dấu, vì ô đánh dấu bắt người ta suy ra hậu quả từ vị trí của nó.
     const nut = chu('button', ct.bat ? 'Tắt' : 'Bật', ct.bat ? 'nguy-hiem' : '');
     nut.type = 'button';
     nut.addEventListener('click', () => doiCongTac(ct, !ct.bat));
@@ -141,7 +106,6 @@ async function taiCongTac() {
     }
 }
 
-/** Gọi một endpoint không trả gì, rồi báo một câu. Dùng cho tám nút giống nhau ở dưới. */
 async function bam(duongDan, than, xong) {
     bao(o, '');
     try {
@@ -154,13 +118,6 @@ async function bam(duongDan, than, xong) {
 
 const VAI_TRO = ['USER', 'SETTER', 'ADMIN'];
 
-/**
- * ★ Mỗi dòng mang thao tác của CHÍNH nó.
- *
- * Bản trước bắt gõ mã số vào một ô rồi bấm nút ở chỗ khác — nghĩa là mọi thao tác đều nhắm
- * vào "con số đang nằm trong ô kia", và gõ nhầm một chữ số là đổi vai trò của người khác.
- * Ở đây không có ô nào để gõ nhầm: nút nằm trên dòng của người ấy.
- */
 function veNguoiDung(u) {
     const tr = chu('tr');
     tr.append(chu('td', u.id));
@@ -181,7 +138,6 @@ function veNguoiDung(u) {
     tr.append(oVaiTro);
 
     const hoatDong = u.trangThai === 'ACTIVE';
-    // Không chỉ dùng màu: trạng thái luôn có chữ.
     tr.append(chu('td', hoatDong ? 'Đang hoạt động' : u.trangThai,
         hoatDong ? 'verdict AC' : 'verdict WA'));
 
@@ -205,8 +161,6 @@ function veNguoiDung(u) {
     const anDanh = chu('button', 'Ẩn danh hoá', 'nguy-hiem');
     anDanh.type = 'button';
     anDanh.addEventListener('click', () => {
-        // Gõ lại tên đăng nhập, không phải bấm Đồng ý: một hộp thoại "Bạn chắc chứ?" là thứ
-        // người ta bấm qua theo phản xạ, còn gõ lại một cái tên thì buộc phải đọc cái tên ấy.
         const traLoi = prompt(`Ẩn danh hoá KHÔNG hoàn tác được.\n`
             + `Gõ lại tên đăng nhập "${u.handle}" để xác nhận:`);
         if (traLoi === null) return;
@@ -244,11 +198,8 @@ function taiNguoiDung() {
     trangNguoiDung.lamMoi();
 }
 
-// ---------------------------------------------------------------------------
-
 if (o) {
     if (!vaiTroItNhat('ADMIN')) {
-        // Không phải chốt bảo mật — mỗi use-case tự kiểm (bất biến #11). Nói trước cho đỡ mất công.
         bao(o, 'Trang này dành cho ADMIN. Máy chủ sẽ từ chối mọi thao tác ở đây.', 'loi');
     }
 
@@ -276,7 +227,6 @@ if (o) {
     document.getElementById('form-bai-nop').addEventListener('submit', (ev) => {
         ev.preventDefault();
         const id = Number(ev.target.submissionId.value);
-        // `submitter` cho biết nút nào được bấm; không có nó thì hai nút thành một.
         const an = ev.submitter?.value !== 'hien';
         bam(an ? DUONG.quanTri.anBai(id) : DUONG.quanTri.hienBai(id), null,
             an ? `Đã ẩn bài nộp #${id}.` : `Đã hiện lại bài nộp #${id}.`);

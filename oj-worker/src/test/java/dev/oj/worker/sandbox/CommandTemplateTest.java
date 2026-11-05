@@ -12,7 +12,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Mẫu lệnh ở đây là bản chép nguyên văn từ {@code R__seed_du_lieu_tham_chieu.sql}. */
 class CommandTemplateTest {
 
     private static final List<String> PATH = List.of("/usr/bin", "/bin");
@@ -26,23 +25,6 @@ class CommandTemplateTest {
                 .first().asString().endsWith("/g++").startsWith("/");
     }
 
-    /**
-     * ★ Ca này KHÔNG được tra {@code java} trên máy đang chạy test.
-     *
-     * <p>{@code resolveProgram} tra bằng {@code Files.isExecutable} trên hệ thống tệp thật,
-     * mà ảnh chạy CỐ Ý không có {@code java} trong {@code program-path}: JRE của worker nằm
-     * ở {@code /opt/java/openjdk} vì Java của worker không phải thứ được phép chạy trong box
-     * ({@code infra/isolate/Dockerfile}). macOS thì có {@code /usr/bin/java}. Nên bản cũ
-     * xanh trên máy dev và ĐỎ trong chính ảnh máy chấm — đo thật ngày 2026-09-05, nó làm
-     * surefire chết trước khi failsafe kịp chạy ca tấn công nào.
-     *
-     * <p>Thứ ca này đo là phép thay {@code dir} và {@code mem} (KB -&gt; MB), không phải máy
-     * nào có sẵn {@code java}. Nên dựng một {@code java} giả rồi tra trong thư mục ấy. Mẫu
-     * lệnh vẫn chép nguyên văn từ {@code R__seed_du_lieu_tham_chieu.sql}.
-     *
-     * <p>Việc ảnh chạy không có {@code java} vẫn là thật và vẫn đúng: dòng {@code java21}
-     * trong seed đang {@code enabled = FALSE}. Ai bật lại nó phải thêm JDK vào ảnh trước.
-     */
     @Test
     @DisplayName("mẫu Java của seed: {dir} và {mem} (KB -> MB)")
     void mauJava(@TempDir Path thuMucBin) throws IOException {

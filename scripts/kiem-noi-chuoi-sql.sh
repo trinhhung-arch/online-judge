@@ -1,73 +1,8 @@
 #!/usr/bin/env bash
-#
-# Luật 5d của CodingRulesTest — lớp cuối chống nối chuỗi vào SQL (bất biến #5, SEC2).
-#
-# ArchUnit ép được 5a/5b/5c, nhưng KHÔNG ép được toán tử `+`: từ Java 9 `a + b` biên dịch
-# thành invokedynamic (StringConcatFactory), nên phân tích bytecode không thấy. Chỗ trống ấy
-# chỉ bịt được bằng cách đọc mã nguồn — file này.
-#
-# Chạy được ở máy: ./scripts/kiem-noi-chuoi-sql.sh
-# CI gọi đúng file này, nên đỏ ở CI thì tái hiện ở máy trong một giây, không phải một vòng push.
-#
-# ---------------------------------------------------------------------------------------
-# VÌ SAO KHÔNG PHẢI MỘT LỆNH grep '"\s*\+'
-#
-# Bản đầu của bước này là đúng một dòng grep: bất kỳ dấu `+` nào cạnh một dấu nháy kép đều
-# đỏ. Nó bắt được nối chuỗi SQL — và bắt luôn mọi câu log dài xuống dòng, mọi lần ghép
-# cursor, mọi thông điệp exception. Bốn dòng đỏ đầu tiên của nó không có dòng nào là SQL.
-#
-# Một hàng rào bắt nhầm còn nguy hơn không có hàng rào, và nguy theo cách rất cụ thể: người
-# ta học được rằng bước này hay đỏ oan, rồi lần nó đỏ ĐÚNG sẽ được xử lý y hệt những lần
-# trước — bằng cách nhìn lướt qua. Chính ci.yml đã viết ra nguyên tắc đó ở cuối file ("một CI
-# đỏ thường trực là một CI bị bỏ qua"); bước này từng là ngoại lệ cho chính nguyên tắc ấy.
-#
-# ---------------------------------------------------------------------------------------
-# LUẬT MỚI DỰA TRÊN MỘT SỰ THẬT ĐO ĐƯỢC CỦA CÂY MÃ NÀY
-#
-# Cả 118 câu SQL trong `oj-api` đều là text block (`"""`) gán vào một hằng `static final
-# String`, và KHÔNG câu log nào dùng text block. Nghĩa là trong tầng infrastructure,
-# "text block" ≈ "SQL" — và bốn luật dưới đây thành ra vừa sắc vừa gọn:
-#
-#   1. Không dấu `+` nào được chạm vào một text block (trước `"""` mở hoặc sau `"""` đóng).
-#   2. Không có `\{...}` (string template) bên trong text block.
-#   3. Đối số của `.sql(...)` không được chứa `+`.
-#   4. Một literal SQL nằm ngoài text block mà có `+` trên cùng dòng → đỏ.
-#
-# Luật 4 tồn tại vì luật 1–3 giả định SQL luôn là text block. Nó canh đúng ngày ai đó viết
-# câu SQL đầu tiên bằng nháy kép thường — `"SELECT ... WHERE id = " + id` — thay vì giả định
-# ngày ấy không tới.
-# ---------------------------------------------------------------------------------------
 set -euo pipefail
 
 goc="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# ---------------------------------------------------------------------------------------
-# ★ `while read` CHỨ KHÔNG PHẢI `mapfile`, và đây không phải chuyện khẩu vị.
-#
-# `mapfile` (và bí danh `readarray`) có từ bash 4. macOS ship bash **3.2.57** — bản cuối
-# cùng dưới giấy phép GPLv2 — và Apple sẽ không nâng. Nên trên máy chấm và trên mọi máy dev
-# dùng Mac, bản cũ của file này chết ở dòng đầu tiên chạm mảng:
-#
-#     scripts/kiem-noi-chuoi-sql.sh: line 48: mapfile: command not found
-#
-# `set -e` biến nó thành exit 127, nên nó KHÔNG âm thầm xanh — nhưng hậu quả cũng đủ tệ:
-# bước kiểm này chỉ còn chạy ở CI (ubuntu-latest). Mà chính đầu file này hứa
-# *"đỏ ở CI thì tái hiện ở máy trong một giây, không phải một vòng push"* — một lời hứa
-# không giữ được trên chính cái máy mà dự án được viết ra.
-#
-# `while IFS= read -r` cho kết quả y hệt và chạy từ bash 2 trở đi. Đã đo trên bash 3.2.57
-# ngày 2026-09-20: `arr+=()`, `${#arr[@]}` trên mảng rỗng, và `"${arr[@]#tien-to}"` đều đúng.
-#
-# ⚠️ Thêm mảng mới thì dùng lại khuôn này, ở đây và ở mọi script khác trong `scripts/`.
-# Lệnh soát (bỏ qua chính khối chú thích này):
-#
-#     grep -nE '^[^#]*\b(mapfile|readarray)\b' scripts/*.sh     # phải rỗng
-# ---------------------------------------------------------------------------------------
-
-# Tìm MỌI thư mục tên `infrastructure`, ở bất kỳ độ sâu nào.
-#
-# Bản trước dùng glob `dev/oj/*/infrastructure/` — đúng một mức — nên nó bỏ sót
-# `dev/oj/platform/audit/infrastructure/` xuất hiện ở M4.
 thu_muc=()
 while IFS= read -r duong; do
   thu_muc+=("$duong")
@@ -78,8 +13,6 @@ if [ ${#thu_muc[@]} -eq 0 ]; then
   exit 1
 fi
 
-# An toàn khi mở rộng "${thu_muc[@]}" dù `set -u`: nhánh trên đã `exit 1` nếu mảng rỗng, và
-# bash 3.2 coi việc mở rộng một mảng rỗng dưới `set -u` là lỗi "unbound variable".
 tep=()
 while IFS= read -r tep_java; do
   tep+=("$tep_java")
@@ -166,3 +99,4 @@ awk -v goc="$goc/" '
 ' "${tep[@]}"
 
 echo "OK — không có nối chuỗi nào vào SQL."
+

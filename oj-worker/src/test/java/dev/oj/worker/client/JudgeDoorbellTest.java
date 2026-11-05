@@ -10,17 +10,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bước 6.4 — chuông cửa. Ba tính chất, và cả ba đều là điều kiện để bước 6.4 an toàn.
- */
 class JudgeDoorbellTest {
 
     private final JudgeDoorbell chuong = new JudgeDoorbell();
 
-    /**
-     * ★ Lý do tồn tại của cả bước: ngân sách {@code enqueue → claim} là 100ms, còn nhịp ngủ
-     * là 500ms. Slot phải dậy <b>ngay</b> khi có chuông, không chờ hết nhịp.
-     */
     @Test
     @DisplayName("★ slot đang chờ dậy NGAY khi có chuông, không chờ hết idle-poll")
     void day_ngay_khi_co_chuong() throws Exception {
@@ -35,7 +28,7 @@ class JudgeDoorbellTest {
         });
         slot.start();
         assertThat(daVaoCho.await(2, TimeUnit.SECONDS)).isTrue();
-        Thread.sleep(50);          // chắc chắn slot đã vào wait()
+        Thread.sleep(50);
 
         chuong.reo();
         slot.join(5_000);
@@ -45,13 +38,6 @@ class JudgeDoorbellTest {
                 .isBetween(0L, 2_000L);
     }
 
-    /**
-     * ★ Vế thứ hai, và là vế giữ cho bước 6.4 an toàn: <b>không có chuông thì vẫn dậy</b>.
-     *
-     * <p>Broker chết, reaper thả một bài, hay {@code publishEnqueued} hỏng sau commit — cả ba
-     * đều là những trường hợp không có tiếng chuông nào. Bỏ nhịp chờ đi là biến RabbitMQ từ
-     * đường dẫn thành kho chứa, và lúc đó R1 không còn được Postgres bảo đảm nữa.
-     */
     @Test
     @DisplayName("★ không có chuông thì vẫn dậy sau idle-poll — đây là đường lùi của degraded mode")
     void van_day_khi_khong_ai_reo() {
@@ -64,11 +50,6 @@ class JudgeDoorbellTest {
         assertThat(msDaCho).isGreaterThanOrEqualTo(100);
     }
 
-    /**
-     * Bước 6.8 — {@code JudgeLoop.stop()} rung chuông để đánh thức slot đang chờ. Không có
-     * đường thoát này thì mỗi lần tắt máy đội thêm một nhịp {@code idle-poll} mà không vì lý
-     * do gì.
-     */
     @Test
     @DisplayName("bị ngắt thì trả false — tín hiệu tắt máy, không phải một lần dậy bình thường")
     void bi_ngat_thi_tra_false() throws Exception {

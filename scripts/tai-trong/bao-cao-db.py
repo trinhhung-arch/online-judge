@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""Số liệu THẬT của đường chấm, đếm trên MỌI bài của một lượt đo trong Postgres.
-
-    bao-cao-db.py --json tom-tat.json --kich-ban on-dinh --id-sau 1234 --rut-can-xong 1 \
-                  [--t-k6-xong '<now() của DB>' --t-rut-can-xong '<now() của DB>']
-
-`chay.sh` gọi file này sau khi hàng đợi rút cạn. Nó vá số DB vào `metrics` của JSON k6, in bảng
-kết luận của CẢ lượt đo, và thoát 1 nếu một ngưỡng cứng trượt hoặc không đo được.
-
-★ VÌ SAO LẤY Ở DB CHỨ KHÔNG LẤY Ở k6
-Bản cũ đo verdict ở client: chỉ 10% số bài, cắt ở trần 60s, và làm tròn theo nhịp hỏi
-0.25→0.65→1.29→2.31s (verdict thật 1.3s bị ghi 2.31s). Mọi mốc giờ ở đây do server ghi, cho mọi
-bài, nên không có lấy mẫu, không có kiểm duyệt, không có làm tròn.
-
-★ LƯỢT ĐO LÀ "--id-sau < id ≤ --id-den VÀ handle tai-*". Lọc theo id chứ không theo giờ: k6 chạy
-từ máy khác thì đồng hồ hai máy lệch nhau, còn id do chính Postgres cấp. chay.sh chụp max(id) ngay
-trước lượt và ngay sau khi rút cạn. CẬN TRÊN là bắt buộc: thiếu nó thì chạy lại báo cáo của một lượt
-cũ sẽ đếm lẫn bài của mọi lượt sau. Cửa sổ được lưu vào JSON, nên chạy lại chỉ cần --json.
-
-Kết nối: OJ_TAI_PSQL (mặc định `docker exec -i oj-postgres psql -U ojuser -d ojdb`). Chỉ SELECT.
-"""
 import argparse
 import io
 import json
@@ -28,12 +8,11 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong  # noqa: E402
-import p8_bang  # noqa: E402
+from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong
+import p8_bang
 
 PSQL = os.environ.get('OJ_TAI_PSQL', 'docker exec -i oj-postgres psql -U ojuser -d ojdb')
 
-# Mỗi dòng trả một cặp khoá|giá trị. Giá trị vào qua biến psql (:id_sau, :'t0'), không nối chuỗi.
 SQL_CHUNG = r"""
 \set ON_ERROR_STOP on
 WITH bai AS (
@@ -72,7 +51,6 @@ UNION ALL SELECT 'so_bai_rut_can', count(*)::text FROM bai
      WHERE judged_at > :'t0'::timestamptz AND judged_at <= :'t1'::timestamptz
 UNION ALL SELECT 'giay_rut_can', extract(epoch FROM :'t1'::timestamptz - :'t0'::timestamptz)::text
 """
-# ky-thi: bài AC ĐẦU TIÊN trong kỳ thi của mỗi tài khoản — đúng những bài làm đổi bảng (p8_bang.py).
 SQL_AC = r"""
 \set ON_ERROR_STOP on
 SELECT u.handle, extract(epoch FROM min(s.judged_at))
@@ -81,7 +59,6 @@ SELECT u.handle, extract(epoch FROM min(s.judged_at))
    AND s.contest_id IS NOT NULL AND s.verdict = 'AC' AND s.judged_at IS NOT NULL
  GROUP BY u.handle
 """
-
 
 def truy_van(id_sau, id_den, t0, t1):
     lenh = shlex.split(PSQL) + ['-X', '-q', '-tA', '-F', '|', '-v', f'id_sau={id_sau}', '-v', f'id_den={id_den}']
@@ -99,7 +76,6 @@ def truy_van(id_sau, id_den, t0, t1):
             ra[k] = v if k == 'db' else (float(v) if v != '' else None)
     return ra
 
-
 def truy_van_ac(id_sau, id_den):
     lenh = shlex.split(PSQL) + ['-X', '-q', '-tA', '-F', '|', '-v', f'id_sau={id_sau}', '-v', f'id_den={id_den}']
     kq = subprocess.run(lenh, input=SQL_AC + ';\n', capture_output=True, text=True, timeout=120)
@@ -107,19 +83,13 @@ def truy_van_ac(id_sau, id_den):
         raise SystemExit(f'psql hỏng ({kq.returncode}): {kq.stderr.strip()}')
     return [(h, float(t)) for h, t in (d.split('|', 1) for d in kq.stdout.splitlines() if '|' in d)]
 
-
 def so_db(tho, nop_202, rut_can_xong, kich_ban, nguong):
-    """Từ số thô sang metric có nghĩa. Mỗi dòng ở đây là một định nghĩa, đọc cùng nguong.json."""
     so_bai = tho['so_bai'] or 0
     da_xong = tho['da_xong'] or 0
-    # "0 mất trên 0 bài" không phải bằng chứng. Đo 2026-09-11: lượt chết ở setup() in R1/R2 ✅.
     co_bai = so_bai > 0 or nop_202 > 0
     ra = {
         'db_so_bai': so_bai,
-        # R1: client được hứa 202 nhiều hơn số bài DB có. Âm (client biết ÍT hơn) là timeout phía
-        # client sau khi server đã commit — không mất bài, nên kẹp về 0 và in riêng.
         'db_bai_mat': max(0.0, nop_202 - so_bai) if co_bai else None,
-        # Chưa rút cạn xong thì "còn QUEUED" là chậm, không phải kẹt: không đo được, không bịa số.
         'db_chua_xong': tho['chua_xong'] if rut_can_xong and co_bai else None,
         'db_cham_trung': tho['cham_trung'] if co_bai else None,
         'db_ti_le_ie': (tho['so_ie'] / da_xong) if da_xong else None,
@@ -128,20 +98,15 @@ def so_db(tho, nop_202, rut_can_xong, kich_ban, nguong):
         'db_verdict_max_ms': tho['verdict_max_ms'],
         'db_cho_p95_ms': tho['cho_p95_ms'],
         'db_cham_p95_ms': tho['cham_p95_ms'],
-        # P5 chỉ có nghĩa ở đợt dồn; ở kịch bản khác nó là độ dài cả lượt đo, và ghi vào JSON là gây nhầm.
         'db_rut_can_dot_bien_ms': tho['rut_can_dot_bien_ms'] if rut_can_xong and kich_ban == 'dot-bien' else None,
     }
     toi_thieu = nguong['rut_can_toi_thieu']
     if (tho.get('giay_rut_can') or 0) >= toi_thieu['giay'] and (tho.get('so_bai_rut_can') or 0) >= toi_thieu['bai']:
         ra['db_thong_luong_bai_s'] = tho['so_bai_rut_can'] / tho['giay_rut_can']
-    # Nhịp API đưa bài tới câu INSERT trong đợt dồn. 500 request cùng một mili-giây thì p95 của POST
-    # ≈ 0,95 × 500 ÷ nhịp này — lý do P2 ở dot-bien là quan sát chứ không phải ngưỡng. created_at là
-    # now() = lúc transaction nộp bài BẮT ĐẦU, nên commit và publish RabbitMQ không nằm trong số này.
     trai_ms = tho.get('trai_ghi_nhan_ms') or 0
     if kich_ban == 'dot-bien' and so_bai >= toi_thieu['bai'] and trai_ms > 0:
         ra['db_ghi_nhan_bai_s'] = (so_bai - 1) / (trai_ms / 1000)
     return {k: {'values': {'value': v}} for k, v in ra.items() if v is not None}
-
 
 def in_bang(d, nguong, kich_ban, ten_db):
     m = d['metrics']
@@ -163,7 +128,6 @@ def in_bang(d, nguong, kich_ban, ten_db):
         print(f'  {r["ma"]:<9} {r["nhan"]:<30} {dinh_dang(v, r["don_vi"]):>12}{moc}')
     return dat_ca
 
-
 def canh_bao(d, nguong, nop_202):
     m = d['metrics']
     cham95 = doc_so(m, 'db_cham_p95_ms', 'value')
@@ -181,7 +145,6 @@ def canh_bao(d, nguong, nop_202):
     if so_bai > nop_202:
         print(f'\n  ℹ️  DB có {so_bai:.0f} bài, client chỉ nhận {nop_202:.0f} lần 202: phần chênh là request')
         print('     client bỏ cuộc sau khi server đã commit. Không mất bài, nhưng máy đo đã nghẽn.')
-
 
 def main():
     p = argparse.ArgumentParser()
@@ -206,7 +169,6 @@ def main():
     if id_sau is None or id_den is None:
         raise SystemExit('Thiếu cửa sổ lượt đo: cần --id-sau và --id-den (hoặc JSON đã có "cua_so").')
     tho = truy_van(int(id_sau), int(id_den), a.t_k6_xong, a.t_rut_can_xong)
-    # Xoá số DB của lần chạy trước trên cùng file: update() không xoá khoá mà lần này không sinh ra.
     d['metrics'] = {k: v for k, v in d['metrics'].items() if not k.startswith('db_')}
     d['metrics'].update(so_db(tho, nop_202, a.rut_can_xong == 1, a.kich_ban, nguong))
     if a.sse_json:
@@ -232,7 +194,6 @@ def main():
     with io.open(a.json, 'w', encoding='utf-8') as fh:
         json.dump(d, fh, ensure_ascii=False, indent=2)
     return 0 if dat else 1
-
 
 if __name__ == '__main__':
     sys.exit(main())

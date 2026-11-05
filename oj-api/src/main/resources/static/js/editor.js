@@ -1,24 +1,3 @@
-/**
- * Trình soạn mã CodeMirror 6 — Bước 4.12.
- *
- * ★ NẠP TỪ static/vendor/, KHÔNG TỪ CDN — từ 2026-09-24
- *
- * Quyết định của Bước 4.12: giao diện là trang tĩnh, không thêm Node vào CI. Bản đầu `import()`
- * thẳng bundle `+esm` của jsDelivr. Rà soát bảo mật 2026-09-24 (F3): bundle ấy do jsDelivr
- * DỰNG LÚC PHỤC VỤ nên không gắn được SRI, trong khi trang này giữ access token trong
- * localStorage — và CSP phải mở cả host cdn.jsdelivr.net. Giờ đúng các bundle ấy nằm ở
- * static/vendor/npm/<gói>@<bản>/esm.js, import bên trong đã trỏ về /vendor/, SHA-256 ghi ở
- * vendor/SHA256SUMS (TaiNguyenGiaoDienTest đối chiếu). Hành vi giữ nguyên từng byte — kể cả
- * việc cây import kéo nhiều bản @codemirror/state khác nhau (như trên CDN).
- *
- * ★ VÀ NÓ PHẢI CHẠY ĐƯỢC KHI MODULE KHÔNG NẠP ĐƯỢC
- *
- * Một trang nộp bài không nộp được vì CDN hỏng là một trang hỏng. Nếu import thất bại,
- * {@link gan} trả về một bộ điều khiển dựa trên `<textarea>` thường — mất tô màu cú pháp,
- * giữ nguyên khả năng nộp bài. Với một hệ thống mà điều không thể thoả hiệp thứ hai là
- * *không mất bài nộp*, đó là đánh đổi bắt buộc.
- */
-
 const CDN = '/vendor/npm';
 
 const NGON_NGU = {
@@ -43,13 +22,10 @@ async function napNgonNgu(code) {
         const tao = m.cpp || m.python || m.java;
         return tao ? [tao()] : [];
     } catch {
-        return [];   // không tô màu được thì vẫn gõ được
+        return [];
     }
 }
 
-/**
- * @returns {{doc: () => string, dat: (s: string) => void, doiNgonNgu: (c: string) => void}}
- */
 export async function gan(khung, textarea, { onThayDoi, ngonNguBanDau }) {
     try {
         const { cm, view } = await napCodeMirror();
@@ -79,13 +55,6 @@ export async function gan(khung, textarea, { onThayDoi, ngonNguBanDau }) {
             }),
         };
     } catch (e) {
-        // Không dựng được CodeMirror. Hạ xuống textarea thường — xem javadoc của module.
-        //
-        // ★ GHI RA CONSOLE, đừng nuốt im. Đo 2026-09-24: nhánh này chạy ở MỌI lượt mở trang —
-        // cả trên CDN gốc lẫn bản vendor — vì cây import kéo nhiều bản @codemirror/state
-        // ("Unrecognized extension value… multiple instances of @codemirror/state"). Nộp bài
-        // vẫn chạy (đúng thiết kế), nhưng không ai biết tô màu đã chết từ bao giờ, vì
-        // `catch {}` không để lại dấu vết nào. Sửa tận gốc cần một bundle MỘT bản state.
         console.warn('Trình soạn mã: không dựng được CodeMirror, dùng textarea thường —', e);
         textarea.hidden = false;
         textarea.removeAttribute('aria-hidden');

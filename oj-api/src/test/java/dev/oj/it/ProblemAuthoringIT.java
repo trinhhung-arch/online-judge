@@ -12,13 +12,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Soạn đề qua HTTP thật — FR-PROB-01, 02, 07, 08, 09. Bước 4.9.
- *
- * <p>Ba nhóm ca, và mỗi nhóm canh một thứ khác nhau: <b>ai được làm</b> (phân quyền và sở
- * hữu), <b>khi nào được làm</b> (xuất bản cần testdata), và <b>người đọc thấy gì</b> (HTML đã
- * escape, danh sách chỉ có đề đã xuất bản).
- */
 class ProblemAuthoringIT extends HttpIT {
 
     private static Map<String, Object> deMoi(String code) {
@@ -39,8 +32,6 @@ class ProblemAuthoringIT extends HttpIT {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return ((Number) res.getBody().get("problemId")).longValue();
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ Ai được soạn đề")
@@ -73,8 +64,6 @@ class ProblemAuthoringIT extends HttpIT {
         void khong_sua_duoc_de_nguoi_khac() {
             long cuaSetter = tao("DE-CUA-SETTER", "setter");
 
-            // admin đóng vai một SETTER khác thì sẽ qua (ADMIN thấy tất cả), nên ta kiểm
-            // bằng chiều ngược lại: nâng một tài khoản USER lên SETTER rồi thử.
             jdbc.sql("UPDATE users SET role = 'SETTER' WHERE id = :id")
                     .param("id", USER_ID).update();
 
@@ -82,8 +71,6 @@ class ProblemAuthoringIT extends HttpIT {
                     .header("Authorization", "Bearer " + tokenCua("dev"))
                     .body(deMoi("DE-CUA-SETTER")));
 
-            // 403 ở đây là xác nhận "có một đề id này" — và đề chưa xuất bản rất thường là
-            // đề của contest tuần sau (FR-PROB-08).
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         }
 
@@ -104,8 +91,6 @@ class ProblemAuthoringIT extends HttpIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-PROB-08 · xuất bản")
     class XuatBan {
@@ -118,8 +103,6 @@ class ProblemAuthoringIT extends HttpIT {
             var res = goi(http.post().uri("/api/v1/problems/" + id + "/publish")
                     .header("Authorization", "Bearer " + tokenCua("setter")));
 
-            // Một đề PUBLISHED với current_testdata_version = 0 sẽ nhận bài nộp và cho IE
-            // trên MỌI bài — người dùng thấy hệ thống hỏng, tác giả không biết mình quên gì.
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(res.getBody()).containsEntry("code", "problem.chua_co_testdata");
         }
@@ -151,13 +134,10 @@ class ProblemAuthoringIT extends HttpIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ Vòng đọc → ghi không được làm mất trường nào")
     class VongDocGhi {
 
-        /** Đúng tập trường mà {@code ProblemAuthoringRequest} nhận. */
         private static final List<String> TRUONG_PUT = List.of(
                 "code", "title", "statementMd", "timeLimitMs", "memoryLimitKb",
                 "checkerType", "checkerEpsilon", "scoringMode", "feedbackLevel",
@@ -184,7 +164,6 @@ class ProblemAuthoringIT extends HttpIT {
         void luu_lai_y_nguyen_khong_mat_epsilon() {
             long id = taoDeFloat();
 
-            // Đúng thứ trang soạn đề làm: đọc về, sửa một ô, gửi lại cả bản ghi.
             var doc = doc(id);
             var gui = new LinkedHashMap<String, Object>();
             for (String k : TRUONG_PUT) {
@@ -198,8 +177,6 @@ class ProblemAuthoringIT extends HttpIT {
 
             var sau = doc(id);
             assertThat(sau.get("title")).isEqualTo("Đổi mỗi tiêu đề");
-            // ★ Lỗi cũ nằm đúng ở hai dòng này: `checkerEpsilon` thành null và cờ thành false,
-            // vì GET không trả chúng nên vòng lặp ở trên gửi đi hai giá trị null.
             assertThat(sau.get("checkerEpsilon")).isNotNull();
             assertThat(new BigDecimal(String.valueOf(sau.get("checkerEpsilon"))))
                     .isEqualByComparingTo(new BigDecimal("0.000001"));
@@ -240,9 +217,6 @@ class ProblemAuthoringIT extends HttpIT {
             assertThat((String) de.get("statementHtml"))
                     .contains("<strong>Đậm</strong>")
                     .doesNotContain("<script>");
-            // Markdown gốc vẫn trả về nguyên vẹn — trang soạn đề cần đúng thứ tác giả đã gõ.
-            // Khoá là `statementMd`, TRÙNG tên trường mà PUT nhận: bản soạn đề đọc lại đúng
-            // những gì bản ghi sẽ đặt (xem ProblemAuthoringRoundTripTest).
             assertThat((String) de.get("statementMd")).contains("<script>");
         }
 

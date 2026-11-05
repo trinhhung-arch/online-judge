@@ -27,16 +27,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Ba bảo đảm của {@code identity} mà chỉ Postgres thật chứng minh được: hai cuộc đua và một
- * lần hỏng giữa chừng. Thiết kế: {@code Claude outputs/identity-test-cases.md}, ca DK-08,
- * EM-09 và PH-10.
- *
- * <p>Unit test dùng repository giả nên không có khoá duy nhất, không có câu so-rồi-đổi, không
- * có transaction — đúng ba thứ các ca dưới đây đo. Hai cuộc đua được dàn bằng
- * {@link DiemHenSql}: luồng B dừng ngay trước một câu SQL chỉ định cho tới khi luồng A làm
- * xong, nên kết cục là tất định chứ không tuỳ may rủi của bộ lập lịch.
- */
 class IdentityDuaVaHongIT extends PostgresIT {
 
     private static final String MAT_KHAU = "matkhau-tot-123";
@@ -73,7 +63,6 @@ class IdentityDuaVaHongIT extends PostgresIT {
                 aXong.countDown();
             }
         });
-        // B đã qua phép kiểm "handle đã có chưa" và dừng ngay trước câu INSERT; A đăng ký trọn vẹn.
         DiemHenSql.hen(b, "INSERT INTO users", bDaToi, () -> aXong.getCount() == 0);
 
         chayVaChoXong(b, a);
@@ -82,8 +71,6 @@ class IdentityDuaVaHongIT extends PostgresIT {
         assertThat(ketQuaB.get()).as("lượt B").isInstanceOfSatisfying(IdentityException.class, e -> {
             assertThat(e.kind()).isEqualTo(DomainException.Kind.CONFLICT);
             assertThat(e.code()).isEqualTo("identity.da_ton_tai");
-            // Câu của nhánh DuplicateKeyException trong JdbcUserRepository.taoMoi; phép kiểm
-            // trước INSERT thì nói "Tên đăng nhập này…". Đúng câu này là B đã đâm vào khoá duy nhất.
             assertThat(e.publicMessage()).startsWith("Tên đăng nhập hoặc email");
         });
         assertThat(jdbc.sql("SELECT count(*)::int FROM users WHERE lower(handle) = 'dua-dang-ky'")
@@ -108,7 +95,6 @@ class IdentityDuaVaHongIT extends PostgresIT {
                 aXong.countDown();
             }
         });
-        // B đã đọc mã còn sống và so khớp xong, dừng ngay trước câu TIÊU mã; A xác nhận trọn vẹn.
         DiemHenSql.hen(b, "SET consumed_at", bDaToi, () -> aXong.getCount() == 0);
 
         chayVaChoXong(b, a);
@@ -130,9 +116,6 @@ class IdentityDuaVaHongIT extends PostgresIT {
     void phat_token_hong_giua_chung_thi_token_cu_song_lai() {
         String cu = dangNhap.thucHien("dev", MAT_KHAU_DEV, "it-trinh-duyet", IP, null).refreshToken();
 
-        // Byte NUL bị Postgres (và pgjdbc) từ chối trong mọi chuỗi, nên câu INSERT token MỚI hỏng
-        // thật — ngay sau câu thu hồi token cũ, trong cùng transaction. Không dùng @MockitoSpyBean:
-        // mỗi bean bị thay là thêm một context Spring và hai pool kết nối (javadoc của DiemHenSql).
         assertThatThrownBy(() -> lamMoi.thucHien(cu, "trinh-duyet\u0000hong", IP))
                 .isInstanceOf(DataAccessException.class);
 
@@ -142,14 +125,12 @@ class IdentityDuaVaHongIT extends PostgresIT {
                 .as("không để lại token mới mồ côi").isEqualTo(1);
         assertThat(soDongAudit("REFRESH_TOKEN_REUSE_DETECTED")).isZero();
 
-        var moi = lamMoi.thucHien(cu, "it-trinh-duyet", IP);     // người dùng bấm lại
+        var moi = lamMoi.thucHien(cu, "it-trinh-duyet", IP);
 
         assertThat(moi.refreshToken()).isNotEqualTo(cu);
         assertThat(daThuHoi(cu)).isTrue();
         assertThat(soDongAudit("REFRESH_TOKEN_REUSE_DETECTED")).isZero();
     }
-
-    // =========================================================================
 
     private Object xacNhanBangDev() {
         try (var danhTinh = GiaLapDanhTinh.dongVai(USER_ID, "dev", Role.USER)) {
@@ -168,7 +149,6 @@ class IdentityDuaVaHongIT extends PostgresIT {
                 .param("a", hanhDong).query(Integer.class).single();
     }
 
-    /** Kết quả của luồng — giá trị trả về HOẶC ngoại lệ nó ném — rơi vào {@code ketQua}. */
     private static Thread luong(String ten, AtomicReference<Object> ketQua, Callable<?> viec) {
         return new Thread(() -> {
             try {

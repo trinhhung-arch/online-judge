@@ -11,13 +11,6 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-/**
- * ★ Luật điều tiết rejudge — FR-ADM-01, Bước 6.3.
- *
- * <p>Java thuần, không context, không database: đó chính là lý do luật này nằm ở {@code domain}
- * thay vì nằm rải trong handler. Một luật chỉ kiểm được bằng một integration test là một luật
- * sẽ không được kiểm.
- */
 class RejudgeJobTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-08-30T10:00:00Z");
@@ -49,9 +42,6 @@ class RejudgeJobTest {
         @Test
         @DisplayName("★ vượt trần thì vẫn 0, không âm — một số âm sẽ thành LIMIT âm trong SQL")
         void vuot_tran_thi_khong_am() {
-            // Vượt trần xảy ra thật: hai job rejudge (hai đề khác nhau, hợp lệ từ V9) cùng
-            // thấy còn suất rồi cùng đẩy. Trần là mềm theo thiết kế; điều bắt buộc là con số
-            // trả về không bao giờ âm.
             assertThat(suat(new NhipHangDoi(TRAN + 5, null))).isZero();
         }
 
@@ -94,11 +84,6 @@ class RejudgeJobTest {
         @Test
         @DisplayName("★ không có bài live nào chờ thì KHÔNG phanh, kể cả khi rejudge chờ rất lâu")
         void chi_dem_bai_live() {
-            // Đây là ca quan trọng nhất của cả file. Dòng rejudge do chính job này đẩy vào
-            // luôn là dòng chờ lâu nhất của bảng, vì chúng cố ý bị xếp sau. Nếu cái phanh đo
-            // thời gian chờ của CẢ hàng đợi thì job tự đạp phanh của chính mình sau lô đầu
-            // tiên rồi không bao giờ chạy tiếp — một lỗi im lặng, biểu hiện là "rejudge chạy
-            // mãi không xong".
             NhipHangDoi chiCoRejudgeCho = new NhipHangDoi(1, null);
 
             assertThat(suat(chiCoRejudgeCho)).isEqualTo(TRAN - 1);

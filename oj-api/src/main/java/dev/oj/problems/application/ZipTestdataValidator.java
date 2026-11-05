@@ -17,65 +17,15 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/**
- * ★ Đọc và kiểm một gói testdata — FR-PROB-03, Bước 4.10.
- *
- * <h2>Bốn phép kiểm, và mỗi phép chặn một cách hỏng khác nhau</h2>
- * <ol>
- *   <li><b>Tên file theo danh sách CHO PHÉP</b> ({@link TestdataLimits#TEN_FILE_TEST}) — chặn
- *       {@code ../}, đường dẫn tuyệt đối, và mọi biến thể của chúng bằng cách không kể tên
- *       chúng.</li>
- *   <li><b>Đếm byte THẬT trong lúc đọc</b>, không tin {@code ZipEntry.getSize()}. Trường đó
- *       do người tạo file ghi và không ai kiểm — một zip bomb khai 1KB rồi giải nén ra 10GB.</li>
- *   <li><b>Tỉ lệ nén ≤ 100:1</b>, kiểm <i>trong lúc</i> đọc chứ không sau khi xong. Trần dung
- *       lượng một mình chỉ phát hiện sau khi đã đọc ngần ấy byte.</li>
- *   <li><b>{@code problem.yaml}</b> — giao cho {@link TestdataManifest}, nơi ghi vì sao
- *       SnakeYAML mặc định là một lỗ hổng RCE.</li>
- * </ol>
- *
- * <h2>★ Vì sao KHÔNG có phép kiểm symlink</h2>
- * {@code frplan.md} liệt kê "chặn symlink" cùng với {@code ..} và đường dẫn tuyệt đối. Ba thứ
- * đó chống cùng một mối nguy: <i>ghi ra ngoài thư mục đích</i>. Nhưng lớp này
- * <b>không bao giờ ghi ra hệ thống tệp</b> — mọi nội dung đi thẳng vào kho content-addressed
- * dưới khoá là sha256 của chính nó.
- *
- * <p>Nên một entry symlink chỉ là một file có nội dung là một chuỗi đường dẫn, và nó được lưu
- * như một chuỗi vô hại. Mối nguy bị loại bỏ <b>theo cấu trúc</b> chứ không bằng một phép kiểm
- * có thể quên — cùng lập luận đã dùng cho {@code alg=none} ở {@code Jwt}.
- *
- * <h2>Thứ tự test là thứ tự tên file, và mục lục chỉ nói cái nào là sample</h2>
- * Cách khác là liệt kê tường minh 1000 cặp trong YAML — thứ không ai viết tay, nên nó sẽ được
- * sinh ra bởi một script, và lúc đó một dòng sai trong script là một test bị bỏ qua trong im
- * lặng. Ghép theo tên thì <b>mọi file {@code .in} có mặt đều được nạp</b>, và thiếu file
- * {@code .out} tương ứng là một lỗi ồn ào.
- */
 @Component
 public class ZipTestdataValidator {
 
-    /**
-     * Một cặp test đã được xác nhận có mặt đủ hai đầu.
-     *
-     * @param ordinal 1..N theo thứ tự tên file
-     */
     public record CapTest(int ordinal, String tenInput, String tenOutput, boolean laSample) {
     }
 
-    /**
-     * @param tongByte tổng byte sau giải nén, đếm thật
-     */
     public record KetQua(List<CapTest> cacTest, long tongByte) {
     }
 
-    /**
-     * Đọc gói, kiểm mọi ràng buộc, <b>không ghi gì cả</b>.
-     *
-     * <p>FR-PROB-03: <i>"validate {@code problem.yaml} trước khi ghi bất cứ file nào"</i>. Ở
-     * đây còn mạnh hơn — cả lượt đọc này không ghi một byte nào ra ngoài, nên một gói hỏng ở
-     * test thứ 999 cũng không để lại nửa bộ test trong kho.
-     *
-     * @param zip     luồng gói. Người gọi đóng
-     * @param zipByte kích thước gói nén, để tính tỉ lệ nén
-     */
     public KetQua kiem(InputStream zip, long zipByte) {
         if (zipByte > TestdataLimits.MAX_ZIP_BYTES) {
             throw loi("problem.zip_qua_lon",
@@ -127,15 +77,6 @@ public class ZipTestdataValidator {
         return new KetQua(ghepCap(byteTheoTen.keySet(), sample), tongByte);
     }
 
-    // -------------------------------------------------------------------------
-
-    /**
-     * Ghép {@code X.in} với {@code X.out} theo tên, sắp xếp theo thứ tự chữ cái.
-     *
-     * <p>Sắp xếp là điều kiện để "test số 7" nghĩa như nhau ở mọi lần nạp. Không sắp thì thứ
-     * tự phụ thuộc thứ tự entry trong file ZIP — thứ do công cụ nén quyết định, và khác nhau
-     * giữa {@code zip} của Linux với Explorer của Windows.
-     */
     private static List<CapTest> ghepCap(Collection<String> ten, Set<Integer> sample) {
         Set<String> goc = new TreeSet<>();
         for (String t : ten) {
@@ -164,12 +105,6 @@ public class ZipTestdataValidator {
         return ketQua;
     }
 
-    /** ★ {@link SafeConstructor} — xem javadoc của class. Đổi dòng này là mở lại một đường RCE. */
-
-    /**
-     * Đếm byte thật, <b>không tin {@code ZipEntry.getSize()}</b>: trường đó do người tạo file
-     * ghi và không ai kiểm — một zip bomb khai 1KB rồi giải nén ra 10GB.
-     */
     private long demByte(ZipInputStream in) throws IOException {
         byte[] dem = new byte[8192];
         long tong = 0;
@@ -197,7 +132,6 @@ public class ZipTestdataValidator {
         return ra.toByteArray();
     }
 
-    /** Kiểm TRONG LÚC đọc, không sau khi xong — xem javadoc của {@link TestdataLimits}. */
     private static void kiemPhinh(long tongByte, long zipByte) {
         if (tongByte > TestdataLimits.MAX_GIAI_NEN_BYTES) {
             throw quaLon();

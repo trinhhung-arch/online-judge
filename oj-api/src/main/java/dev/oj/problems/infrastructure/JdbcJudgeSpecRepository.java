@@ -15,26 +15,9 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Thông số chấm cho đường verdict. <b>Pool {@code judge}</b>, không phải {@code app} — đó là
- * toàn bộ lý do interface này tách khỏi {@code ProblemRepository}.
- *
- * <p>Nếu câu này chạy trên pool {@code app}, thì đúng lúc 500 người nộp bài cùng lúc — tức là
- * đúng lúc pool {@code app} cạn — worker sẽ không claim được job. Đó chính là kịch bản mà việc
- * tách hai pool sinh ra để ngăn ({@code postgres-design.md} mục 11), và nó quay lại qua cửa
- * sau chỉ vì một phương thức đặt nhầm chỗ.
- */
 @Repository
 public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
 
-    /**
-     * Gắn với <b>đúng một phiên bản testdata</b>, lấy từ {@code submissions.testdata_version}
-     * — không phải {@code problems.current_testdata_version}.
-     *
-     * <p>Sửa testdata tạo version mới chứ không ghi đè (FR-PROB-10). Dùng "mới nhất" ở đây
-     * nghĩa là một lần rejudge sẽ âm thầm chấm bài cũ bằng bộ test mới, và không ai đối chiếu
-     * được vì sao verdict đổi.
-     */
     private static final String FIND_SPEC = """
             SELECT p.id, p.time_limit_ms, p.memory_limit_kb, p.output_limit_kb,
                    p.checker_type, p.checker_epsilon, p.scoring_mode,
@@ -46,15 +29,6 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
              WHERE p.id = :problemId
             """;
 
-    /**
-     * Chỉ <b>metadata</b>: số thứ tự, cờ sample, và hai chuỗi sha256. Không có cột nào ở đây
-     * chứa được nội dung test — bất biến #1 được ép ở tầng schema chứ không phải ở câu query
-     * này ({@code postgres-design.md} mục 5).
-     *
-     * <p>{@code subtask_ordinal} là cột của V4 — {@code null} với đề không chia nhóm, và
-     * chỉ là một SỐ THỨ TỰ với đề có chia. Nó nói test này thuộc nhóm nào, không nói gì về
-     * nội dung test.
-     */
     private static final String FIND_TESTCASES = """
             SELECT t.ordinal, t.is_sample, t.input_sha256, t.output_sha256,
                    s.ordinal AS subtask_ordinal
@@ -65,16 +39,6 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
              ORDER BY t.ordinal
             """;
 
-    /**
-     * Nhóm test + phụ thuộc, gom trong MỘT câu.
-     *
-     * <p>Hai câu (nhóm, rồi phụ thuộc từng nhóm) là N+1 trên đường claim — đường mà mọi bài
-     * nộp đều đi qua. {@code array_agg} gom phụ thuộc thành một mảng ngay trong Postgres.
-     *
-     * <p>{@code FILTER (WHERE ... IS NOT NULL)} là bắt buộc: {@code LEFT JOIN} không khớp cho
-     * ra một hàng có {@code NULL}, và {@code array_agg} sẽ biến nó thành mảng {@code {NULL}}
-     * — một nhóm không phụ thuộc gì bỗng có một phụ thuộc vào hư không.
-     */
     private static final String FIND_SUBTASKS = """
             SELECT s.ordinal, s.points, s.scoring,
                    COALESCE(
@@ -109,9 +73,6 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
                         (Integer) rs.getObject("subtask_ordinal")))
                 .list();
         if (testcases.isEmpty()) {
-            // Đề mất testdata ở đúng phiên bản bài nộp đã đóng dấu. Trả rỗng thay vì ném:
-            // ClaimJudgeJobUseCase biến nó thành một dòng ERROR và bỏ qua job đó, chứ không
-            // để một đề hỏng làm đứng cả hàng đợi. Xem javadoc skipBrokenJob().
             return Optional.empty();
         }
         List<SubtaskSpecDto> subtasks = jdbc.sql(FIND_SUBTASKS)
@@ -142,7 +103,6 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
                 .optional();
     }
 
-    /** {@code smallint[]} của Postgres về Java là {@code Short[]}, không phải {@code Integer[]}. */
     private static List<Integer> dependsOn(java.sql.Array array) throws java.sql.SQLException {
         if (array == null) {
             return List.of();
@@ -155,7 +115,6 @@ public class JdbcJudgeSpecRepository implements JudgeSpecRepository {
         return List.copyOf(ordinals);
     }
 
-    /** {@code ck_problems_epsilon} bảo đảm nó chỉ khác null khi checker là {@code float}. */
     private static BigDecimal checkerEpsilon(BigDecimal value) {
         return value;
     }

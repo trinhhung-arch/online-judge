@@ -7,17 +7,6 @@ import dev.oj.platform.jobs.application.usecase.GetJobUseCase;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Tiến độ của một job, dạng người dùng nhìn thấy.
- *
- * <h2>Không có {@code params}, không có {@code cursorState}, không có {@code leaseOwner}</h2>
- * Ba trường đó là chuyện nội bộ của khung job. {@code cursorState} đặc biệt: hình dạng của nó
- * do handler tự định nghĩa, nên đưa ra API là biến một chi tiết triển khai thành một hợp đồng
- * mà không ai có ý định giữ.
- *
- * @param phanTram {@code null} khi chưa biết tổng — UI hiện "đang chuẩn bị" thay vì một thanh
- *                 tiến độ đứng ở 0%, thứ trông giống hệt một job treo
- */
 public record JobResponse(
         long id,
         String type,

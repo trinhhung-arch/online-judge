@@ -13,16 +13,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
-/**
- * Hiện thực {@link AuditLog} trên Postgres.
- *
- * <p>Người thực hiện <b>không</b> là tham số: lấy từ {@link CurrentUserProvider}. Nếu để người
- * gọi truyền vào thì sớm muộn sẽ có một chỗ truyền nhầm, và một nhật ký kiểm toán ghi sai
- * người thực hiện còn tệ hơn không có nhật ký — nó là bằng chứng sai.
- *
- * <p>Lời gọi từ job nền và reaper không có danh tính; {@code actor_id} khi đó là {@code NULL},
- * đúng như comment trong V5 mô tả (<i>"NULL = hệ thống"</i>).
- */
 @Repository
 public class JdbcAuditLog implements AuditLog {
 
@@ -60,7 +50,6 @@ public class JdbcAuditLog implements AuditLog {
             actorId = nguoiGoi.id();
             actorRole = nguoiGoi.role().name();
         } catch (AuthorizationException e) {
-            // Không có ai đang gọi: reaper, job nền, consumer. NULL là giá trị đúng — xem V5.
             actorId = null;
         }
         try {

@@ -23,44 +23,6 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/**
- * ★ Nạp một gói testdata — FR-PROB-03, 04. Bước 4.10, chạy trên khung job của Bước 4.7b.
- *
- * <h2>Vì sao đây phải là job nền chứ không phải một request</h2>
- * Quy tắc 5 của {@code frplan.md}: <i>mọi thao tác có thể vượt 5 giây là job nền có tiến độ</i>.
- * Một gói 200MB với 1000 test là 2000 lượt băm và 2000 lượt ghi lên kho — hàng phút, không
- * phải hàng giây. Giữ nó trong một request HTTP nghĩa là một connection treo hàng phút, một
- * timeout của proxy làm mất toàn bộ công việc, và không có cách nào biết nó đang tới đâu.
- *
- * <p>Đây cũng chính là xung đột thứ tự mà {@code build-order.md} PHẦN 6 nêu ra, và là lý do
- * hạ tầng job được kéo từ M6 lên tuần 7 (phương án (a)).
- *
- * <h2>★ Hai lượt đọc, và lượt đầu KHÔNG ghi một byte nào</h2>
- * FR-PROB-03 đòi <i>"validate {@code problem.yaml} trước khi ghi bất cứ file nào"</i>. Lượt
- * một chỉ kiểm; lượt hai mới ghi. Nhờ đó một gói hỏng ở test thứ 999 <b>không để lại nửa bộ
- * test</b> trong kho và trong database.
- *
- * <p>Cái giá là đọc gói hai lần. Với một job nền thì đó là vài giây, và nó mua lấy tính chất
- * "hỏng thì không để lại gì" — thứ đáng giá hơn hẳn.
- *
- * <h2>★ Chạy lại an toàn, và đó là điều kiện để Quy tắc 5 có nghĩa</h2>
- * Job này <b>sẽ</b> bị chạy lại: instance chết giữa chừng, lease hết hạn, {@code JobRunner}
- * nhặt lên từ {@code PAUSED}. Hai tính chất làm việc đó vô hại:
- *
- * <ul>
- *   <li>Kho là <b>content-addressed</b> — ghi lại cùng một nội dung cho cùng một khoá, và
- *       {@code daCo()} bỏ qua thứ đã có.</li>
- *   <li>Mọi câu ghi database là {@code ON CONFLICT ... DO UPDATE} với dữ liệu giống hệt.</li>
- * </ul>
- *
- * <p>Nên chạy lại chỉ tốn <i>thời gian</i>, không tạo dữ liệu sai. Đó là lý do vị trí lưu
- * trong {@code cursor_state} chỉ cần một trường: số phiên bản đang dựng.
- *
- * <h2>★ Bước cuối cùng là một câu UPDATE, và thứ tự đó quan trọng</h2>
- * {@code kichHoatPhienBan} chạy sau khi mọi test đã nằm đủ trong kho và trong database. Chết
- * trước dòng đó thì đề vẫn dùng phiên bản cũ, và <b>không một bài nộp nào bị chấm bằng nửa bộ
- * test</b> — kết quả sai âm thầm là thứ tệ nhất một Online Judge có thể tạo ra.
- */
 @Component
 public class TestdataImportJob implements JobHandler {
 
@@ -122,19 +84,9 @@ public class TestdataImportJob implements JobHandler {
         ctx.ghiSuKien("INFO", "Xong. Đề đã chuyển sang phiên bản " + version);
     }
 
-    // -------------------------------------------------------------------------
-
-    /** Nội dung một file trong gói: hash, kích thước, và <b>văn bản chỉ khi là sample</b>. */
     private record NoiDung(String sha256, int soByte, String vanBan) {
     }
 
-    /**
-     * Lượt đọc thứ hai: băm, đẩy lên kho, và giữ lại văn bản của <b>riêng</b> test sample.
-     *
-     * <p>Giữ văn bản của test ẩn trong bộ nhớ là một bước gần hơn tới việc nó lọt ra ngoài
-     * (bất biến #1). Ở đây nó không những không được lưu vào Postgres mà còn không được giữ
-     * lại quá lúc đẩy lên kho.
-     */
     private Map<String, NoiDung> docVaLuu(JobContext ctx, String zipSha,
                                           List<ZipTestdataValidator.CapTest> cacTest) {
         Map<String, Boolean> laSample = new HashMap<>();
@@ -149,7 +101,7 @@ public class TestdataImportJob implements JobHandler {
             ZipEntry entry;
             while ((entry = in.getNextEntry()) != null) {
                 if (entry.isDirectory() || !laSample.containsKey(entry.getName())) {
-                    continue;   // problem.yaml đã đọc ở lượt một
+                    continue;
                 }
                 ctx.kiemHuy();
                 byte[] noiDung = doc(in);
@@ -161,8 +113,6 @@ public class TestdataImportJob implements JobHandler {
                         vanBanSample(laSample.get(entry.getName()), noiDung)));
 
                 if (++daDoc % 20 == 0) {
-                    // Nhịp tim: gia hạn lease. Im lặng quá lâu là bị nhặt lại và chạy song
-                    // song với chính mình — xem JobHandler, hợp đồng số 2.
                     ctx.tienDo(daDoc / 2, cacTest.size());
                 }
             }
@@ -196,12 +146,6 @@ public class TestdataImportJob implements JobHandler {
         }
     }
 
-    /**
-     * Số phiên bản đang dựng, lấy từ vị trí đã lưu nếu job này từng chạy dở.
-     *
-     * <p>Không có nó thì mỗi lần restart tạo thêm một phiên bản mới, và một job bị nhặt lại
-     * ba lần để lại ba phiên bản testdata mà chỉ một cái được dùng.
-     */
     private int viTri(JobContext ctx, long problemId) {
         Object daLuu = ctx.viTriDaLuu().get("version");
         if (daLuu instanceof Number n) {

@@ -1,35 +1,4 @@
-/* =============================================================================
-   Giao diện Online Judge — Bước 4.12, sửa mặt tiền (tham khảo DMOJ).
-
-   Không build step, không framework CSS. Một file, biến CSS, và bố cục bằng
-   flex/grid. Lý do ở README: một mốc đã kín lịch không chịu thêm được một
-   toolchain thứ hai, và deploy vẫn phải là đúng một file jar.
-
-   Ngôn ngữ thị giác mượn từ DMOJ (`resources/base.scss`, `navbar.scss`,
-   `table.scss`, `vars-*.scss`) và dịch sang biến CSS thuần:
-     · thanh điều hướng nền than, chữ trắng, mục đang mở tô xanh nhấn
-     · trang nằm trên một tấm nền sáng — nội dung là một tấm giấy có viền
-     · bảng có hàng tiêu đề nền đậm, bo góc trên, sọc chẵn lẻ
-     · hộp thông báo bốn sắc: tin / được / chờ / lỗi
-
-   Ba thứ được giữ nghiêm ngặt vì chúng là yêu cầu, không phải thẩm mỹ:
-     · a11y mức A — tương phản >= 4.5:1, focus nhìn thấy được, chạm >= 44px
-     · mobile-first — mọi thứ bày một cột trước, media query mới chia đôi
-     · prefers-reduced-motion — không ai bị buộc phải xem hiệu ứng
-
-   ★ KHÔNG một tên lớp nào bị xoá hay đổi nghĩa so với bản trước. Mọi lớp mà
-   `js/*.js` gán (`the` · `goi-y` · `thong-bao` · `loi` · `on` · `verdict` ·
-   `cho` · `hang` · `so-lieu` · `tien-do` · `su-kien` · `phu` · `nut` ·
-   `nguy-hiem` · `cuon-ngang` · `hai-cot` · `thanh` · `hieu` · `phien`) vẫn ở
-   đây, cùng ý nghĩa. Đây là một lần sơn lại, không phải một lần đổi hợp đồng.
-   ============================================================================= */
-
-/* --- Biến ----------------------------------------------------------------- */
-
 :root {
-    /* Bề mặt. `--nen-trang` là tấm nền của cả trang; `--nen` là tờ giấy nằm
-       trên nó. Tách hai thứ này ra là cách DMOJ tạo chiều sâu mà không cần
-       một cái bóng nào. */
     --nen-trang: #eef0f4;
     --nen: #ffffff;
     --nen-phu: #f5f6f8;
@@ -40,36 +9,24 @@
 
     --nhan: #1f5fbf;
     --nhan-dam: #16468f;
-    --nhan-sang: #2980b9;   /* xanh nhấn của DMOJ — mục đang mở trên thanh nav */
+    --nhan-sang: #2980b9;
 
-    /* Thanh điều hướng giữ nguyên một màu ở mọi chủ đề, đúng như DMOJ: nó là
-       khung của trang, không phải nội dung của trang. */
     --thanh-nen: #2f3239;
     --thanh-nen-dam: #24272d;
     --thanh-chu: #f0f1f4;
 
-    /* Hàng tiêu đề bảng. Tách khỏi màu thanh nav vì ở chủ đề tối, một nền
-       #1f232b nằm trên nền thẻ #1b1d23 gần như không nhìn ra. */
     --bang-dau-nen: #2f3239;
     --bang-dau-chu: #f0f1f4;
     --bang-dau-vien: #24272d;
 
-    /* Nút chính. Tách khỏi `--nhan` vì chữ trắng phải nằm trên một nền đủ
-       tối — link màu sáng ở chủ đề tối không dùng làm nền nút được. */
     --nut-nen: #1f5fbf;
     --nut-nen-hover: #16468f;
     --nut-chu: #ffffff;
 
-    /* Màu verdict. Không dùng riêng màu để truyền tin — mỗi verdict luôn kèm
-       chữ viết tắt VÀ một câu giải thích. a11y mức A, và cũng vì 8% nam giới
-       không phân biệt được đỏ với lục. */
     --ac: #197a3d;
     --sai: #b3261e;
     --cho: #8a6d00;
 
-    /* Nền nhạt đi kèm ba màu trên, cho huy hiệu và hộp thông báo. Ghi thẳng
-       giá trị thay vì `color-mix()` để không phụ thuộc một tính năng trình
-       duyệt mới cho thứ cơ bản như màu nền. */
     --ac-nen: #e7f5ec;
     --sai-nen: #fdecea;
     --cho-nen: #fbf3d6;
@@ -79,8 +36,8 @@
     --nguy-nen-hover: #8f1e17;
     --nguy-chu: #ffffff;
 
-    --soc: rgba(0, 0, 0, .025);          /* sọc hàng chẵn */
-    --noi-bat: rgba(41, 128, 185, .09);  /* hàng đang rê chuột */
+    --soc: rgba(0, 0, 0, .025);
+    --noi-bat: rgba(41, 128, 185, .09);
     --bong: 0 1px 2px rgba(16, 20, 30, .06), 0 4px 16px rgba(16, 20, 30, .05);
 
     --ban-kinh-nho: 4px;
@@ -139,13 +96,6 @@
 
 * { box-sizing: border-box; }
 
-/* ★ BẮT BUỘC, không phải trang trí.
-   `hidden` là cách mọi trang ở đây giấu một khối: nút "Tải thêm", khu quản trị,
-   dòng cảnh báo đóng băng. Trình duyệt cài nó bằng `display: none` trong bảng
-   kiểu mặc định — độ ưu tiên thấp nhất — nên BẤT KỲ quy tắc `display` nào của
-   ta trên cùng phần tử (`button { display: inline-flex }` chẳng hạn) cũng thắng
-   nó và làm khối ấy hiện ra. Một `!important` ở đây rẻ hơn nhiều so với việc
-   phải nhớ luật này mỗi lần thêm một `display` mới. */
 [hidden] { display: none !important; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -161,7 +111,6 @@ body {
 
 ::selection { background: var(--nhan); color: #fff; }
 
-/* ★ a11y mức A: bỏ qua thanh điều hướng bằng bàn phím. Hiện ra khi được focus. */
 .bo-qua {
     position: absolute;
     left: -9999px;
@@ -175,18 +124,12 @@ body {
 }
 .bo-qua:focus { left: 0; }
 
-/* ★ Focus PHẢI nhìn thấy được. Xoá outline mà không thay gì là loại người dùng
-   bàn phím ra khỏi trang — lỗi a11y phổ biến nhất và dễ tránh nhất. */
 :focus-visible {
     outline: 3px solid var(--nhan);
     outline-offset: 2px;
     border-radius: var(--ban-kinh-nho);
 }
 
-/* --- Thanh điều hướng ----------------------------------------------------- */
-
-/* Dính đỉnh trang: trên một trang bảng dài, đường về trang khác không nên nằm
-   sau ba màn hình cuộn. `z-index` thấp hơn `.bo-qua` để link bỏ qua vẫn nổi. */
 header.thanh {
     position: sticky;
     top: 0;
@@ -224,7 +167,6 @@ header.thanh nav {
     align-items: center;
 }
 
-/* 44px là ngưỡng vùng chạm của WCAG — kể cả với một link trên thanh nav. */
 header.thanh nav a {
     display: inline-flex;
     align-items: center;
@@ -240,9 +182,6 @@ header.thanh nav a:hover {
     background: rgba(255, 255, 255, .14);
     color: #fff;
 }
-/* ★ `aria-current="page"` do khung.js gán. Tô nó là cách duy nhất để người
-   NHÌN biết mình đang ở đâu — người dùng trình đọc màn hình đã được thuộc tính
-   ấy nói cho rồi. Hai nhóm, một nguồn sự thật. */
 header.thanh nav a[aria-current="page"] {
     background: var(--nhan-sang);
     color: #fff;
@@ -267,7 +206,6 @@ header.thanh .phien > a:not(.nut) {
 }
 header.thanh .phien > a:not(.nut):hover { color: #fff; text-decoration: underline; }
 
-/* Nút "Đăng xuất" nằm trên nền than: viền và chữ phải sáng, không phải màu link. */
 header.thanh button.phu {
     color: var(--thanh-chu);
     border-color: rgba(255, 255, 255, .45);
@@ -279,12 +217,8 @@ header.thanh button.phu:hover {
     border-color: rgba(255, 255, 255, .7);
 }
 
-/* Vòng focus xanh chìm nghỉm trên nền than — trên thanh nav nó phải là trắng. */
 header.thanh :focus-visible { outline-color: #fff; }
 
-/* --- Khung trang ---------------------------------------------------------- */
-
-/* Nội dung là một tờ giấy nằm trên nền trang, như `#page-container` của DMOJ. */
 main {
     max-width: 1100px;
     min-height: 60vh;
@@ -300,8 +234,6 @@ main {
 @media (min-width: 900px) {
     main { padding: 28px 32px 40px; }
 }
-
-/* --- Chữ ------------------------------------------------------------------ */
 
 a { color: var(--nhan); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 a:hover { color: var(--nhan-dam); }
@@ -323,7 +255,6 @@ h2 {
 
 h3 { font-size: 1.05rem; margin: 20px 0 8px; }
 
-/* Trong một thẻ, tiêu đề đầu tiên không cần đẩy xuống — viền thẻ đã tách rồi. */
 .the > h2:first-child,
 .the > h3:first-child,
 section > h2:first-child { margin-top: 0; }
@@ -353,11 +284,7 @@ pre {
     overflow: auto;
 }
 
-/* --- Nút và ô nhập -------------------------------------------------------- */
-
 button, .nut {
-    /* 44px là ngưỡng vùng chạm của WCAG. Nút nhỏ hơn thì trên điện thoại người
-       ta bấm trượt, và trên một trang nộp bài thì bấm trượt là mất thời gian thi. */
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -417,8 +344,6 @@ input:focus, select:focus, textarea:focus {
 textarea { line-height: 1.55; resize: vertical; }
 textarea#statementMd { font-family: var(--chu-may); font-size: .92rem; }
 
-/* Ô đánh dấu KHÔNG phải ô nhập chữ: quy tắc `width:100%` ở trên biến nó thành
-   một dải xám dài suốt hàng. Trả nó về đúng kích thước của một ô đánh dấu. */
 input[type="checkbox"], input[type="radio"] {
     width: auto;
     min-width: 20px;
@@ -444,8 +369,6 @@ progress {
     vertical-align: middle;
 }
 
-/* --- Thẻ ------------------------------------------------------------------ */
-
 .the {
     border: 1px solid var(--vien);
     border-radius: var(--ban-kinh-lon);
@@ -459,14 +382,8 @@ progress {
     .the { padding: 20px 22px; }
 }
 
-/* Một thẻ lồng trong thẻ (khu điều hành trong contest.html) phải phân biệt
-   được với thẻ chứa nó — nếu không thì hai đường viền chỉ là nhiễu. */
 .the .the { background: var(--nen-phu); box-shadow: none; }
 
-/* --- Bảng ----------------------------------------------------------------- */
-
-/* `separate` thay cho `collapse` để bo được góc hàng tiêu đề (cách của DMOJ
-   trong `table.scss`). Viền vẫn vẽ một lần mỗi ô nhờ `border-spacing: 0`. */
 table {
     width: 100%;
     border-collapse: separate;
@@ -505,8 +422,6 @@ td {
     font-variant-numeric: tabular-nums;
 }
 
-/* Ô tiêu đề HÀNG (`<th scope="row">` ở submission.html và trang-thai.html) là
-   một nhãn, không phải một hàng tiêu đề bảng. Nó không được mang nền đậm. */
 tbody th {
     text-align: left;
     padding: 11px 10px;
@@ -521,7 +436,6 @@ tbody tr:nth-child(even) { background: var(--soc); }
 tbody tr:hover { background: var(--noi-bat); }
 tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
 
-/* Bảng rộng cuộn trong khung của nó, KHÔNG làm cả trang cuộn ngang. */
 .cuon-ngang {
     overflow-x: auto;
     margin-bottom: var(--khoang);
@@ -531,13 +445,9 @@ tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
 }
 .cuon-ngang > table { margin-bottom: 0; }
 .cuon-ngang > table > caption { padding: 10px 12px 8px; }
-/* Bảng đã nằm trong một khung có viền — góc bo của hàng tiêu đề bị khung cắt,
-   nên bỏ đi cho khỏi thừa một milimet trắng ở hai mép. */
 .cuon-ngang thead tr:first-child th:first-child,
 .cuon-ngang thead tr:first-child th:last-child { border-radius: 0; }
 
-/* Danh sách mô tả — phần chỉ đọc của hồ sơ (Bước G2). Hai cột trên màn hình
-   rộng, xếp chồng trên điện thoại: nhãn ngắn, giá trị dài, không cần bảng. */
 dl { display: grid; grid-template-columns: 1fr; gap: 2px 12px; margin: 0 0 var(--khoang); }
 dl dt { color: var(--chu-nhat); font-size: .85rem; }
 dl dd { margin: 0 0 8px; }
@@ -546,10 +456,6 @@ dl dd { margin: 0 0 8px; }
     dl dd { margin-bottom: 2px; }
 }
 
-/* --- Verdict -------------------------------------------------------------- */
-
-/* Mỗi verdict mang theo hai biến: màu chữ và màu nền. Nhờ vậy huy hiệu bên
-   dưới chỉ cần một quy tắc, không phải bảy. */
 .verdict {
     font-weight: 700;
     --v-chu: var(--chu-nhat);
@@ -563,10 +469,6 @@ dl dd { margin: 0 0 8px; }
 }
 .verdict.cho { --v-chu: var(--cho); --v-nen: var(--cho-nen); }
 
-/* Huy hiệu — CHỈ cho `<span>` và `<a>`, tức những chỗ verdict là một nhãn rời.
-   `<td class="verdict …">` (contests.js) và `<h2 class="verdict …">`
-   (trang-thai.js) giữ nguyên dạng chữ tô màu: một ô bảng hay một tiêu đề bị
-   bọc thành viên thuốc trông như lỗi bố cục. */
 a.verdict, span.verdict {
     display: inline-block;
     padding: 2px 10px;
@@ -581,18 +483,10 @@ a.verdict, span.verdict {
 }
 a.verdict:hover { color: var(--v-chu); filter: brightness(.94); }
 
-/* submission.js gán lớp cả khi chưa có verdict — một viên thuốc rỗng là rác
-   thị giác, không phải thông tin. */
 a.verdict:empty, span.verdict:empty { display: none; }
 
-/* Tiêu đề trạng thái hệ thống (trang-thai.js gán `verdict AC` / `verdict cho`
-   thẳng lên `<h2>`) — chữ tô màu, cỡ tiêu đề. */
 h1.verdict, h2.verdict, h3.verdict { color: var(--v-chu); }
 
-/* --- Thông báo ------------------------------------------------------------ */
-
-/* Bốn sắc, mượn thang `info / success / warning / danger` của DMOJ. Dải màu
-   bên trái là thứ đọc được từ khoé mắt; chữ mới là thứ nói ra chuyện gì. */
 .thong-bao {
     padding: 12px 14px;
     border-radius: var(--ban-kinh);
@@ -615,19 +509,13 @@ h1.verdict, h2.verdict, h3.verdict { color: var(--v-chu); }
 }
 .thong-bao:empty { display: none; }
 
-/* ★ Ô nhập bị server từ chối. JS đặt aria-invalid — dùng chính thuộc tính trợ năng làm
-   móc CSS thay vì thêm một class song song, nên trình đọc màn hình và mắt thường nhận
-   cùng một tín hiệu, không thể lệch nhau. */
 input[aria-invalid="true"],
 select[aria-invalid="true"] {
     border-color: var(--sai);
     background: var(--sai-nen);
 }
 
-/* tien-do-job.js gắn lớp `loi` lên một `<p>` trần, ngoài mọi hộp thông báo. */
 .loi { color: var(--sai); }
-
-/* --- Trình soạn mã -------------------------------------------------------- */
 
 .khung-soan {
     border: 1px solid var(--vien);
@@ -637,25 +525,16 @@ select[aria-invalid="true"] {
 }
 .khung-soan:focus-within { border-color: var(--nhan); box-shadow: 0 0 0 3px var(--tin-nen); }
 .cm-editor { height: 55vh; font-size: 14px; }
-.cm-editor.cm-focused { outline: none; }   /* khung ngoài đã có focus ring */
+.cm-editor.cm-focused { outline: none; }
 
 .hang-nop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
 .hang-nop select { width: auto; min-width: 180px; }
 
-/* --- Bố cục hai cột, mobile-first ----------------------------------------- */
-
-/* ★ `minmax(0, 1fr)` KHÔNG phải thừa, kể cả ở cột đơn.
-   Một ô lưới mặc định có `min-width: auto` — nó không co nhỏ hơn nội dung của
-   nó. Một bảng có hàng tiêu đề `nowrap` nằm bên trong sẽ đẩy cột rộng ra, cột
-   đẩy `main` rộng ra, và cả trang cuộn ngang trên điện thoại — đúng thứ mà
-   `.cuon-ngang` sinh ra để tránh. `minmax(0, …)` cho phép ô co lại, và khung
-   cuộn bên trong nó mới làm được việc của mình. */
 .hai-cot { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--khoang); }
 @media (min-width: 900px) {
     .hai-cot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 }
 
-/* Đề bài render từ Markdown: bảng và khối mã không được làm vỡ bố cục. */
 .de-bai { overflow-wrap: anywhere; }
 .de-bai > :first-child { margin-top: 0; }
 .de-bai pre { background: var(--nen-phu); padding: 12px; border-radius: var(--ban-kinh); overflow-x: auto; }
@@ -670,16 +549,9 @@ select[aria-invalid="true"] {
 }
 .de-bai img { max-width: 100%; height: auto; }
 
-/* --- Đợt 3: soạn đề và vận hành ------------------------------------------ */
-
-/* Một hàng nút/nhãn xếp ngang, xuống dòng được trên màn hình hẹp. */
 .hang { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-/* `<label class="hang">` bọc một ô đánh dấu: chữ nhãn không nên đậm như một
-   nhãn ô nhập, và nó phải bấm được cả dòng. */
 label.hang { font-weight: 400; cursor: pointer; }
 
-/* Bảng số của trang vận hành. Nhãn và số phải đọc được thành cặp, kể cả khi
-   đọc bằng trình đọc màn hình — nên nó là <dl>, không phải hai cột <div>. */
 .so-lieu {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -708,11 +580,8 @@ label.hang { font-weight: 400; cursor: pointer; }
     .so-lieu { grid-template-columns: repeat(2, 1fr auto); column-gap: 24px; }
 }
 
-/* Chưa tải được số liệu thì `#bang-so` rỗng — một khung viền trống là một câu
-   nói dối nhỏ ("có bảng, chỉ là trống"), trong khi sự thật là chưa có gì. */
 dl:empty { display: none; }
 
-/* Tiến độ việc nền. */
 .tien-do {
     margin-top: 14px;
     padding: 12px 14px;
@@ -726,8 +595,6 @@ dl:empty { display: none; }
 .su-kien { margin: 8px 0 0; padding-left: 18px; color: var(--chu-nhat); font-size: 0.94em; }
 .su-kien li { margin: 2px 0; overflow-wrap: anywhere; }
 
-/* Nút cho việc không hoàn tác được. Màu KHÔNG phải thứ duy nhất báo hiệu:
-   chữ trên nút và câu hỏi xác nhận mới là thứ nói ra hậu quả. */
 .nguy-hiem {
     background: var(--nguy-nen);
     border-color: var(--nguy-nen);
@@ -739,8 +606,6 @@ dl:empty { display: none; }
     color: var(--nguy-chu);
 }
 
-/* Chi tiết nhật ký là JSON một dòng — cho phép ngắt ở bất kỳ đâu để không đẩy
-   ngang cả bảng. */
 td code {
     overflow-wrap: anywhere;
     font-size: 0.88em;
@@ -749,16 +614,6 @@ td code {
     padding: 2px 5px;
 }
 
-/* --- Điện thoại ----------------------------------------------------------- */
-
-/* Trên màn hình hẹp, bảy mục điều hướng xuống dòng thành bốn hàng và ăn mất
-   nửa màn hình đầu tiên. DMOJ giải bằng một nút hamburger — thứ đó cần JS và
-   cần sửa `khung.js`. Ở đây dùng cách không cần một dòng mã nào: nav thành MỘT
-   hàng cuộn ngang được. Mọi mục vẫn tới được, vẫn đủ 44px vùng chạm, và chiều
-   cao thanh trở về hai hàng.
-
-   Thanh cũng thôi dính đỉnh: trên 812px chiều cao thì 100px dính cứng là một
-   cái giá quá đắt cho một tiện ích. */
 @media (max-width: 760px) {
     header.thanh {
         position: static;
@@ -766,8 +621,6 @@ td code {
         column-gap: 8px;
         row-gap: 0;
     }
-    /* Tên site và khu phiên phải nằm CÙNG một hàng. Ở 375px chúng vừa khít,
-       nên mọi milimet đệm thừa ở đây đều đổi thành một hàng nữa của thanh. */
     header.thanh .hieu { order: 1; font-size: 1rem; padding-right: 0; margin-right: 0; }
     header.thanh .phien { order: 2; gap: 6px; }
     header.thanh .phien > a:not(.nut) { padding: 0 4px; }

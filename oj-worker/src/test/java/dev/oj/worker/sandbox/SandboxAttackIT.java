@@ -15,30 +15,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★★★ <b>Bộ 14 test tấn công — cổng chuyển của M2</b> ({@code nfrplan.md} 4.1, Bước 2.2).
- *
- * <p>{@code IsolateJudgeRunner} chỉ được đăng ký thay {@code ScriptedJudgeRunner} khi cả 14 ca
- * xanh. Từ đó, <b>mọi PR chạm vào {@code worker.sandbox} chạy lại toàn bộ 14 ca</b>, kể cả PR
- * "chỉ là refactor" — vì một cờ isolate bị đổi trong lúc dọn dẹp trông y hệt một refactor.
- *
- * <h2>Hai kiểu khẳng định, và kiểu thứ hai mới là kiểu khó</h2>
- * <ul>
- *   <li><b>Bị chặn:</b> chương trình chạy xong nhưng không lấy được gì — không có
- *       {@code LEAK:} nào trong stdout. Ca 4, 5, 6, 7, 8, 9, 10, 11.</li>
- *   <li><b>Bị giết đúng cách:</b> chương trình bị dừng bởi đúng cơ chế đã thiết kế, và host
- *       không hề hấn. Ca 1, 2, 3, 12, 13, 14.</li>
- * </ul>
- *
- * <h2>Vì sao mỗi ca là một file dữ liệu chứ không phải một chuỗi trong Java</h2>
- * Thêm ca thứ 15 là thêm một file, không phải sửa class này — và diff của PR đọc được bằng
- * mắt ({@code cau-truc-source.md} mục 5).
- *
- * <h2>Ca không có ở đây, cố ý</h2>
- * "Tự viết sandbox" không phải một ca test mà là một điều cấm ({@code nfrplan.md} 4.1): mọi
- * ca dưới đây chỉ chứng minh rằng {@code isolate} <i>đang được gọi đúng cách</i>, chứ không
- * chứng minh sandbox tự viết nào là an toàn.
- */
 @DisplayName("14 test tấn công sandbox")
 class SandboxAttackIT {
 
@@ -62,10 +38,6 @@ class SandboxAttackIT {
         }
     }
 
-    // =========================================================================
-    // Nhóm 1 — bị giết đúng cách, host không hề hấn
-    // =========================================================================
-
     @Test
     @DisplayName("1 · fork bomb bị cgroup chặn, host không sinh thêm tiến trình nào")
     void forkBomb() {
@@ -75,8 +47,6 @@ class SandboxAttackIT {
         assertThat(attempt.meta().outcome())
                 .as("fork bomb phải bị dừng, không được chạy tới cùng")
                 .isNotEqualTo(IsolateMeta.Outcome.OK);
-        // Nới rộng: máy build cũng có tiến trình khác sinh ra trong lúc test chạy. Điều cần
-        // bắt là bậc độ lớn — một fork bomb thoát ra ngoài tạo hàng nghìn tiến trình.
         assertThat(hostProcessCount() - processesBefore)
                 .as("fork bomb thoát ra ngoài cgroup sẽ để lại hàng nghìn tiến trình trên host")
                 .isLessThan(200);
@@ -89,8 +59,6 @@ class SandboxAttackIT {
 
         assertThat(attempt.meta().outcome()).isEqualTo(IsolateMeta.Outcome.TIME_LIMIT);
         assertThat(attempt.meta().killed()).isTrue();
-        // Đo CPU time chứ không phải wall time: máy tải nặng thì wall time làm cùng một bài
-        // lúc AC lúc TLE, và đó là mất công bằng (oj-worker/CLAUDE.md mục 2).
         assertThat(attempt.meta().cpuTimeMs())
                 .as("bị giết ngay sau hạn mức CPU, không phải sau wall")
                 .isBetween((long) CPU_MS, CPU_MS + 900L);
@@ -133,7 +101,7 @@ class SandboxAttackIT {
         assertThat(attempt.compiled()).isTrue();
 
         long startedAt = System.nanoTime();
-        harness.attack("04-read-etc-passwd.cpp", CPU_MS, MEMORY_KB);   // buộc reset() dọn box
+        harness.attack("04-read-etc-passwd.cpp", CPU_MS, MEMORY_KB);
         long cleanupMs = (System.nanoTime() - startedAt) / 1_000_000;
 
         assertThat(harness.boxEntries())
@@ -161,10 +129,6 @@ class SandboxAttackIT {
                 .as("thí sinh phải hiểu vì sao bài của họ không biên dịch được")
                 .isNotNull();
     }
-
-    // =========================================================================
-    // Nhóm 2 — chạy xong nhưng không lấy được gì
-    // =========================================================================
 
     @Test
     @DisplayName("4 · /etc/passwd và /etc/shadow không tồn tại trong box")
@@ -251,7 +215,6 @@ class SandboxAttackIT {
         assertThat(attempt.leaked())
                 .as("stdout: %s", attempt.stdout())
                 .isFalse();
-        // Chương trình tự liệt kê /box: chỉ được thấy đúng binary của chính nó.
         List<String> seen = attempt.stdout().lines()
                 .filter(line -> line.startsWith("BOXENTRY:"))
                 .map(line -> line.substring("BOXENTRY:".length()))
@@ -261,7 +224,6 @@ class SandboxAttackIT {
                         + "nếu đó là testdata thì nộp sai từng test một là rút được cả bộ đề "
                         + "(SEC3, frplan 3.1)")
                 .containsExactly("prog");
-        // Và cùng một sự thật nhìn từ phía host, phòng khi chương trình nói dối.
         assertThat(harness.boxEntries()).containsExactly("prog");
     }
 
@@ -280,7 +242,6 @@ class SandboxAttackIT {
                 .doesNotContain("OJ_INTERNAL", "SHARED_SECRET");
     }
 
-    /** Đếm tiến trình trên host, để ca fork bomb khẳng định được điều nó muốn khẳng định. */
     private static long hostProcessCount() {
         return ProcessHandle.allProcesses().count();
     }

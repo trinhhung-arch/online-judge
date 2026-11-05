@@ -1,26 +1,3 @@
-/**
- * Trang trạng thái công khai — FR-ADM-05. Bước G3.
- *
- * ★ KHÔNG ĐÒI ĐĂNG NHẬP, VÀ ĐÓ LÀ ĐIỂM CỦA TRANG
- *
- * Người gặp sự cố thường là người đang không đăng nhập được. Một trang trạng thái đòi đăng
- * nhập là một trang trạng thái vô dụng đúng lúc cần nhất.
- *
- * ★ HAI CÂU HỎI KHÁC NHAU, ĐỪNG GỘP
- *
- *   "còn nhận bài không?"  -> `dangNhanBai`, một quyết định của người vận hành (FR-ADM-06)
- *   "có máy chấm không?"   -> `mayChamSong`, một sự thật về hạ tầng
- *
- * Cả hai đều làm bài nộp không được chấm ngay, nhưng chúng đòi hai hành động khác nhau ở
- * người dùng: một cái là "quay lại sau khi bảo trì xong", cái kia là "bài của bạn đã vào
- * hàng đợi và sẽ được chấm". Gộp thành một dòng "hệ thống bận" là bỏ mất khác biệt đó.
- *
- * ★ TỰ LÀM MỚI, VÌ NGƯỜI TA MỞ TRANG NÀY RỒI ĐỂ ĐÓ
- *
- * 10 giây khớp `oj.judge.metrics-interval` — nhịp server thật sự lấy mẫu. Hỏi dày hơn chỉ
- * nhận lại cùng một con số.
- */
-
 import { goi, LoiApi } from './api.js';
 import { chu, bao } from './khung.js';
 import { khoiDong } from './trang.js';
@@ -43,7 +20,6 @@ function giay(ms) {
 
 function dong(nhan, giaTri, nghia) {
     const tr = chu('tr');
-    // scope="row": trình đọc màn hình đọc "Đang chờ, 0" chứ không đọc trơ một con số.
     const th = chu('th', nhan);
     th.setAttribute('scope', 'row');
     tr.append(th);
@@ -52,7 +28,6 @@ function dong(nhan, giaTri, nghia) {
     return tr;
 }
 
-/** Một câu tóm tắt, và nó phải nói đúng cái đang xảy ra. */
 function tomTat(t) {
     if (!t.dangNhanBai) {
         return ['Đang bảo trì — tạm ngừng nhận bài nộp', 'verdict cho',
@@ -87,7 +62,6 @@ async function tai() {
         ve(await goi(DUONG.trangThai));
         bao(o, '');
     } catch (e) {
-        // Trang trạng thái không tải được LÀ một trạng thái, và là trạng thái đáng báo.
         tieuDe.textContent = 'Không liên lạc được với máy chủ';
         tieuDe.className = 'verdict WA';
         moTa.textContent = 'Trang này sẽ tự thử lại. Nếu kéo dài, hệ thống đang có sự cố.';

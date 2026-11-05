@@ -26,16 +26,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bất biến #9 trên log THẬT (bao-mat-plan Lỗ 3, bước 1.2) — lưới thứ hai sau
- * {@code LogKhongBiMatTest}.
- *
- * <p>Gắn một {@link ListAppender} vào logger gốc, hạ {@code dev.oj} xuống TRACE (bắt cả dòng
- * debug mà prod không in), rồi chạy trọn đường nộp bài → claim → tiến độ → verdict, cả nhánh
- * lỗi biên dịch (log compiler thường chép lại dòng mã lỗi), và một lượt đăng nhập. Mã nguồn,
- * log compiler, mật khẩu đều mang một chuỗi mốc; không dòng log nào — kể cả stack trace — được
- * chứa nó.
- */
 class LogKhongLoBiMatIT extends HttpIT {
 
     private static final String MOC = "MOC_BI_MAT_7c1f9e";
@@ -87,11 +77,6 @@ class LogKhongLoBiMatIT extends HttpIT {
         khongLo();
     }
 
-    /**
-     * Qua HTTP thật, không gọi thẳng use-case: use-case chỉ NÉM, dòng log sinh ra ở
-     * {@code GlobalExceptionHandler} — gọi thẳng thì không có dòng nào để soi (đo 2026-09-24:
-     * chốt "phải bắt được log" đỏ ở bản đầu, đúng như nó được đặt ra để làm).
-     */
     @Test
     @DisplayName("★ đăng nhập sai qua HTTP: mật khẩu đã thử không xuất hiện trong log")
     void dang_nhap_khong_ghi_mat_khau() {

@@ -4,15 +4,6 @@ import dev.oj.contract.CheckerType;
 
 import java.math.BigDecimal;
 
-/**
- * Kiểm đầu vào khi soạn đề — FR-PROB-01. Java thuần.
- *
- * <h2>Mỗi ràng buộc ở đây có một bản sao trong CHECK của V2, và đó là chủ ý</h2>
- * Bản ở đây cho ra câu tiếng Việt người soạn đề đọc được; bản trong database bảo đảm rằng một
- * đường ghi nào đó quên gọi hàm này vẫn không tạo được dữ liệu sai. Sửa một bên thì sửa cả hai.
- *
- * <p>Các con số trùng đúng V2: thời gian 100–30000ms, bộ nhớ 16384–1048576KB.
- */
 public final class ProblemRules {
 
     public static final int TIME_LIMIT_MIN_MS = 100;
@@ -21,14 +12,6 @@ public final class ProblemRules {
     public static final int MEMORY_LIMIT_MAX_KB = 1_048_576;
     public static final int TITLE_MAX = 200;
 
-    /**
-     * Đề dài nhất chấp nhận được, tính bằng ký tự.
-     *
-     * <p>Cột là {@code TEXT} nên database nhận cả một megabyte. Trần này tồn tại vì đề được
-     * render <b>server-side</b> (FR-PROB-02): một đề 50MB là một lần phân tích Markdown 50MB
-     * trong cùng tiến trình đang giữ đường nộp bài. Không phải giới hạn về lưu trữ, mà là
-     * giới hạn về thời gian CPU của một request.
-     */
     public static final int STATEMENT_MAX_CHARS = 200_000;
 
     private ProblemRules() {
@@ -72,15 +55,6 @@ public final class ProblemRules {
         }
     }
 
-    /**
-     * {@code ck_problems_epsilon} của V2: epsilon <b>có mặt khi và chỉ khi</b> checker là
-     * {@code float}.
-     *
-     * <p>Ràng buộc hai chiều chứ không chỉ "float thì phải có epsilon": một epsilon sót lại
-     * trên đề dùng checker {@code token} là một con số không ai đọc nhưng ai cũng tưởng có
-     * tác dụng — và ngày đổi checker sang float thì nó bỗng có hiệu lực với một giá trị không
-     * ai chọn.
-     */
     public static void kiemTraChecker(CheckerType checkerType, BigDecimal epsilon) {
         boolean laFloat = checkerType == CheckerType.FLOAT;
         if (laFloat && epsilon == null) {

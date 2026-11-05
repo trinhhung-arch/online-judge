@@ -24,22 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-/**
- * ★ Hai hàng rào Redis của {@code identity}, và chúng hỏng theo hai hướng NGƯỢC nhau — có chủ
- * ý. Thiết kế: {@code Claude outputs/identity-test-cases.md}, ca GH-05 và GH-06.
- *
- * <ul>
- *   <li><b>Đăng ký: Redis chết thì ĐÓNG cửa.</b> Cho qua nghĩa là một bot chỉ cần làm Redis
- *       nghẹt là tạo được tài khoản không giới hạn ({@link RedisRegistrationRateLimiter}).</li>
- *   <li><b>Đăng nhập: Redis chết thì MỞ cửa.</b> Giãn nhịp 2 giây chỉ bớt số dòng
- *       {@code refresh_tokens}; chặn ở đây là biến một sự cố hạ tầng thành "không ai đăng nhập
- *       được" ({@link RedisLoginRateLimiter}).</li>
- * </ul>
- *
- * <p>Một lần refactor gom hai lớp về chung một kiểu xử lý lỗi sẽ lật một trong hai hướng mà
- * không test nào khác đỏ: IT chạy trên Redis thật, còn unit test của use-case dùng hàng rào
- * giả. Lớp này giữ cả hai hướng ở cạnh nhau.
- */
 @ExtendWith(MockitoExtension.class)
 class RedisGioiHanIdentityTest {
 
@@ -53,12 +37,6 @@ class RedisGioiHanIdentityTest {
     @Mock
     ValueOperations<String, String> ops;
 
-    /**
-     * {@link StringRedisTemplate} viết tay thay vì để Mockito giả: {@code expire(K, Duration)}
-     * là một phương thức {@code default} của {@code RedisOperations}, và mock có chặn được nó
-     * hay không là tuỳ mock maker. Đè đúng {@code expire(K, Expiration)} — chỗ phương thức
-     * default ấy gọi vào — thì phép kiểm không phụ thuộc vào điều đó.
-     */
     private final class RedisGia extends StringRedisTemplate {
 
         final List<Long> hanDaDatMs = new ArrayList<>();
@@ -90,8 +68,6 @@ class RedisGioiHanIdentityTest {
         redis.chet = new RedisConnectionFailureException("giả lập: Redis không phản hồi");
         return redis;
     }
-
-    // ---- Đăng ký: đóng cửa -------------------------------------------------------------
 
     @Test
     @DisplayName("★ GH-05 · đăng ký khi Redis chết → TỪ CHỐI 429, không cho qua")
@@ -131,8 +107,6 @@ class RedisGioiHanIdentityTest {
                 .hasFieldOrPropertyWithValue("retryAfter", Duration.ofSeconds(1_234));
         assertThat(redis.hanDaDatMs).as("chỉ lượt đầu của cửa sổ mới đặt hạn").isEmpty();
     }
-
-    // ---- Đăng nhập: mở cửa -------------------------------------------------------------
 
     @Test
     @DisplayName("★ GH-06 · giãn nhịp đăng nhập khi Redis chết → CHO QUA, người dùng vẫn đăng nhập được")

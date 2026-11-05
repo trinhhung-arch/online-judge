@@ -17,16 +17,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bất biến #9 trên log THẬT, cho mọi luồng còn lại của {@code identity}. Thiết kế:
- * {@code Claude outputs/identity-test-cases.md}, ca RR-03.
- *
- * <p>{@link LogKhongLoBiMatIT} mới soi một lượt đăng nhập sai. Ở đây là đăng ký, đổi mật
- * khẩu, làm mới / dùng lại / đăng xuất refresh token, gõ mã xác minh email — và một thân JSON
- * hỏng, vì nhánh lỗi là chỗ dễ lọt nhất: dòng log của nó do framework soạn, không phải do ta.
- * Cùng cách đo với lớp kia: gắn {@link ListAppender} vào logger gốc, hạ {@code dev.oj} xuống
- * TRACE, rồi tìm từng bí mật trong mọi dòng — kể cả stack trace.
- */
 class LogIdentityKhongLoBiMatIT extends HttpIT {
 
     private static final String MOC = "MOC_BI_MAT_3a9d2e";
@@ -108,12 +98,6 @@ class LogIdentityKhongLoBiMatIT extends HttpIT {
         khongLo(MOC);
     }
 
-    /**
-     * ★ JSON hỏng mang một mật khẩu không có ngoặc kép — kiểu lỗi của một client viết tay hay
-     * một lệnh {@code curl} gõ vội. Bộ phân tích JSON chép token lạ vào câu lỗi của nó
-     * ({@code Unrecognized token '…'}), nên bất cứ nơi nào ghi câu lỗi ấy ra log là ghi luôn
-     * mật khẩu.
-     */
     @Test
     @DisplayName("★ JSON hỏng: mật khẩu viết không ngoặc kép không được lọt vào log qua câu lỗi của bộ phân tích JSON")
     void json_hong_khong_lo_mat_khau() {

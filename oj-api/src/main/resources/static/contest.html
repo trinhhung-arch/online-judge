@@ -18,8 +18,6 @@
         <section aria-labelledby="nhan-de">
             <h2 id="nhan-de">Đề bài</h2>
 
-            <!-- ★ Vùng này có HAI nghĩa khi rỗng: "chưa tới giờ" và "kỳ thi chưa có đề nào".
-                 js/contest.js phân biệt bằng `trangThai` của server, không bằng độ dài mảng. -->
             <p id="vi-sao-trong" class="thong-bao" hidden></p>
 
             <div class="cuon-ngang">
@@ -30,9 +28,6 @@
                         <th scope="col">Nhãn</th>
                         <th scope="col">Mã đề</th>
                         <th scope="col">Điểm</th>
-                        <!-- Hai cột chỉ có nghĩa với người ra đề; js/contest.js bỏ `hidden`
-                             khi người xem đủ quyền. Ẩn bằng thuộc tính chứ không xoá khỏi
-                             DOM để `scope="col"` vẫn khớp số ô của mỗi dòng. -->
                         <th scope="col" class="chi-ra-de" hidden>Nguồn</th>
                         <th scope="col" class="chi-ra-de" hidden>Sửa</th>
                         <th scope="col" class="chi-ra-de" hidden>Gỡ</th>
@@ -44,20 +39,9 @@
 
             <p><button id="dang-ky" hidden>Đăng ký tham gia</button></p>
 
-            <!-- ★ TÁCH LÀM HAI vì hai hành động này đòi HAI mức quyền khác nhau:
-                 "Thêm đề" đi qua AuthorContestUseCase (@RequiresRole SETTER), còn
-                 "Công bố" đi qua RevealStandingsUseCase (@RequiresRole ADMIN).
-                 Gộp chúng vào một khối rồi chặn ở ADMIN là giấu mất phần việc mà một
-                 SETTER hoàn toàn được làm — và họ không nhận lỗi nào, chỉ là không thấy. -->
             <section id="khu-ra-de" class="the" hidden>
                 <h3>Đề của kỳ thi</h3>
 
-                <!-- ★ V10 — HAI đường vào, và chúng khác nhau ở thứ chúng lấy đi.
-                     "Soạn đề riêng" tạo ra một đề chưa từng ở trong kho đề chung, nên nó
-                     không lấy đi của người luyện tập thứ gì.
-                     "Mượn đề" lấy một đề đang có sẵn — và đề ấy sẽ VẮNG khỏi trang Đề bài
-                     cho tới khi kỳ thi kết thúc (FR-CON-03). Câu gợi ý dưới nút nói thẳng
-                     cái giá đó, vì nó không hiển nhiên với người bấm. -->
                 <h4>Soạn đề riêng</h4>
                 <p><a id="soan-de-rieng" class="nut" href="#">Soạn đề mới cho kỳ thi này</a></p>
                 <p class="goi-y">Đề mới, chỉ thuộc kỳ thi này. Nó không xuất hiện ở trang
@@ -68,20 +52,6 @@
                     bài suốt thời gian kỳ thi chưa kết thúc.</p>
 
                 <form id="form-them-de" novalidate>
-                    <!-- ★ Ô này nhận MÃ ĐỀ (chuỗi), không phải id (số).
-
-                         Bản đầu nhận id, và đó là một cái bẫy: id không xuất hiện ở BẤT KỲ
-                         màn hình nào — trang Đề bài, bảng đề của kỳ thi ngay bên trái, và
-                         cả đường dẫn /problem.html?code=... đều nói bằng mã đề. Chỗ duy
-                         nhất id từng hiện ra là câu "Đã tạo đề #N. Ghi lại số này" ở
-                         ra-de.js, tức là người ra đề phải tự chép tay một con số.
-
-                         Người không chép thì gõ thứ họ nhìn thấy — mã đề — vào ô số, và
-                         nhận về "lỗi phía hệ thống". Sửa đúng chỗ là hỏi bằng cái định
-                         danh mà cả giao diện đang dùng, rồi để contest.js đổi nó ra id.
-
-                         KHÔNG đoán "toàn số thì là id": một đề hoàn toàn có thể mang mã
-                         "15", và ca đầu tiên gặp lỗi này chính là ca đó. -->
                     <label for="ma-de">Mã đề</label>
                     <input id="ma-de" name="code" required placeholder="A-PLUS-B"
                            list="ds-ma-de" autocomplete="off" aria-describedby="goi-y-ma-de">
@@ -89,9 +59,6 @@
                     <p class="goi-y" id="goi-y-ma-de">Đúng chuỗi ở cột “Mã đề” của trang
                         Đề bài. Đề phải đã xuất bản trước khi thêm vào kỳ thi.</p>
 
-                    <!-- Nhãn LÀ thứ tự đề (V12, ADR 015) — không có ô "Thứ tự" riêng.
-                         Hai ô cùng nói một chuyện thì sớm muộn chúng cãi nhau, và đề mang
-                         nhãn D sẽ đứng đầu danh sách mà không ai sai cả. -->
                     <label for="nhan-de-moi">Nhãn</label>
                     <input id="nhan-de-moi" name="label" required placeholder="A"
                            pattern="^[A-Z]{1,2}$" maxlength="2"
@@ -118,8 +85,6 @@
         <section aria-labelledby="nhan-bang">
             <h2 id="nhan-bang">Bảng xếp hạng</h2>
 
-            <!-- ★ Đóng băng PHẢI nhìn thấy được. Một bảng ngừng đổi mà không nói gì làm
-                 thí sinh kết luận hệ thống hỏng, đúng vào lúc căng nhất. -->
             <p id="bang-dong-bang" class="thong-bao" hidden></p>
             <p id="nguon-bang" class="goi-y"></p>
 

@@ -8,11 +8,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Mọi khối {@code meta} dưới đây là <b>bản chép nguyên văn</b> từ isolate 2.6 chạy thật, chứ
- * không phải chuỗi bịa ra. Một parser được kiểm bằng dữ liệu do chính người viết parser nghĩ
- * ra thì chỉ chứng minh rằng hai lần đoán giống nhau.
- */
 class IsolateMetaTest {
 
     @Test

@@ -22,25 +22,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-/**
- * Chạy đúng một testcase. Bước 2.7 của {@code build-order.md}.
- *
- * <h2>★ Input đi vào bằng stdin, và testdata KHÔNG BAO GIỜ vào box</h2>
- * {@link TestdataFetcher} trả về một đường dẫn <b>trên host</b>;
- * {@code ProcessBuilder.redirectInput} mở nó thành một file descriptor mà tiến trình con thừa
- * hưởng. Chương trình đọc được nội dung nhưng <b>không thấy file</b>.
- *
- * <p>Đây là bất biến #1 ở dạng cụ thể nhất của nó. Nếu ai đó "đơn giản hoá" thành copy file
- * input vào box rồi {@code --stdin=input.txt}, thì một chương trình bốn dòng
- * {@code opendir("/box")} lấy được toàn bộ bộ test — nộp một bảng tra cứu là AC mọi bài, và
- * không có dòng log nào cho thấy chuyện đó đã xảy ra (SEC3, {@code frplan.md} 3.1).
- * Test tấn công 10 tồn tại đúng để bắt ngày ai đó làm việc ấy.
- *
- * <h2>{@link IsolateBox#reset()} trước mỗi test, không phải mỗi bài</h2>
- * {@code cg-mem} là đỉnh bộ nhớ tính từ lúc box sinh ra. Không reset thì test 5 báo bộ nhớ
- * của test 1..5 gộp lại — một bài dùng 200MB ở test 1 rồi 10MB ở test 2 sẽ bị MLE ở test 2.
- * Giá của reset đo được là ~5ms một lượt.
- */
 @Component
 public class TestRunner {
 
@@ -52,11 +33,6 @@ public class TestRunner {
         this.testdata = testdata;
     }
 
-    /**
-     * @param verdict    {@code AC} · {@code WA} · {@code TLE} · {@code MLE} · {@code RE}
-     * @param diagnostic chuỗi cho {@code judge_runs.isolate_status} — <b>chỉ ADMIN xem</b>,
-     *                   không bao giờ chứa output của chương trình hay nội dung testcase
-     */
     public record TestOutcome(Verdict verdict, long cpuTimeMs, long memoryKb, String diagnostic) {
 
         public boolean accepted() {
@@ -91,18 +67,6 @@ public class TestRunner {
                 meta.cpuTimeMs(), meta.memoryKb(), meta.diagnostic());
     }
 
-    /**
-     * <h2>Thứ tự các nhánh ở đây là một quyết định, không phải ngẫu nhiên</h2>
-     * Chương trình bị giết vì hết giờ <b>trong lúc</b> đang tuôn output thì lý do thật là hết
-     * giờ, nên {@code TIME_LIMIT} phải được xét trước cờ {@code truncated}.
-     *
-     * <h2>Vì sao output vượt trần là {@code WA} chứ không phải {@code RE}</h2>
-     * Vì chương trình không hề bị lỗi: nó chạy xong bình thường và in ra quá nhiều. Báo
-     * {@code RE} là nói với thí sinh rằng chương trình của họ đổ vỡ, và họ sẽ đi tìm một lỗi
-     * không tồn tại. Output dài hơn trần thì <b>chắc chắn</b> không thể khớp đáp án, nên
-     * {@code WA} vừa đúng vừa dẫn họ tới chỗ cần sửa. Bộ verdict của dự án không có
-     * {@code OLE} ({@code oj-contract} {@code Verdict}), và thêm một verdict là đổi hợp đồng.
-     */
     private Verdict verdictOf(IsolateMeta meta, OutputLimiter.Captured stdout,
                               byte[] expected, Checker checker) {
         return switch (meta.outcome()) {

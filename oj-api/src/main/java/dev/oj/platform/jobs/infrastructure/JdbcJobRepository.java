@@ -21,20 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Bảng {@code jobs} và {@code job_events} (V6). Chạy trên pool {@code app}.
- *
- * <h2>★ {@link #claim} là {@code FOR UPDATE SKIP LOCKED}, cùng khuôn với hàng đợi chấm bài</h2>
- * Hai instance API cùng nhặt một job là hai lần nạp cùng một file testdata. {@code SKIP LOCKED}
- * cho instance thứ hai đi thẳng sang job kế tiếp thay vì chờ — cùng lập luận đã dùng ở
- * {@code JdbcJudgeQueueRepository}, và cùng lý do vì sao dự án này chọn Postgres thật thay vì
- * H2 trong test ({@code postgres-design.md} mục 13).
- *
- * <h2>{@code started_at} dùng COALESCE, không ghi đè</h2>
- * Một job bị thu hồi rồi chạy lại phải giữ mốc bắt đầu <b>lần đầu</b>. Ghi đè nó là làm cho
- * "job này chạy bao lâu rồi" trả lời sai đúng vào lúc câu hỏi đó quan trọng nhất — khi có
- * người đang chờ và tự hỏi nó có treo không.
- */
 @Repository
 public class JdbcJobRepository implements JobRepository {
 
@@ -56,7 +42,6 @@ public class JdbcJobRepository implements JobRepository {
                     .query(Long.class)
                     .single();
         } catch (DuplicateKeyException e) {
-            // ux_jobs_one_active_per_entity. Một cú double click trên trang admin là đủ.
             throw JobsException.dangCoJobCungLoai(type);
         }
     }
@@ -199,7 +184,6 @@ public class JdbcJobRepository implements JobRepository {
         return jsonb == null ? Map.of() : json.readValue(jsonb, Map.class);
     }
 
-    /** {@code INTEGER} nullable: {@code getInt} trả 0 cho NULL, nên phải hỏi {@code wasNull}. */
     private static Integer soNguyen(ResultSet rs, String cot) throws SQLException {
         int value = rs.getInt(cot);
         return rs.wasNull() ? null : value;

@@ -8,10 +8,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Phạm vi thật (biến thể đường dẫn, lỗi, file tĩnh) nằm ở {@code KhongLuuDemApiHttpIT} — ở đây
- * chỉ giữ hai điều không cần Tomcat mới thấy.
- */
 class KhongLuuDemApiFilterTest {
 
     @Test

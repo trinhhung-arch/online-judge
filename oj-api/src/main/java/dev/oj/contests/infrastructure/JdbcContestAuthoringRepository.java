@@ -11,14 +11,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-/**
- * Hiện thực {@link ContestAuthoringRepository}. Pool {@code app}.
- *
- * <p>Mọi câu ở đây mang {@code (created_by = :nguoiGoi OR :laAdmin)} — và {@link #THEM_DE}
- * mang thêm {@code (owner_id = :nguoiGoi OR :laAdmin)} của đề. Hai điều kiện nằm trong CÙNG
- * câu ghi, không phải một câu {@code SELECT} kiểm trước rồi ghi sau: kiểm-rồi-ghi là hai
- * bước, và điều kiện sở hữu thì phải là một ({@code oj-api/CLAUDE.md} mục 2).
- */
 @Repository
 public class JdbcContestAuthoringRepository implements ContestAuthoringRepository {
 
@@ -30,16 +22,6 @@ public class JdbcContestAuthoringRepository implements ContestAuthoringRepositor
                AND (created_by = :nguoiGoi OR :laAdmin)
             """;
 
-    /**
-     * {@code INSERT ... SELECT ... WHERE} thay cho {@code VALUES}: không đủ quyền thì
-     * {@code SELECT} ra 0 dòng và câu lệnh ghi 0 dòng. {@code ON CONFLICT DO UPDATE} (gắn lại
-     * = đổi nhãn/điểm) chỉ chạy trên dòng đã qua được {@code WHERE}, nên đường đổi nhãn cũng
-     * không đi vòng được.
-     *
-     * <p>{@code CAST} ở danh sách chọn: trong {@code INSERT ... SELECT}, Postgres dựng kiểu
-     * của {@code SELECT} trước rồi mới so với cột đích — không có gì để suy ra kiểu của một
-     * tham số trần.
-     */
     private static final String THEM_DE = """
             INSERT INTO contest_problems (contest_id, problem_id, label, points,
                                           created_for_contest)
@@ -112,13 +94,9 @@ public class JdbcContestAuthoringRepository implements ContestAuthoringRepositor
                     .param("laAdmin", laAdmin)
                     .update();
         } catch (DuplicateKeyException e) {
-            // UNIQUE (contest_id, label) — hai đề cùng nhãn 'A' thì bảng xếp hạng có hai cột
-            // trùng tên và không ai biết cột nào là đề nào.
             throw ContestsException.khongHopLe("contest.nhan_de_trung",
                     "Nhãn đề này đã được dùng trong kỳ thi.");
         } catch (DataIntegrityViolationException e) {
-            // Khoá ngoại problem_id: chỉ còn tới được đây khi đề bị xoá giữa câu EXISTS và
-            // lúc ghi. Cùng câu với nhánh 0 dòng dưới — với người gọi đó là một chuyện.
             throw deKhongGanDuoc(problemId);
         }
         if (soDong == 0) {
@@ -126,14 +104,6 @@ public class JdbcContestAuthoringRepository implements ContestAuthoringRepositor
         }
     }
 
-    /**
-     * ★ Đề không có thật và đề của người khác cho CÙNG một câu. Nói "đề này là của người
-     * khác" là xác nhận id ấy tồn tại — và dò id tuần tự là cách lấy danh sách đề DRAFT.
-     *
-     * <p>Vẫn nhắc lại con số người dùng gõ: ca thật đã gặp là người ra đề gõ MÃ đề
-     * ({@code A-PLUS-B}, đọc từ trang danh sách) vào ô nhận ID — câu này phải chỉ ra được
-     * sự nhầm lẫn ấy ({@code ContestProblemsIT}).
-     */
     private static ContestsException deKhongGanDuoc(long problemId) {
         return ContestsException.khongHopLe("contest.de_khong_ton_tai",
                 "Không có đề nào mang id " + problemId + " trong số đề bạn được gắn vào kỳ thi.");

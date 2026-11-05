@@ -23,53 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * ★ Cập nhật bảng xếp hạng <b>theo lô</b> — FR-CON-04, P8. Bước 5.6.
- *
- * <h2>Vì sao theo lô mỗi 2 giây chứ không phải mỗi verdict</h2>
- * {@code oj-api/CLAUDE.md} mục 6 nói thẳng con số. Lý do là số học: 500 người nộp cùng lúc ở
- * phút cuối là 500 lần đọc-tính-ghi lại bảng xếp hạng, mỗi lần chạm cùng những dòng — tức là
- * 500 lần tranh khoá trên một handful hàng, <i>đúng vào lúc</i> hệ thống bận nhất.
- *
- * <p>Gom lại thành một lô: một lượt đọc, một lượt tính, một lượt ghi. Người dùng thấy bảng
- * chậm tối đa hai giây, và hai giây là thứ không ai nhận ra trong một kỳ thi năm tiếng.
- *
- * <h2>★ Idempotent qua watermark — Quy tắc 4</h2>
- * {@code last_applied_submission_id} là ranh giới đã xử lý. Mỗi nhịp chỉ đọc bài nộp có
- * {@code id} lớn hơn nó, và bài nộp được xử lý <b>đúng theo thứ tự id</b>. Nhờ vậy:
- *
- * <ul>
- *   <li>Chạy lại một lô đã chạy không đổi gì — thể thức cũng thuần ({@link ContestFormat}).</li>
- *   <li>Tiến trình chết giữa chừng thì lô đó chưa commit, watermark chưa tiến, và nhịp sau
- *       làm lại từ đúng chỗ ấy.</li>
- * </ul>
- *
- * <p><b>Một watermark duy nhất chỉ đúng nếu lô không bao giờ có khoảng trống.</b> Đây là chỗ
- * bản đầu sai: nó đọc {@code baiDaChamTrongContest}, vốn lọc {@code status='DONE'}, nên lô
- * <i>nhảy qua</i> bài đang chấm dở và watermark vượt lên trên nó — bài ấy vĩnh viễn không vào
- * bảng. Không hiếm chút nào: thứ tự claim theo id, thứ tự chấm xong theo độ nặng của bài.
- * Từ nay {@link #capNhat} dùng {@code baiDaChamLienMach}, câu cắt ở bài chưa xong đầu tiên.
- *
- * <h2>Cả lô nằm trong MỘT transaction, và đó là điều bắt buộc</h2>
- * Watermark của kỳ thi là {@code MAX} qua các dòng theo người. Nếu ghi được dòng của người B
- * (id 20) mà hỏng ở dòng người A (id 10), watermark thành 20 và <b>bài id 10 vĩnh viễn không
- * vào bảng</b> — một lỗi im lặng mà chỉ job đối soát drift (FR-CON-09) tìm ra.
- *
- * <p>Một transaction làm cho hai kết cục duy nhất là "cả lô vào" hoặc "cả lô chưa vào".
- *
- * <h2>★ Hai lượt cùng một kỳ thi thì xếp hàng — {@link StandingsLock}</h2>
- * Transaction làm cho <i>một</i> lô nguyên tử, không làm cho <i>hai</i> lô tuần tự. Bản trước
- * đọc watermark và lô <b>bên ngoài</b> transaction, nên nhịp 2 giây và
- * {@code RebuildStandingsJob} (hoặc hai instance API) từng đọc chung một watermark, và lượt đến
- * sau áp lại cả lô lên dòng mà lượt trước vừa ghi: ICPC đếm một lần sai thành hai. Giờ mỗi
- * lượt khoá kỳ thi trước, rồi mới đọc watermark, lô và trạng thái — nên lượt sau thấy watermark
- * mà lượt trước đã đẩy tới, và lô của nó rỗng. {@link #xoaTrang} của job dựng lại đứng sau
- * cùng khoá ấy, nên nó không xoá chen vào giữa một lô đang ghi.
- *
- * <h2>Nuốt ngoại lệ ở tầng ngoài — cùng lý do với {@code StaleJobReaper}</h2>
- * Spring huỷ hẳn một tác vụ {@code @Scheduled} nếu nó ném ra ngoài. Một kỳ thi có dữ liệu lạ
- * sẽ làm bảng xếp hạng của <b>mọi</b> kỳ thi khác đứng im cho tới lần deploy sau.
- */
 @Component
 public class StandingsUpdater {
 
@@ -112,22 +65,10 @@ public class StandingsUpdater {
         }
     }
 
-    /**
-     * Xử lý <b>một</b> lô cho một kỳ thi.
-     *
-     * <p>Trả về số bài đã tính, để {@code RebuildStandingsJob} gọi lặp cho tới khi hết và báo
-     * tiến độ. Public vì chính lý do đó — không phải để test gọi.
-     */
     public int capNhat(Contest contest) {
         Integer soBai = tx.execute(status -> {
-            // ★ KHOÁ TRƯỚC, ĐỌC SAU — và khoá là một câu lệnh riêng. Câu đọc watermark phải
-            // chụp ảnh dữ liệu SAU khi đã giữ khoá, nếu không nó đọc đúng cái watermark mà
-            // lượt vừa nhả khoá đã làm cũ. Xem javadoc StandingsLock.
             khoa.khoaKyThi(contest.id());
             long watermark = standings.watermark(contest.id());
-            // ★ LIỀN MẠCH, không phải baiDaChamTrongContest. Câu kia lọc status='DONE' nên nó
-            // nhảy qua bài đang chấm dở, và watermark vượt qua thì bài ấy mất vĩnh viễn — xem
-            // javadoc JudgingQueries.baiDaChamLienMach.
             List<ScoredSubmission> lo = judging.baiDaChamLienMach(
                     contest.id(), watermark, properties.contest().standingsBatchSize());
             if (!lo.isEmpty()) {
@@ -138,21 +79,11 @@ public class StandingsUpdater {
 
         int daTinh = soBai == null ? 0 : soBai;
         if (daTinh > 0) {
-            // Đẩy tin SAU khi commit. Trước commit thì một client đọc lại ngay có thể thấy
-            // bảng cũ — cùng cái bẫy mà AfterCommit giải ở M3.
             publisher.bangDaDoi(contest.id());
         }
         return daTinh;
     }
 
-    /**
-     * Xoá sạch bảng xếp hạng của một kỳ thi — bước đầu của {@code RebuildStandingsJob}.
-     *
-     * <p>Nằm ở đây chứ không để job gọi thẳng repository vì nó phải đứng sau <b>cùng một
-     * khoá</b> với {@link #capNhat}. Xoá chen vào giữa một lô đang ghi thì lô ấy ghi lên bảng
-     * vừa trống, watermark nhảy tới bài cuối của lô, và mọi bài trước đó — vừa bị xoá — không
-     * bao giờ được tính lại. Hai câu xoá cũng thành một khối, thay vì hai lần tự commit.
-     */
     public void xoaTrang(long contestId) {
         tx.executeWithoutResult(status -> {
             khoa.khoaKyThi(contestId);
@@ -169,8 +100,6 @@ public class StandingsUpdater {
     }
 
     private void ghiLo(Contest contest, List<ScoredSubmission> lo, Set<Long> nguoiBiCham) {
-        // Đọc TOÀN BỘ kết quả từng đề của những người bị chạm: tổng điểm và penalty là hàm
-        // của TẤT CẢ các đề, nên tính lại mà thiếu một đề là ra một con số sai âm thầm.
         Map<Long, Map<Long, KetQuaDe>> theoNguoi = new LinkedHashMap<>();
         standings.ketQuaTheoNguoi(contest.id(), nguoiBiCham).forEach((userId, danhSach) -> {
             Map<Long, KetQuaDe> theoDe = new LinkedHashMap<>();
@@ -195,15 +124,6 @@ public class StandingsUpdater {
             baiCuoiCuaNguoi.merge(bai.userId(), bai.submissionId(), Math::max);
         }
 
-        // ★ THỨ TỰ BẮT BUỘC: dòng tổng TRƯỚC, dòng theo đề SAU.
-        //
-        // `contest_problem_standings` có khoá ngoại tổng hợp (contest_id, user_id) trỏ tới
-        // `contest_standings`. Ghi ngược lại thì lần nộp ĐẦU TIÊN của một người vỡ ràng buộc
-        // — và vỡ với một thông báo về "contest_problem_standings" không hề nhắc tới bảng
-        // đang thiếu dòng.
-        //
-        // Mọi giá trị đã tính xong trong bộ nhớ ở vòng lặp trên, nên thứ tự ghi không ảnh
-        // hưởng kết quả — chỉ ảnh hưởng việc nó ghi được hay không.
         for (Map.Entry<Long, Long> e : baiCuoiCuaNguoi.entrySet()) {
             long userId = e.getKey();
             var cacDe = new ArrayList<>(theoNguoi.get(userId).values());
@@ -218,13 +138,6 @@ public class StandingsUpdater {
         }
     }
 
-    /**
-     * Gói {@code (userId, problemId)} vào một {@code long} để dùng làm khoá tập hợp.
-     *
-     * <p>{@code problemId} nằm ở 32 bit thấp. Với {@code BIGINT GENERATED ALWAYS} thì hệ thống
-     * này sẽ chạm hai tỉ đề rất lâu sau khi mọi thứ khác đã hỏng — nhưng nếu ngày đó tới, phép
-     * gói này sai <b>im lặng</b>, nên nó được viết ra ở đây thay vì giấu trong một biểu thức.
-     */
     private static long khoaDe(long userId, long problemId) {
         return (userId << 32) | (problemId & 0xFFFFFFFFL);
     }

@@ -10,29 +10,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
-/**
- * Bảng {@code login_attempts} và {@code login_lockouts} (V5) — FR-AUTH-08.
- *
- * <h2>{@code client_ip} có thể là {@code null}, và câu SQL phải chịu được điều đó</h2>
- * {@code HttpServletRequest.getRemoteAddr()} trả về một chuỗi hợp lệ trong mọi trường hợp
- * thật, nhưng một test gọi thẳng use-case thì không có request nào. Cột là {@code NOT NULL},
- * nên tầng trên truyền một giá trị thay thế; ở đây chỉ cần cast đúng kiểu {@code inet}.
- *
- * <p>Một IP là IPv6 dài hay một chuỗi rác từ header giả mạo đều bị chính kiểu {@code inet}
- * của Postgres từ chối — đó là một phép kiểm miễn phí mà kiểu {@code TEXT} sẽ không cho.
- *
- * <h2>Khoá ghi theo kiểu chèn-hoặc-đè</h2>
- * <h2>Đếm theo DẢI bằng chính kiểu {@code inet} — không cần migration (2026-09-24)</h2>
- * {@code login_attempts} vẫn ghi địa chỉ đầy đủ (để điều tra). Đếm dùng {@code <<=} ("nằm trong
- * dải"), khoá ghi chính dải ấy ({@code 2001:db8:1:2::/64}), và phép kiểm khoá dùng {@code >>=}
- * ("dải nào chứa địa chỉ này") — nên khoá ghi theo từng địa chỉ TRƯỚC khi đổi vẫn còn hiệu lực.
- * Btree trên {@code inet} dùng được cho {@code <<=} (Postgres tự đổi nó thành một khoảng), nên
- * {@code ix_login_attempts_ip_recent} vẫn phục vụ câu đếm.
- *
- * {@code ON CONFLICT (client_ip) DO UPDATE} — cùng một IP bị khoá lần nữa thì <b>gia hạn</b>,
- * không phải chèn thêm dòng. Nếu để nó chèn thêm thì cột khoá chính vỡ, mà nếu bỏ khoá chính
- * thì mỗi lần kiểm phải tìm dòng mới nhất trong hàng nghìn dòng của cùng một IP đang bị tấn công.
- */
 @Repository
 public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
 
@@ -108,11 +85,6 @@ public class JdbcLoginAttemptRepository implements LoginAttemptRepository {
                 .update();
     }
 
-    /**
-     * Handle đã thử là dữ liệu người ngoài gửi vào và không có giới hạn nào ở tầng HTTP. Cắt
-     * ở 64 ký tự — dài hơn trần 32 ký tự của một handle hợp lệ, đủ để nhìn ra người ta đã gõ
-     * gì, và không đủ để dùng bảng này làm chỗ chứa dữ liệu tuỳ ý.
-     */
     private static String cat(String handle) {
         if (handle == null) {
             return "";

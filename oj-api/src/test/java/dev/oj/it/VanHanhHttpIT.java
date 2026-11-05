@@ -15,17 +15,6 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Phân quyền của bảy endpoint mới ở M6 — {@code CLAUDE.md} mục 6, dòng "Endpoint mới".
- *
- * <h2>"403, KHÔNG PHẢI 200 rỗng"</h2>
- * Bảng test bắt buộc nói đúng câu đó, và nó có lý do: một endpoint quản trị viết thiếu chốt
- * quyền thường vẫn <i>chạy</i> — nó chỉ trả về một danh sách rỗng, hoặc thao tác trên một
- * đối tượng không tồn tại rồi trả 204. Nhìn từ ngoài, "an toàn" và "không có dữ liệu" giống
- * hệt nhau. Chỉ một mã trạng thái từ chối mới phân biệt được hai thứ đó.
- *
- * <p>Vì thế mọi ca dưới đây khẳng định <b>mã trạng thái</b>, không khẳng định thân rỗng.
- */
 class VanHanhHttpIT extends HttpIT {
 
     @Nested
@@ -66,9 +55,6 @@ class VanHanhHttpIT extends HttpIT {
         @Test
         @DisplayName("SETTER cũng KHÔNG được đổi công tắc hệ thống")
         void setter_khong_doi_duoc_cong_tac() {
-            // ★ Ca này không thừa. SETTER có quyền quản trị NỘI DUNG (đề của chính mình);
-            // công tắc nhận bài là quyền quản trị HỆ THỐNG. Gộp hai thứ ấy là cho người soạn
-            // đề tắt được cả sàn nộp bài giữa kỳ thi.
             assertThat(goi(http.post().uri("/api/v1/admin/settings/{k}", "submissions.accepting")
                     .header(HttpHeaders.AUTHORIZATION, setterBearer())
                     .body(Map.of("bat", false))).getStatusCode())
@@ -121,14 +107,6 @@ class VanHanhHttpIT extends HttpIT {
                     .isEqualTo("SETTER");
         }
 
-        /**
-         * ★★ FR-PROB-12 — endpoint duy nhất đưa nội dung testcase ẩn ra khỏi hệ thống.
-         *
-         * <p>Ba vai trò, ba kết quả, và ca giữa là ca quan trọng nhất: <b>SETTER của một đề
-         * khác</b> phải bị từ chối. Chốt {@code @RequiresRole(SETTER)} một mình không làm được
-         * điều đó — nó chỉ nói "người gọi là SETTER". Chốt thật nằm trong câu query
-         * {@code findForAuthorById}.
-         */
         @Test
         @DisplayName("★★ GET /problems/{id}/testdata — SETTER của đề KHÁC cũng bị từ chối")
         void tai_testdata() {
@@ -165,10 +143,6 @@ class VanHanhHttpIT extends HttpIT {
                     "mayChamSong", "choLauNhatMs", "choUocTinhMs");
         }
 
-        /**
-         * Bốn con số ở đây nói về <b>máy chấm</b>, không về <b>bài nộp</b>. Biết "có 40 bài
-         * đang chờ" không cho ai lợi thế trong kỳ thi; biết "40 bài của đề C" thì có.
-         */
         @Test
         @DisplayName("★ không lộ một mã đề hay một submissionId nào")
         void khong_lo_gi_ve_bai_nop() {
@@ -201,13 +175,6 @@ class VanHanhHttpIT extends HttpIT {
             assertThat(res.getBody()).containsEntry("code", "submission.maintenance");
         }
 
-        /**
-         * ★ "Bài đang chấm vẫn chấm xong" — nửa sau của FR-ADM-06, và là nửa dễ quên.
-         *
-         * <p>Công tắc chỉ chặn <b>cửa vào</b>. Nó không đụng tới {@code judge_queue}, nên mọi
-         * bài đã commit vẫn đi hết đường của nó. Một hiện thực "đúng" mà xoá hàng đợi khi bật
-         * bảo trì sẽ qua được ca ở trên và phá R1 ở ca này.
-         */
         @Test
         @DisplayName("★ bảo trì KHÔNG đụng tới hàng đợi — bài đang chờ vẫn còn nguyên")
         void bai_dang_cham_van_cham_xong() {
@@ -222,7 +189,7 @@ class VanHanhHttpIT extends HttpIT {
             jdbc.sql("UPDATE system_settings SET value = 'false'::jsonb "
                     + "WHERE key = 'submissions.accepting'").update();
             choCacheCongTacHetHan();
-            goi(http.get().uri("/api/v1/status"));   // một request bất kỳ trong lúc bảo trì
+            goi(http.get().uri("/api/v1/status"));
 
             assertThat(jdbc.sql("SELECT count(*) FROM judge_queue WHERE submission_id = :id")
                     .param("id", id).query(Integer.class).single())
@@ -246,8 +213,6 @@ class VanHanhHttpIT extends HttpIT {
         @Test
         @DisplayName("★ KHÔNG trả về email — endpoint này liệt kê MỌI người dùng")
         void khong_tra_ve_email() {
-            // Javadoc của ProfileResponse cảnh báo đúng về endpoint kiểu này: một trường email
-            // ở đây là một lần rò rỉ toàn bộ danh sách email. Quản lý vai trò cần handle.
             assertThat(tim("")).isNotEmpty().allSatisfy(u -> {
                 assertThat(u).doesNotContainKey("email");
                 assertThat(u.values()).noneSatisfy(v ->
@@ -266,8 +231,6 @@ class VanHanhHttpIT extends HttpIT {
         @Test
         @DisplayName("★ dấu gạch dưới trong từ khoá KHÔNG thành ký tự đại diện của LIKE")
         void gach_duoi_khong_phai_dai_dien() {
-            // `handle` hợp lệ chứa được `_`. Không thoát thì "a_min" khớp "admin", và ADMIN
-            // đổi nhầm vai trò của một người khác vì kết quả tìm kiếm nói dối.
             assertThat(tim("?tim=a_min"))
                     .as("'a_min' chỉ được khớp handle có đúng dấu gạch dưới")
                     .isEmpty();
@@ -292,10 +255,6 @@ class VanHanhHttpIT extends HttpIT {
 
         private static final String NHAN_BAI = "submissions.accepting";
 
-        /**
-         * Trả công tắc về {@code true} bằng SQL, không qua endpoint: một ca hỏng ở giữa không
-         * được phép để lại chế độ bảo trì cho các lớp test chạy sau.
-         */
         @AfterEach
         void batLai() {
             jdbc.sql("UPDATE system_settings SET value = 'true'::jsonb "
@@ -310,8 +269,6 @@ class VanHanhHttpIT extends HttpIT {
                     .header(HttpHeaders.AUTHORIZATION, adminBearer())
                     .body(Map.of("bat", false))).getStatusCode()).isEqualTo(HttpStatus.OK);
 
-            // ★ KHÔNG chờ hết TTL. `dat()` xoá cache của chính instance nhận lệnh, nên hiệu
-            // lực phải tức thì — đó là cả lý do endpoint này tồn tại thay cho một câu UPDATE.
             quenLuotNopVuaRoi(USER_ID);
             var res = goi(http.post().uri("/api/v1/submissions")
                     .header(HttpHeaders.AUTHORIZATION, bearerDev())
@@ -366,7 +323,6 @@ class VanHanhHttpIT extends HttpIT {
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(res.getBody()).containsEntry("code", "settings.khoa_khong_doi_duoc");
             assertThat(soDongSetting()).isEqualTo(truoc);
-            // Khoá AI vẫn nguyên giá trị seed — không ai bật được tính năng chưa tồn tại.
             assertThat(jdbc.sql("SELECT value #>> '{}' FROM system_settings "
                             + "WHERE key = 'ai_review.enabled'")
                     .query(String.class).single()).isEqualTo("false");
@@ -375,7 +331,6 @@ class VanHanhHttpIT extends HttpIT {
         @Test
         @DisplayName("GET /admin/settings liệt kê công tắc kèm câu mô tả hậu quả")
         void doc_liet_ke_cong_tac() {
-            // `goi()` giải mã vào Map nên không dùng được cho một mảng JSON.
             List<Map<String, Object>> ds = http.get().uri("/api/v1/admin/settings")
                     .header(HttpHeaders.AUTHORIZATION, adminBearer())
                     .retrieve()
@@ -400,13 +355,6 @@ class VanHanhHttpIT extends HttpIT {
         }
     }
 
-    // -------------------------------------------------------------------------
-
-    /**
-     * Cache công tắc sống 2 giây ({@code JdbcSystemSettings.TTL}). Test sửa thẳng bằng SQL nên
-     * không đi qua {@code dat()} — thứ duy nhất xoá cache. Chờ qua TTL là cách trung thực để
-     * mô phỏng đúng thứ xảy ra trên một instance <i>khác</i> instance nhận lệnh.
-     */
     private static void choCacheCongTacHetHan() {
         try {
             Thread.sleep(2_100);

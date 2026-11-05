@@ -19,29 +19,14 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Thứ trình duyệt được phép chạy — luật trên {@code static/**} (rà soát bảo mật 2026-09-24).
- *
- * <p>Access token nằm trong {@code localStorage}: mọi script chạy trong trang đều đọc được nó.
- * Nên câu hỏi "trang này nạp mã từ ĐÂU" là câu hỏi bảo mật, không phải câu hỏi hiệu năng.
- * Trước ngày này CodeMirror được {@code import()} động từ jsDelivr ({@code +esm}, dựng lúc phục
- * vụ, không gắn được SRI), và CSP phải mở cả host {@code cdn.jsdelivr.net} — F3. Giờ mọi thư
- * viện nằm ở {@code static/vendor/}, và các luật dưới đây giữ nó ở đó.
- */
 class TaiNguyenGiaoDienTest {
 
     private static final Path STATIC = Path.of("src", "main", "resources", "static");
     private static final Path VENDOR = STATIC.resolve("vendor");
 
-    /** Host ngoài DUY NHẤT được nạp tài nguyên: widget Turnstile ở trang đăng ký (FR-AUTH-01). */
     private static final Set<String> HOST_CHO_PHEP = Set.of("challenges.cloudflare.com");
 
     private static final Pattern URL_TUYET_DOI = Pattern.compile("[\"'`(]\\s*https?://([A-Za-z0-9.-]+)");
-    /**
-     * Đích của {@code import}/{@code from} TRÔNG NHƯ đường dẫn module: tuyệt đối, tương đối,
-     * hoặc có giao thức. Bản đầu nhận mọi chuỗi sau chữ {@code from} — và bắt nhầm từ khoá
-     * {@code "from"} trong ngữ pháp Python mà {@code lang-python} mang theo làm DỮ LIỆU.
-     */
     private static final Pattern IMPORT = Pattern.compile(
             "\\b(?:import|from)\\s*\\(?\\s*[\"'`]((?:https?:)?//[^\"'`]+|\\.{0,2}/[^\"'`]+)[\"'`]");
 
@@ -51,7 +36,7 @@ class TaiNguyenGiaoDienTest {
         List<String> vi = new ArrayList<>();
         for (Path f : tep(STATIC, ".html", ".js", ".css")) {
             if (f.startsWith(VENDOR)) {
-                continue;                 // vendor có luật riêng ở dưới
+                continue;
             }
             Matcher m = URL_TUYET_DOI.matcher(Files.readString(f));
             while (m.find()) {
@@ -82,10 +67,6 @@ class TaiNguyenGiaoDienTest {
         assertThat(vi).isEmpty();
     }
 
-    /**
-     * Vendor là mã của người khác nằm trong repo của ta. Sửa tay một file ở đây (vá nhanh, gỡ
-     * lỗi) mà không ghi lại là mất dấu nó khác bản gốc — và bản gốc là thứ đã được xem xét.
-     */
     @Test
     @DisplayName("★ static/vendor/SHA256SUMS khớp TỪNG file — sửa vendor mà không ghi lại là đỏ")
     void vendor_khop_sha256() throws Exception {
@@ -105,10 +86,6 @@ class TaiNguyenGiaoDienTest {
         assertThat(that).as("thêm/bớt/sửa file vendor thì phải cập nhật SHA256SUMS").isEqualTo(ghi);
     }
 
-    /**
-     * Chuỗi CSP nằm trong {@code application.yml}, không phải trong mã — nên phải đọc chính file
-     * ấy. Nới lại {@code script-src} cho một CDN là mở lại F3 dù {@code static/} vẫn sạch.
-     */
     @Test
     @DisplayName("★ CSP: script-src chỉ 'self' + Turnstile, không còn jsdelivr ở đâu")
     void csp_khong_mo_cdn() throws IOException {
@@ -122,7 +99,6 @@ class TaiNguyenGiaoDienTest {
                 .contains("font-src 'self';").contains("style-src 'self';");
     }
 
-    /** Lỗ 4 của bao-mat-plan: lời hứa "một innerHTML duy nhất" giờ là một luật. */
     @Test
     @DisplayName("★ đúng MỘT phép gán innerHTML, ở problem.js, gán statementHtml do server render")
     void mot_inner_html_duy_nhat() throws IOException {
@@ -152,7 +128,6 @@ class TaiNguyenGiaoDienTest {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(f)));
     }
 
-    /** Bỏ chú thích {@code //…} và {@code /* … *}{@code /} — javadoc của ta nhắc innerHTML nhiều lần. */
     private static String boChuThich(String ma) {
         return ma.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)^\\s*//.*$", "");
     }

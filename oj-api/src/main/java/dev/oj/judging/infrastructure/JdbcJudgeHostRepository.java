@@ -10,24 +10,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
-/**
- * Pool {@code judge}: đây là traffic của worker, và nó phải chịu chung trần 6 connection với
- * việc chấm bài chứ không được mượn pool của người dùng. Một máy chấm hỏng làm ngập endpoint
- * này thì cùng lắm là chấm chậm, chứ không được làm cả website không mở nổi trang chủ.
- */
 @Repository
 public class JdbcJudgeHostRepository implements JudgeHostRepository {
 
-    /**
-     * Cập nhật {@code host_factor} và {@code last_seen_at}, trả về id để ghi phép đo.
-     *
-     * <p>{@code UPDATE ... RETURNING id} thay vì {@code SELECT} rồi {@code UPDATE}: một lượt
-     * round-trip thay vì hai, và không có khe hở giữa hai câu.
-     *
-     * <p>{@code JdbcJudgeRunRepository} cố ý <b>không</b> đụng tới {@code last_seen_at} vì
-     * sáu slot của cùng một máy sẽ tranh khoá trên đúng một dòng và mọi verdict từ máy đó bị
-     * tuần tự hoá. Ở đây thì an toàn: mỗi worker gọi 15 phút một lần, không phải mỗi bài nộp.
-     */
     private static final String TOUCH_HOST = """
             UPDATE judge_hosts
                SET host_factor  = :hostFactor,

@@ -29,24 +29,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Bản giả trong bộ nhớ cho {@code identity} — {@code CLAUDE.md} mục 6: use-case mới phải có
- * unit test với fake repository.
- *
- * <h2>{@link BamGia} băm bằng một phép nối chuỗi, và đó là lý do bộ test này chạy trong 0,2 giây</h2>
- * BCrypt cost 12 tốn ~250ms mỗi lần <b>theo thiết kế</b>. Một bộ test có ba mươi lượt đăng ký
- * và đăng nhập sẽ mất tám giây chỉ để băm, và một bộ test chậm là một bộ test người ta thôi
- * chạy trước khi commit.
- *
- * <p>Chi phí thật vẫn được đo ở đúng một chỗ: {@code IdentityHttpIT} chạy qua
- * {@code BCryptPasswordHasher} thật.
- */
 final class IdentityFakes {
 
     private IdentityFakes() {
     }
 
-    /** Băm rẻ tiền. Vẫn giữ đúng hợp đồng "null cũng phải xử lý được" của port. */
     static final class BamGia implements PasswordHasher {
 
         @Override
@@ -74,7 +61,6 @@ final class IdentityFakes {
             return id;
         }
 
-        /** Bắt chước SQL thật: lọc theo chuỗi con của handle, id GIẢM DẦN, cắt theo gioiHan. */
         @Override
         public List<TomTatNguoiDung> danhSach(String tim, Long sauId, int gioiHan) {
             return theoId.values().stream()
@@ -142,7 +128,6 @@ final class IdentityFakes {
             bamMatKhau.put(userId, passwordHash);
         }
 
-        /** Bắt chước đúng hai điều kiện trong WHERE của câu SQL thật — xem javadoc của port. */
         @Override
         public boolean danhDauDaXacMinhEmail(long userId) {
             User u = theoId.get(userId);
@@ -157,7 +142,6 @@ final class IdentityFakes {
         @Override
         public void anDanhHoa(long userId, String tenHienThiMoi) {
             User u = theoId.get(userId);
-            // Bắt chước ck_users_anonymized của V13: mốc xác minh bị xoá cùng email.
             theoId.put(userId, new User(u.id(), u.handle(), null, tenHienThiMoi, u.role(),
                     UserStatus.ANONYMIZED, null, u.createdAt(), null));
             bamMatKhau.put(userId, null);
@@ -207,10 +191,6 @@ final class IdentityFakes {
             return Optional.ofNullable(theoBam.get(tokenSha256));
         }
 
-        /**
-         * Giả lập một request khác chen vào thu hồi token ngay trước lượt so-rồi-đổi của ta —
-         * thứ chỉ Postgres thật tái hiện được (xem {@code SessionLifecycleHttpIT}).
-         */
         boolean requestKhacThuHoiTruoc;
 
         @Override
@@ -223,7 +203,6 @@ final class IdentityFakes {
 
         @Override
         public void ganThayThe(long tokenId, long thayTheBoiId) {
-            // Fake không giữ replaced_by_id: không ca nào đọc lại mắt xích ấy.
         }
 
         @Override
@@ -276,12 +255,6 @@ final class IdentityFakes {
         }
     }
 
-    /**
-     * Đếm theo IP trong bộ nhớ — cùng ngữ nghĩa với bản Redis, không cần Redis.
-     *
-     * <p>{@code toiDa} đặt được để test vừa kiểm được đường thường (không chạm ngưỡng) vừa
-     * kiểm được đường chặn, mà không phải tạo mười tài khoản chỉ để thấy cái thứ mười một.
-     */
     static final class ChanDangKyGia implements RegistrationRateLimiter {
 
         final Map<String, Integer> dem = new HashMap<>();
@@ -296,7 +269,6 @@ final class IdentityFakes {
         }
     }
 
-    /** Không mã hoá gì cả — test cần đọc được bí mật để tự tính mã TOTP đúng. */
     static final class MaHoaGia implements SecretCipher {
         @Override
         public String maHoa(String roThô) {
@@ -336,10 +308,6 @@ final class IdentityFakes {
             theoUser.put(userId, new TwoFactor(userId, cu.secretEnc(), true, buocDaDung));
         }
 
-        /**
-         * Giả lập một request song song tiêu mã ngay trước lượt ghi của ta — thứ chỉ Postgres
-         * thật tái hiện được (xem {@code ChongPhatLaiHaiLopIT}).
-         */
         boolean requestKhacDungMaTruoc;
 
         @Override
@@ -372,7 +340,6 @@ final class IdentityFakes {
             return new ArrayList<>(maDuPhong.getOrDefault(userId, List.of()));
         }
 
-        /** V15 — cùng ngữ nghĩa với {@code JdbcTwoFactorRepository}: đếm liên tiếp, chạm ngưỡng thì khoá và về 0. */
         final Map<Long, Integer> maSai = new LinkedHashMap<>();
         final Map<Long, Instant> khoaToi = new LinkedHashMap<>();
 
@@ -408,16 +375,8 @@ final class IdentityFakes {
         }
     }
 
-    /**
-     * Bảng {@code email_verifications} trong bộ nhớ — V13.
-     *
-     * <p>Bắt chước <b>hai</b> hành vi mà câu SQL thật bảo đảm, vì cả hai đều là thứ use-case
-     * dựa vào: {@code ux_email_verifications_song} chỉ cho một mã sống mỗi người, và
-     * {@link #tieuThu} là một phép kiểm-rồi-ghi nguyên tử.
-     */
     static final class XacMinhEmailGia implements EmailVerificationRepository {
 
-        /** Dòng đã lưu, kể cả dòng đã khai tử — test cần đếm được cả hai. */
         record Dong(long id, long userId, String sha256Hex, Instant taoLuc, Instant hetHan,
                     int soLanThu, boolean daTieu) {
         }
@@ -425,16 +384,10 @@ final class IdentityFakes {
         final List<Dong> dong = new ArrayList<>();
         private final AtomicLong seq = new AtomicLong();
 
-        /** Đồng hồ của test: mọi phép so hạn dùng đi qua đây, không qua {@code Instant.now()}. */
         Instant bayGio = Instant.EPOCH;
 
-        /** Giả lập một request khác tiêu thụ mã ngay trước lượt ghi của ta. */
         boolean requestKhacTieuTruoc;
 
-        /**
-         * Giả lập một request gửi lại khác vừa CHÈN xong trước ta — thứ chỉ Postgres thật
-         * tái hiện được, vì nó là một va chạm trên {@code ux_email_verifications_song}.
-         */
         boolean requestKhacChenTruoc;
 
         @Override
@@ -450,8 +403,6 @@ final class IdentityFakes {
             int n = 0;
             for (int i = 0; i < dong.size(); i++) {
                 Dong d = dong.get(i);
-                // KHÔNG lọc theo hạn dùng — đúng như câu SQL thật. Mã hết hạn vẫn chiếm chỗ
-                // trong unique index cho tới khi bị khai tử.
                 if (d.userId() == userId && !d.daTieu()) {
                     dong.set(i, danhDauTieu(d));
                     n++;
@@ -463,9 +414,6 @@ final class IdentityFakes {
         @Override
         public long luu(long userId, String maSha256, Instant hetHan) {
             if (requestKhacChenTruoc) {
-                // Bản Jdbc dịch DuplicateKeyException thành đúng ngoại lệ này. Fake phải nói
-                // cùng một câu, nếu không thì ca test dưới đây chứng minh một hành vi mà
-                // production không có.
                 throw IdentityException.guiLaiQuaNhanh(java.time.Duration.ZERO);
             }
             if (timMaDangSong(userId).isPresent()) {
@@ -513,13 +461,6 @@ final class IdentityFakes {
         }
     }
 
-    /**
-     * Hộp thư trong bộ nhớ.
-     *
-     * <p>Nó GIỮ mã thô, và đó là cách duy nhất test kiểm được vòng đầy đủ: mã thật chỉ tồn
-     * tại trong lá thư, database chỉ có bản băm. Không có fake này thì ca "gửi rồi xác minh"
-     * phải tự tính SHA-256 — tức là tự viết lại chính thứ đang kiểm.
-     */
     static final class ThuGia implements EmailSender {
 
         record LaThu(String den, String tenHienThi, String ma, long soPhutConHan) {
@@ -527,7 +468,6 @@ final class IdentityFakes {
 
         final List<LaThu> daGui = new ArrayList<>();
 
-        /** Bật để giả lập SMTP từ chối — dùng cho ca "đăng ký vẫn thành công". */
         boolean hong;
 
         @Override

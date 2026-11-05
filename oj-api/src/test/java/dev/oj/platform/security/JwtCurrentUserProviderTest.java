@@ -9,16 +9,8 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Hạ vai trò ADMIN chưa bật 2FA — cơ chế, đo bằng một cổng giả biết đếm.
- *
- * <p>Bằng chứng rằng mọi chỗ {@code isAdmin()} thật sự nhận vai trò đã hạ nằm ở hai IT
- * {@code HaiLopKhongDiVongIT} và {@code HaiLopKhongDiVongKyThiIT}; lớp này chỉ ghim ba tính
- * chất mà IT không đo được rẻ: hạ về ĐÚNG vai trò nào, hỏi cổng MẤY lần, và hỏi AI.
- */
 class JwtCurrentUserProviderTest {
 
-    /** Cổng giả: trả lời cố định và đếm số lần bị hỏi. */
     private static final class CongGia implements TwoFactorGate {
         private final boolean choQua;
         private int soLanHoi;
@@ -97,7 +89,7 @@ class JwtCurrentUserProviderTest {
 
         CurrentUserHolder.dat(new CurrentUser(3L, "admin", Role.ADMIN));
         p.current();
-        CurrentUserHolder.dat(new CurrentUser(3L, "admin", Role.ADMIN));   // JwtAuthFilter, request sau
+        CurrentUserHolder.dat(new CurrentUser(3L, "admin", Role.ADMIN));
         p.current();
 
         assertThat(cong.soLanHoi).isEqualTo(2);

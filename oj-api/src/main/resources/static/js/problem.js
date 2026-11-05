@@ -1,5 +1,3 @@
-/** Trang đề bài: xem đề, soạn mã, nộp — FR-PROB-02, FR-SUB-01/08/10. Bước 4.12. */
-
 import { goi, LoiApi } from './api.js';
 import { veThanh, bao, chu, thamSo, canDangNhap } from './khung.js';
 import { gan } from './editor.js';
@@ -24,13 +22,9 @@ async function taiDe() {
     document.getElementById('gioi-han').textContent =
         `Giới hạn: ${de.timeLimitMs} ms · ${Math.round(de.memoryLimitKb / 1024)} MB`;
 
-    // ★ innerHTML — chỗ DUY NHẤT của cả giao diện. An toàn vì server đã render bằng
-    // CommonMark với escapeHtml(true): mọi thẻ HTML trong đề đã thành văn bản.
     const khung = document.getElementById('de-bai');
     khung.innerHTML = de.statementHtml;
 
-    // KaTeX vẽ công thức SAU khi HTML đã vào DOM. Nếu CDN chết thì công thức hiện dưới
-    // dạng $...$ — đọc được, chỉ xấu. Trang không vỡ.
     if (window.renderMathInElement) {
         window.renderMathInElement(khung, {
             delimiters: [
@@ -42,16 +36,6 @@ async function taiDe() {
     }
 }
 
-/**
- * ★ Bước G3 — chế độ bảo trì (FR-ADM-06) phải thấy được TRƯỚC khi bấm.
- *
- * Khi người vận hành tắt nhận bài, `SubmitSolutionUseCase` từ chối. Để người dùng gõ xong
- * một lời giải rồi mới biết là đổi một phút của họ lấy một thông báo lỗi — và trên trang
- * này thì thứ họ vừa gõ là thứ họ quan tâm nhất.
- *
- * Best-effort có chủ ý: `/status` hỏng thì KHÔNG tắt nút. Một trang trạng thái chập chờn
- * không được phép chặn đường nộp bài — server vẫn là nơi quyết định, và nó từ chối đúng.
- */
 async function kiemBaoTri() {
     try {
         const t = await goi(DUONG.trangThai);
@@ -61,7 +45,6 @@ async function kiemBaoTri() {
         demNguoc.textContent = 'Hệ thống đang bảo trì, tạm ngừng nhận bài nộp. '
             + 'Mã nguồn của bạn vẫn được giữ trong trình duyệt.';
     } catch {
-        // Im lặng: xem javadoc trên.
     }
 }
 
@@ -92,13 +75,11 @@ async function dungTrinhSoan() {
     soan.dat(nhap.doc(de.code, chonNgonNgu.value));
 
     chonNgonNgu.addEventListener('change', () => {
-        // Nháp khoá theo (đề, ngôn ngữ): đổi ngôn ngữ không được xoá bản C++ đang viết dở.
         soan.doiNgonNgu(chonNgonNgu.value);
         soan.dat(nhap.doc(de.code, chonNgonNgu.value));
     });
 }
 
-/** FR-SUB-08 — giới hạn là quy tắc được CÔNG BỐ, nên nó phải hiện ra thành đếm ngược. */
 function demNguocLai(giay) {
     nutNop.disabled = true;
     let conLai = giay;
@@ -147,8 +128,6 @@ nutNop.addEventListener('click', nop);
     try {
         await Promise.all([taiDe(), taiNgonNgu()]);
         await dungTrinhSoan();
-        // SAU trình soạn: nháp phải được khôi phục xong trước khi ta có thể hứa
-        // "mã nguồn của bạn vẫn được giữ".
         await kiemBaoTri();
     } catch (e) {
         bao(o, e instanceof LoiApi ? e.message : 'Không tải được đề bài.', 'loi');

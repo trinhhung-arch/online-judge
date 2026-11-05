@@ -14,42 +14,10 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Mọi tài nguyên nạp từ máy chủ NGOÀI phải được ghim bằng SRI — Bước 4.12.
- *
- * <h2>Vì sao đây là một luật chứ không phải một lần sửa</h2>
- * Giao diện nạp KaTeX từ jsDelivr, và {@code katex.min.js} chạy với <b>toàn quyền</b> trên
- * trang đang giữ access token trong bộ nhớ. Không có {@code integrity}, một CDN bị xâm nhập —
- * hoặc một phiên bản bị thay lặng lẽ — là mã tuỳ ý chạy trên trang của mọi thí sinh đang thi.
- *
- * <p>Sửa một lần thì lần thêm tài nguyên thứ tư sẽ quên. Luật này bắt <b>lần đó</b>.
- *
- * <h2>Đã có một lần suýt hỏng, và nó hỏng theo hướng ngược lại</h2>
- * Trong lúc viết Bước 4.12, ba hash SRI đã bị <i>gỡ ra</i> vì người viết không kiểm chứng được
- * chúng tại chỗ và không muốn để lại một giá trị có thể sai — một hash sai không bảo vệ gì mà
- * chặn thẳng tài nguyên. Sau khi tải tệp về và tính lại, ba hash ấy hoá ra đúng.
- *
- * <p>Bài học không phải "đừng thận trọng" mà là: <b>giá trị đúng phải kiểm được bằng một lệnh,
- * và sự vắng mặt của nó phải làm test đỏ</b>. Lệnh nằm trong comment của
- * {@code static/problem.html}; vế thứ hai là ca kiểm dưới đây.
- *
- * <h2>Vì sao là unit test chứ không phải IT</h2>
- * Nó chỉ đọc tệp trong {@code src/main/resources/static}. Một luật không cần Postgres thì
- * không nên trả giá một container Postgres — và nó chạy trong vài mili giây, tức là nó chạy
- * ở mọi lần {@code mvnw test}, không chỉ ở {@code verify}.
- */
 class TaiNguyenNgoaiTest {
 
     private static final Path GOC = Path.of("src/main/resources/static");
 
-    /** {@code src=} hoặc {@code href=} trỏ ra một máy chủ khác. Đường dẫn nội bộ bắt đầu bằng "/". */
-    /**
-     * Mã của BÊN THỨ BA: từ host ngoài, hoặc từ {@code /vendor/}. Từ 2026-09-24 (rà soát F3)
-     * KaTeX và qrcode được vendor về {@code static/vendor/} — không còn thẻ nào trỏ ra ngoài, nên
-     * luật mở rộng sang vendor: vẫn là mã người khác, vẫn chạy toàn quyền trên trang. Hash giữ
-     * nguyên từ bản CDN (file giống từng byte), nên SRI vẫn đúng và vẫn chặn được một lần sửa
-     * lén trong repo mà quên {@code SHA256SUMS}.
-     */
     private static final Pattern NGOAI =
             Pattern.compile("<(script|link)\\b([^>]*\\b(?:src|href)=\"(?:https?://|/vendor/)[^\"]+\"[^>]*)>",
                     Pattern.CASE_INSENSITIVE);
@@ -102,9 +70,6 @@ class TaiNguyenNgoaiTest {
     @Test
     @DisplayName("★ và có crossorigin= — thiếu nó thì trình duyệt bỏ qua integrity trong im lặng")
     void moi_tai_nguyen_ngoai_deu_co_crossorigin() throws IOException {
-        // Đây là cái bẫy: SRI trên tài nguyên khác gốc chỉ có hiệu lực khi phản hồi đi kèm
-        // CORS. Thiếu crossorigin= thì trình duyệt KHÔNG báo lỗi, KHÔNG chặn, và cũng KHÔNG
-        // kiểm hash — tức là thuộc tính integrity trở thành trang trí.
         List<ThamChieu> thieu = quet().stream().filter(t -> !t.coCors()).toList();
 
         assertThat(thieu).describedAs("thiếu crossorigin=: %s", thieu).isEmpty();
@@ -113,8 +78,6 @@ class TaiNguyenNgoaiTest {
     @Test
     @DisplayName("phép quét thật sự tìm thấy tài nguyên — luật rỗng là luật sắp bị xoá")
     void phep_quet_khong_chay_rong() throws IOException {
-        // Không có ca này thì hai ca trên vẫn xanh sau khi ai đó đổi cấu trúc thư mục và
-        // biểu thức tìm kiếm không khớp gì nữa. Một luật luôn xanh là một luật không tồn tại.
         assertThat(quet())
                 .describedAs("không quét thấy tài nguyên ngoài nào — biểu thức tìm kiếm hỏng?")
                 .isNotEmpty();

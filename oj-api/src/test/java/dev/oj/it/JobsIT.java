@@ -17,15 +17,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Khung job nền trên Postgres thật — Bước 4.7b (V6, kéo lên từ M6 theo phương án (a)).
- *
- * <h2>Vì sao ba tính chất dưới đây phải kiểm trên database thật</h2>
- * Cả ba đều <b>là</b> ràng buộc của Postgres, không phải mã Java:
- * {@code ux_jobs_one_active_per_type} là một partial unique index, {@code claim} là
- * {@code FOR UPDATE SKIP LOCKED}, và thu hồi job treo dựa vào so sánh {@code TIMESTAMPTZ}.
- * Một bản giả trong bộ nhớ sẽ xanh cho mọi hiện thực, kể cả hiện thực sai.
- */
 class JobsIT extends PostgresIT {
 
     @Autowired JobRepository jobs;
@@ -84,9 +75,6 @@ class JobsIT extends PostgresIT {
         void admin_xem_tat_ca_khong_vo() {
             taoViec(PROBLEM_ID);
 
-            // Đây là lỗi đã sống trên máy chủ thật: `(:createdBy IS NULL OR ...)` không CAST
-            // thì Postgres từ chối cả câu lệnh, và `createdBy` là null ĐÚNG khi người gọi là
-            // ADMIN. Endpoint trả 500 cho quản trị viên, chạy tốt cho mọi người khác.
             assertThat(jobs.ganDay(null, null, 10))
                     .as("ADMIN phải đọc được việc của mọi người")
                     .isNotEmpty();
@@ -205,8 +193,6 @@ class JobsIT extends PostgresIT {
         void phan_tram_null_khi_chua_biet_tong() {
             long id = taoJob();
 
-            // Một thanh tiến độ đứng ở 0% trông giống hệt một job treo, và người dùng sẽ bấm
-            // chạy lại — tạo ra đúng thứ ux_jobs_one_active_per_type phải chặn.
             assertThat(jobs.timTheoId(id).orElseThrow().phanTram()).isNull();
 
             jobs.claim("A", Instant.now().plusSeconds(120));

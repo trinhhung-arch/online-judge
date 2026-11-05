@@ -1,20 +1,3 @@
-/**
- * Kịch bản KỲ THI — 1000 người vừa xem bảng xếp hạng vừa nộp bài. Chạy qua `chay.sh ky-thi`.
- *
- * ★ k6 CHỈ LO VẾ NỘP BÀI. Vế xem là sse-tai.py (N kết nối ĐÃ ĐĂNG NHẬP). chay.sh mở nó trước, chờ mọi
- *   kết nối mở xong rồi mới chạy file này, nên mọi bài nộp rơi đúng vào lúc N người đang xem.
- *
- * ★ KHÔNG ĐĂNG NHẬP Ở ĐÂY. sse-tai.py đã đăng nhập tai-1..tai-N và ghi phiên ra file PHIEN; đọc lại
- *   thay vì băm bcrypt thêm N lần qua Cloudflare. KHÔNG làm mới token: access sống 15 phút, lượt đo
- *   ngắn hơn nhiều, và hai tiến trình làm mới cùng một refresh token là thu hồi cả phiên (luật 2, chung.js).
- *
- * ★ MỖI VÒNG LẶP MỘT TÀI KHOẢN — exec.scenario.iterationInTest là duy nhất trên mọi người ảo. Bài thứ i
- *   thuộc tai-(i mod N + 1): không chạm rate limit 10s, và khi N ≥ số bài thì mỗi bài là bài AC ĐẦU
- *   TIÊN của một người, nên bài nào cũng đổi bảng và đo được P8 trên màn hình của chính người nộp.
- *
- * ★ P1/P2 Ở ĐÂY ĐO QUA MẠNG khi BASE là tên miền sau Cloudflare: quan sát, không phải ngưỡng — mốc của
- *   nfrplan là số đo ở máy chủ (nguong.json, kich_ban "ky-thi").
- */
 import http from 'k6/http';
 import { check } from 'k6';
 import { Trend } from 'k6/metrics';
@@ -72,7 +55,6 @@ export function nop(du) {
     check(r, { 'nộp bài 202': (x) => x.status === 202 });
 }
 
-/** Ẩn danh, như on-dinh: hai endpoint công khai. */
 export function doc() {
     const url = Math.random() < 0.5
         ? `${BASE}/api/v1/problems?size=20`

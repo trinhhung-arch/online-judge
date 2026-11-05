@@ -22,44 +22,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ {@link MinioTestdataStore} trên MinIO THẬT — lớp duy nhất nói chuyện với kho testdata.
- *
- * <h2>Vì sao có lớp này (2026-09-24)</h2>
- * Bộ IT dùng {@code KhoTestdataTrongBoNho}, nên cho tới hôm nay không test nào chạm MinIO client.
- * Nâng client 8.5.17 → 8.6.0 (vá CVE-2025-59952) kéo theo OkHttp 5 và Bouncy Castle 1.85 — ba
- * thư viện mạng/mật mã đổi cùng lúc dưới một lớp mà "được kiểm bằng tay khi chạy thật". Lần
- * nâng ấy hỏng ngay ở biên dịch ({@code okhttp3.HttpUrl}); một lần hỏng lúc CHẠY thì không
- * có gì bắt được trước khi tới máy thật.
- *
- * <p>Cùng ảnh MinIO với {@code docker-compose.yml}: đo đúng thứ sẽ chạy.
- * Container singleton, không {@code stop()} — cùng lý do với {@code PostgresIT}.
- *
- * <h2>⚠️ CI KHÔNG chạy lớp này (từ 2026-09-26) — chỉ {@code ./mvnw verify} trên máy</h2>
- * MinIO đã thôi phát ảnh công khai cho bản cộng đồng: Docker Hub {@code minio/minio} 404 từ
- * 2026-09-24, và {@code quay.io/minio/minio} trả {@code unauthorized} từ 2026-09-26 — kể cả với
- * token ẩn danh, trong khi repo công khai khác trên quay.io vẫn kéo được. Runner CI không có
- * ảnh nên cả bốn ca chết ở khởi tạo lớp; với {@code build} là check bắt buộc của {@code main},
- * thế là MỌI PR bị chặn. Nên {@code ci.yml} loại nhãn {@link #NHAN}. Máy prod còn ảnh trong
- * cache ({@code linux/arm64}, đúng digest ở dưới), nên {@code ./mvnw verify} trên máy ấy vẫn
- * chạy đủ bốn ca; máy KHÔNG có ảnh thì chạy {@code ./mvnw verify -DexcludedGroups=minio-that}.
- *
- * <p>Gỡ việc loại trừ khi có nguồn ảnh mới — tự build MinIO từ mã nguồn lên GHCR, hoặc một
- * S3 server khác cho riêng test (rà soát 2026-09-24, việc còn mở). Đừng để nó thành vĩnh viễn:
- * đây là lưới DUY NHẤT của đường ghi/đọc testcase ẩn.
- */
 @Tag(MinioTestdataStoreIT.NHAN)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MinioTestdataStoreIT {
 
-    /** Nhãn mà {@code ci.yml} loại ra — xem javadoc của lớp. */
     static final String NHAN = "minio-that";
 
-    /**
-     * Đúng chuỗi của {@code docker-compose.yml} — quay.io + digest, xem lý do ở đó. Bản đầu dùng
-     * {@code minio/minio} của Docker Hub: xanh trên máy dev (ảnh có sẵn), đỏ trên CI với
-     * "pull access denied … repository does not exist" (2026-09-24).
-     */
     private static final String ANH = "quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z"
             + "@sha256:9535594ad4122b7a78c6632788a989b96d9199b483d3bd71a5ceae73a922cdfa";
     private static final String NGUOI_DUNG = "ojminio";
@@ -84,11 +52,6 @@ class MinioTestdataStoreIT {
         return new MinioTestdataStore(diaChi(), NGUOI_DUNG, MAT_KHAU);
     }
 
-    /**
-     * ĐẦU TIÊN, trên container còn trống — nên nó kiểm điều kiện ấy trước, không giả định.
-     * Javadoc của class gọi {@code luu} là "chỗ thứ hai, và là chỗ cần thiết": API lên trước MinIO
-     * thì {@code @PostConstruct} hỏng một lần rồi thôi.
-     */
     @Test
     @Order(1)
     @DisplayName("★ luu tự tạo bucket dù bước khởi động chưa chạy — API lên trước MinIO vẫn nạp được testdata")
@@ -127,10 +90,6 @@ class MinioTestdataStoreIT {
         assertThat(kho().daCo(sha256("chưa từng ghi".getBytes()))).isFalse();
     }
 
-    /**
-     * Ngoại lệ của MinIO mang endpoint và tên bucket — ra HTTP là lộ hạ tầng. Cổng 1 trên
-     * loopback: không ai nghe, nên bị từ chối ngay chứ không chờ hết timeout.
-     */
     @Test
     @DisplayName("★ MinIO chết: khởi động không ném; ghi/đọc ném lỗi CỦA MODULE, không lộ endpoint")
     void minio_chet() throws Exception {

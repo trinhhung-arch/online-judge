@@ -6,10 +6,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * {@link ClientIp#khoaGioiHan} — khoá dùng để đếm (rà soát 2026-09-24, F2) — và phép kiểm
- * "chỉ nhận IP dạng số" của {@code hopLe}.
- */
 class ClientIpTest {
 
     @Test
@@ -38,10 +34,6 @@ class ClientIpTest {
         assertThat(ClientIp.khoaGioiHan((String) null)).isEqualTo(ClientIp.KHONG_RO);
     }
 
-    /**
-     * ★ Bản cũ lọc theo KÝ TỰ (số, chấm, hai chấm, chữ hex) — {@code bad.cafe} qua được, bị
-     * {@code getByName} TRA DNS (đo 211ms, ra một IPv4 công khai) và được nhận là "IP".
-     */
     @Test
     @DisplayName("★ tên miền chỉ gồm chữ hex (bad.cafe) KHÔNG được nhận là IP — không tra DNS")
     void ten_mien_chu_hex_khong_phai_ip() {
@@ -63,13 +55,6 @@ class ClientIpTest {
         assertThat(ClientIp.khoaGioiHan(req)).isEqualTo("2001:db8:5:6:0:0:0:0/64");
     }
 
-    /**
-     * ★ GH-01 ({@code Claude outputs/identity-test-cases.md}): header chỉ đáng tin khi request đến
-     * từ {@code cloudflared} trên chính máy này. Một request nối thẳng vào cổng API (mạng LAN,
-     * cổng bị lộ) tự khai được mọi header — nhận chúng thì đổi một header là thoát mọi giới
-     * hạn theo IP, và còn đổ được lần khoá đăng nhập lên đầu một IP vô can.
-     * {@code bao-mat-plan.md} Đợt 3, kịch bản 10 định thử tay đúng chỗ này.
-     */
     @Test
     @DisplayName("★ KHÔNG qua tunnel mà mang CF-Connecting-IP / X-Forwarded-For giả → bỏ qua, đếm theo địa chỉ thật")
     void ngoai_tunnel_khong_tin_header() {

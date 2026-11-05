@@ -7,20 +7,6 @@ import dev.oj.problems.domain.FeedbackLevel;
 
 import java.math.BigDecimal;
 
-/**
- * Đầu vào tạo và sửa đề — FR-PROB-01, 07.
- *
- * <h2>Không có {@code status}, không có {@code ownerId}, không có {@code testdataVersion}</h2>
- * Ba trường đó có đường đi riêng, và để chúng ở đây là mở ba lỗ hổng khác nhau: tự xuất bản
- * đề mà bỏ qua phép kiểm "đã có testdata chưa", tự gán đề cho người khác, và tự trỏ đề sang
- * một phiên bản testdata chưa từng được nạp.
- *
- * <p>Đây cùng một bài học với {@code UpdateProfileRequest} ở Bước 4.3: record hẹp thì không có
- * trường nào để gửi thừa.
- *
- * @param checkerEpsilon bắt buộc khi và chỉ khi {@code checkerType} là {@code float} —
- *                       {@code ck_problems_epsilon} của V2 ép cả hai chiều
- */
 public record ProblemAuthoringRequest(
         String code,
         String title,
@@ -33,14 +19,6 @@ public record ProblemAuthoringRequest(
         String feedbackLevel,
         Boolean allowPublicSolutions) {
 
-    /**
-     * Mặc định an toàn cho ba trường có thể vắng mặt.
-     *
-     * <p>{@code feedbackLevel} mặc định {@code TEST_INDEX} — khớp {@code DEFAULT} của V2, và
-     * là <b>mức an toàn nhất mà vẫn dùng được để luyện tập</b>. Quên khai báo thì được mức kín
-     * hơn, không phải mức hở hơn (FR-PROB-07 là biện pháp chống rò rỉ testdata, không phải
-     * một tính năng).
-     */
     public AuthorProblemUseCase.Command toCommand() {
         return new AuthorProblemUseCase.Command(
                 code, title, statementMd,

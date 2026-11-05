@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/** Hai đường đọc: xem một bài (chống IDOR) và xem lịch sử của mình (bất biến #8). */
 class ReadSubmissionUseCasesTest {
 
     private JudgingFakes fakes;
@@ -26,10 +25,6 @@ class ReadSubmissionUseCasesTest {
                 fakes.submissions, JudgingFakes.properties());
     }
 
-    /**
-     * ★ Chống IDOR: danh tính người gọi đi <b>vào câu query</b>, không phải vào một câu
-     * {@code if} chạy sau khi đã load.
-     */
     @Test
     void danh_tinh_nguoi_goi_duoc_truyen_thang_vao_cau_query() {
         fakes.submissions.found = JudgingFakes.submission(101L, SubmissionStatus.DONE, 1);
@@ -40,10 +35,6 @@ class ReadSubmissionUseCasesTest {
         assertThat(fakes.submissions.requesterRole).isEqualTo(Role.USER);
     }
 
-    /**
-     * Query rỗng → 404 với <b>đúng câu chữ như khi bài không tồn tại</b>. Trả 403 là xác nhận
-     * "id này có thật" — đủ để dò ra ai đã nộp bài nào.
-     */
     @Test
     void bai_cua_nguoi_khac_va_bai_khong_ton_tai_cho_cung_mot_cau_tra_loi() {
         fakes.submissions.found = null;
@@ -57,7 +48,6 @@ class ReadSubmissionUseCasesTest {
                 });
     }
 
-    /** Xin 1000 thì nhận trần 50, <b>không nhận lỗi</b> ({@code oj-api/CLAUDE.md} mục 3). */
     @Test
     void xin_1000_ban_ghi_thi_nhan_tran_50() {
         list.list(null, 1000, SubmissionFilter.none());
@@ -80,7 +70,6 @@ class ReadSubmissionUseCasesTest {
         assertThat(fakes.submissions.cursorSeen).isEqualTo(500L);
     }
 
-    /** Cursor hỏng thì từ chối, không im lặng quay về trang đầu. */
     @Test
     void cursor_hong_thi_tu_choi() {
         assertThatExceptionOfType(JudgingException.class)
@@ -90,14 +79,6 @@ class ReadSubmissionUseCasesTest {
         assertThat(fakes.calls).doesNotContain("submissions.listForUser");
     }
 
-    /**
-     * ★ Bước 3.11 · FR-PROB-07 — bộ lọc phải nằm TRONG use-case.
-     *
-     * <p>Trước bước này, {@code FeedbackLevel.revealsFailedTestOrdinal()} không được gọi ở
-     * bất kỳ đâu trong {@code src/main}: bộ lọc tồn tại như một hàm, và trang chi tiết đơn
-     * giản là không trả con số nào. Đúng ở M1 (thà thiếu còn hơn lộ), nhưng nó có nghĩa là
-     * FR-SUB-06 và FR-PROB-07 chưa hề được nối. Test này là chỗ giữ nó đã nối.
-     */
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("★ đề mức NONE thì trang chi tiết KHÔNG trả số thứ tự test sai")
     void feedback_level_NONE_thi_giau_test_sai() {

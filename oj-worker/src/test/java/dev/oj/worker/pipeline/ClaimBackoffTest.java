@@ -13,13 +13,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Ca kiểm cho sự cố đo được 2026-09-10: API chết thì sáu slot ghi <b>12 dòng WARN mỗi giây</b>,
- * không đổi dù nó đã chết bao lâu, và mọi dòng log khác chìm nghỉm.
- *
- * <p>Hai tính chất phải giữ, và chúng độc lập nhau: nhịp chờ <i>giãn</i> theo từng slot, còn
- * dòng log thì <i>một</i> cho cả worker.
- */
 class ClaimBackoffTest {
 
     private static final Duration NHIP = Duration.ofMillis(500);
@@ -51,13 +44,6 @@ class ClaimBackoffTest {
         assertThatThrownBy(() -> backoff.cho(0)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    /**
-     * ★ Ca giữ đúng thứ đã làm ngập log.
-     *
-     * <p>Sáu slot cùng phát hiện API chết trong cùng một khoảnh khắc — đúng điều xảy ra thật,
-     * vì cả sáu cùng gọi {@code claim} vào một cổng đã đóng. Nếu mỗi slot tự ghi log thì đó
-     * là sáu dòng cho một sự kiện, rồi lặp lại hai lần mỗi giây.
-     */
     @Test
     @DisplayName("★ sáu slot cùng mất kết nối chỉ sinh ĐÚNG một dòng log")
     void sau_slot_cung_hong_chi_mot_dong_log() throws InterruptedException {

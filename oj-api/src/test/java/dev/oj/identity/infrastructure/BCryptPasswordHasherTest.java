@@ -14,17 +14,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/**
- * ★ Trần CPU của đường đăng nhập.
- *
- * <p>FR-AUTH-08 chỉ khoá các lượt SAI, nên một bot có tài khoản hợp lệ đăng nhập ĐÚNG liên
- * tục không chạm hàng rào nào. Đo ngày 2026-09-05: <b>17,5 lượt/giây làm nghẽn cả máy chấm</b>,
- * và lúc ấy chấm bài đứng. Semaphore ở đây là thứ duy nhất chặn được điều đó.
- *
- * <p>Các ca dưới đây chạy với cost 12 thật (~250ms mỗi lần băm) vì {@code AuthProperties}
- * crash nếu cost khác — và guard ấy đúng: nó bảo vệ mọi mật khẩu đã băm trong database. Nhịp
- * 250ms cũng chính là thứ làm ca đầu tiên xác định được, không cần latch.
- */
 class BCryptPasswordHasherTest {
 
     private BCryptPasswordHasher hasher(int soSuat, Duration cho) {
@@ -38,7 +27,6 @@ class BCryptPasswordHasherTest {
         var daBatDau = new CountDownLatch(1);
         var loiCuaA = new AtomicReference<Throwable>();
 
-        // Luồng A giữ suất duy nhất trong ~250ms — thời gian băm thật của cost 12.
         Thread a = new Thread(() -> {
             try {
                 daBatDau.countDown();
@@ -49,7 +37,7 @@ class BCryptPasswordHasherTest {
         });
         a.start();
         assertThat(daBatDau.await(5, TimeUnit.SECONDS)).isTrue();
-        Thread.sleep(60);       // đủ để A vào trong, còn xa 250ms nên A vẫn đang giữ
+        Thread.sleep(60);
 
         long t0 = System.nanoTime();
         Throwable bi = bat(() -> h.bam("cua-b"));
@@ -72,7 +60,6 @@ class BCryptPasswordHasherTest {
     void suat_duoc_tra_lai() {
         var h = hasher(1, Duration.ofSeconds(2));
 
-        // Ba lượt tuần tự trên MỘT suất: chỉ chạy được nếu finally luôn release.
         String bam = h.bam("mat-khau");
         assertThat(h.khop("mat-khau", bam)).isTrue();
         assertThat(h.khop("sai", bam)).isFalse();

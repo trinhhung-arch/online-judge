@@ -28,12 +28,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/**
- * Hai use-case quản trị của {@code judging}: FR-ADM-01 (Bước 6.3) và FR-SUB-09 (Bước 6.13).
- *
- * <p>Fake repository + fake queue, đúng bảng mục 6 của {@code CLAUDE.md}. Không context, không
- * database — nên mỗi ca ở đây kiểm đúng một quyết định nghiệp vụ và không kiểm gì khác.
- */
 class AdminJudgingUseCasesTest {
 
     private static final long ADMIN_ID = 9L;
@@ -70,14 +64,6 @@ class AdminJudgingUseCasesTest {
             assertThat(nhatKy.hanhDong).containsExactly("REJUDGE_STARTED");
         }
 
-        /**
-         * ★ Chốt quan trọng nhất của FR-ADM-01.
-         *
-         * <p>{@code frplan.md} mâu thuẫn 3.2: một đề phổ biến có 10.000 bài nộp, và ở
-         * throughput 5 bài/s thì hàng đợi tắc 33 phút. Trần 30% năng lực <b>không cứu được</b>
-         * điều này giữa contest, vì thứ bị phá không phải throughput mà là tính công bằng —
-         * bài nộp phút thứ 90 chấm chậm hơn bài phút thứ 5.
-         */
         @Test
         @DisplayName("★ có kỳ thi đang chạy thì từ chối, và KHÔNG tạo job nào")
         void co_ky_thi_thi_tu_choi() {
@@ -103,10 +89,6 @@ class AdminJudgingUseCasesTest {
             assertThat(jobs.daTao).isEmpty();
         }
 
-        /**
-         * Không có chốt này thì {@code POST /admin/problems/999999/rejudge} tạo một job chạy
-         * xong ngay với 0 bài, và ADMIN tưởng mình vừa chấm lại một đề.
-         */
         @Test
         @DisplayName("đề không tồn tại thì 404 và không tạo job")
         void de_khong_ton_tai() {
@@ -125,7 +107,6 @@ class AdminJudgingUseCasesTest {
                     .isThrownBy(() -> useCase().batDau(DE))
                     .satisfies(e -> assertThat(e.code()).isEqualTo("job.dang_chay"));
 
-            // Audit ghi SAU khi job đã tạo — ghi trước là ghi một việc chưa xảy ra.
             assertThat(nhatKy.hanhDong).isEmpty();
         }
     }
@@ -151,8 +132,6 @@ class AdminJudgingUseCasesTest {
             assertThatExceptionOfType(JudgingException.class)
                     .isThrownBy(() -> uc.dat(11L, true));
 
-            // Một dòng audit, không phải hai. Hai dòng nghĩa là nhật ký kiểm toán nói hai
-            // người cùng ẩn một bài, trong khi người thứ hai chỉ bấm nhầm.
             assertThat(nhatKy.hanhDong).containsExactly("SUBMISSION_HIDDEN");
         }
 
@@ -167,8 +146,6 @@ class AdminJudgingUseCasesTest {
                     .containsExactly("SUBMISSION_HIDDEN", "SUBMISSION_UNHIDDEN");
         }
     }
-
-    // -------------------------------------------------------------------------
 
     private StartRejudgeUseCase useCase() {
         return new StartRejudgeUseCase(nguoiGoi(), deCoThat(), lichThi, congTac, jobs, nhatKy);
@@ -195,7 +172,6 @@ class AdminJudgingUseCasesTest {
         return SubmitSolutionUseCaseTest.getProblemUseCaseTraVe(null, lichThi);
     }
 
-    /** {@link JobRepository} giả — chỉ ba phương thức use-case này chạm tới. */
     static final class JobsGia implements JobRepository {
 
         final List<JobType> daTao = new ArrayList<>();
@@ -275,7 +251,6 @@ class AdminJudgingUseCasesTest {
         }
     }
 
-    /** {@link AuditLog} giả. Bản của {@code IdentityFakes} là package-private ở module khác. */
     static final class IdentityFreeAuditLog implements AuditLog {
 
         final List<String> hanhDong = new ArrayList<>();

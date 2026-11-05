@@ -25,17 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ FR-AUTH-08 theo ĐỒNG HỒ: cửa sổ 60 giây đếm lần sai và 15 phút khoá. Thiết kế:
- * {@code Claude outputs/identity-test-cases.md}, ca DN-05 và DN-06.
- *
- * <p>{@code IdentityUseCasesTest} đã kiểm "5 lần sai thì khoá", nhưng bằng
- * {@code IdentityFakes.LanThuGia} — bản giả ấy đếm MỌI lần sai, bất kể mốc thời gian. Nên nó
- * không bắt được một use-case truyền nhầm mốc (lấy {@code lockout} thay cho
- * {@code loginWindow} chẳng hạn): khi đó lần sai từ mười phút trước vẫn bị tính, và người
- * gõ nhầm rải rác trong một buổi sáng bị khoá oan. Lớp này dùng một bản giả nhớ GIỜ của từng
- * lần thử, và đếm đúng như câu SQL thật ({@code attempted_at >= :moc}).
- */
 class KhoaDangNhapTheoGioTest {
 
     private static final Instant T0 = Instant.parse("2026-11-05T08:00:00Z");
@@ -46,7 +35,6 @@ class KhoaDangNhapTheoGioTest {
     private LanThuTheoGio lanThu;
     private final AppProperties props = IdentityFakes.properties();
 
-    /** Như {@code LanThuGia}, nhưng nhớ thời điểm của từng lần sai. */
     private static final class LanThuTheoGio implements LoginAttemptRepository {
 
         private final List<Instant> lanSai = new ArrayList<>();
@@ -84,7 +72,6 @@ class KhoaDangNhapTheoGioTest {
         users.them("nan-nhan", "nan-nhan@oj.test", Role.USER, UserStatus.ACTIVE, bam.bam(DUNG));
     }
 
-    /** Một lượt đăng nhập ở đúng thời điểm {@code luc} — mọi thành phần dùng chung một đồng hồ. */
     private SessionIssuer.Session dangNhapLuc(Instant luc, String matKhau) {
         lanThu.bayGio = luc;
         Clock dongHo = Clock.fixed(luc, ZoneOffset.UTC);

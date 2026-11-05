@@ -1,23 +1,3 @@
-/**
- * Hồ sơ và đổi mật khẩu — FR-AUTH-04, FR-AUTH-05. Bước G2.
- *
- * ★ ĐỔI MẬT KHẨU THÀNH CÔNG NGHĨA LÀ PHIÊN NÀY ĐÃ CHẾT
- *
- * `ChangePasswordUseCase` thu hồi MỌI refresh token, kể cả cái vừa dùng để gọi request này
- * (FR-AUTH-04). Access token còn hiệu lực tối đa 15 phút nữa, nhưng không làm mới được — nên
- * người dùng sẽ bị đá ra vào một lúc ngẫu nhiên trong 15 phút tới, ở một trang bất kỳ, không
- * hiểu vì sao.
- *
- * Trang này xoá phiên NGAY và tự đưa về đăng nhập kèm lý do. Chờ token tự chết là để người
- * dùng gặp một lỗi khó hiểu thay cho một câu giải thích.
- *
- * ★ `preferredLanguageId` LÀ SỐ, KHÔNG PHẢI CHUỖI
- *
- * `UpdateProfileRequest` nhận `Short`. `FormData` trả mọi thứ dạng chuỗi, và `""` cho ô
- * "Chưa chọn". Gửi `""` thì Jackson từ chối; gửi `"1"` thì nó nhận. Nên phải chuyển tay:
- * rỗng -> `null`, còn lại -> số.
- */
-
 import { goi, LoiApi, xoaPhien } from './api.js';
 import { chu, bao } from './khung.js';
 import { khoiDong, gio } from './trang.js';
@@ -46,7 +26,6 @@ if (o) {
         dongChiSoDoc('Tham gia', gio(hs.createdAt));
 
         formHoSo.displayName.value = hs.displayName || '';
-        // Đặt sau khi danh sách ngôn ngữ đã nạp; nếu chưa thì lần nạp xong sẽ đặt lại.
         chonNgonNgu.value = hs.preferredLanguageId ?? '';
         return hs;
     }
@@ -60,7 +39,6 @@ if (o) {
             }
             chonNgonNgu.value = idDangChon ?? '';
         } catch {
-            // Tiện nghi, không phải nội dung chính: hồ sơ vẫn sửa được tên hiển thị.
             chonNgonNgu.disabled = true;
             chonNgonNgu.insertAdjacentElement('afterend',
                 chu('p', 'Không tải được danh sách ngôn ngữ.', 'goi-y'));
@@ -93,8 +71,6 @@ if (o) {
         ev.preventDefault();
         const nut = formMatKhau.querySelector('button[type=submit]');
 
-        // Kiểm ở client CHỈ để đỡ một vòng mạng cho một lỗi hiển nhiên. Server vẫn là nơi
-        // quyết định — nó không tin gì ở đây.
         if (formMatKhau.matKhauMoi.value !== formMatKhau.matKhauLai.value) {
             bao(o, 'Hai ô mật khẩu mới không giống nhau.', 'loi');
             formMatKhau.matKhauLai.focus();
@@ -111,8 +87,6 @@ if (o) {
                     matKhauMoi: formMatKhau.matKhauMoi.value,
                 },
             });
-            // Xoá TRƯỚC khi chuyển trang: refresh token vừa bị thu hồi ở server, giữ lại
-            // chỉ để `api.js` thử làm mới một lần rồi thất bại.
             xoaPhien();
             location.href = '/login.html?vi-sao=doi-mat-khau';
         } catch (e) {

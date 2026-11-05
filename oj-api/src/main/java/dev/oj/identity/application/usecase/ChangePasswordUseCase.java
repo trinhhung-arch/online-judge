@@ -13,21 +13,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
-/**
- * FR-AUTH-04 — đổi mật khẩu (cần mật khẩu cũ), và <b>thu hồi mọi refresh token</b>.
- *
- * <h2>Vì sao thu hồi hết, kể cả phiên đang thao tác</h2>
- * Vì lý do phổ biến nhất để đổi mật khẩu là <i>nghi ngờ có người khác biết nó</i>. Nếu chỉ đổi
- * cột băm mà để nguyên các phiên đang mở thì người kia vẫn đang đăng nhập — mật khẩu mới không
- * đuổi họ ra, và người dùng tin rằng nó có.
- *
- * <p>Cái giá: người vừa đổi mật khẩu cũng bị đăng xuất trên mọi thiết bị. Đó là hành vi họ
- * mong đợi, và là hành vi của mọi hệ thống nghiêm túc.
- *
- * <h2>Vì sao vẫn phải hỏi mật khẩu cũ dù đã có access token</h2>
- * Vì access token có thể là token bị đánh cắp. Mật khẩu cũ là thứ kẻ đánh cắp token
- * <i>không</i> có, nên nó biến "chiếm được phiên" thành "chưa chiếm được tài khoản".
- */
 @RequiresRole
 @Service
 public class ChangePasswordUseCase {

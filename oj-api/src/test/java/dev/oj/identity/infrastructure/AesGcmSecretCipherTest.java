@@ -10,15 +10,6 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ {@link AesGcmSecretCipher} — thứ giữ bí mật TOTP của mọi ADMIN lúc nằm trong database
- * (FR-AUTH-10, V11). Thiết kế: {@code Claude outputs/identity-test-cases.md}, ca HL-17.
- *
- * <p>Bí mật đọc được từ một bản sao {@code user_two_factor} là sinh được mã hai lớp của mọi
- * người — tức là 2FA chỉ còn là một lớp. Mọi test khác của {@code identity} dùng
- * {@code MaHoaGia}, một bản giả không mã hoá gì cả, nên lớp này có hỏng thì chúng vẫn xanh.
- * Năm ca dưới đây canh đúng năm cách nó có thể hỏng.
- */
 class AesGcmSecretCipherTest {
 
     private final AesGcmSecretCipher cipher = new AesGcmSecretCipher(AppPropertiesGia.macDinh());
@@ -42,7 +33,6 @@ class AesGcmSecretCipherTest {
         String a = cipher.maHoa(biMat);
         String b = cipher.maHoa(biMat);
 
-        // GCM dùng lại IV với cùng khoá là lộ XOR của hai bản rõ và giả mạo được tag.
         assertThat(a).isNotEqualTo(b);
         assertThat(cipher.giaiMa(a)).isEqualTo(biMat);
         assertThat(cipher.giaiMa(b)).isEqualTo(biMat);
@@ -53,7 +43,7 @@ class AesGcmSecretCipherTest {
     void sua_mot_byte_thi_tu_choi() {
         byte[] tho = Base64.getDecoder().decode(cipher.maHoa(Totp.sinhBiMat()));
 
-        for (int viTri : new int[]{0, 12, tho.length - 1}) {   // đầu IV · đầu thân · cuối tag
+        for (int viTri : new int[]{0, 12, tho.length - 1}) {
             byte[] sua = tho.clone();
             sua[viTri] ^= 0x01;
             String banSua = Base64.getEncoder().encodeToString(sua);

@@ -13,18 +13,8 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ {@link AuthProperties} — các chốt "cấu hình sai thì KHÔNG khởi động". Thiết kế:
- * {@code Claude outputs/identity-test-cases.md}, ca CH-01 … CH-04.
- *
- * <p>Mỗi chốt canh một bí mật bắt buộc hoặc một con số đã chốt ({@code CLAUDE.md} mục 5.4,
- * bảng giới hạn của {@code oj-api/CLAUDE.md} mục 8). Mọi test khác dựng cấu hình ĐÚNG qua
- * {@link AppPropertiesGia}, nên không test nào đi qua nhánh ném: gỡ một chốt trong lúc dọn
- * dẹp thì cả bộ test vẫn xanh. Lớp này đi qua từng nhánh một.
- */
 class AuthPropertiesTest {
 
-    /** Bản sao sửa được của cấu hình chuẩn — mỗi ca đổi đúng một trường rồi dựng lại. */
     private static final class Ban {
         private final AuthProperties goc = AppPropertiesGia.authMacDinh();
         String jwtSecret = goc.jwtSecret();

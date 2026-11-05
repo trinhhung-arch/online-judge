@@ -13,7 +13,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/** Bước 2.9 — {@code POST /internal/judge/benchmark}. */
 class RecordHostBenchmarkUseCaseTest {
 
     private final FakeHosts hosts = new FakeHosts();
@@ -28,13 +27,6 @@ class RecordHostBenchmarkUseCaseTest {
         assertThat(hosts.recorded.getFirst().hostFactor()).isEqualByComparingTo("1.250");
     }
 
-    /**
-     * ★ Máy chấm chưa đăng ký <b>không</b> làm hỏng request.
-     *
-     * <p>Một worker mới chấm bài được ngay mà không cần ai sửa config phía API (S2,
-     * {@code judge_runs.host_id} cho phép NULL). Nếu endpoint này ném lỗi cho máy lạ thì
-     * "bật thêm một worker là nó tự vào việc" không còn đúng nữa.
-     */
     @Test
     @DisplayName("máy chưa có trong judge_hosts → log rồi thôi, KHÔNG ném")
     void may_la_thi_khong_nem() {
@@ -44,10 +36,6 @@ class RecordHostBenchmarkUseCaseTest {
                 .doesNotThrowAnyException();
     }
 
-    /**
-     * Ngưỡng 8% nằm trong hợp đồng để hai phía không tự đặt hai con số. Đây là bẫy throttle
-     * nhiệt ({@code nfrplan} rủi ro #5), không phải chuyện hiệu chuẩn.
-     */
     @Test
     @DisplayName("drift vượt 8% là đáng báo động, dưới thì không")
     void nguong_drift_nam_trong_hop_dong() {

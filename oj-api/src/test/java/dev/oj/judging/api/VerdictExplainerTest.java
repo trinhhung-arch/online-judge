@@ -30,11 +30,6 @@ class VerdictExplainerTest {
         assertThat(text).contains("2.03s", "2.00s");
     }
 
-    /**
-     * Vượt sát hạn và vượt gấp nhiều lần cần hai lời khuyên NGƯỢC NHAU: một bên tối ưu hằng
-     * số, một bên phải đổi thuật toán. Đưa nhầm lời khuyên là bảo người ta đi sửa thứ không
-     * hỏng — mất buổi tối của họ, và họ vẫn TLE.
-     */
     @Test
     @DisplayName("★ TLE sát hạn và TLE gấp nhiều lần cho lời khuyên khác nhau")
     void tle_sat_han_khac_tle_vuot_xa() {
@@ -56,11 +51,6 @@ class VerdictExplainerTest {
         assertThat(explainRe("SG signal=6 cpu=1ms")).contains("SIGABRT");
     }
 
-    /**
-     * Tín hiệu lạ thì nói thẳng là lạ. Đoán bừa một nguyên nhân còn tệ hơn không đoán, vì
-     * thí sinh sẽ đi sửa đúng thứ không hỏng — cùng một nguyên tắc với "mã isolate lạ → IE,
-     * không map bừa sang RE" ({@code oj-worker/CLAUDE.md} mục 6).
-     */
     @Test
     @DisplayName("tín hiệu lạ không bị đoán bừa thành một nguyên nhân cụ thể")
     void tin_hieu_la_khong_doan_bua() {
@@ -87,10 +77,6 @@ class VerdictExplainerTest {
         assertThat(hien).contains("test 7");
     }
 
-    /**
-     * ★ Bất biến #1 ở tầng trình bày. {@code isolateStatus} chứa đường dẫn bên trong box và
-     * thông báo nguyên văn của isolate; nó vào đây CHỈ để rút một con số tín hiệu.
-     */
     @Test
     @DisplayName("★ SEC3 — isolateStatus không bao giờ lọt nguyên văn ra câu giải thích")
     void khong_lot_isolate_status_nguyen_van() {
@@ -112,7 +98,6 @@ class VerdictExplainerTest {
         assertThat(text).contains("không phải lỗi bài của bạn", "IE-");
     }
 
-    /** Cùng một sự cố phải cho cùng một mã, nếu không thì mã đó tra được cái gì? */
     @Test
     @DisplayName("mã sự cố ổn định giữa hai lần gọi")
     void ma_su_co_on_dinh() {

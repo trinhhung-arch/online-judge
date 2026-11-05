@@ -17,19 +17,6 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Vòng đời một phiên đăng nhập, qua HTTP thật — FR-AUTH-02, 03, 04, 08.
- *
- * <p>Nửa kia của {@link IdentityHttpIT}, nơi kiểm đăng ký, đăng nhập và phân quyền. Đường cắt
- * theo chủ đề chứ không theo số dòng: file kia hỏi <i>"ai vào được"</i>, file này hỏi
- * <i>"phiên sống và chết thế nào"</i>.
- *
- * <h2>Vì sao ba ca dưới đây phải chạy qua HTTP</h2>
- * Chúng kiểm những thứ chỉ đúng khi <b>trạng thái sống qua nhiều request</b>: một refresh token
- * bị thu hồi ở request này phải chết ở request sau, và bộ đếm đăng nhập sai phải cộng dồn
- * đúng IP qua sáu lần gọi khác nhau. Một test trong cùng một tiến trình có thể xanh nhờ trạng
- * thái còn trong bộ nhớ — thứ mà production không có.
- */
 class SessionLifecycleHttpIT extends HttpIT {
 
     @Nested
@@ -45,7 +32,6 @@ class SessionLifecycleHttpIT extends HttpIT {
                     .body(Map.of("refreshToken", cu)).retrieve().body(THAN_JSON);
             assertThat((String) moi.get("refreshToken")).isNotEqualTo(cu);
 
-            // Trình lại bản cũ: hệ thống hiểu là có hai bản sao đang tồn tại.
             var dungLai = http.post().uri("/api/v1/auth/refresh")
                     .body(Map.of("refreshToken", cu))
                     .exchange((req, r) -> ResponseEntity.status(r.getStatusCode())
@@ -53,7 +39,6 @@ class SessionLifecycleHttpIT extends HttpIT {
             assertThat(dungLai.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(dungLai.getBody()).containsEntry("code", "identity.phien_bi_dung_lai");
 
-            // ...và phiên hợp lệ của chủ tài khoản cũng bị thu hồi theo.
             HttpStatusCode sauDo = http.post().uri("/api/v1/auth/refresh")
                     .body(Map.of("refreshToken", moi.get("refreshToken")))
                     .exchange((req, r) -> r.getStatusCode(), false);
@@ -79,9 +64,6 @@ class SessionLifecycleHttpIT extends HttpIT {
             assertThat(login("dev", MAT_KHAU_DEV).getStatusCode())
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
 
-            // Ca này nén cả một luồng của người dùng vào chưa tới hai giây: đăng nhập, đổi
-            // mật khẩu, rồi đăng nhập lại. Người thật mất hàng phút cho đoạn ấy nên không
-            // chạm oj.auth.login-min-interval; test thì chạm. Tua đồng hồ, không nới chốt.
             quenLuotDangNhapVuaRoi(USER_ID);
 
             assertThat(login("dev", "mat-khau-hoan-toan-moi").getStatusCode())
@@ -105,15 +87,6 @@ class SessionLifecycleHttpIT extends HttpIT {
             assertThat(sauKhiDangXuat).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
 
-        /**
-         * ★ Cuộc đua là thứ kẻ cầm token trộm điều khiển được, nên nó phải được kiểm bằng cuộc
-         * đua thật: tám luồng, một cái chốt, cùng một token.
-         *
-         * <p>Bản cũ đọc {@code revoked_at} rồi mới thu hồi, bằng hai câu lệnh rời nhau — mọi
-         * request lọt vào giữa hai câu ấy đều thấy token còn sống và đều nhận một chuỗi phiên
-         * riêng. Kẻ trộm bắn N request cùng lúc là có N phiên sống bảy ngày, và
-         * {@code REFRESH_TOKEN_REUSE_DETECTED} không bao giờ được ghi.
-         */
         @Test
         @DisplayName("★ cùng một refresh token gửi SONG SONG → đúng MỘT lượt thắng, còn lại là dùng lại")
         void lam_moi_song_song_chi_mot_luot_thang() throws Exception {
@@ -143,8 +116,6 @@ class SessionLifecycleHttpIT extends HttpIT {
                     .allSatisfy(r -> assertThat(r.getBody())
                             .containsEntry("code", "identity.phien_bi_dung_lai"));
 
-            // Lượt thua đã kích hoạt phát hiện dùng lại, nên phiên của lượt thắng cũng chết theo
-            // — đúng như khi token cũ quay lại một cách tuần tự.
             assertThat(lamMoi((String) thang.get(0).getBody().get("refreshToken")).getStatusCode())
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
         }
@@ -156,8 +127,6 @@ class SessionLifecycleHttpIT extends HttpIT {
                             .body(r.bodyTo(THAN_JSON)), false);
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ FR-AUTH-08 · khoá 5 lần sai / phút / IP")

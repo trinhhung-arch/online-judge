@@ -20,46 +20,20 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Chỗ duy nhất biến ngoại lệ thành HTTP. Không controller nào tự bắt lỗi rồi tự dựng response.
- *
- * <h2>Luật của class này</h2>
- * <b>Chỉ {@link DomainException#publicMessage()} được ra tới client.</b> Mọi ngoại lệ khác nhận
- * một câu chung chung cố định, còn chi tiết thật đi vào log kèm {@code traceId}. Không có
- * {@code e.getMessage()} nào lọt ra ngoài — đó là cách duy nhất chắc chắn rằng một ngày nào đó
- * đường dẫn testdata hay câu SQL không hiện lên trình duyệt người dùng
- * ({@code CLAUDE.md} mục 4.2, SEC3).
- *
- * <p>Điều đó nghe như làm khó việc debug, nhưng không: người dùng đọc {@code traceId} cho bạn,
- * bạn {@code grep} ra đúng request đó với đầy đủ chi tiết. Đổi một chút bất tiện lấy việc
- * không bao giờ phải rà lại xem endpoint nào đang lộ gì.
- *
- * <h2>Không bao giờ log thân request</h2>
- * Bất biến #9. Thân của {@code POST /api/v1/submissions} <b>là mã nguồn người dùng</b>. Một
- * dòng {@code log.error("payload={}", body)} thêm vào đây lúc 2 giờ sáng là một đường rò rỉ
- * vĩnh viễn, và không ai nhớ ra để xoá.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    /** Câu duy nhất người dùng thấy khi có lỗi ngoài dự kiến. */
     private static final String GENERIC_MESSAGE =
             "Có lỗi phía hệ thống. Bài nộp của bạn không bị ảnh hưởng. "
                     + "Nếu cần báo lỗi, gửi kèm mã sự cố bên dưới.";
-
-    // -------------------------------------------------------------------------
-    // Lỗi nghiệp vụ — đường đi bình thường
-    // -------------------------------------------------------------------------
 
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ApiError> handleDomain(DomainException e) {
         HttpStatus status = toStatus(e.kind());
         String traceId = TraceIdFilter.current();
 
-        // 4xx là chuyện bình thường (nộp sai, hết quota) -> WARN, không stack trace.
-        // 5xx do nghiệp vụ (UNAVAILABLE) -> ERROR kèm nguyên nhân.
         if (status.is5xxServerError()) {
             log.error("[{}] {} — {}", e.code(), status.value(), e.getMessage(), e);
         } else {
@@ -70,9 +44,6 @@ public class GlobalExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         if (e.kind() == DomainException.Kind.RATE_LIMITED && e.retryAfter() != null) {
             long seconds = Math.max(1, e.retryAfter().toSeconds());
-            // Retry-After là chuẩn HTTP; details là để UI hiện đếm ngược mà không phải
-            // đọc header (FR-SUB-08: rate limit là quy tắc nghiệp vụ ĐƯỢC CÔNG BỐ,
-            // không phải cơ chế ẩn — người dùng phải thấy được).
             headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(seconds));
             details = Map.of("retryAfterSeconds", seconds);
         }
@@ -80,26 +51,6 @@ public class GlobalExceptionHandler {
         return json(status, headers, new ApiError(e.code(), e.publicMessage(), traceId, details));
     }
 
-    /**
-     * ★ Mọi phản hồi lỗi <b>luôn</b> là {@code application/json}, đặt tường minh.
-     *
-     * <h2>Lỗi đã gặp thật, và nó im lặng theo cách tệ nhất</h2>
-     * {@code GET /api/v1/submissions/{id}/stream} khai {@code produces = text/event-stream}.
-     * Khi nó ném lỗi <i>trước khi</i> ghi byte nào — token hết hạn, bài của người khác —
-     * Spring đã đặt sẵn {@code Content-Type} của response theo khai báo đó, rồi không tìm được
-     * bộ chuyển đổi nào ghi {@link ApiError} thành {@code text/event-stream}. Kết quả:
-     * <b>500 với thân rỗng</b>, thay cho 401 hoặc 404.
-     *
-     * <p>Hậu quả không phải thẩm mỹ. Frontend phân biệt "token hết hạn, làm mới rồi thử lại"
-     * với "hỏng thật" bằng mã lỗi trong thân phản hồi (xem {@code js/api.js}). Một 500 rỗng
-     * xoá mất sự phân biệt ấy, nên người dùng có token hết hạn giữa lúc theo dõi một bài nộp
-     * sẽ thấy luồng chết vĩnh viễn.
-     *
-     * <p>Đặt {@code Content-Type} tường minh ghi đè giá trị Spring đã chọn sẵn. Áp cho
-     * <b>mọi</b> nhánh, không riêng nhánh SSE: một endpoint tương lai khai
-     * {@code produces} khác cũng sẽ gặp đúng vấn đề này, và lúc đó không ai nhớ tới đoạn
-     * javadoc này nữa.
-     */
     private static ResponseEntity<ApiError> json(HttpStatus status, HttpHeaders headers,
                                                  ApiError than) {
         return ResponseEntity.status(status)
@@ -124,10 +75,6 @@ public class GlobalExceptionHandler {
         };
     }
 
-    // -------------------------------------------------------------------------
-    // Lỗi đầu vào — tên trường là của ta nên trả ra được
-    // -------------------------------------------------------------------------
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException e) {
         Map<String, Object> fields = new HashMap<>();
@@ -140,18 +87,6 @@ public class GlobalExceptionHandler {
                 TraceIdFilter.current(), fields));
     }
 
-    /**
-     * ★ {@code MissingServletRequestPartException} thêm vào ở M6, và nó là một lỗi thật.
-     *
-     * <p>Gửi multipart mà đặt sai tên phần (ví dụ {@code goi} thay vì {@code file}) rơi xuống
-     * {@code handleUnexpected} và nhận <b>500 kèm câu "Có lỗi phía hệ thống"</b>. Cả hai đều
-     * sai: lỗi nằm ở request, và câu chữ ấy bảo người ta đi báo sự cố cho một thứ họ tự sửa
-     * được trong một giây.
-     *
-     * <p>Endpoint duy nhất nhận multipart là nạp testdata — người dùng của nó là SETTER dùng
-     * {@code curl} hoặc một script, tức là chính nhóm dễ gõ sai tên phần nhất. Tìm ra khi
-     * chạy tay ở Bước 6.14.
-     */
     @ExceptionHandler({MissingServletRequestParameterException.class,
             org.springframework.web.multipart.support.MissingServletRequestPartException.class,
             MethodArgumentTypeMismatchException.class})
@@ -161,18 +96,6 @@ public class GlobalExceptionHandler {
                 "request.invalid_parameter", "Tham số không hợp lệ.", TraceIdFilter.current()));
     }
 
-    /**
-     * JSON hỏng, hoặc một record trong {@code oj-contract} từ chối payload.
-     *
-     * <p>Trường hợp thứ hai là chỗ đáng nói: compact constructor của {@code JudgeResultDto} ném
-     * {@code IllegalArgumentException}, Jackson bọc lại thành ngoại lệ này. Nó <b>phải</b> là
-     * 400 chứ không phải 500 — worker nhìn 5xx sẽ retry mãi một payload không bao giờ hợp lệ,
-     * còn 4xx thì nó biết là lỗi của chính nó và cho vào DLQ.
-     *
-     * <p>Thông điệp gốc không ra ngoài, và <b>cũng không vào log</b>: nó chép một đoạn payload
-     * — mã nguồn người dùng ở {@code /api/v1/submissions}, mật khẩu ở {@code /api/v1/auth/*}.
-     * Log chỉ nhận loại lỗi, vị trí và tên trường; lý do ở {@link MoTaLoiAnToan}.
-     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException e) {
         log.warn("Không đọc được thân request: {}", MoTaLoiAnToan.cua(e));
@@ -186,49 +109,11 @@ public class GlobalExceptionHandler {
                 "resource.not_found", "Không tìm thấy.", TraceIdFilter.current()));
     }
 
-    /**
-     * ★ Client đã đóng kết nối SSE. <b>Không phải lỗi</b>, và phải bắt TRƯỚC lưới cuối.
-     *
-     * <h2>Đường đi của nó, vì nó không hiển nhiên</h2>
-     * Người dùng rời trang chi tiết bài nộp. Socket đứt, nhịp heartbeat kế tiếp ghi hỏng, và
-     * {@code SseEmitters.attempt} bắt gọn — nó ghi {@code DEBUG} rồi gọi {@code complete()}
-     * để dọn. Cho tới đây mọi thứ đúng.
-     *
-     * <p>Nhưng {@code complete()} <b>không ném tại chỗ</b>: nó đẩy một async dispatch trở lại
-     * servlet container. Trên luồng Tomcat ấy, Spring dựng lại
-     * {@link AsyncRequestNotUsableException}, {@code DispatcherServlet} đưa nó tới đây, và
-     * lưới cuối ghi {@code ERROR} kèm stack trace đầy đủ.
-     *
-     * <p>Đó là lý do {@code catch (Exception ignored)} trong {@code SseEmitters.closeQuietly}
-     * <b>không sai mà vẫn không đủ</b>: ngoại lệ nổi lên ở một luồng khác, sau đó.
-     *
-     * <h2>Vì sao trả {@code void}</h2>
-     * Trả {@code ResponseEntity} là cố ghi một thân JSON vào một response đã mang
-     * {@code Content-Type: text/event-stream} — và đó chính là lỗi THỨ HAI trong log
-     * ({@code HttpMessageNotWritableException: No converter for ApiError}). Không còn ai ở
-     * đầu kia để nhận thân ấy. Không ghi gì là câu trả lời đúng.
-     *
-     * <h2>Vì sao đáng sửa dù không ai chết</h2>
-     * Rời một trang là hành vi bình thường nhất của người dùng. Một kỳ thi 200 người bấm back
-     * là 400 stack trace ở mức ERROR/WARN — đúng vào lúc cần đọc log để tìm lỗi thật. Javadoc
-     * của {@link #handleUnexpected} đã viết ra luật: lưới cuối chạy thường xuyên nghĩa là
-     * thiếu một handler ở đâu đó. Đây là cái thiếu.
-     */
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleClientDaNgatKetNoi(AsyncRequestNotUsableException e) {
         log.debug("Client đã ngắt kết nối trước khi response ghi xong: {}", e.getMessage());
     }
 
-    // -------------------------------------------------------------------------
-    // Lưới cuối
-    // -------------------------------------------------------------------------
-
-    /**
-     * Mọi thứ không lường trước. Người dùng nhận một câu cố định; log giữ toàn bộ sự thật.
-     *
-     * <p>Nếu handler này chạy thường xuyên, đó không phải chuyện của log — đó là một
-     * {@link DomainException} còn thiếu ở đâu đó.
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception e) {
         String traceId = TraceIdFilter.current();
@@ -237,12 +122,4 @@ public class GlobalExceptionHandler {
                 "internal.error", GENERIC_MESSAGE, traceId));
     }
 
-    // -------------------------------------------------------------------------
-    // Thêm ở M4, cùng Bước 4.5-4.6:
-    //   @ExceptionHandler(AccessDeniedException.class)      -> 403
-    //   @ExceptionHandler(AuthenticationException.class)    -> 401
-    // Chưa thêm bây giờ vì kéo spring-security vào ở M1 là thêm một dependency cho một
-    // thứ chưa dùng — và thêm dependency là việc phải hỏi người (CLAUDE.md mục 5.2).
-    // Ở M4, @RequiresRole ném DomainException(FORBIDDEN) nên phần lớn đã có handler rồi.
-    // -------------------------------------------------------------------------
 }

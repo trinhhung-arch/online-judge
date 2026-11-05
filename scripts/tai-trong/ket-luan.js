@@ -1,13 +1,3 @@
-/**
- * Bảng cuối lượt k6 — CHỈ phần k6 biết. Kết luận đạt/không đạt của cả lượt đo nằm ở
- * bao-cao-db.py, chạy SAU khi hàng đợi rút cạn, vì R1/R2/R3/P3/P5/P6 chỉ đo được lúc đó.
- *
- * Bảng này cố ý in các ngưỡng DB là "chờ đo" chứ không im lặng bỏ đi: một người đọc thấy mọi ô
- * k6 xanh rồi đóng terminal là đúng cái kết luận nửa vời mà bộ đo này sinh ra để chặn.
- *
- * Không con số nào viết cứng ở đây — mọi ngưỡng đọc từ `nguong.json`.
- */
-
 function so(n, le) {
     if (n === null || n === undefined || Number.isNaN(n)) return '—';
     const [nguyen, thap] = Number(n).toFixed(le === undefined ? 0 : le).split('.');
@@ -27,15 +17,9 @@ export function dinhDang(v, donVi) {
 const cot = (s, n) => String(s).padEnd(n);
 const cotPhai = (s, n) => String(s).padStart(n);
 
-/**
- * `null` khi vắng mặt, KHÔNG phải 0: `doc_ms` vắng mặt nghĩa là không ai đọc được đề nào — rất
- * tệ — còn 0 thì trông như nhanh vô hạn.
- */
 export function docSo(metrics, ten, thongKe) {
     const m = metrics[ten];
     if (!m || !m.values) return null;
-    // ★ 0 MẪU LÀ KHÔNG ĐO ĐƯỢC, không phải 0. k6 vẫn ghi Trend/Rate đã khai báo dù không có mẫu nào —
-    // p(95) = 0, rate = 0. Đo 2026-09-11: một lượt chết ở setup() in "P1 0 ms ✅" và "hỏng 0.00 % ✅".
     if (m.values.count === 0 || (m.values.passes === 0 && m.values.fails === 0)) return null;
     const v = m.values[thongKe];
     return v === undefined ? null : v;
@@ -45,11 +29,6 @@ function apDung(nhom, nguon, kichBan) {
     return nhom.filter((d) => d.nguon === nguon && d.kich_ban.includes(kichBan));
 }
 
-/**
- * Dựng `options.thresholds` từ nguong.json — thay cho bản chép tay ba dòng cũ, thứ phải nhớ sửa
- * ở hai nơi. k6 báo lỗi nếu ngưỡng trỏ tới một metric kịch bản không khai báo, nên chỉ lấy dòng
- * thuộc đúng kịch bản.
- */
 export function nguongK6(nguong, kichBan) {
     const ra = {};
     apDung(nguong.cung, 'k6', kichBan).forEach((d) => {
@@ -72,7 +51,6 @@ function ve(metrics, nguong, bc) {
     });
 
     d.push('', 'ĐƯỜNG CHẤM — CHỜ ĐO: bao-cao-db.py chạy sau khi hàng đợi rút cạn');
-    // db VÀ sse: cả hai chỉ có số sau khi hàng đợi rút cạn (kịch bản ky-thi gộp số SSE vào lúc đó).
     nguong.cung.filter((d) => d.nguon !== 'k6' && d.kich_ban.includes(bc.kichBan)).forEach((r) => {
         d.push(`  ${cot(r.ma, 9)} ${cot(r.nhan, 34)} ${cotPhai('…', 12)}`
             + `   ${r.toi_da === 0 ? '= 0' : '< ' + dinhDang(r.toi_da, r.don_vi)}`);
@@ -93,7 +71,6 @@ function ve(metrics, nguong, bc) {
     return d.join('\n');
 }
 
-/** stdout: bảng. RA_JSON: `data` k6 nguyên vẹn — bao-cao-db.py vá số DB vào chính file này. */
 export function tomTat(data, nguong, bc) {
     const moTa = bc.kichBan === 'quet'
         ? `${bc.nguoi} người ảo · ${bc.thoiLuong} · dốc ${bc.docLen} (không tính vào p95)`

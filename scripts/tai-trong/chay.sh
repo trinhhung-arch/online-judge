@@ -1,36 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Bộ đo tải — bốn kịch bản, mỗi kịch bản trả lời ĐÚNG MỘT câu hỏi của nfrplan:
-#
-#   BASE=http://<máy>:<cổng> ./chay.sh quet       P1/P2 theo số người ảo · R1/R2/R3 dưới quá tải
-#   BASE=...                 ./chay.sh on-dinh    P3, P6 — 2 bài/s, 30 phút, mô hình mở   (2.4 b)
-#   BASE=...                 ./chay.sh dot-bien   P5 — 500 bài cùng lúc, rút cạn, 0 mất   (2.4 a)
-#   BASE=... CONTEST_ID=7    ./chay.sh sse        1000 kết nối SSE đồng thời              (2.4 c)
-#   BASE=...                 ./chay.sh ky-thi     N người ĐĂNG NHẬP xem bảng xếp hạng + nộp bài · P8
-#                            qua Cloudflare: BASE=https://<tên miền đo> — dựng bằng tunnel-do.sh
-#
-# ★ SỐ ĐỂ NGHIỆM THU CHỈ ĐẾN TỪ ĐỦ BA ĐIỀU KIỆN: stack KHÔNG phải prod · worker chạy isolate thật
-#   (không phải ScriptedJudgeRunner) · k6 trên máy khác từ ~400 người ảo trở lên. Thiếu một điều thì
-#   con số chỉ để dò đường — bảng kết luận nói rõ điều ấy.
-#
-# ★ "KHÔNG PHẢI PROD" NGHĨA LÀ API SAU BASE CHẠY TRÊN DATABASE ĐO RIÊNG — không chỉ "BASE là IP nội bộ".
-#   Trên máy đang chạy prod, http://<IP-LAN>:8080 VẪN là prod. Vì thế trước khi ghi bất cứ gì, chay.sh
-#   BẮT TAY: problemId của DE_MA ở API phải bằng id trong database của OJ_TAI_PSQL (chỉ đọc), và tai-1
-#   vừa seed phải đăng nhập được qua BASE.
-#
-# ★ ĐƯỜNG CHẤM ĐẾM Ở DB, KHÔNG Ở k6. Mỗi lượt: chụp max(id) → chạy k6 → chờ dangCho VÀ dangCham về 0
-#   → bao-cao-db.py đếm mọi bài có id lớn hơn mốc. Bản cũ chỉ chờ dangCho, nên bài đang chấm dở
-#   bị tính nhầm là kẹt.
-#
-# Biến: BASE (bắt buộc) · OJ_TAI_PSQL (psql tới DB của stack; mặc định docker exec oj-postgres,
-#       database ojdb) · OJ_TAI_DB (tên DB, để xác nhận seed) · RA · CAC_MUC · THOI_LUONG · NGHI
-#       SO_TAI_KHOAN · TOC_DO · SO_BAI · CONTEST_ID · SO_KET_NOI · GIU · CHO_RUT_CAN
-# =============================================================================
-set -uo pipefail          # KHÔNG -e: k6 thoát 99 khi trượt ngưỡng, và trượt ngưỡng là DỮ LIỆU
-# ★ KHÔNG `| grep -q` trong pipeline ở file này: với `set -o pipefail`, grep -q thoát ngay khi khớp,
-#   lệnh bên trái ăn SIGPIPE (mã 141) và cả pipeline bị coi là HỎNG dù đã khớp. Đo 2026-09-11:
-#   dung-stack-do.sh báo "RabbitMQ không lên sau 60s" với một RabbitMQ sẵn sàng sau 6s.
-#   Dùng `grep ... >/dev/null` — grep đọc hết đầu vào, không đóng pipe sớm.
+set -uo pipefail
 
 KICH_BAN=${1:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -39,17 +8,12 @@ case "$KICH_BAN" in quet|on-dinh|dot-bien|sse|ky-thi) ;; *)
 
 loi() { echo "✗ $*" >&2; exit 1; }
 
-# ★ Worker PROD bị pause để đo (dung-stack-do.sh, mục CPU) thì site thật NGỪNG CHẤM cho tới khi
-#   unpause. Đo 2026-09-11: quên bước đó sau lượt dot-bien, prod đứng chấm ~2 giờ mà không gì báo.
-#   Nhắc ở EXIT để lượt đạt, lượt trượt, lượt lỗi và Ctrl+C đều in. INT/TERM đổi thành exit để
-#   EXIT trap chắc chắn chạy.
 nhac_worker_prod() {
     [ "$(docker inspect -f '{{.State.Paused}}' oj-worker 2>/dev/null)" = true ] || return 0
     echo
     echo "⚠ Worker PROD (oj-worker) vẫn đang PAUSE — site thật KHÔNG chấm bài. Đo xong thì:"
     echo "    docker unpause oj-worker"
 }
-# ky-thi chạy sse-tai.py NỀN và giữ phiên đăng nhập trong một file tạm: thoát kiểu gì cũng phải dọn cả hai.
 PID_SSE='' PHIEN=''
 khi_thoat() {
     [ -n "$PID_SSE" ] && kill "$PID_SSE" 2>/dev/null
@@ -61,7 +25,6 @@ trap 'exit 130' INT TERM
 : "${BASE:?Thiếu BASE. Không có mặc định, cố ý: localhost:8080 của máy chủ là API prod.}"
 BASE=${BASE%/}
 
-# Cùng luật với chung.js và sse-tai.py: chỉ máy nội bộ, trừ khi gõ lại đúng BASE.
 host=$(printf '%s' "$BASE" | sed -E 's#^https?://(\[[^]]*\]|[^/:]+).*#\1#')
 case "$host" in
     localhost|127.*|10.*|192.168.*|*.local|\[::1\]) ;;
@@ -78,8 +41,6 @@ RA=${RA:-/tmp/oj-tai-trong}/$KICH_BAN-$(date +%Y%m%d-%H%M%S)
 
 command -v python3 >/dev/null || loi "Cần python3."
 [ "$KICH_BAN" = sse ] || command -v k6 >/dev/null || loi "Chưa có k6: brew install k6"
-# 2>/dev/null ở CẢ hai vế: API chưa chạy thì curl trả rỗng, và json.load in 12 dòng traceback che mất
-# câu lỗi thật (2026-09-11: chạy vào stack đo đã gỡ, người đọc chỉ thấy traceback). Nơi gọi tự xét mã thoát.
 trang_thai() {
     curl -fsS --max-time 5 "$BASE/api/v1/status" 2>/dev/null | python3 -c \
         'import sys,json; d=json.load(sys.stdin); print(d["dangCho"], d["dangCham"], d["mayChamSong"])' 2>/dev/null
@@ -91,24 +52,16 @@ if ! trang_thai >/dev/null; then
             loi "Không gọi được $BASE/api/v1/status (HTTP $ma_tt) — API sau BASE chưa chạy.
   Stack đo trên máy này đã gỡ thì dựng lại trước: $HERE/dung-stack-do.sh" ;;
         *)
-            # Đo 2026-09-11: chạy ky-thi ngay sau `tunnel-do.sh --xoa` — câu cũ bảo "dựng lại stack đo"
-            # trong khi stack vẫn sống, chỉ có tunnel đã tắt.
             loi "Không gọi được $BASE/api/v1/status (HTTP $ma_tt).
   530 = tunnel đo đang TẮT → mở lại: $HERE/tunnel-do.sh $host
   403 = luật WAF chặn chính máy này · 000 = DNS hoặc mạng · mã khác = xem stack đo: $HERE/dung-stack-do.sh" ;;
     esac
 fi
 
-# ---- Tiền kiểm: stack ĐÚNG, không phải prod, có máy chấm ---------------------
 if [ "$KICH_BAN" != sse ]; then
-    # ★ </dev/null ở MỌI lệnh psql không cần đầu vào: `docker exec -i` giữ stdin mở và NUỐT nó. Đo
-    # 2026-09-11: `printf 'dong y' | ./chay.sh quet` in "Đã huỷ" — lệnh psql này ăn mất câu xác nhận.
     ten_db=$("${PSQL[@]}" -X -tAc 'SELECT current_database()' </dev/null 2>/dev/null) || loi "OJ_TAI_PSQL không kết nối được: ${PSQL[*]}"
     case "$ten_db" in *prod*|*PROD*) loi "OJ_TAI_PSQL trỏ vào '$ten_db' — database production." ;; esac
     [ "$ten_db" = "$OJ_TAI_DB" ] || loi "OJ_TAI_PSQL trỏ vào '$ten_db' nhưng OJ_TAI_DB='$OJ_TAI_DB'. Hai biến phải cùng một database."
-    # ★ Bắt tay CHỈ ĐỌC. Đo 2026-09-11: BASE=http://192.168.1.2:8080 là IP LAN của chính máy chủ — qua
-    # hàng rào "máy nội bộ" — và cổng 8080 là API prod (ojdb_prod), còn OJ_TAI_PSQL mặc định trỏ ojdb.
-    # Hai đầu chưa từng được đối chiếu; lượt ấy chỉ dừng vì prod tình cờ không có đề A-PLUS-B.
     DE_MA=${DE_MA:-A-PLUS-B}
     id_api=$(curl -fsS --max-time 5 "$BASE/api/v1/problems/$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$DE_MA")" 2>/dev/null \
         | python3 -c 'import sys, json; print(json.load(sys.stdin)["problemId"])' 2>/dev/null)
@@ -136,8 +89,6 @@ mkdir -p "$RA"
 db_now()    { "${PSQL[@]}" -X -tAc 'SELECT now()' </dev/null; }
 db_id_max() { "${PSQL[@]}" -X -tAc 'SELECT coalesce(max(id), 0) FROM submissions' </dev/null; }
 
-# Rỗng = không còn bài CHỜ và không còn bài ĐANG CHẤM. Ghi RUT_CAN_XONG để bao-cao-db.py biết
-# "còn QUEUED" là kẹt (đã rút cạn xong) hay chỉ là chậm (hết giờ chờ).
 cho_rut_can() {
     local han=${CHO_RUT_CAN:-1200} t=0 cho cham
     RUT_CAN_XONG=0
@@ -151,7 +102,6 @@ cho_rut_can() {
     echo; echo "  ⚠ Sau ${han}s vẫn chưa rỗng. R1 'chưa có verdict' sẽ KHÔNG đo được. Nới: CHO_RUT_CAN=2400"
 }
 
-# Một lượt đo đầy đủ: mốc id → k6 → rút cạn → số DB. $1 file k6, $2 tên json, còn lại là -e cho k6.
 do_mot_luot() {
     local js=$1 ten=$2; shift 2
     local json="$RA/tom-tat-$ten.json" id_sau id_den t_k6 t_rut
@@ -159,27 +109,24 @@ do_mot_luot() {
     k6 run -e BASE="$BASE" -e DE_MA="$DE_MA" -e SO_TAI_KHOAN="$SO_TAI_KHOAN" -e RA_JSON="$json" "$@" "$HERE/$js" 2>&1 | tee "$RA/$ten.log"
     local ma=${PIPESTATUS[0]}
     if [ "$ma" -ne 0 ] && [ "$ma" -ne 99 ]; then
-        # Không kết luận cho một lượt không chạy trọn: 2026-09-11 lượt như thế vẫn in bảng "P1 0 ms ✅".
         echo "  ✗ k6 thoát mã $ma (không phải trượt ngưỡng): lượt đo không chạy trọn, KHÔNG có kết luận. Xem $RA/$ten.log" >&2
         return 1
     fi
     t_k6=$(db_now)
     cho_rut_can
     t_rut=$(db_now)
-    id_den=$(db_id_max)       # cận trên: báo cáo chạy lại sau này không đếm lẫn lượt khác
+    id_den=$(db_id_max)
     [ -f "$json" ] || { echo "  ✗ k6 không ghi $json — bỏ qua phần DB của lượt này."; return; }
     python3 "$HERE/bao-cao-db.py" --json "$json" --kich-ban "$KICH_BAN" --id-sau "$id_sau" --id-den "$id_den" \
         --rut-can-xong "$RUT_CAN_XONG" --t-k6-xong "$t_k6" --t-rut-can-xong "$t_rut" | tee -a "$RA/$ten.log"
 }
 
-# JVM chưa JIT, cache Postgres nguội: đo 2026-09-05 cho doc_ms p95 9ms → 3ms chỉ vì THỨ TỰ chạy.
 khoi_dong() {
     [ "${KHOI_DONG:-45s}" = 0 ] && return
     echo; echo "══════════ khởi động ${KHOI_DONG:-45s} · KẾT QUẢ BỎ ĐI ══════════"
     k6 run --quiet -e BASE="$BASE" -e DE_MA="$DE_MA" -e NGUOI=50 -e THOI_LUONG="${KHOI_DONG:-45s}" -e DOC_LEN=10s \
         "$HERE/k6-tai.js" > "$RA/khoi-dong.log" 2>&1
     local ma=$?
-    # Kết quả bỏ đi, LỖI thì không: 2026-09-11 lượt khởi động chết ở setup() mà không in ra chữ nào.
     if [ "$ma" -ne 0 ] && [ "$ma" -ne 99 ]; then
         grep -m3 -E 'level=error|Error' "$RA/khoi-dong.log" | cut -c1-200 | sed 's/^/    /' >&2
         loi "Lượt khởi động hỏng (k6 mã $ma) — lượt đo chính sẽ hỏng cùng lý do. Log: $RA/khoi-dong.log"
@@ -205,7 +152,6 @@ on-dinh)
     ;;
 dot-bien)
     khoi_dong
-    # Tài khoản của lượt khởi động cũng nằm trong đợt dồn: phải qua rate limit 10s của chúng.
     sleep 11
     do_mot_luot k6-dot-bien.js dot-bien -e SO_BAI="${SO_BAI:-500}" || exit 1
     ;;
@@ -214,8 +160,6 @@ ky-thi)
     [ "$SO_NGUOI" -le "$SO_TAI_KHOAN" ] || loi "SO_NGUOI=$SO_NGUOI cần ngần ấy tài khoản, SO_TAI_KHOAN=$SO_TAI_KHOAN."
     giay=$(python3 -c 'import re, sys; m = re.fullmatch(r"(\d+)(s|m)", sys.argv[1]); print(int(m[1]) * (60 if m[2] == "m" else 1) if m else "")' "$THOI_LUONG")
     [ -n "$giay" ] || loi "THOI_LUONG phải dạng 180s hoặc 3m, không phải '$THOI_LUONG'."
-    # Kết nối mở ĐẦU TIÊN phải sống qua: chờ mở hết (≤ 30s) + k6 khởi động + THOI_LUONG + rút cạn + 15s
-    # để thấy bài AC cuối lên bảng. Và phải dưới oj.sse.timeout 300s: quá mốc ấy máy chủ tự đóng, tính là đứt.
     giu=$((giay + 75)) phut=$((giay / 60 + 12))
     [ "$giu" -le 285 ] || loi "THOI_LUONG=$THOI_LUONG quá dài: kết nối SSE cần giữ ${giu}s, vượt oj.sse.timeout 300s. Tối đa 3m30s."
     khoi_dong

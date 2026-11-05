@@ -13,28 +13,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Đường <b>ĐỌC</b> bảng xếp hạng — FR-CON-04, Bước 5.7. Pool {@code app}.
- *
- * <p>Đây là {@code PostgresStandingsReader} mà {@code build-order.md} Bước 5.7 gọi tên: đường
- * <b>dự phòng</b> khi Redis chết. Đường chính là {@code RedisStandingsCache}; cả hai phải cho
- * ra <i>cùng một thứ hạng</i>, và bảng này là thứ định nghĩa "đúng" nghĩa là gì.
- *
- * <h2>★ Vì sao bản đóng băng là HAI câu riêng chứ không phải một câu có tên bảng động</h2>
- * Cách gọn là ghép tên bảng vào chuỗi SQL theo cờ {@code dongBang}. Đừng: đó là nối chuỗi
- * trong tầng {@code infrastructure} (bất biến #5), và nó là <i>đúng cái hình dạng</i> mà một
- * lỗ hổng SQL injection có — kể cả khi giá trị ghép vào hôm nay là một boolean an toàn.
- *
- * <h2>Thứ tự xếp hạng viết ra ở SÁU chỗ, và cả sáu phải giống nhau</h2>
- * {@code total_score DESC, penalty_seconds ASC, last_scoring_at ASC NULLS LAST} — khớp đúng
- * {@code ix_contest_standings_rank} của V7. Lệch một chỗ là hai người xem cùng một bảng thấy
- * hai thứ hạng khác nhau, tuỳ họ mở trang top hay trang "quanh mình".
- *
- * <p>{@code NULLS LAST} không có trong định nghĩa index nhưng bắt buộc phải có ở đây:
- * {@code last_scoring_at} là {@code NULL} với người chưa ghi điểm nào. Mặc định của Postgres
- * cho {@code ASC} đúng là {@code NULLS LAST}, nhưng viết ra để nó là một quyết định chứ không
- * phải một mặc định người sau phải tra cứu.
- */
 @Repository
 public class JdbcStandingsReader implements StandingsReader {
 

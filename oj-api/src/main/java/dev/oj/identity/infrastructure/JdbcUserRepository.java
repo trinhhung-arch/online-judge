@@ -18,23 +18,6 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Bảng {@code users}. Chạy trên pool {@code app} — mọi lời gọi ở đây là request người dùng.
- *
- * <h2>Vì sao mọi câu tra cứu đều dùng {@code lower(...)}</h2>
- * V1 không dùng extension CITEXT (thêm extension là thêm dependency, phải hỏi người) mà dùng
- * hai index biểu thức: {@code ux_users_handle_lower} và {@code ux_users_email_lower}. Câu
- * query phải viết <b>đúng cùng biểu thức</b> thì mới trúng index. Viết {@code handle ILIKE :h}
- * là seq scan trên bảng người dùng ở mỗi lần đăng nhập.
- *
- * <p>{@code User.chuanHoaHandle} đã hạ chữ thường ở phía Java, nhưng {@code lower()} vẫn phải
- * có mặt trong câu SQL — nó là thứ chọn index, không phải thứ so sánh.
- *
- * <h2>Không có {@code SELECT *}, và {@code password_hash} chỉ xuất hiện ở hai câu</h2>
- * Đúng hai câu dưới đây đọc cột đó, cả hai đều trả về {@link Credentials}. Đây là thứ
- * {@code grep} kiểm được trong ba giây, và là lý do việc tách {@code Credentials} khỏi
- * {@link User} có giá trị thật chứ không chỉ là hình thức.
- */
 @Repository
 public class JdbcUserRepository implements UserRepository {
 
@@ -79,7 +62,6 @@ public class JdbcUserRepository implements UserRepository {
              WHERE id = :id
             """;
 
-    /** FR-ADM-03. Điều kiện ANONYMIZED nằm trong SQL — xem javadoc của port. */
     private static final String DOI_VAI_TRO = """
             UPDATE users SET role = :vaiTro
              WHERE id = :id AND status <> 'ANONYMIZED'
@@ -94,25 +76,11 @@ public class JdbcUserRepository implements UserRepository {
             UPDATE users SET password_hash = :passwordHash WHERE id = :id
             """;
 
-    /** FR-AUTH-09 · V13. Hai điều kiện trong WHERE — xem javadoc của port. */
     private static final String DANH_DAU_XAC_MINH_EMAIL = """
             UPDATE users SET email_verified_at = now()
              WHERE id = :id AND email_verified_at IS NULL AND status <> 'ANONYMIZED'
             """;
 
-    /**
-     * Một câu duy nhất đặt cả bốn thay đổi của FR-AUTH-07.
-     *
-     * <p>Tách thành nhiều câu là mở ra một trạng thái trung gian trong đó
-     * {@code ck_users_anonymized} bị vi phạm — status đã {@code ANONYMIZED} nhưng email chưa
-     * kịp xoá — và Postgres sẽ từ chối câu đầu tiên. Ràng buộc đó buộc thao tác này phải
-     * nguyên tử, và đó chính là điều nó được viết ra để làm.
-     *
-     * <p>V13 đưa {@code email_verified_at} vào cùng ràng buộc ấy, nên nó phải có mặt ở đây.
-     * Dấu thời gian xác minh là một khẳng định VỀ một địa chỉ email, và FR-AUTH-07 hứa xoá,
-     * không hứa xoá một nửa. Quên dòng ấy thì câu này <b>không chạy được nữa</b> — đó là
-     * điểm của việc đưa cột mới vào ràng buộc thay vì chỉ nhớ.
-     */
     private static final String AN_DANH_HOA = """
             UPDATE users
                SET status = 'ANONYMIZED',
@@ -123,17 +91,6 @@ public class JdbcUserRepository implements UserRepository {
              WHERE id = :id
             """;
 
-    /**
-     * ★ {@code CAST(:x AS …)} quanh mỗi tham số có thể {@code NULL}.
-     *
-     * <p>Postgres không suy được kiểu của một tham số chỉ xuất hiện trong {@code :x IS NULL},
-     * và lỗi nó trả về — {@code could not determine data type of parameter} — không nhắc gì
-     * tới chỗ thiếu {@code CAST}. Cùng cái bẫy đã ghi ở {@code JdbcContestRepository}.
-     *
-     * <p>{@code ESCAPE '\'} không thừa: {@code handle} hợp lệ chứa được {@code _} và
-     * {@code -}, mà {@code _} là ký tự đại diện của {@code LIKE}. Không thoát thì tìm "a_b"
-     * ra cả "axb", và ADMIN đổi nhầm vai trò của người khác.
-     */
     private static final String DANH_SACH = """
             SELECT id, handle, display_name, role, status, created_at
               FROM users
@@ -190,8 +147,6 @@ public class JdbcUserRepository implements UserRepository {
                     .query(Long.class)
                     .single();
         } catch (DuplicateKeyException e) {
-            // Chốt thật. Tới được đây nghĩa là hai request đăng ký cùng handle chạy song song
-            // và cả hai đều vượt qua bước kiểm trước đó — hiếm, nhưng có thật.
             throw IdentityException.daTonTai("Tên đăng nhập hoặc email");
         }
     }
@@ -205,8 +160,6 @@ public class JdbcUserRepository implements UserRepository {
                     .param("id", userId)
                     .update();
         } catch (DataIntegrityViolationException e) {
-            // Khoá ngoại users.preferred_language_id -> languages.id. Luật ArchUnit 3 cấm
-            // identity biết bảng languages tồn tại, nên chốt duy nhất là ràng buộc này.
             throw IdentityException.khongHopLe("identity.ngon_ngu_khong_ton_tai",
                     "Ngôn ngữ được chọn không tồn tại.");
         }
@@ -245,13 +198,11 @@ public class JdbcUserRepository implements UserRepository {
             rs.getObject("created_at", java.time.OffsetDateTime.class).toInstant(),
             mocXacMinh(rs));
 
-    /** {@code SMALLINT} nullable: {@code getShort} trả 0 cho NULL, nên phải hỏi {@code wasNull}. */
     private static Short ngonNgu(ResultSet rs) throws SQLException {
         short value = rs.getShort("preferred_language_id");
         return rs.wasNull() ? null : value;
     }
 
-    /** {@code TIMESTAMPTZ} nullable — V13. Không có bẫy {@code wasNull} như {@code getShort}. */
     private static java.time.Instant mocXacMinh(ResultSet rs) throws SQLException {
         var moc = rs.getObject("email_verified_at", java.time.OffsetDateTime.class);
         return moc == null ? null : moc.toInstant();
@@ -284,7 +235,6 @@ public class JdbcUserRepository implements UserRepository {
                 .list();
     }
 
-    /** Thoát ký tự đại diện của {@code LIKE} rồi bọc {@code %} — xem javadoc của DANH_SACH. */
     private static String mauTim(String tim) {
         if (tim == null || tim.isBlank()) {
             return null;

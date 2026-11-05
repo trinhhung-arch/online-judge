@@ -14,33 +14,12 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ LUẬT 10 · bất biến #9 ở DÒNG LOG, không chỉ ở {@code toString()} (bao-mat-plan Lỗ 3).
- *
- * <p>Năm chỗ ép {@code toString()} không chứa bí mật chặn được {@code log.info("{}", cmd)}. Chúng
- * KHÔNG chặn {@code log.info("source={}", cmd.source())} — và trong 12 bất biến, #9 là cái duy
- * nhất chỉ có javadoc canh. Luật này quét mọi lời gọi {@code log.*(…)} của cả {@code oj-api} lẫn
- * {@code oj-worker}: bỏ chuỗi literal đi, phần còn lại (các THAM SỐ) không được nhắc tới một tên
- * mang bí mật. ArchUnit không làm được việc này — nó thấy lời gọi, không thấy đối số.
- *
- * <p>Là lưới thứ nhất, bắt kiểu viết. Lưới thứ hai — log THẬT trên đường nộp bài và đăng nhập —
- * là {@code LogKhongLoBiMatIT}.
- *
- * <p>⚠️ <b>Giới hạn đã đo (2026-09-24):</b> luật chỉ nhận ra dạng {@code log.x(…)} — trường
- * {@code log} là quy ước của cả repo. Một dòng viết
- * {@code LoggerFactory.getLogger(…).warn("{}", matKhau)} lọt qua luật này; chỉ IT bắt được nó
- * (gỡ-cơ-chế L2). Đừng coi xanh ở đây là đủ cho bất biến #9 — hai lưới cùng xanh mới là đủ.
- */
 class LogKhongBiMatTest {
 
     private static final List<Path> GOC = List.of(
             Path.of("src", "main", "java"),
             Path.of("..", "oj-worker", "src", "main", "java"));
 
-    /**
-     * Tên mang bí mật. Không có {@code code}/{@code ma}: chúng quá chung ({@code e.code()} là mã
-     * lỗi như {@code identity.khoa_tam}) — bắt nhầm bốn dòng vô hại ở lần chạy đầu 2026-09-24.
-     */
     private static final Pattern NHAY = Pattern.compile("\\b(source|sourceCode|maNguon|password|matKhau"
             + "|matKhauMoi|matKhauCu|secret|secretEnc|biMat|token|tokenTho|accessToken|refreshToken"
             + "|rawCode|noiDung|input|output|expected|maHaiLop|compileLog)\\b");
@@ -72,7 +51,6 @@ class LogKhongBiMatTest {
                 .isEmpty();
     }
 
-    /** Phần giữa hai dấu ngoặc của lời gọi, đếm ngoặc và bỏ qua ngoặc nằm trong chuỗi. */
     private static String thanLoiGoi(String s, int tu) {
         int sau = 1;
         int i = tu;

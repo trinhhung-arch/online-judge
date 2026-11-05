@@ -1,53 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Dựng STACK ĐO chạy SONG SONG với prod trên cùng máy — load test có số thật mà không tắt site.
-#
-#   ./scripts/tai-trong/dung-stack-do.sh          dựng (chạy lại khi đã dựng thì chỉ báo trạng thái)
-#   ./scripts/tai-trong/dung-stack-do.sh --xoa    gỡ sạch
-#
-#   rồi đo:  BASE=http://127.0.0.1:18080 ./scripts/tai-trong/chay.sh on-dinh
-#
-# ★ VÌ SAO CÓ FILE NÀY. Ngày 2026-09-11 lệnh `BASE=http://192.168.1.2:8080 chay.sh` nhắm thẳng API prod
-#   — IP LAN của chính máy chủ. chay.sh giờ chặn điều đó bằng bắt tay API↔database; file này dựng đúng
-#   thứ bắt tay đòi: một API trên database đo riêng, và một máy chấm isolate THẬT chấm cho nó.
-#
-# ★ CÁI GÌ DÙNG CHUNG VỚI PROD, CÁI GÌ TÁCH — và vì sao:
-#   Postgres  CHUNG container oj-postgres, database ojdb. Postgres là một phần của hệ thống được đo;
-#             một instance riêng sẽ cho con số của một máy chủ khác.
-#   MinIO     CHUNG, chỉ đọc testdata (content-addressed; đề A-PLUS-B của dev-seed có sẵn ở đó).
-#   Redis     TÁCH (oj-do-redis): kênh pub/sub và bảng xếp hạng đánh khoá theo id, mà id của ojdb và
-#             ojdb_prod trùng nhau — dùng chung là SSE của người dùng prod nhận sự kiện của bài đo.
-#   RabbitMQ  TÁCH (oj-do-rabbitmq): chung judge.live là worker prod nhặt bài đo rồi claim vào API prod.
-#   API đo    java -jar, cổng 18080/18081, profile dev (ojdb mang lịch sử dev-seed), bí mật RIÊNG.
-#             Trần API chung (nfrplan 4.2) đặt 1 000 000 thay vì 100/600: k6 bắn hàng chục nghìn lượt
-#             ẩn danh mỗi phút TỪ MỘT IP, nên trần thật biến phép đo P1 thành phép đo 429. Đặt số lớn
-#             chứ không đặt 0 là cố ý — bộ đếm VẪN chạy, nên chi phí của bộ lọc vẫn nằm trong số đo.
-#   Worker đo container oj-worker-do qua trien-khai-mac.sh: isolate thật, tên mac-m1max-host để phép đo
-#             máy được ghi, tmpfs 4g (VM ~15GB, worker prod đã giữ 8g).
-#   Redis/RabbitMQ chỉ mở trên 127.0.0.1: container vẫn gọi được qua host.docker.internal (đã thử).
-#
-# ★ env -i CHO API VÀ WORKER ĐO. Chạy script từ một terminal đã `source .env` của prod thì tiến trình
-#   con thừa hưởng OJ_DB_MIGRATOR_USER=oj_migrator, khoá Turnstile, HSTS... và Flyway trên ojdb chạy sai
-#   role. Tiến trình đo chỉ nhận đúng các biến khai báo dưới đây.
-#
-# ★ STACK ĐO TÁCH API/DB/REDIS/RABBITMQ — NHƯNG DÙNG CHUNG CPU VỚI PROD, và điều đó CHẠM TỚI PROD.
-#   Worker prod (oj-worker) tự đo máy mỗi 15 phút. Trong lúc tải đo chạy, nó đo NHẦM máy chậm hơn.
-#   Đo 2026-09-11 (on-dinh 30 phút, 2 bài/s): host_factor của PROD 0.993 → 1.052 → 1.052 → 0.998 khi
-#   tải dừng, trong khi thời gian chấm thật phẳng suốt 30 phút (919–950ms p50) — tức là tranh CPU,
-#   không phải máy chậm đi. host_factor quy đổi giới hạn thời gian (CLAUDE.md, từ vựng), nên suốt lượt
-#   đo mọi bài nộp prod được chấm với giới hạn lệch ~5%: bất công với người nộp trước và sau.
-#   → `docker pause oj-worker` TRƯỚC khi đo (bài prod xếp hàng, không mất), `docker unpause oj-worker`
-#     sau. Pause cũng dừng luôn phép đo máy của nó. KHÔNG BAO GIỜ đo trong lúc có kỳ thi.
-#
-# ★ GIỚI HẠN CÒN LẠI: k6 chạy trên chính máy này — từ ~400 người ảo số bi quan hơn sự thật.
-#
-# Log, PID, bí mật: ~/oj-stack-do/ — ngoài repo, bí mật không bao giờ vào git.
-# =============================================================================
 set -uo pipefail
-# ★ KHÔNG `| grep -q` trong pipeline ở file này: với `set -o pipefail`, grep -q thoát ngay khi khớp,
-#   lệnh bên trái ăn SIGPIPE (mã 141) và cả pipeline bị coi là HỎNG dù đã khớp. Đo 2026-09-11:
-#   dung-stack-do.sh báo "RabbitMQ không lên sau 60s" với một RabbitMQ sẵn sàng sau 6s.
-#   Dùng `grep ... >/dev/null` — grep đọc hết đầu vào, không đóng pipe sớm.
 GOC=$(cd "$(dirname "$0")/../.." && pwd)
 NHA=${OJ_STACK_DO_DIR:-$HOME/oj-stack-do}
 JAR="$GOC/oj-api/target/oj-api-0.0.1-SNAPSHOT.jar"
@@ -58,7 +10,6 @@ pid_api() { [ -f "$NHA/api.pid" ] && ps -p "$(cat "$NHA/api.pid")" >/dev/null 2>
 trang_thai() { curl -fsS --max-time 5 "http://127.0.0.1:$CONG_API/api/v1/status" 2>/dev/null; }
 
 if [ "${1:-}" = --xoa ]; then
-    # Tên miền đo đóng TRƯỚC: không để một tên miền công khai trỏ vào một API đang tắt dở.
     [ -f "$NHA/cloudflared-do.pid" ] && "$GOC/scripts/tai-trong/tunnel-do.sh" --xoa | sed 's/^ */  /'
     p=$(pid_api) && { kill "$p"; echo "  tắt API đo (PID $p)"; }
     TEN=oj-worker-do "$GOC/scripts/trien-khai-mac.sh" --xoa
@@ -85,8 +36,6 @@ for c in $CONG_API $CONG_QT $CONG_REDIS $CONG_RABBIT; do
 done
 ok "jar, oj-postgres/ojdb, đề A-PLUS-B, 4 cổng trống"
 
-# Mật khẩu của oj-postgres và oj-minio THẬT — đọc đúng ba khoá cần từ .env, KHÔNG source cả
-# file (cùng lý do với env -i ở trên). Từ 2026-09-16 ojpass/ojminio123 không còn đúng nữa.
 doc_env() { grep -E "^$1=" "$GOC/.env" 2>/dev/null | tail -1 | cut -d= -f2-; }
 PG_MK=$(doc_env OJ_POSTGRES_PASSWORD); MINIO_KHOA=$(doc_env OJ_MINIO_ACCESS_KEY); MINIO_MK=$(doc_env OJ_MINIO_SECRET_KEY)
 [ -n "$PG_MK" ] && [ -n "$MINIO_KHOA" ] && [ -n "$MINIO_MK" ] \
@@ -132,7 +81,6 @@ env -i PATH="$PATH" HOME="$HOME" TEN=oj-worker-do OJ_BOX_TMPFS=4g \
     | grep -v 'Hai việc BẮT BUỘC'
 [ "$(docker inspect -f '{{.State.Running}}' oj-worker-do 2>/dev/null)" = true ] || loi "Worker đo không chạy: docker logs oj-worker-do"
 
-# Phép đo máy lúc worker khởi động là thứ ghi judge_hosts.last_seen_at; không có nó, chay.sh dừng.
 for _ in $(seq 60); do
     song=$(trang_thai | python3 -c 'import sys, json; print(json.load(sys.stdin)["mayChamSong"])' 2>/dev/null)
     [ "${song:-0}" -ge 1 ] && break; sleep 1
@@ -151,7 +99,7 @@ cat <<TIEP
 
   Gỡ:          $0 --xoa
 TIEP
-# Nói to, không để trong chú thích: đo trên cùng CPU mà worker prod còn chạy là lệch host_factor của prod.
+
 if [ "$(docker inspect -f '{{.State.Status}}' oj-worker 2>/dev/null)" = running ]; then
     echo
     echo "⚠ Worker PROD (oj-worker) đang chạy. Trong lúc đo nó sẽ đo nhầm máy chậm hơn (~5% ở 2 bài/s,"
