@@ -174,11 +174,14 @@ class BangXepHangVanHanhIT extends PostgresIT {
 
     @Test
     @DisplayName("★ NFR-03 · P8: từ lúc ghi verdict tới lúc bảng phản ánh — trung vị 5 lần đo < 2 s, không lần nào > 10 s")
-    void nfr03_do_do_tre_p8() {
+    void nfr03_do_do_tre_p8() throws InterruptedException {
         long id = kyThi(bayGio.minus(Duration.ofHours(1)), bayGio.plus(Duration.ofHours(2)), null);
+        Duration nhip = props.contest().standingsInterval();
         List<Duration> doTre = new ArrayList<>();
 
-        for (int lan = 1; lan <= 5; lan++) {
+        for (int lan = 0; lan < 5; lan++) {
+            Duration lechPhaSoVoiNhip = nhip.multipliedBy(lan).dividedBy(5);
+            Thread.sleep(lechPhaSoVoiNhip);
             long thiSinh = nguoi("p8-" + lan);
             long batDau = System.nanoTime();
             nopAc(id, thiSinh);
