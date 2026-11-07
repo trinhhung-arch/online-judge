@@ -12,6 +12,8 @@ public interface JudgingQueries {
     List<ScoredSubmission> baiDaChamCuaDe(long contestId, long problemId,
                                           long sauSubmissionId, int gioiHan);
 
+    boolean conBaiChoChamTrongContest(long contestId);
+
     record ScoredSubmission(long submissionId, long userId, long problemId,
                             String verdict, int score, Instant nopLuc) {
 

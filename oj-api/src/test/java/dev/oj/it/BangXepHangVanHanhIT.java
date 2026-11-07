@@ -72,9 +72,7 @@ class BangXepHangVanHanhIT extends PostgresIT {
     }
 
     private void nopAc(long contestId, long userId) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
-                .param("sha", NGUON).update();
+        taoNguon();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
                                          source_sha256, source_bytes, testdata_version, status,
@@ -130,10 +128,57 @@ class BangXepHangVanHanhIT extends PostgresIT {
     }
 
     @Test
+    @DisplayName("★ BX-07 · hết ân hạn mà vẫn còn bài chờ chấm: bảng chờ, bài chấm xong muộn vẫn vào bảng, rồi mới chốt")
+    void bx07_cap_nhat_toi_khi_het_bai_cho() {
+        long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofMinutes(10)),
+                null);
+        String sha = taoNguon();
+        long cho = jdbc.sql("""
+                INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
+                                         source_sha256, source_bytes, testdata_version,
+                                         created_at)
+                VALUES (:u, :p, :c, 1, :sha, 12, 1, now() - interval '15 minutes')
+                RETURNING id
+                """).param("u", USER_ID).param("p", PROBLEM_ID).param("c", id)
+                .param("sha", sha).query(Long.class).single();
+        jdbc.sql("INSERT INTO judge_queue (submission_id) VALUES (:s)").param("s", cho).update();
+        long keSau = nguoi("cham-muon");
+        nopAc(id, keSau);
+
+        updater.nhip();
+        assertThat(contests.canCapNhat(Instant.now())).extracting(Contest::id)
+                .as("còn bài trong judge_queue thì chưa được chốt").contains(id);
+        assertThat(standings.top(id, 50, false)).isEmpty();
+
+        jdbc.sql("""
+                WITH roi_hang_doi AS (DELETE FROM judge_queue WHERE submission_id = :s)
+                UPDATE submissions SET status = 'DONE', verdict = 'WA', score = 0, max_score = 100,
+                                       attempt = 1, judged_at = now()
+                 WHERE id = :s
+                """).param("s", cho).update();
+        updater.nhip();
+        updater.nhip();
+
+        assertThat(standings.top(id, 50, false)).extracting(StandingsReader.Dong::userId)
+                .containsExactlyInAnyOrder(USER_ID, keSau);
+        assertThat(contests.canCapNhat(Instant.now())).extracting(Contest::id)
+                .as("hết bài chờ và đã vào bảng hết thì chốt").doesNotContain(id);
+    }
+
+    private String taoNguon() {
+        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
+                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+                .param("sha", NGUON).update();
+        return NGUON;
+    }
+
+    @Test
     @DisplayName("★ TT-05 · khi bảng đổi và khi công bố: cache bảng thật lẫn bản chụp đã bị xoá TRƯỚC khi sự kiện tới người nghe")
     void tt05_xoa_cache_truoc_khi_bao() throws Exception {
         long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)),
                 bayGio.minus(Duration.ofHours(2)));
+        jdbc.sql("UPDATE contests SET standings_settled_at = now() WHERE id = :id")
+                .param("id", id).update();
         jdbc.sql("""
                 INSERT INTO contest_standings_frozen (contest_id, user_id, total_score,
                                                       penalty_seconds, solved_count)

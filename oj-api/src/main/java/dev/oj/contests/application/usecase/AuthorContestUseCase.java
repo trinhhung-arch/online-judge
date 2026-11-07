@@ -6,6 +6,7 @@ import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormats;
 import dev.oj.contests.domain.ContestsException;
 import dev.oj.platform.audit.AuditLog;
+import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.CurrentUserProvider;
 import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import dev.oj.platform.security.RequiresRole;
@@ -32,22 +33,24 @@ public class AuthorContestUseCase {
     private final ContestAuthoringRepository soanKyThi;
     private final AuthorProblemUseCase authorProblem;
     private final AuditLog auditLog;
+    private final AppProperties properties;
     private final Clock clock;
 
     public AuthorContestUseCase(CurrentUserProvider currentUser, ContestRepository contests,
                                 ContestAuthoringRepository soanKyThi,
                                 AuthorProblemUseCase authorProblem,
-                                AuditLog auditLog, Clock clock) {
+                                AuditLog auditLog, AppProperties properties, Clock clock) {
         this.currentUser = currentUser;
         this.contests = contests;
         this.soanKyThi = soanKyThi;
         this.authorProblem = authorProblem;
         this.auditLog = auditLog;
+        this.properties = properties;
         this.clock = clock;
     }
 
     public long tao(Lenh lenh) {
-        lenh.kiemTra(clock.instant());
+        lenh.kiemTra(clock.instant(), properties.contest().penaltyMinutesMax());
         long id = contests.tao(new ContestRepository.ContestMoi(
                 lenh.slug().trim(), lenh.title().trim(), lenh.format(),
                 lenh.startsAt(), lenh.endsAt(), lenh.freezeAt(),
@@ -61,6 +64,11 @@ public class AuthorContestUseCase {
     public void themDe(long contestId, long problemId, String nhan, int diem) {
         CurrentUser nguoiGoi = currentUser.current();
         kiemGanDe(contestId, nhan, diem, nguoiGoi);
+        if (soanKyThi.deNamTrongKyThiChongGio(contestId, problemId, nguoiGoi.id(),
+                nguoiGoi.isAdmin())) {
+            throw ContestsException.khongHopLe("contest.de_trung_khung_gio",
+                    "Đề này đang nằm trong một kỳ thi khác có khung giờ chồng lên kỳ thi này.");
+        }
         soanKyThi.themDe(contestId, problemId, nhan, diem, nguoiGoi.id(), nguoiGoi.isAdmin());
         auditLog.ghi("CONTEST_PROBLEM_ADDED", "contest", contestId,
                 Map.of("problemId", problemId, "nhan", nhan));
@@ -117,7 +125,7 @@ public class AuthorContestUseCase {
                        int penaltyMinutes, boolean registrationRequired,
                        boolean revealAfterEnd) {
 
-        void kiemTra(Instant bayGio) {
+        void kiemTra(Instant bayGio, int phutPhatToiDa) {
             if (slug == null || !SLUG.matcher(slug.trim()).matches()) {
                 throw ContestsException.khongHopLe("contest.slug_khong_hop_le",
                         "Mã kỳ thi phải dài 2–64 ký tự, chỉ gồm chữ thường, số và gạch ngang.");
@@ -146,6 +154,10 @@ public class AuthorContestUseCase {
             if (penaltyMinutes < 0) {
                 throw ContestsException.khongHopLe("contest.penalty_am",
                         "Số phút phạt không được âm.");
+            }
+            if (penaltyMinutes > phutPhatToiDa) {
+                throw ContestsException.khongHopLe("contest.penalty_qua_lon",
+                        "Số phút phạt tối đa là " + phutPhatToiDa + ".");
             }
         }
     }

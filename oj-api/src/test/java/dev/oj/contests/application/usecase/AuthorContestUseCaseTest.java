@@ -4,6 +4,7 @@ import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.domain.Contest;
 import dev.oj.contests.domain.ContestFormats;
 import dev.oj.contests.domain.ContestsException;
+import dev.oj.platform.config.AppPropertiesGia;
 import dev.oj.platform.contest.ContestWindowQuery;
 import dev.oj.platform.security.CurrentUserProvider.CurrentUser;
 import dev.oj.platform.security.Role;
@@ -39,7 +40,7 @@ class AuthorContestUseCaseTest {
         var authorProblem = new AuthorProblemUseCase(() -> nguoiGoi, de,
                 (h, l, id, ct) -> { }, new KhongKyThiNao(), dongHo);
         return new AuthorContestUseCase(() -> nguoiGoi, null, soan, authorProblem,
-                (h, l, id, ct) -> { }, dongHo);
+                (h, l, id, ct) -> { }, AppPropertiesGia.macDinh(), dongHo);
     }
 
     @Test
@@ -108,6 +109,17 @@ class AuthorContestUseCaseTest {
     }
 
     @Test
+    @DisplayName("★ AT-14 · đề đã nằm trong kỳ thi khác chồng khung giờ → 400 contest.de_trung_khung_gio, không gắn")
+    void at14_de_trong_ky_thi_chong_gio() {
+        soan.chongGio = true;
+        var chu = useCase(new CurrentUser(CHU, "setter", Role.SETTER));
+
+        assertThatThrownBy(() -> chu.themDe(KY_CUA_CHU, 1L, "A", 100))
+                .hasFieldOrPropertyWithValue("code", "contest.de_trung_khung_gio");
+        assertThat(soan.loiGoi).isEmpty();
+    }
+
+    @Test
     @DisplayName("★ AT-11 · điểm của đề 0 → 400 contest.diem_khong_hop_le; 1 thì được")
     void at11_diem_de() {
         var chu = useCase(new CurrentUser(CHU, "setter", Role.SETTER));
@@ -128,6 +140,12 @@ class AuthorContestUseCaseTest {
 
     private static final class SoanKyThiGia implements ContestAuthoringRepository {
         final List<String> loiGoi = new ArrayList<>();
+        boolean chongGio;
+
+        @Override
+        public boolean deNamTrongKyThiChongGio(long c, long p, long nguoiGoi, boolean laAdmin) {
+            return chongGio;
+        }
 
         @Override
         public Optional<Contest> timDeSoan(long contestId, long nguoiGoi, boolean laAdmin) {

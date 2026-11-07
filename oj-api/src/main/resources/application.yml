@@ -189,6 +189,7 @@ oj:
 
     drift-check-interval: 15m
     drift-check-window: 7d
+    penalty-minutes-max: 1440
 
   api-rate-limit:
     per-user: ${OJ_API_RATE_LIMIT_USER:100}

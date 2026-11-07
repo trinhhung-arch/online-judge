@@ -123,7 +123,7 @@ public final class AppPropertiesGia {
                 new AppProperties.Jobs(Duration.ofSeconds(120), Duration.ofSeconds(5)),
                 new ContestProperties(Duration.ofSeconds(2), 500,
                         Duration.ofMinutes(5), 50,
-                        Duration.ofMinutes(15), Duration.ofDays(7)),
+                        Duration.ofMinutes(15), Duration.ofDays(7), 1440),
                 new AppProperties.ApiRateLimit(100, 600, Duration.ofMinutes(1)),
                 new AppProperties.Ai(5, Duration.ofSeconds(30)));
     }

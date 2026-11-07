@@ -23,7 +23,12 @@ class ContestFormatTest {
     }
 
     private static BaiDaCham bai(long id, boolean ac, int diem, int phutSauKhiBatDau) {
-        return new BaiDaCham(id, 7L, 42L, ac, diem, BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
+        return bai(id, ac ? "AC" : "WA", diem, phutSauKhiBatDau);
+    }
+
+    private static BaiDaCham bai(long id, String verdict, int diem, int phutSauKhiBatDau) {
+        return new BaiDaCham(id, 7L, 42L, verdict, diem,
+                BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
     }
 
     @Nested
@@ -59,6 +64,25 @@ class ContestFormatTest {
             assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(2);
             assertThat(format.penaltyGiay(List.of(kq), c))
                     .isEqualTo(37 * 60 + 2 * 20 * 60);
+        }
+
+        @Test
+        @DisplayName("★ TD-04 · trước AC là CE, IE, WA: chỉ WA tính là lần sai — CE và IE không bị phạt")
+        void ce_ie_khong_tinh_lan_sai() {
+            KetQuaDe kq = chay(bai(1, "CE", 0, 5), bai(2, "IE", 0, 9), bai(3, "WA", 0, 12),
+                    bai(4, "AC", 100, 37));
+
+            assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(1);
+            assertThat(format.penaltyGiay(List.of(kq), c)).isEqualTo(37 * 60 + 20 * 60);
+        }
+
+        @Test
+        @DisplayName("TD-04 · WA, TLE, MLE, RE đều tính là lần sai")
+        void bon_verdict_tinh_lan_sai() {
+            KetQuaDe kq = chay(bai(1, "WA", 0, 5), bai(2, "TLE", 0, 6), bai(3, "MLE", 0, 7),
+                    bai(4, "RE", 0, 8));
+
+            assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(4);
         }
 
         @Test
@@ -101,9 +125,9 @@ class ContestFormatTest {
         @DisplayName("điểm ICPC là số đề đạt, không phải điểm từng phần")
         void diem_la_so_de_dat() {
             KetQuaDe deA = format.apDung(KetQuaDe.trong(1L),
-                    new BaiDaCham(1, 7, 1, true, 100, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(1, 7, 1, "AC", 100, BAT_DAU.plusSeconds(600)), c);
             KetQuaDe deB = format.apDung(KetQuaDe.trong(2L),
-                    new BaiDaCham(2, 7, 2, false, 60, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(2, 7, 2, "WA", 60, BAT_DAU.plusSeconds(600)), c);
 
             var tong = format.tongHop(List.of(deA, deB));
             assertThat(tong.tongDiem()).isEqualTo(1);

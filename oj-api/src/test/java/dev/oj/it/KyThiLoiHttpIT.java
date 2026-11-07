@@ -70,6 +70,8 @@ class KyThiLoiHttpIT extends HttpIT {
                 "Thi thử", "ICPC", bayGio.minus(Duration.ofHours(3)),
                 bayGio.minus(Duration.ofHours(1)), null, 20, true, true, ADMIN_ID));
         soanKyThi.themDe(id, PROBLEM_ID, "A", 100, ADMIN_ID, true);
+        jdbc.sql("UPDATE contests SET standings_settled_at = now() WHERE id = :id")
+                .param("id", id).update();
         nopAc(id, USER_ID);
         assertThat(updater.capNhat(doc(id))).isEqualTo(1);
         long keSau = nguoi("khi-redis-chet");
@@ -110,6 +112,21 @@ class KyThiLoiHttpIT extends HttpIT {
                 "Thi thử", "ICPC", batDau, ketThuc, null, 20, true, true, SETTER_ID)))
                 .as("khác hoa thường, đi thẳng xuống kho — chỉ chỉ mục lower(slug) chặn được")
                 .hasFieldOrPropertyWithValue("code", "contest.slug_da_ton_tai");
+    }
+
+    @Test
+    @DisplayName("★ AT-07 · phút phạt 40000 qua API → 400 contest.penalty_qua_lon, không chạm tới cột SMALLINT")
+    void at07_phut_phat_tran_smallint() {
+        Instant batDau = bayGio.plus(Duration.ofDays(1));
+        Map<String, Object> than = Map.of("slug", "phat-qua-lon", "title", "Thi thử",
+                "format", "ICPC", "startsAt", batDau.toString(),
+                "endsAt", batDau.plus(Duration.ofHours(3)).toString(), "penaltyMinutes", 40_000);
+
+        var res = taoQuaApi(than, bearer(SETTER_ID, "setter", Role.SETTER));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(res.getBody()).containsEntry("code", "contest.penalty_qua_lon");
+        assertThat(contests.timTheoSlug("phat-qua-lon")).isEmpty();
     }
 
     private ResponseEntity<Map<String, Object>> taoQuaApi(Map<String, Object> than,

@@ -1,6 +1,7 @@
 package dev.oj.contests.application.usecase;
 
 import dev.oj.contests.domain.ContestsException;
+import dev.oj.platform.config.AppPropertiesGia;
 import dev.oj.platform.error.DomainException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,11 +17,18 @@ class TaoKyThiKiemTraTest {
     private static final Instant BAY_GIO = Instant.parse("2026-11-07T10:00:00Z");
     private static final Instant BAT_DAU = BAY_GIO.plus(Duration.ofDays(1));
     private static final Instant KET_THUC = BAT_DAU.plus(Duration.ofHours(5));
+    private static final int PHUT_PHAT_TOI_DA =
+            AppPropertiesGia.macDinh().contest().penaltyMinutesMax();
 
     private static AuthorContestUseCase.Lenh lenh(String slug, String title, Instant batDau,
                                                   Instant ketThuc, Instant dongBang) {
         return new AuthorContestUseCase.Lenh(slug, title, "ICPC", batDau, ketThuc, dongBang,
                 20, true, true);
+    }
+
+    private static AuthorContestUseCase.Lenh voiPhutPhat(int phut) {
+        return new AuthorContestUseCase.Lenh("thi-thu", "Thi thử", "ICPC", BAT_DAU, KET_THUC,
+                null, phut, true, true);
     }
 
     private static AuthorContestUseCase.Lenh voiSlug(String slug) {
@@ -37,12 +45,12 @@ class TaoKyThiKiemTraTest {
     }
 
     private static void hopLe(AuthorContestUseCase.Lenh lenh) {
-        assertThatCode(() -> lenh.kiemTra(BAY_GIO)).as(lenh.toString())
+        assertThatCode(() -> lenh.kiemTra(BAY_GIO, PHUT_PHAT_TOI_DA)).as(lenh.toString())
                 .doesNotThrowAnyException();
     }
 
     private static void loi(AuthorContestUseCase.Lenh lenh, String ma) {
-        assertThatThrownBy(() -> lenh.kiemTra(BAY_GIO))
+        assertThatThrownBy(() -> lenh.kiemTra(BAY_GIO, PHUT_PHAT_TOI_DA))
                 .as(lenh.toString())
                 .isInstanceOf(ContestsException.class)
                 .hasFieldOrPropertyWithValue("kind", DomainException.Kind.INVALID)
@@ -79,5 +87,15 @@ class TaoKyThiKiemTraTest {
                 "contest.gio_dong_bang_khong_hop_le");
         loi(voiGio(BAY_GIO, KET_THUC, null), "contest.bat_dau_trong_qua_khu");
         hopLe(voiGio(BAY_GIO.plusSeconds(1), KET_THUC, null));
+    }
+
+    @Test
+    @DisplayName("★ AT-07 · phút phạt −1 → 400; 0 và đúng trần được; trần + 1 và 40000 (tràn SMALLINT) → 400, không còn 500")
+    void at07_phut_phat() {
+        loi(voiPhutPhat(-1), "contest.penalty_am");
+        hopLe(voiPhutPhat(0));
+        hopLe(voiPhutPhat(PHUT_PHAT_TOI_DA));
+        loi(voiPhutPhat(PHUT_PHAT_TOI_DA + 1), "contest.penalty_qua_lon");
+        loi(voiPhutPhat(40_000), "contest.penalty_qua_lon");
     }
 }

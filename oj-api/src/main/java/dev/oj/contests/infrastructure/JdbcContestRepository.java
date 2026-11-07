@@ -12,7 +12,6 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -50,7 +49,7 @@ public class JdbcContestRepository implements ContestRepository {
                    penalty_minutes, registration_required, reveal_after_end, created_by
               FROM contests
              WHERE starts_at <= :bayGio
-               AND ends_at > :moc
+               AND standings_settled_at IS NULL
              ORDER BY id
             """;
 
@@ -61,8 +60,7 @@ public class JdbcContestRepository implements ContestRepository {
               FROM contests c
              WHERE c.freeze_at IS NOT NULL
                AND c.freeze_at <= :bayGio
-               AND NOT EXISTS (SELECT 1 FROM contest_standings_frozen f
-                                WHERE f.contest_id = c.id)
+               AND c.frozen_captured_at IS NULL
              ORDER BY c.id
             """;
 
@@ -96,6 +94,11 @@ public class JdbcContestRepository implements ContestRepository {
 
     private static final String CONG_BO = """
             UPDATE contests SET unfrozen_at = :luc WHERE id = :id AND unfrozen_at IS NULL
+            """;
+
+    private static final String CHOT_BANG = """
+            UPDATE contests SET standings_settled_at = :luc
+             WHERE id = :id AND standings_settled_at IS NULL
             """;
 
     private final JdbcClient jdbc;
@@ -176,12 +179,16 @@ public class JdbcContestRepository implements ContestRepository {
     }
 
     @Override
-    public List<Contest> canCapNhat(Instant bayGio, Duration anHan) {
+    public List<Contest> canCapNhat(Instant bayGio) {
         return jdbc.sql(CAN_CAP_NHAT)
                 .param("bayGio", luc(bayGio))
-                .param("moc", luc(bayGio.minus(anHan)))
                 .query(MAPPER)
                 .list();
+    }
+
+    @Override
+    public void chotBangXepHang(long contestId, Instant luc) {
+        jdbc.sql(CHOT_BANG).param("luc", luc(luc)).param("id", contestId).update();
     }
 
     @Override

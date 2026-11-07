@@ -22,7 +22,9 @@ public interface ContestRepository {
 
     List<Contest> danhSach(Long sauId, int gioiHan);
 
-    List<Contest> canCapNhat(Instant bayGio, java.time.Duration anHan);
+    List<Contest> canCapNhat(Instant bayGio);
+
+    void chotBangXepHang(long contestId, Instant luc);
 
     List<Contest> canDongBang(Instant bayGio);
 

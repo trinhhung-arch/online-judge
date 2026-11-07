@@ -141,7 +141,13 @@ class StandingsDriftCheckSchedulerTest {
         }
         @Override public void xoaBangXepHang(long c) { throw chuaCan(); }
         @Override public boolean daChupDongBang(long c) { throw chuaCan(); }
-        @Override public void chupDongBang(long c, Instant f) { throw chuaCan(); }
+        @Override public void ghiTongKetDongBang(long c, long u, TongKet t, int p) {
+            throw chuaCan();
+        }
+        @Override public void ghiKetQuaDeDongBang(long c, long u, KetQuaDe k) {
+            throw chuaCan();
+        }
+        @Override public void chotBanChup(long c, Instant f, Instant l) { throw chuaCan(); }
         @Override public Map<Long, DiemDaLuu> tongKetDaLuu(long c) { throw chuaCan(); }
         @Override public void ghiDrift(long c, int k, int l, Map<String, Object> ct) {
             throw chuaCan();

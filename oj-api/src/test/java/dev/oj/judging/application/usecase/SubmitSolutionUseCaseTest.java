@@ -67,6 +67,26 @@ class SubmitSolutionUseCaseTest {
     }
 
     @Test
+    @DisplayName("★ NB-05 · người ra đề và ADMIN nộp trong giờ thi → bài luyện tập, không gắn kỳ thi, không lên bảng")
+    void nguoi_ra_de_va_admin_khong_len_bang() {
+        lichThi.contestDangChay = 77L;
+
+        for (var nguoi : java.util.List.of(JudgingFakes.userIs(1L, Role.SETTER),
+                JudgingFakes.userIs(9L, Role.ADMIN))) {
+            useCaseCua(nguoi).submit(command());
+            assertThat(fakes.submissions.inserted.contestId()).isNull();
+        }
+    }
+
+    private SubmitSolutionUseCase useCaseCua(dev.oj.platform.security.CurrentUserProvider nguoi) {
+        return new SubmitSolutionUseCase(nguoi,
+                new GetProblemUseCase(problemRepositoryReturning(publishedProblem()), statements(),
+                        lichThi, nguoi),
+                fakes.languages, fakes.sourceBlobs, fakes.submissions, rateLimiter,
+                lichThi, congTac, fakes.queue, fakes.publisher, fakes.txManager);
+    }
+
+    @Test
     @DisplayName("★ M5 · Command KHÔNG có trường contest nào — client không được chọn")
     void command_khong_co_truong_contest() {
         var truong = java.util.Arrays.stream(SubmitSolutionUseCase.Command.class

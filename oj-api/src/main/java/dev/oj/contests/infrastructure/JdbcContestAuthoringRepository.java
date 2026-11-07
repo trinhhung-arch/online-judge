@@ -58,6 +58,32 @@ public class JdbcContestAuthoringRepository implements ContestAuthoringRepositor
         this.jdbc = jdbc;
     }
 
+    private static final String CHONG_GIO = """
+            SELECT EXISTS (
+                SELECT 1
+                  FROM contests c
+                  JOIN problems p ON p.id = :problemId
+                                 AND (p.owner_id = :nguoiGoi OR :laAdmin)
+                  JOIN contest_problems cp ON cp.problem_id = p.id
+                                          AND cp.contest_id <> c.id
+                  JOIN contests khac ON khac.id = cp.contest_id
+                 WHERE c.id = :contestId
+                   AND khac.starts_at < c.ends_at
+                   AND c.starts_at < khac.ends_at)
+            """;
+
+    @Override
+    public boolean deNamTrongKyThiChongGio(long contestId, long problemId,
+                                          long nguoiGoi, boolean laAdmin) {
+        return Boolean.TRUE.equals(jdbc.sql(CHONG_GIO)
+                .param("contestId", contestId)
+                .param("problemId", problemId)
+                .param("nguoiGoi", nguoiGoi)
+                .param("laAdmin", laAdmin)
+                .query(Boolean.class)
+                .single());
+    }
+
     @Override
     public Optional<Contest> timDeSoan(long contestId, long nguoiGoi, boolean laAdmin) {
         return jdbc.sql(CHON_DE_SOAN)

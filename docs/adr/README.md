@@ -27,3 +27,6 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [017](017-cong-hai-lop-ha-vai-tro-tai-goc.md) | Cổng 2FA của ADMIN hạ vai trò tại gốc, không kiểm ở từng use-case | v1.1 |
 | [018](018-khoa-tu-van-cho-moi-luot-ghi-bang-xep-hang.md) | Mọi lượt ghi bảng xếp hạng của một kỳ thi xếp hàng sau một khoá tư vấn | v1.1 |
 | [019](019-tran-so-lan-reaper-tha-lai.md) | Reaper có trần: hết lease lần thứ 3 thì ghi IE, không quay vòng mãi | v1.1 |
+| [020](020-ce-ie-khong-tinh-lan-sai-icpc.md) | ICPC: chỉ WA, TLE, MLE, RE tính là lần sai — CE và IE không bị phạt | v1.1 |
+| [021](021-bang-xep-hang-chot-khi-het-bai-cho.md) | Bảng xếp hạng chốt khi hết bài chờ chấm, không dừng cứng sau 5 phút | v1.1 |
+| [022](022-ban-chup-dong-bang-tinh-tu-bai-nop-truoc-freeze.md) | Bản chụp đóng băng tính lại từ bài nộp trước `freeze_at` | v1.1 |

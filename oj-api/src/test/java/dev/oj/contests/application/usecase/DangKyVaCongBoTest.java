@@ -128,7 +128,8 @@ class DangKyVaCongBoTest {
         @Override public List<DeCuaContest> deCua(long contestId) { throw chuaCan(); }
         @Override public boolean daDangKy(long contestId, long userId) { throw chuaCan(); }
         @Override public List<Contest> danhSach(Long sauId, int gioiHan) { throw chuaCan(); }
-        @Override public List<Contest> canCapNhat(Instant t, Duration d) { throw chuaCan(); }
+        @Override public List<Contest> canCapNhat(Instant t) { throw chuaCan(); }
+        @Override public void chotBangXepHang(long c, Instant l) { throw chuaCan(); }
         @Override public List<Contest> canDongBang(Instant bayGio) { throw chuaCan(); }
     }
 

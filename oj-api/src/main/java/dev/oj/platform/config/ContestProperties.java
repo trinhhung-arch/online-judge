@@ -8,9 +8,16 @@ public record ContestProperties(
         Duration standingsGrace,
         int topSize,
         Duration driftCheckInterval,
-        Duration driftCheckWindow) {
+        Duration driftCheckWindow,
+        int penaltyMinutesMax) {
 
 public ContestProperties {
+        if (penaltyMinutesMax < 0 || penaltyMinutesMax > Short.MAX_VALUE) {
+            throw new IllegalStateException(
+                    "oj.contest.penalty-minutes-max = " + penaltyMinutesMax
+                            + " phải trong khoảng 0.." + Short.MAX_VALUE
+                            + ": contests.penalty_minutes là SMALLINT");
+        }
         if (standingsInterval == null || standingsInterval.isZero()
                 || standingsInterval.toSeconds() > 2) {
             throw new IllegalStateException(

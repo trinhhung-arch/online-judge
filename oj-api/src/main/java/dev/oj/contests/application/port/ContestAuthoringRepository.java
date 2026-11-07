@@ -15,4 +15,7 @@ public interface ContestAuthoringRepository {
                          long nguoiGoi, boolean laAdmin);
 
     boolean goDe(long contestId, long problemId, long nguoiGoi, boolean laAdmin);
+
+    boolean deNamTrongKyThiChongGio(long contestId, long problemId, long nguoiGoi,
+                                    boolean laAdmin);
 }

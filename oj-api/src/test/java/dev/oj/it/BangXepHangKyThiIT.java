@@ -58,7 +58,10 @@ class BangXepHangKyThiIT extends PostgresIT {
     }
 
     private long daXongLau() {
-        return kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)), null);
+        long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)), null);
+        jdbc.sql("UPDATE contests SET standings_settled_at = now() WHERE id = :id")
+                .param("id", id).update();
+        return id;
     }
 
     private Contest doc(long id) {

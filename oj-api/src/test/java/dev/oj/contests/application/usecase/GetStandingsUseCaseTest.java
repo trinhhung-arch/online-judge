@@ -151,7 +151,8 @@ class GetStandingsUseCaseTest {
         @Override public boolean daDangKy(long contestId, long userId) { throw chuaCan(); }
         @Override public void dangKy(long c, long u, Instant luc) { throw chuaCan(); }
         @Override public List<Contest> danhSach(Long sauId, int gioiHan) { throw chuaCan(); }
-        @Override public List<Contest> canCapNhat(Instant t, Duration d) { throw chuaCan(); }
+        @Override public List<Contest> canCapNhat(Instant t) { throw chuaCan(); }
+        @Override public void chotBangXepHang(long c, Instant l) { throw chuaCan(); }
         @Override public List<Contest> canDongBang(Instant bayGio) { throw chuaCan(); }
         @Override public void congBo(long contestId, Instant luc) { throw chuaCan(); }
     }

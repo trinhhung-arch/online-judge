@@ -183,12 +183,12 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 | ID | Yêu cầu | Ràng buộc NFR | Ưu tiên |
 |---|---|---|---|
-| FR-CON-01 | Tạo contest: tên, thời gian bắt đầu/kết thúc, thể thức (`ICPC`/`IOI`), danh sách đề | M4-nfr (thêm thể thức = 1 file) | Must |
+| FR-CON-01 | Tạo contest: tên, thời gian bắt đầu/kết thúc, thể thức (`ICPC`/`IOI`), danh sách đề. Phút phạt từ 0 tới `oj.contest.penalty-minutes-max` (1440). Một đề không được nằm trong hai kỳ thi chồng khung giờ (`contest.de_trung_khung_gio`) | M4-nfr (thêm thể thức = 1 file) | Must |
 | FR-CON-02 | Đăng ký tham gia trước giờ bắt đầu | — | Must |
 | FR-CON-03 | **Đề của contest chỉ truy cập được trong khung giờ** — kiểm ở tầng use-case, không phải ẩn nút | SEC (Quy tắc 3) | Must |
-| FR-CON-04 | Bảng xếp hạng cập nhật **≤2s** sau verdict mới. Hiển thị **top 50 + vùng quanh mình**, không tải toàn bộ | **P8, P1** | Must |
-| FR-CON-05 | Đóng băng bảng xếp hạng N phút cuối; ADMIN vẫn xem được bản đầy đủ | — | Must |
-| FR-CON-06 | `ICPCFormat`: penalty time · `IOIFormat`: điểm subtask, lấy lần cao nhất | — | Must |
+| FR-CON-04 | Bảng xếp hạng cập nhật **≤2s** sau verdict mới. Hiển thị **top 50 + vùng quanh mình**, không tải toàn bộ. Sau giờ kết thúc vẫn cập nhật tới khi hết bài chờ chấm (ADR 021). Bài của người ra đề và ADMIN nộp trong giờ thi là bài luyện tập, không lên bảng | **P8, P1** | Must |
+| FR-CON-05 | Đóng băng bảng xếp hạng N phút cuối; ADMIN vẫn xem được bản đầy đủ. Bản đóng băng chỉ gồm bài nộp trước `freeze_at`, chụp đúng một lần kể cả khi bảng đang trống (ADR 022) | — | Must |
+| FR-CON-06 | `ICPCFormat`: penalty time — chỉ `WA`/`TLE`/`MLE`/`RE` tính là lần sai, `CE` và `IE` không bị phạt · `IOIFormat`: điểm subtask, lấy lần cao nhất | — | Must |
 | FR-CON-07 | Sau khi contest kết thúc: mở đề ra ngoài, **mở lại AI review**, công bố bảng xếp hạng đầy đủ | AI (công bằng) | Must |
 | FR-CON-08 | ADMIN chạy job **rebuild bảng xếp hạng từ Postgres** — job nền có tiến độ | Quy tắc 5, A (Redis chết) | Must |
 | FR-CON-09 | Job đối soát dữ liệu denormalize + metric `drift` + alert | R | Must |

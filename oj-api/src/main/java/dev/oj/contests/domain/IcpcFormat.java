@@ -3,10 +3,13 @@ package dev.oj.contests.domain;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Set;
 
 public final class IcpcFormat implements ContestFormat {
 
     public static final String CODE = "ICPC";
+
+    private static final Set<String> TINH_LA_LAN_SAI = Set.of("WA", "TLE", "MLE", "RE");
 
     @Override
     public String code() {
@@ -27,7 +30,8 @@ public final class IcpcFormat implements ContestFormat {
             return new KetQuaDe(hienTai.problemId(), 1, hienTai.soLanSaiTruocKhiDat(),
                     bai.nopLuc(), bai.submissionId(), bai.submissionId());
         }
-        return new KetQuaDe(hienTai.problemId(), 0, hienTai.soLanSaiTruocKhiDat() + 1,
+        int phatThem = TINH_LA_LAN_SAI.contains(bai.verdict()) ? 1 : 0;
+        return new KetQuaDe(hienTai.problemId(), 0, hienTai.soLanSaiTruocKhiDat() + phatThem,
                 null, null, bai.submissionId());
     }
 
