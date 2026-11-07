@@ -60,8 +60,10 @@ class MigrationTrenDuLieuCoSanIT {
             }
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
-                st.execute("SELECT create_audit_log_partition("
-                        + "(CURRENT_DATE + INTERVAL '2 month')::date)");
+                st.execute("""
+                        SELECT create_audit_log_partition(
+                        (CURRENT_DATE + INTERVAL '2 month')::date)
+                        """);
             }
         }
     }

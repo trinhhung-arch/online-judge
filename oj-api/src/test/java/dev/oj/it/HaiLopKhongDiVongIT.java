@@ -39,8 +39,10 @@ class HaiLopKhongDiVongIT extends HttpIT {
     @DisplayName("★★ GET /problems/{id}/testdata qua HTTP thật — đề của SETTER khác")
     void tai_testdata_de_nguoi_khac() {
         byte[] noiDung = "testdata-an-cua-setter".getBytes(StandardCharsets.UTF_8);
-        kho.dat(jdbc.sql("SELECT manifest_sha256 FROM testdata_versions "
-                        + "WHERE problem_id = :id AND version = 1")
+        kho.dat(jdbc.sql("""
+                SELECT manifest_sha256 FROM testdata_versions
+                WHERE problem_id = :id AND version = 1
+                """)
                 .param("id", PROBLEM_ID).query(String.class).single(), noiDung);
 
         AdminHaiLop.go(jdbc);
@@ -221,8 +223,10 @@ class HaiLopKhongDiVongIT extends HttpIT {
                         now() + interval '1 hour', :setter)
                 RETURNING id
                 """).param("setter", SETTER_ID).query(Long.class).single();
-        jdbc.sql("INSERT INTO contest_problems (contest_id, problem_id, label) "
-                        + "VALUES (:c, :p, 'A')")
+        jdbc.sql("""
+                INSERT INTO contest_problems (contest_id, problem_id, label)
+                VALUES (:c, :p, 'A')
+                """)
                 .params(Map.of("c", contestId, "p", problemId)).update();
     }
 }

@@ -96,8 +96,10 @@ class HaiLopKhongDiVongKyThiIT extends PostgresIT {
                 RETURNING id
                 """).param("slug", SLUG_CHUA_MO).param("setter", SETTER_ID)
                 .query(Long.class).single();
-        jdbc.sql("INSERT INTO contest_problems (contest_id, problem_id, label) "
-                        + "VALUES (:c, :p, 'A')")
+        jdbc.sql("""
+                INSERT INTO contest_problems (contest_id, problem_id, label)
+                VALUES (:c, :p, 'A')
+                """)
                 .param("c", contestId).param("p", problemId).update();
     }
 }

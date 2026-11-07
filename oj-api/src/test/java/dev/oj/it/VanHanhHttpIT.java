@@ -160,8 +160,10 @@ class VanHanhHttpIT extends HttpIT {
         @DisplayName("★ tắt nhận bài thì POST /submissions trả 503, và KHÔNG ghi gì vào DB")
         void tat_thi_tu_choi_503() {
             long truoc = soBaiNop();
-            jdbc.sql("UPDATE system_settings SET value = 'false'::jsonb "
-                    + "WHERE key = 'submissions.accepting'").update();
+            jdbc.sql("""
+                    UPDATE system_settings SET value = 'false'::jsonb
+                    WHERE key = 'submissions.accepting'
+                    """).update();
             quenLuotNopVuaRoi(USER_ID);
             choCacheCongTacHetHan();
 
@@ -186,8 +188,10 @@ class VanHanhHttpIT extends HttpIT {
             assertThat(daNop.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
             long id = ((Number) daNop.getBody().get("submissionId")).longValue();
 
-            jdbc.sql("UPDATE system_settings SET value = 'false'::jsonb "
-                    + "WHERE key = 'submissions.accepting'").update();
+            jdbc.sql("""
+                    UPDATE system_settings SET value = 'false'::jsonb
+                    WHERE key = 'submissions.accepting'
+                    """).update();
             choCacheCongTacHetHan();
             goi(http.get().uri("/api/v1/status"));
 
@@ -257,8 +261,10 @@ class VanHanhHttpIT extends HttpIT {
 
         @AfterEach
         void batLai() {
-            jdbc.sql("UPDATE system_settings SET value = 'true'::jsonb "
-                    + "WHERE key IN ('submissions.accepting', 'rejudge.enabled')").update();
+            jdbc.sql("""
+                    UPDATE system_settings SET value = 'true'::jsonb
+                    WHERE key IN ('submissions.accepting', 'rejudge.enabled')
+                    """).update();
             choCacheCongTacHetHan();
         }
 
@@ -323,8 +329,10 @@ class VanHanhHttpIT extends HttpIT {
             assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(res.getBody()).containsEntry("code", "settings.khoa_khong_doi_duoc");
             assertThat(soDongSetting()).isEqualTo(truoc);
-            assertThat(jdbc.sql("SELECT value #>> '{}' FROM system_settings "
-                            + "WHERE key = 'ai_review.enabled'")
+            assertThat(jdbc.sql("""
+                    SELECT value #>> '{}' FROM system_settings
+                    WHERE key = 'ai_review.enabled'
+                    """)
                     .query(String.class).single()).isEqualTo("false");
         }
 

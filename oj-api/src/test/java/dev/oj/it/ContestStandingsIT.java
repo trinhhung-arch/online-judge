@@ -200,8 +200,10 @@ class ContestStandingsIT extends PostgresIT {
                         penalty_seconds, solved_count)
                     VALUES (:c, :u, 0, 0, 0)
                     """).param("c", id).param("u", USER_ID).update();
-            jdbc.sql("UPDATE contest_standings SET total_score = 5, solved_count = 5 "
-                    + "WHERE contest_id = :c").param("c", id).update();
+            jdbc.sql("""
+                    UPDATE contest_standings SET total_score = 5, solved_count = 5
+                    WHERE contest_id = :c
+                    """).param("c", id).update();
 
             try (var phien = GiaLapDanhTinh.dongVai(USER_ID, "dev", Role.USER)) {
                 assertThat(getStandings.thucHien(id).dongBang()).isTrue();

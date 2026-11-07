@@ -36,13 +36,17 @@ class AuditLogChiGhiThemIT {
 
             flyway(pg).target(MigrationVersion.fromVersion("13")).load().migrate();
             try (Connection chu = ketChu(pg); Statement st = chu.createStatement()) {
-                st.execute("INSERT INTO audit_log (action, entity_type) "
-                        + "VALUES ('TRUOC_V14', 'x'), ('TRUOC_V14', 'y')");
+                st.execute("""
+                        INSERT INTO audit_log (action, entity_type)
+                        VALUES ('TRUOC_V14', 'x'), ('TRUOC_V14', 'y')
+                        """);
             }
             String thangNay;
             try (Connection app = ketApp(pg)) {
-                thangNay = motGiaTri(app, "SELECT format('audit_log_%s', "
-                        + "to_char(date_trunc('month', now()), 'YYYY_MM'))");
+                thangNay = motGiaTri(app, """
+                        SELECT format('audit_log_%s',
+                        to_char(date_trunc('month', now()), 'YYYY_MM'))
+                        """);
                 assertThat(quyen(app, thangNay, "DELETE"))
                         .as("trước V14 lỗ phải CÓ THẬT — không thì ca này không chứng minh gì")
                         .isTrue();
@@ -70,15 +74,21 @@ class AuditLogChiGhiThemIT {
             flyway(pg).load().migrate();
 
             try (Connection app = ketApp(pg)) {
-                assertThat(duoc(app, "INSERT INTO audit_log (action, entity_type) "
-                        + "VALUES ('SAU_V14', 'x')")).isTrue();
+                assertThat(duoc(app, """
+                        INSERT INTO audit_log (action, entity_type)
+                        VALUES ('SAU_V14', 'x')
+                        """)).isTrue();
                 assertThat(demDong(app, "SAU_V14")).isEqualTo(1);
                 assertThat(duoc(app, "DELETE FROM audit_log")).as("V8 vẫn giữ bảng cha").isFalse();
 
-                String moi = motGiaTri(app, "SELECT format('audit_log_%s', "
-                        + "to_char(date_trunc('month', now() + interval '6 months'), 'YYYY_MM'))");
-                assertThat(duoc(app, "SELECT create_audit_log_partition("
-                        + "CAST(now() + interval '6 months' AS date))")).isTrue();
+                String moi = motGiaTri(app, """
+                        SELECT format('audit_log_%s',
+                        to_char(date_trunc('month', now() + interval '6 months'), 'YYYY_MM'))
+                        """);
+                assertThat(duoc(app, """
+                        SELECT create_audit_log_partition(
+                        CAST(now() + interval '6 months' AS date))
+                        """)).isTrue();
                 assertThat(partitions(app)).contains(moi);
 
                 assertThat(duoc(app, "DELETE FROM " + moi)).isFalse();
@@ -157,8 +167,10 @@ class AuditLogChiGhiThemIT {
     private static List<String> partitions(Connection con) throws SQLException {
         List<String> ds = new ArrayList<>();
         try (Statement st = con.createStatement(); ResultSet rs = st.executeQuery(
-                "SELECT inhrelid::regclass::text FROM pg_inherits "
-                        + "WHERE inhparent = 'audit_log'::regclass ORDER BY 1")) {
+                """
+                        SELECT inhrelid::regclass::text FROM pg_inherits
+                        WHERE inhparent = 'audit_log'::regclass ORDER BY 1
+                        """)) {
             while (rs.next()) {
                 ds.add(rs.getString(1));
             }

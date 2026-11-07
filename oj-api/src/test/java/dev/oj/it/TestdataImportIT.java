@@ -60,8 +60,10 @@ class TestdataImportIT extends PostgresIT {
                 .param("id", PROBLEM_ID).query(Integer.class).single();
         assertThat(version).isEqualTo(2);
 
-        assertThat(jdbc.sql("SELECT count(*) FROM testcases "
-                        + "WHERE problem_id = :id AND testdata_version = :v")
+        assertThat(jdbc.sql("""
+                SELECT count(*) FROM testcases
+                WHERE problem_id = :id AND testdata_version = :v
+                """)
                 .param("id", PROBLEM_ID).param("v", version).query(Integer.class).single())
                 .isEqualTo(3);
     }

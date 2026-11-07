@@ -205,11 +205,13 @@ class InternalJudgeHttpIT extends PostgresIT {
 
         assertThat(status).isEqualTo(HttpStatus.NO_CONTENT);
 
-        var row = jdbc.sql("SELECT b.host_factor, b.drift_pct, b.note, "
-                        + "h.host_factor AS host_current, h.last_seen_at "
-                        + "FROM host_benchmarks b JOIN judge_hosts h ON h.id = b.host_id "
-                        + "WHERE h.name = 'mac-m1max-host' "
-                        + "ORDER BY b.measured_at DESC LIMIT 1")
+        var row = jdbc.sql("""
+                SELECT b.host_factor, b.drift_pct, b.note,
+                h.host_factor AS host_current, h.last_seen_at
+                FROM host_benchmarks b JOIN judge_hosts h ON h.id = b.host_id
+                WHERE h.name = 'mac-m1max-host'
+                ORDER BY b.measured_at DESC LIMIT 1
+                """)
                 .query().singleRow();
 
         assertThat((BigDecimal) row.get("host_factor")).isEqualByComparingTo("1.250");

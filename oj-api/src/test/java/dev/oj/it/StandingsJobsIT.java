@@ -137,8 +137,10 @@ class StandingsJobsIT extends PostgresIT {
     @Test
     @DisplayName("★ dựng lại SỬA được một bảng đã bị làm hỏng")
     void dung_lai_sua_duoc_bang_hong() {
-        jdbc.sql("UPDATE contest_standings SET total_score = 999, penalty_seconds = 0 "
-                + "WHERE contest_id = :id").param("id", contestId).update();
+        jdbc.sql("""
+                UPDATE contest_standings SET total_score = 999, penalty_seconds = 0
+                WHERE contest_id = :id
+                """).param("id", contestId).update();
 
         rebuild.chay(ctx());
 

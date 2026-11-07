@@ -175,8 +175,10 @@ class RejudgeIT extends PostgresIT {
     }
 
     private List<Long> taoBaiDaCham(int soLuong) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) VALUES "
-                + "(:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size) VALUES
+                (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", "a".repeat(64)).update();
         List<Long> ids = new ArrayList<>();
         for (int i = 0; i < soLuong; i++) {
