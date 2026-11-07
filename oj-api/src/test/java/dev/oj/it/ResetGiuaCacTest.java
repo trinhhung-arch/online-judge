@@ -28,8 +28,10 @@ final class ResetGiuaCacTest {
 
         jdbc.sql("DELETE FROM host_benchmarks").update();
         jdbc.sql("UPDATE judge_hosts SET host_factor = 1.000, last_seen_at = NULL").update();
-        jdbc.sql("UPDATE problems SET feedback_level = 'TEST_INDEX', "
-                + "scoring_mode = 'ALL_OR_NOTHING'").update();
+        jdbc.sql("""
+                UPDATE problems SET feedback_level = 'TEST_INDEX',
+                scoring_mode = 'ALL_OR_NOTHING'
+                """).update();
 
         jdbc.sql("UPDATE problems SET status = 'PUBLISHED' WHERE id = 1").update();
 
@@ -74,8 +76,10 @@ final class ResetGiuaCacTest {
     private static void jobNen(JdbcClient jdbc) {
         jdbc.sql("DELETE FROM jobs").update();
         jdbc.sql("UPDATE problems SET current_testdata_version = 1").update();
-        jdbc.sql("DELETE FROM sample_testcase_contents WHERE testcase_id IN "
-                + "(SELECT id FROM testcases WHERE testdata_version > 1)").update();
+        jdbc.sql("""
+                DELETE FROM sample_testcase_contents WHERE testcase_id IN
+                (SELECT id FROM testcases WHERE testdata_version > 1)
+                """).update();
         jdbc.sql("DELETE FROM testcases WHERE testdata_version > 1").update();
         jdbc.sql("DELETE FROM testdata_versions WHERE version > 1").update();
     }

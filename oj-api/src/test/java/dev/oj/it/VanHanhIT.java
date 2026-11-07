@@ -53,8 +53,10 @@ class VanHanhIT extends PostgresIT {
         @DisplayName("★ bài ĐANG trong hàng đợi thì bỏ qua, không đẩy lần hai")
         void bai_dang_trong_hang_doi_thi_bo_qua() {
             long id = baiDaCham();
-            jdbc.sql("INSERT INTO judge_queue (submission_id, priority, attempt) "
-                    + "VALUES (:id, 0, 3)").param("id", id).update();
+            jdbc.sql("""
+                    INSERT INTO judge_queue (submission_id, priority, attempt)
+                    VALUES (:id, 0, 3)
+                    """).param("id", id).update();
 
             List<Long> vao = rejudge.dayVaoHangDoi(List.of(id));
 
@@ -109,11 +111,15 @@ class VanHanhIT extends PostgresIT {
             long live = baiDaCham();
             long rj = baiDaCham();
             long dangCham = baiDaCham();
-            jdbc.sql("INSERT INTO judge_queue (submission_id, priority, attempt) "
-                    + "VALUES (:id, 0, 0)").param("id", live).update();
+            jdbc.sql("""
+                    INSERT INTO judge_queue (submission_id, priority, attempt)
+                    VALUES (:id, 0, 0)
+                    """).param("id", live).update();
             rejudge.dayVaoHangDoi(List.of(rj));
-            jdbc.sql("INSERT INTO judge_queue (submission_id, priority, attempt, claimed_at, "
-                    + "lease_until) VALUES (:id, 0, 1, now(), now() + interval '120 seconds')")
+            jdbc.sql("""
+                    INSERT INTO judge_queue (submission_id, priority, attempt, claimed_at,
+                    lease_until) VALUES (:id, 0, 1, now(), now() + interval '120 seconds')
+                    """)
                     .param("id", dangCham).update();
 
             QueueStatusQuery.TrangThai t = trangThai.doc();
@@ -264,8 +270,10 @@ class VanHanhIT extends PostgresIT {
     }
 
     private long baiDaCham() {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) VALUES "
-                + "(:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size) VALUES
+                (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", "a".repeat(64)).update();
         return jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, language_id, source_sha256,

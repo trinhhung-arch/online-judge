@@ -41,8 +41,10 @@ class MigrationV16HangDoiIT {
             flyway(pg).load().migrate();
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
-                ResultSet rs = st.executeQuery("SELECT count(*), min(reap_count), max(reap_count) "
-                        + "FROM judge_queue");
+                ResultSet rs = st.executeQuery("""
+                        SELECT count(*), min(reap_count), max(reap_count)
+                        FROM judge_queue
+                        """);
                 rs.next();
                 assertThat(rs.getInt(1)).isEqualTo(2);
                 assertThat(rs.getObject(2)).as("dòng cũ nhận DEFAULT 0, không phải NULL").isEqualTo(0);
