@@ -18,30 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Đường <b>GHI</b> bốn bảng xếp hạng của V7. Pool {@code app}.
- *
- * <p>Đường đọc ở {@link JdbcStandingsReader} — xem javadoc của
- * {@link StandingsRepository} về vì sao tách.
- *
- * <h2>★ Vì sao bản đóng băng là HAI câu riêng chứ không phải một câu có tên bảng động</h2>
- * Cách gọn là ghép tên bảng vào chuỗi SQL theo cờ {@code dongBang}. Đừng: đó là nối chuỗi
- * trong tầng {@code infrastructure} (bất biến #5), và nó là <i>đúng cái hình dạng</i> mà một
- * lỗ hổng SQL injection có — kể cả khi giá trị ghép vào hôm nay là một boolean an toàn.
- *
- * <p>Cái giá là mỗi câu viết hai lần. Cùng cái giá {@code JdbcProblemRepository} và
- * {@code JdbcJobRepository} đã trả, và vì cùng một lý do.
- *
- * <h2>Thứ tự xếp hạng viết ra ở BỐN chỗ, và cả bốn phải giống nhau</h2>
- * {@code total_score DESC, penalty_seconds ASC, last_scoring_at ASC NULLS LAST} — khớp đúng
- * {@code ix_contest_standings_rank} của V7. Lệch một chỗ là hai người xem cùng một bảng thấy
- * hai thứ hạng khác nhau, tuỳ họ mở trang top hay trang "quanh mình".
- *
- * <p>{@code NULLS LAST} không có trong định nghĩa index nhưng bắt buộc phải có ở đây:
- * {@code last_scoring_at} là {@code NULL} với người chưa ghi điểm nào, và mặc định của
- * Postgres cho {@code ASC} là {@code NULLS LAST} — viết ra để nó là một quyết định, không phải
- * một mặc định.
- */
 @Repository
 public class JdbcStandingsRepository implements StandingsRepository {
 
@@ -91,7 +67,6 @@ public class JdbcStandingsRepository implements StandingsRepository {
             SELECT EXISTS (SELECT 1 FROM contest_standings_frozen WHERE contest_id = :contestId)
             """;
 
-    /** Tổng phải chèn TRƯỚC: bảng theo đề có khoá ngoại trỏ tới nó. */
     private static final String CHUP_TONG = """
             INSERT INTO contest_standings_frozen
                 (contest_id, user_id, total_score, penalty_seconds, solved_count, last_scoring_at)
@@ -101,16 +76,6 @@ public class JdbcStandingsRepository implements StandingsRepository {
             ON CONFLICT (contest_id, user_id) DO NOTHING
             """;
 
-    /**
-     * {@code pending_after_freeze} đếm bài nộp sau giờ đóng băng — ô "?" kiểu ICPC.
-     *
-     * <p>Câu này chạm {@code submissions}, bảng của module {@code judging}. Luật ArchUnit 3
-     * nói về phụ thuộc giữa các <b>package Java</b>, không về SQL, nên đây không phải vi phạm;
-     * nhưng nó là một sợi dây thật nên được viết ở đúng một chỗ.
-     *
-     * <p>{@code LEAST(..., 32767)} vì cột là {@code SMALLINT}. Một người nộp hơn ba mươi hai
-     * nghìn bài trong một kỳ thi thì con số chính xác không còn là thứ đáng quan tâm.
-     */
     private static final String CHUP_THEO_DE = """
             INSERT INTO contest_problem_standings_frozen
                 (contest_id, user_id, problem_id, best_score, attempts_before_score,
@@ -147,10 +112,6 @@ public class JdbcStandingsRepository implements StandingsRepository {
             VALUES (:contestId, :soDongKiem, :soDongLech, CAST(:chiTiet AS jsonb))
             """;
 
-    /**
-     * {@code NOT EXISTS} thay vì {@code LEFT JOIN ... IS NULL}: kỳ thi có nhiều bản soát, và
-     * một phép nối sẽ nhân dòng lên rồi phải {@code DISTINCT} lại. Ở đây chỉ hỏi "có hay không".
-     */
     private static final String CAN_SOAT_LECH = """
             SELECT c.id
               FROM contests c

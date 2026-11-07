@@ -16,32 +16,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Một sandbox {@code isolate} đang sống: {@code init} → {@code run}* → {@code cleanup}.
- * Bước 2.3 và 2.6 của {@code build-order.md}.
- *
- * <p>★ Đây là <b>class duy nhất trong cả dự án được phép spawn tiến trình</b> — luật ArchUnit
- * 6 ({@code cau-truc-source.md} mục 6) ép điều đó bằng máy, cho mọi file hiện có và mọi file
- * sau này.
- *
- * <h2>{@link AutoCloseable} chứ không phải một cặp {@code start/stop}</h2>
- * "Dọn box trong {@code finally}" là một câu trong tài liệu mà người ta quên. Cấu trúc
- * {@code try (var box = IsolateBox.open(...))} thì trình biên dịch nhớ hộ. Box rò rỉ là mất
- * một slot vĩnh viễn, và mất đủ slot là hệ thống <b>ngừng chấm mà không báo lỗi gì</b>.
- *
- * <h2>{@link #reset()} giữa mỗi lượt, và lý do rất cụ thể</h2>
- * {@code cg-mem} trong file meta là đỉnh bộ nhớ của cgroup <b>tính từ lúc box sinh ra</b>, chứ
- * không phải của lượt chạy vừa rồi. Đo được: biên dịch xong rồi chạy trong cùng box thì lượt
- * chạy báo 40MB cho một chương trình dùng 1,6MB — đó là đỉnh của {@code g++}. Đặt ngưỡng MLE
- * trên con số ấy là <b>mọi bài đều MLE</b>. {@code cleanup} + {@code init} lại mất ~5ms và
- * trả lại một con số có nghĩa.
- *
- * <h2>Input đi vào bằng fd, không bằng file trong box</h2>
- * {@link #execute} nhận {@code stdinFile} là một đường dẫn <b>trên host</b> và đưa nó cho
- * {@code isolate} qua {@code ProcessBuilder.redirectInput}; tiến trình con thừa hưởng fd đó.
- * Testdata vì thế không bao giờ xuất hiện trong thư mục box (bất biến #1) — test tấn công 10
- * liệt kê {@code /box} và chỉ thấy đúng binary của chính nó.
- */
 public final class IsolateBox implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(IsolateBox.class);
@@ -57,7 +31,6 @@ public final class IsolateBox implements AutoCloseable {
         this.metaFile = metaFile;
     }
 
-    /** Khởi tạo box {@code boxId}. {@code workDir} nằm NGOÀI box — meta do isolate ghi ra. */
     public static IsolateBox open(Sandbox cfg, int boxId, Path workDir) {
         try {
             Files.createDirectories(workDir);
@@ -69,27 +42,7 @@ public final class IsolateBox implements AutoCloseable {
         return box;
     }
 
-    /**
-     * ★ Bước 6.8 — dọn một box <b>mà không init nó</b>.
-     *
-     * <p>{@link #open} luôn {@code init} trước, nên nó không dùng được lúc tắt máy: mở một box
-     * chỉ để đóng ngay là tạo ra đúng thứ mình đang muốn dọn, và nếu tiến trình chết giữa hai
-     * bước thì tình trạng còn tệ hơn lúc đầu.
-     *
-     * <p>Box rò rỉ không phải chuyện nhỏ: {@code isolate} giữ cgroup và thư mục của box, nên
-     * lần khởi động sau {@code --init} trên cùng id sẽ đè lên một box còn dấu vết của lượt
-     * chấm trước — và dấu vết đó có thể là <b>file testdata</b> ({@code oj-worker/CLAUDE.md}
-     * mục 1 điều 5).
-     *
-     * <p>Nuốt mọi lỗi: đây là đường tắt máy, và một box không dọn được không được phép giữ
-     * tiến trình lại. Nó ghi ERROR để có người vào xoá tay.
-     */
     public static void donDep(Sandbox cfg, int boxId) {
-        // KHÔNG dựng một IsolateBox ở đây. Bản đầu có `new IsolateBox(...)` chỉ để mượn
-        // runControl, và trình biên dịch cảnh báo đúng: một AutoCloseable được tạo mà không
-        // bao giờ đóng. Cảnh báo ấy không sai về hình thức và cũng không sai về nội dung —
-        // một đối tượng "box" tồn tại mà không tương ứng với một box nào đang mở là một khái
-        // niệm sai, và người đọc sau sẽ phải mất một phút để tin rằng nó vô hại.
         try {
             chayLenhDieuKhien(IsolateCommand.cleanup(cfg, boxId), "cleanup", boxId);
             log.debug("Đã dọn box {}", boxId);
@@ -103,19 +56,10 @@ public final class IsolateBox implements AutoCloseable {
         return boxId;
     }
 
-    /**
-     * File {@code meta} mà box này ghi ra, <b>ngoài box</b>.
-     *
-     * <p>Bên gọi phải dựng dòng lệnh bằng đúng đường dẫn này ({@code isolate -M}). Nếu hai
-     * bên dùng hai đường dẫn khác nhau thì {@code isolate} ghi vào một chỗ còn worker đọc ở
-     * chỗ khác, và <b>mọi lượt chấm đều thành IE</b> — với thông báo "isolate không ghi ra
-     * file meta", nghe như sandbox hỏng chứ không như một lỗi nối dây.
-     */
     public Path metaFile() {
         return metaFile;
     }
 
-    /** Thư mục {@code /box} nhìn từ phía host. */
     public Path boxDir() {
         if (boxDir == null) {
             throw new SandboxException("box " + boxId + " chưa init");
@@ -123,7 +67,6 @@ public final class IsolateBox implements AutoCloseable {
         return boxDir;
     }
 
-    /** {@code cleanup} rồi {@code init} lại — box rỗng và bộ đếm cgroup về 0. */
     public void reset() {
         cleanupQuietly();
         init();
@@ -141,14 +84,6 @@ public final class IsolateBox implements AutoCloseable {
         write(name, content.getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * Đặt một file vào box và bật cờ thực thi.
-     *
-     * <p>Cần thiết vì binary được lấy ra khỏi box dưới dạng <b>byte</b> (để vào cache biên
-     * dịch) rồi đặt lại vào box mới — và {@code Files.write} tạo file 0644. Thiếu dòng
-     * {@code chmod} này thì mọi bài C++ đều {@code RE} với {@code exitsig:13}, một triệu chứng
-     * không gợi ra nguyên nhân chút nào.
-     */
     public void writeExecutable(String name, byte[] content) {
         write(name, content);
         try {
@@ -159,19 +94,6 @@ public final class IsolateBox implements AutoCloseable {
         }
     }
 
-    /**
-     * Lấy một file ra khỏi box — <b>chỉ khi nó là file thường</b>.
-     *
-     * <h2>Vì sao có {@code NOFOLLOW_LINKS} ở đây</h2>
-     * Đo được: một chương trình 3 dòng xoá binary {@code prog} rồi tạo symlink cùng tên trỏ
-     * tới {@code /etc/shadow}. Nếu bước copy artifact đi theo link thì máy chấm <b>tự tay</b>
-     * bê {@code /etc/shadow} vào cache binary — và từ đó nó là "chương trình" của một bài nộp.
-     *
-     * <p>{@code isolate} tự xoá file không-thường ở cuối {@code --run} (vì {@code
-     * --special-files} tắt, xem {@link IsolateCommand}), nên trên thực tế link đã biến mất
-     * trước khi tới đây. Lớp kiểm này vẫn ở lại: một cờ bị bật nhầm ba năm nữa không được
-     * phép biến thành một lỗ hổng đọc file tuỳ ý.
-     */
     public byte[] takeRegularFile(String name) {
         Path file = boxDir().resolve(name);
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -191,16 +113,6 @@ public final class IsolateBox implements AutoCloseable {
         return Files.isRegularFile(boxDir().resolve(name), LinkOption.NOFOLLOW_LINKS);
     }
 
-    /**
-     * Chạy một dòng lệnh đã dựng sẵn trong box này.
-     *
-     * @param argv        dựng bởi {@link IsolateCommand}; được soi lại lần cuối trước khi spawn
-     * @param stdinFile   file <b>trên host</b> làm stdin, hoặc {@code null} nếu không có input
-     * @param stdoutLimit trần byte giữ lại của stdout
-     * @param stderrLimit trần byte giữ lại của stderr
-     * @param watchdog    chốt chặn khi chính {@code isolate} treo — giới hạn thật là của
-     *                    {@code isolate}, cái này chỉ để worker không mất một slot vĩnh viễn
-     */
     public Execution execute(List<String> argv, Path stdinFile,
                              long stdoutLimit, long stderrLimit, Duration watchdog) {
         IsolateCommand.assertNoForbiddenFlags(argv);
@@ -214,8 +126,6 @@ public final class IsolateBox implements AutoCloseable {
         builder.redirectInput(stdinFile != null
                 ? ProcessBuilder.Redirect.from(stdinFile.toFile())
                 : ProcessBuilder.Redirect.from(new java.io.File("/dev/null")));
-        // KHÔNG environment().putAll(...): box thừa hưởng môi trường của worker là thừa hưởng
-        // cả OJ_INTERNAL_SHARED_SECRET. isolate tự dựng môi trường tối thiểu.
         builder.environment().clear();
 
         Process process;
@@ -232,7 +142,6 @@ public final class IsolateBox implements AutoCloseable {
             try (InputStream in = process.getErrorStream()) {
                 stderr.set(OutputLimiter.drain(in, stderrLimit));
             } catch (IOException ignored) {
-                // Tiến trình chết giữa chừng là chuyện bình thường ở đây.
             }
         }, "oj-stderr-box" + boxId);
         errPump.setDaemon(true);
@@ -277,10 +186,6 @@ public final class IsolateBox implements AutoCloseable {
         }
     }
 
-    /**
-     * ⚠️ Không nuốt lỗi ở đây. Box không dọn được là <b>rò rỉ tài nguyên</b>, không phải
-     * chuyện nhỏ: slot đó coi như mất và không có gì báo ({@code oj-worker/CLAUDE.md} mục 6).
-     */
     @Override
     public void close() {
         try {
@@ -301,19 +206,10 @@ public final class IsolateBox implements AutoCloseable {
         }
     }
 
-    /** {@code --init} / {@code --cleanup}: nhanh, không có input, không cần giới hạn output. */
     private String runControl(List<String> argv, String what) {
         return chayLenhDieuKhien(argv, what, boxId);
     }
 
-    /**
-     * Phần thân của {@link #runControl}, tách ra dạng {@code static} để {@link #donDep} dùng
-     * được mà không phải dựng một {@link IsolateBox}.
-     *
-     * <p>{@code boxId} chỉ đi vào thông điệp lỗi — nhưng nó phải đi vào: "isolate --cleanup
-     * thất bại" mà không nói box nào là một dòng log không hành động được, và lúc tắt máy thì
-     * có sáu box đang được dọn cùng lúc.
-     */
     private static String chayLenhDieuKhien(List<String> argv, String what, int boxId) {
         try {
             Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
@@ -338,7 +234,6 @@ public final class IsolateBox implements AutoCloseable {
         }
     }
 
-    /** Một lượt chạy: kết luận của sandbox + hai luồng output đã bị cắt theo trần. */
     public record Execution(IsolateMeta meta, OutputLimiter.Captured stdout,
                             OutputLimiter.Captured stderr) {
     }

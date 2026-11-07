@@ -8,14 +8,6 @@ import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ static/vendor/ qua Tomcat thật (rà soát 2026-09-24, F3).
- *
- * <p>{@code TaiNguyenGiaoDienTest} đọc tệp trên đĩa; ca ở đây đo phần chỉ server trả lời được:
- * đường dẫn có {@code @} ({@code @codemirror/view@6.34.1}) có được phục vụ không, và với MIME
- * nào — trình duyệt TỪ CHỐI chạy một ES module mang MIME không phải JavaScript, và lỗi ấy chỉ
- * hiện trong console. Cùng lúc: header CSP thật gửi ra không còn host CDN nào.
- */
 class TaiNguyenGiaoDienHttpIT extends HttpIT {
 
     private record TraLoi(int ma, String kieu, String csp) {

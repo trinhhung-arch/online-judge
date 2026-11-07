@@ -1,6 +1,3 @@
-// Tấn công 5/14 — mở socket ra ngoài.
-// Không có --share-net nên box ở network namespace riêng, chỉ có loopback.
-// In "LEAK:" nếu connect thành công.
 #include <cstdio>
 #include <cstring>
 #include <arpa/inet.h>

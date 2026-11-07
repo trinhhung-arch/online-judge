@@ -11,20 +11,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-/**
- * Chạy một file trong {@code oj-worker/src/test/resources/attacks/} qua <b>đúng hai bộ dựng
- * lệnh của production</b> — {@link IsolateCommand#compile} và {@link IsolateCommand#run}.
- *
- * <p>Đây là điểm mấu chốt của cả bộ test: nếu harness tự dựng lấy dòng lệnh isolate của
- * riêng nó thì 14 ca xanh chứng minh rằng <i>harness</i> an toàn, chứ không chứng minh gì về
- * hệ thống thật. Mọi cờ ở đây đến từ cùng một chỗ mà một bài nộp thật đi qua.
- */
 final class SandboxHarness implements AutoCloseable {
 
-    /**
-     * Dải box id của test — cách xa {@code first-box-id} của worker thật (0..5) để chạy test
-     * trên máy đang có worker chạy không phá lượt chấm nào.
-     */
     static final int BOX_ID = 900;
 
     private final Sandbox cfg;
@@ -41,11 +29,9 @@ final class SandboxHarness implements AutoCloseable {
         return new SandboxHarness(work);
     }
 
-    /** Kết quả một lượt tấn công. {@code stdout} là thứ ta soi để tìm dấu hiệu rò rỉ. */
     record Attempt(IsolateMeta meta, String stdout, String stderr, boolean compiled,
                    String compileLog) {
 
-        /** Mọi file tấn công in {@code LEAK:...} khi nó lấy được thứ lẽ ra không lấy được. */
         boolean leaked() {
             return stdout.contains("LEAK:");
         }
@@ -55,12 +41,6 @@ final class SandboxHarness implements AutoCloseable {
         }
     }
 
-    /**
-     * Biên dịch rồi chạy một file tấn công.
-     *
-     * @param cpuLimitMs giới hạn CPU của lượt chạy — cố tình ngắn, mọi ca đều phải kết thúc
-     *                   trong vài giây kể cả ca cố tình chạy vô hạn
-     */
     Attempt attack(String attackFile, int cpuLimitMs, int memoryKb) {
         String source = readResource("/attacks/" + attackFile);
 
@@ -92,10 +72,6 @@ final class SandboxHarness implements AutoCloseable {
         return new Attempt(run.meta(), run.stdout().text(), run.stderr().text(), true, compileLog);
     }
 
-    /**
-     * File input nằm <b>ngoài</b> box và đi vào chương trình qua một fd đã mở — đúng cách
-     * {@code TestRunner} làm. Nếu nó nằm trong box thì ca tấn công 10 mất hết ý nghĩa.
-     */
     private Path stdinFile() {
         try {
             Path file = work.resolve("stdin.txt");
@@ -108,7 +84,6 @@ final class SandboxHarness implements AutoCloseable {
         }
     }
 
-    /** Nội dung thư mục box nhìn từ host — dùng để khẳng định testdata không lọt vào. */
     List<String> boxEntries() {
         try (var stream = Files.list(box.boxDir())) {
             return stream.map(p -> p.getFileName().toString()).sorted().toList();

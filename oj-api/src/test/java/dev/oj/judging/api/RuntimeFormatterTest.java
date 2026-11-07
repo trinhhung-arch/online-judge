@@ -24,11 +24,6 @@ class RuntimeFormatterTest {
         assertThat(RuntimeFormatter.roundMs(null)).isNull();
     }
 
-    /**
-     * Nếu ai đó bỏ {@code Locale.ROOT}, máy chạy {@code vi-VN} sẽ in {@code "2,03s"} — mà
-     * một nửa thế giới đọc chuỗi đó thành hai nghìn linh ba giây. Test này chạy dưới locale
-     * dùng dấu phẩy để bắt đúng ngày đó.
-     */
     @Test
     @DisplayName("★ dấu thập phân là dấu chấm, kể cả trên máy dùng locale dấu phẩy")
     void khong_phu_thuoc_locale() {

@@ -3,38 +3,10 @@ package dev.oj.it;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/**
- * Đưa Postgres và Redis về trạng thái ngay sau khi seed, trước <b>mỗi</b> test.
- *
- * <h2>Vì sao không dùng {@code @Transactional} + rollback</h2>
- * Use-case chạy trên <b>hai transaction manager khác nhau</b> ({@code app} và {@code judge}),
- * nên một transaction bọc ngoài của test không bao trùm được cả hai — và cái không bị rollback
- * sẽ rò sang test sau. Thêm nữa, phần trạng thái nằm ở Redis thì transaction nào cũng không
- * với tới.
- *
- * <h2>★ Ba lần cùng một bài học trong dự án này</h2>
- * <ol>
- *   <li>M2 — {@code judge_hosts.host_factor} bị một test benchmark đổi thành 1.250 và mọi test
- *       sau đó tính sai giới hạn thời gian.</li>
- *   <li>M3 — {@code problems.feedback_level} bị đặt {@code NONE} và mọi test sau không thấy
- *       {@code failed_test_ordinal}.</li>
- *   <li>M4 — khoá rate limit trong Redis sống 10 giây, <b>không biết gì về ranh giới giữa các
- *       test</b>: test A nộp bài lúc 0,0s và test B bị 429 lúc 0,4s vì một lượt nộp nó không
- *       hề thực hiện.</li>
- * </ol>
- * Cả ba đều cùng một kiểu hỏng, và là kiểu tệ nhất: <b>phụ thuộc thứ tự chạy</b>. Xanh khi
- * chạy một lớp, đỏ khi chạy cả bộ, và đỏ khác nhau giữa máy dev với runner CI. Xem
- * {@code <runOrder>alphabetical</runOrder>} trong {@code oj-api/pom.xml}.
- *
- * <p>Quy tắc rút ra: <b>thêm một bảng hay một khoá mà use-case GHI vào thì thêm một dòng ở
- * đây</b>, cùng lúc, không để lần sau.
- */
 final class ResetGiuaCacTest {
 
-    /** Khớp {@code RedisSubmissionRateLimiter.KHOA_PREFIX}. */
     static final String KHOA_RATE_LIMIT = "oj:ratelimit:submit:";
 
-    /** Băm BCrypt cost 12 của {@code matkhau-dev-123} — khớp {@code R__seed_du_lieu_dev.sql}. */
     private static final String BAM_MAT_KHAU_DEV =
             "$2a$12$nbmWQ37swiou9I6Nm3N1YuQcTPBYnK/nSbXxt2M0FZc9GkUuldEoS";
 
@@ -48,12 +20,6 @@ final class ResetGiuaCacTest {
         rateLimit(redis);
     }
 
-    /**
-     * {@code judge_hosts} và {@code host_benchmarks} có mặt ở đây vì
-     * {@code /internal/judge/benchmark} <b>sửa</b> chúng. {@code 1.000} là giá trị của máy chấm
-     * chuẩn trong {@code R__seed_du_lieu_tham_chieu.sql} — một hằng số theo định nghĩa
-     * ({@code nfrplan.md} 9.1).
-     */
     private static void duongCham(JdbcClient jdbc) {
         jdbc.sql("DELETE FROM judge_runs").update();
         jdbc.sql("DELETE FROM judge_queue").update();
@@ -65,65 +31,19 @@ final class ResetGiuaCacTest {
         jdbc.sql("UPDATE problems SET feedback_level = 'TEST_INDEX', "
                 + "scoring_mode = 'ALL_OR_NOTHING'").update();
 
-        // ★ Lần thứ TƯ của đúng bài học ở javadoc lớp này — và lần này nó nằm im gần một
-        // milestone. `ProblemAuthoringIT` gỡ đề 1 xuống RETIRED để kiểm FR-PROB-08, còn dòng
-        // trên chỉ hoàn nguyên feedback_level và scoring_mode. Nên từ ca ấy trở đi, đề seed
-        // duy nhất của cả bộ test không còn PUBLISHED.
-        //
-        // Không ca nào đỏ, vì tới lúc đó chưa ca nào ĐỌC danh sách đề — chúng đọc đề theo id
-        // hoặc theo mã, và cả hai đường đó không lọc trạng thái giống danh sách. Ca đầu tiên
-        // đọc danh sách (ProblemListContestIT) thấy một danh sách rỗng và đỏ vì một lý do
-        // không liên quan gì tới thứ nó kiểm.
-        //
-        // Chỉ id = 1: đề do test tạo bị xoá ở cuối phương thức này, và "xuất bản hộ" chúng
-        // sẽ giấu mất đúng những ca kiểm rằng đề DRAFT không lộ ra ngoài.
         jdbc.sql("UPDATE problems SET status = 'PUBLISHED' WHERE id = 1").update();
 
-        // Gỡ tham chiếu từ `testcases` TRƯỚC rồi mới xoá `subtasks` — khoá ngoại đi theo chiều
-        // đó. `judge_run_subtasks` tự biến mất theo `judge_runs` (ON DELETE CASCADE).
         jdbc.sql("UPDATE testcases SET subtask_id = NULL WHERE subtask_id IS NOT NULL").update();
         jdbc.sql("DELETE FROM subtasks").update();
 
-        // Kỳ thi (M5, V7). Phải sau khi xoá `submissions`: fk_submissions_contest KHÔNG có
-        // ON DELETE CASCADE, cố ý — mất một contest không được phép kéo theo bài nộp.
-        // Sáu bảng con của `contests` thì CÓ cascade, nên chúng tự biến mất.
         jdbc.sql("DELETE FROM contests").update();
 
-        // Đề do test tạo (Bước 4.9). Phải sau khi xoá `submissions` — khoá ngoại đi theo
-        // chiều đó và KHÔNG có ON DELETE CASCADE. `testcases` và `testdata_versions` thì có,
-        // nên chúng tự biến mất theo.
         jdbc.sql("DELETE FROM problems WHERE id > 1").update();
     }
 
-    /**
-     * Bốn bảng của V5, cộng ba tài khoản seed.
-     *
-     * <h2>Vì sao {@code users} cũng phải hoàn nguyên</h2>
-     * {@code AnonymizeAccountUseCase} <b>sửa</b> nó: xoá email, xoá băm mật khẩu, đổi tên hiển
-     * thị. Một test ẩn danh hoá {@code setter} sẽ để lại một tài khoản không đăng nhập được
-     * cho mọi test chạy sau.
-     *
-     * <h2>Vì sao xoá được {@code audit_log} dù nó là append-only</h2>
-     * Tính append-only được ép bằng <b>phân quyền</b> ({@code REVOKE DELETE ... FROM oj_app}),
-     * và phần GRANT đó nằm ở <b>V8</b> (M6) — không phải V9, thứ chỉ đổi một index của
-     * {@code jobs}. Trong test, Flyway chạy bằng vai trò SỞ HỮU schema nên lệnh xoá vẫn thực
-     * hiện được, kể cả sau khi V8 đã chạy: {@code REVOKE} chỉ áp cho role {@code oj_app}.
-     * Ngày nào bộ test đổi sang chạy bằng {@code oj_app}, dòng này sẽ đỏ — và đó là lời nhắc
-     * đúng lúc rằng test cần một vai trò riêng, chứ không phải rằng V8 sai.
-     */
     private static void danhTinh(JdbcClient jdbc) {
-        // V11 — hai bảng 2FA. Không dọn thì một test bật 2FA cho `dev` sẽ làm mọi test
-        // sau đó nhận 401 can_totp ở lượt đăng nhập, với một thông báo không nhắc gì tới
-        // 2FA. Đo thật ngày 2026-09-05: nó làm `dang_nhap_bang_email` đỏ.
-        // PostgresIT bật lại 2FA cho ADMIN ngay sau khi hàm này chạy xong.
         jdbc.sql("DELETE FROM user_scratch_code").update();
         jdbc.sql("DELETE FROM user_two_factor").update();
-        // V13 — mã xác minh email. Khoá ngoại có ON DELETE CASCADE, nhưng câu
-        // `DELETE FROM users WHERE id > 3` ở dưới chỉ dọn được mã của tài khoản do test tạo:
-        // mã của ba tài khoản seed thì sống sót. Một mã còn sống mang theo `created_at`, và
-        // `created_at` là thứ khoảng chờ gửi-lại đọc — nên test sau bấm "gửi lại" sẽ nhận 429
-        // vì một lượt gửi nó không hề thực hiện. Đúng bài học M4 với khoá rate limit trong
-        // Redis, lặp lại trên một bảng.
         jdbc.sql("DELETE FROM email_verifications").update();
         jdbc.sql("DELETE FROM refresh_tokens").update();
         jdbc.sql("DELETE FROM login_attempts").update();
@@ -151,12 +71,6 @@ final class ResetGiuaCacTest {
                 """).param("bam", BAM_MAT_KHAU_DEV).update();
     }
 
-    /**
-     * Bảng của V6. {@code job_events} tự biến mất theo {@code jobs}
-     * ({@code ON DELETE CASCADE}), nhưng {@code testdata_versions} thì không — nó thuộc
-     * {@code problems}, và một phiên bản testdata sót lại sẽ làm test sau thấy đề đã có
-     * testdata trong khi nó không nên có.
-     */
     private static void jobNen(JdbcClient jdbc) {
         jdbc.sql("DELETE FROM jobs").update();
         jdbc.sql("UPDATE problems SET current_testdata_version = 1").update();
@@ -168,9 +82,6 @@ final class ResetGiuaCacTest {
 
     private static void rateLimit(StringRedisTemplate redis) {
         xoaTheoMau(redis, "oj:ratelimit:*");
-        // Cache bảng xếp hạng (M5). Không xoá thì một test đọc bảng của contest id=1 sẽ thấy
-        // bảng của contest id=1 từ test trước — id được cấp lại sau mỗi lần DELETE FROM
-        // contests, nên "cùng id, khác dữ liệu" là chuyện xảy ra ở MỌI test.
         xoaTheoMau(redis, "oj:standings:*");
     }
 
@@ -181,3 +92,4 @@ final class ResetGiuaCacTest {
         }
     }
 }
+

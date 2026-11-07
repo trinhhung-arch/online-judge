@@ -11,20 +11,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/**
- * HTML của một đề, có cache — FR-PROB-02, P1.
- *
- * <h2>Cache-aside, và cache hỏng KHÔNG được làm hỏng trang đề</h2>
- * Đọc cache → trượt thì render → ghi cache. Nếu bước ghi hỏng (database đầy, quyền sai), trang
- * vẫn trả HTML đúng và chỉ tốn một lần render nữa ở lần sau. Cùng lập luận với
- * {@code RedisSubmissionEventBus}: một cache là thứ tăng tốc, không phải thứ mà sự đúng đắn
- * phụ thuộc vào.
- *
- * <h2>Vì sao đây là {@code Service} chứ không phải {@code UseCase}</h2>
- * Nó không phải một hành động người dùng yêu cầu — không ai bấm "render đề". Nó là một bước
- * bên trong {@code GetProblemUseCase}, và nếu mang tên {@code UseCase} thì LUẬT 8 sẽ bắt nó
- * tuyên bố lập trường phân quyền, mà câu trả lời đúng lại là <i>"tuỳ người gọi"</i>.
- */
 @Service
 public class StatementService {
 
@@ -58,13 +44,6 @@ public class StatementService {
         return html;
     }
 
-    /**
-     * {@code sha256(statement_md)} — khớp cột {@code problems.statement_hash} (V2).
-     *
-     * <p>Hàm này là <b>chỗ duy nhất</b> tính giá trị ấy. Một chỗ thứ hai tính khác đi một
-     * khoảng trắng là một cache không bao giờ trúng, và triệu chứng duy nhất là trang đề chậm
-     * — thứ không ai nối được với nguyên nhân.
-     */
     public static String bam(String statementMd) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

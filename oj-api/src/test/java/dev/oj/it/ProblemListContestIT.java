@@ -17,27 +17,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ FR-CON-03 + FR-CON-07 — đề của kỳ thi phải VẮNG MẶT khỏi trang Đề bài, không phải
- * "hiện ra rồi bấm vào thì 404".
- *
- * <h2>Vì sao 404 thôi là chưa đủ</h2>
- * {@code GetProblemUseCase} đã chặn nội dung đề từ M5. Nhưng danh sách thì không lọc, nên đề
- * của kỳ thi tuần sau vẫn nằm giữa trang Đề bài như một đề bình thường. Hai thiệt hại:
- *
- * <ul>
- *   <li>Thí sinh bấm vào một dòng có thật và nhận một trang không có thật. Không lời giải
- *       thích nào là đúng ở đó — lời giải thích đúng lại là thứ FR-CON-03 cấm nói.</li>
- *   <li><b>Danh sách ấy chính là thành phần kỳ thi.</b> Bấm thử từng đề, ghi lại đề nào 404,
- *       là biết trước bộ đề. Chốt 404 giữ được nội dung đề mà không giữ được danh sách đề —
- *       và với một hệ thống bán sự công bằng thì danh sách cũng đã là quá nhiều.</li>
- * </ul>
- *
- * <h2>Tách theo THỜI GIAN, không phải theo kho riêng</h2>
- * {@link #de_quay_lai_sau_khi_ky_thi_ket_thuc()} là ca giữ FR-CON-07 <i>"sau khi contest kết
- * thúc: mở đề ra ngoài"</i>. Một kho đề riêng cho kỳ thi sẽ làm ca đó không bao giờ xanh
- * được, và kho luyện tập thì không bao giờ lớn lên.
- */
 class ProblemListContestIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
@@ -48,7 +27,6 @@ class ProblemListContestIT extends PostgresIT {
 
     private static final Instant MOC = Instant.now();
 
-    /** Đề 1 (A-PLUS-B) thuộc {@code SETTER_ID} theo seed dev. */
     private long dungContestChua(long problemId, Instant batDau, Instant ketThuc) {
         long id = contests.tao(new ContestRepository.ContestMoi(
                 "ds-de-" + System.nanoTime(), "Thi thử", "ICPC",
@@ -69,8 +47,6 @@ class ProblemListContestIT extends PostgresIT {
         return maDeThayBoi(USER_ID, "dev", Role.USER);
     }
 
-    // =========================================================================
-
     @Test
     @DisplayName("★ đề của kỳ thi CHƯA MỞ không nằm trong danh sách đề")
     void de_cua_ky_thi_chua_mo_vang_mat() {
@@ -81,10 +57,6 @@ class ProblemListContestIT extends PostgresIT {
         assertThat(maDeThayBoiThiSinh()).doesNotContain("A-PLUS-B");
     }
 
-    /**
-     * ★ FR-CON-07. Không ai bấm nút gì cả — đề quay lại vì đồng hồ đã đi qua {@code ends_at}.
-     * Đây là lý do bộ đề luyện tập vẫn lớn lên sau mỗi kỳ thi.
-     */
     @Test
     @DisplayName("★ FR-CON-07 — đề tự quay lại danh sách sau khi kỳ thi kết thúc")
     void de_quay_lai_sau_khi_ky_thi_ket_thuc() {
@@ -106,11 +78,6 @@ class ProblemListContestIT extends PostgresIT {
         assertThat(maDeThayBoiThiSinh()).contains("A-PLUS-B");
     }
 
-    /**
-     * Ma trận hiển thị, dòng "Đề trong contest chưa mở": SETTER (đề của mình) ✅, ADMIN ✅.
-     * Chốt cho SETTER nằm trong câu SQL ({@code p.owner_id = :requesterId}), không ở một câu
-     * {@code if} sau khi đã load — mẫu chống IDOR của {@code oj-api/CLAUDE.md} mục 2.
-     */
     @Test
     @DisplayName("người ra đề và ADMIN vẫn thấy đề bị khoá")
     void nguoi_ra_de_va_admin_van_thay() {
@@ -120,13 +87,6 @@ class ProblemListContestIT extends PostgresIT {
         assertThat(maDeThayBoi(ADMIN_ID, "admin", Role.ADMIN)).contains("A-PLUS-B");
     }
 
-    /**
-     * ★ Ca này là lý do bộ lọc phải nằm TRONG câu query.
-     *
-     * <p>Lọc sau khi đã lấy đủ {@code size} dòng thì trang co lại — xin 2 đề, bị khoá mất 1,
-     * nhận về 1 — trong khi con trỏ trang vẫn nhảy như thể đã trả 2. Người dùng mất một đề và
-     * không có dấu hiệu nào cho thấy điều đó đã xảy ra.
-     */
     @Test
     @DisplayName("★ phân trang không co lại khi có đề bị khoá")
     void phan_trang_khong_co_lai() {
@@ -147,14 +107,6 @@ class ProblemListContestIT extends PostgresIT {
         }
     }
 
-    /**
-     * Đề mới, đã xuất bản — chỉ đề PUBLISHED mới vào danh sách.
-     *
-     * <p>Bản testdata được đóng dấu bằng SQL vì {@code xuatBan} đòi
-     * {@code current_testdata_version > 0} và nạp một gói ZIP thật ở đây là kéo cả đường
-     * import vào một ca kiểm không hỏi gì về nó. Bước đổi trạng thái thì vẫn đi qua use-case
-     * thật — đó mới là thứ ca này phụ thuộc vào.
-     */
     private long deMoi(String ma) {
         try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
             assertThat(phien).isNotNull();

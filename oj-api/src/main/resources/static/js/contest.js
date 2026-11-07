@@ -1,22 +1,3 @@
-/**
- * Chi tiết kỳ thi: đăng ký, danh sách đề, điều hành — FR-CON-02, 03, 07. Bước G5 và G8.
- *
- * ★ DANH SÁCH ĐỀ RỖNG CÓ HAI NGHĨA, VÀ TRANG PHẢI NÓI ĐÚNG NGHĨA NÀO
- *
- * `cacDe` rỗng khi kỳ thi chưa mở — server giấu nó, vì chính danh sách mã đề đã là thông tin
- * (`GetContestUseCase`). Nhưng nó cũng rỗng khi kỳ thi thật sự chưa có đề nào.
- *
- * Phân biệt bằng `trangThai`, thứ server suy và gửi kèm. KHÔNG so `startsAt` với đồng hồ của
- * trình duyệt: đồng hồ ấy lệch, và nó lệch ở đúng phút bắt đầu — tức là đúng lúc cả phòng
- * thi đang nhìn màn hình.
- *
- * ★ NÚT ĐĂNG KÝ ẨN KHI KHÔNG DÙNG ĐƯỢC, KHÔNG PHẢI TẮT RỒI ĐỂ ĐÓ
- *
- * Kỳ thi đã bắt đầu thì không đăng ký được nữa (FR-CON-02). Một nút xám vẫn nằm đó mời người
- * ta bấm và nhận lỗi; không có nút thì câu chuyện đã rõ. Còn khi đã đăng ký rồi thì hiện một
- * câu khẳng định — im lặng làm người ta bấm lại để chắc.
- */
-
 import { goi, LoiApi, phien } from './api.js';
 import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong, gio } from './trang.js';
@@ -49,7 +30,6 @@ function veDe(d) {
     const tr = chu('tr');
     tr.append(chu('td', d.label));
 
-    // Trong lúc thi, bảng này LÀ thanh điều hướng của thí sinh — nên mỗi dòng phải bấm được.
     const oMa = chu('td');
     const link = chu('a', d.code);
     link.href = `/problem.html?code=${encodeURIComponent(d.code)}`;
@@ -58,9 +38,6 @@ function veDe(d) {
 
     tr.append(chu('td', d.points));
 
-    // ★ Hai ô chỉ dành cho người ra đề. Chúng luôn được TẠO, và bị ẩn bằng cùng một class
-    //   với hai <th> ở contest.html — nếu chỉ tạo khi đủ quyền thì số ô của dòng lệch số ô
-    //   của tiêu đề, và trình đọc màn hình đọc sai cột.
     const oNguon = chu('td', d.soanRieng ? 'Riêng' : 'Mượn', 'chi-ra-de');
     oNguon.hidden = !laNguoiRaDe;
     tr.append(oNguon);
@@ -78,11 +55,6 @@ function veDe(d) {
     return tr;
 }
 
-/**
- * Gỡ một đề khỏi kỳ thi — KHÔNG xoá đề. Thiếu thao tác này thì gắn nhầm một đề là ngõ cụt:
- * đề vừa không ra khỏi kỳ thi được, vừa không xoá được, vừa vắng khỏi trang Đề bài.
- * Chỉ trước giờ bắt đầu — gỡ đề giữa kỳ thi là xoá điểm của những người đã giải nó.
- */
 function nutGo(d) {
     if (kyThi.trangThai !== 'SAP_DIEN_RA') return chu('span', '—', 'goi-y');
 
@@ -105,16 +77,6 @@ function nutGo(d) {
     return nut;
 }
 
-/**
- * Nút Sửa của một đề trong kỳ thi.
- *
- * <p>Tắt sau giờ bắt đầu, kèm lý do. Đây KHÔNG phải chốt bảo mật —
- * {@code AuthorProblemUseCase} mới là nơi chặn (FR-PROB-11, bất biến #11). Nó ở đây để
- * người ra đề không gõ xong cả một bản sửa rồi mới nhận 409.
- *
- * <p>Sửa đề giữa kỳ thi tạo ra hai nhóm thí sinh — nhóm đọc bản cũ và nhóm đọc bản mới —
- * và không có cách nào đền bù cho nhóm thứ nhất.
- */
 function nutSua(d) {
     if (kyThi.trangThai !== 'SAP_DIEN_RA') {
         const p = chu('span', 'Khoá', 'goi-y');
@@ -146,7 +108,6 @@ function veDangKy() {
         tomTat.append(chu('span', ' · Bạn đã đăng ký.'));
         return;
     }
-    // Chỉ hiện nút khi thật sự đăng ký được: phải đăng nhập, và chưa tới giờ bắt đầu.
     nutDangKy.hidden = !(phien() && kyThi.trangThai === 'SAP_DIEN_RA');
 }
 
@@ -159,20 +120,12 @@ async function tai() {
         `${kyThi.format} · ${NHAN_TRANG_THAI[kyThi.trangThai] || kyThi.trangThai}`
         + ` · ${gio(kyThi.startsAt)} → ${gio(kyThi.endsAt)}`));
 
-    // ★ Quyền phải được xác định TRƯỚC khi vẽ bảng đề: veDe() đọc `laNguoiRaDe` để quyết
-    //   định hai ô cuối. Đặt sau thì lần vẽ đầu tiên luôn ẩn chúng, và chúng chỉ hiện ra
-    //   sau một lần tải lại — một lỗi chỉ thấy được khi bấm đúng thứ tự.
-    //
-    //   `duocSoan` do SERVER tính (chủ kỳ thi hoặc ADMIN), không phải "vai trò ≥ SETTER":
-    //   SETTER khác không soạn được kỳ thi này, và hiện form cho họ là hiện một cái nút
-    //   chắc chắn trả 404. Đây chỉ là chuyện hiển thị — chốt thật nằm trong câu SQL.
     laNguoiRaDe = kyThi.duocSoan === true;
     for (const th of document.querySelectorAll('th.chi-ra-de')) th.hidden = !laNguoiRaDe;
 
     veDanhSachDe();
     veDangKy();
 
-    // Hai mức quyền khác nhau, hai lần hỏi khác nhau — xem chú thích ở contest.html.
     khuRaDe.hidden = !laNguoiRaDe;
     soanDeRieng.href = `/ra-de.html?kyThi=${encodeURIComponent(kyThi.id)}`;
     khuCongBo.hidden = !vaiTroItNhat('ADMIN');
@@ -181,55 +134,26 @@ async function tai() {
     ganBangXepHang(kyThi.id, { o });
 }
 
-// ---------------------------------------------------------------------------
-
-/**
- * Đổ <datalist> gợi ý mã đề — TIỆN, không phải NGUỒN SỰ THẬT.
- *
- * Chỉ lấy trang đầu. Một kho đề lớn sẽ không nằm hết ở đây, và đó là lý do ô nhập vẫn là
- * <input> tự do chứ không phải <select>: gõ một mã không có trong gợi ý vẫn phải thêm được.
- * Một <select> đổ từ trang đầu thì đề thứ 101 biến mất mà không ai được báo.
- *
- * Lỗi ở đây nuốt im lặng: mất gợi ý là mất tiện nghi, không mất chức năng, và một dòng đỏ
- * cho việc đó chỉ làm người ta tưởng form đang hỏng.
- */
 async function goiYMaDe() {
     try {
         const trang = await goi(`${DS.de.url}?${DS.de.khoaSize}=100`);
         dsMaDe.replaceChildren();
         for (const de of trang.items) {
-            // `muc`, không phải `o`: `o` là ô thông báo của cả trang, và che nó ở đây là
-            // thứ chạy đúng hôm nay rồi hỏng vào ngày ai đó thêm một dòng bao() vào vòng lặp.
             const muc = chu('option');
             muc.value = de.code;
             muc.label = de.title;
             dsMaDe.append(muc);
         }
     } catch {
-        // Không sao — ô nhập vẫn dùng tay được.
     }
 }
 
-/**
- * Mã đề (thứ người dùng nhìn thấy) -> problemId (thứ API nhận).
- *
- * Một request thêm, cố ý. Đây là thao tác của người ra đề, không nằm trên đường nóng
- * `nộp bài -> verdict`, nên đổi 1 request lấy một thông báo lỗi đúng là đổi có lãi.
- *
- * 404 ở đây gộp ba nguyên nhân — không có mã ấy, đề còn DRAFT, hoặc đề đang bị một kỳ thi
- * khác khoá. Không tách ra được từ phía client, và cũng không NÊN tách: `GetProblemUseCase`
- * cố ý trả cùng một câu cho cả ba để đề của kỳ thi sắp mở không bị dò ra bằng cách so mã lỗi.
- */
 async function doiMaDeRaId(maDe) {
     try {
         const de = await goi(DUONG.de.theoMa(maDe));
         return de.problemId;
     } catch (e) {
         if (e instanceof LoiApi && e.status === 404) {
-            // Vẫn là LoiApi — nó THẬT SỰ là lỗi từ API, chỉ được nói lại bằng câu có ích
-            // hơn "Không tìm thấy đề này." Giữ đúng kiểu để nhánh catch ở form không phải
-            // nới ra bắt Error trần, thứ sẽ hiện cả TypeError của một lỗi lập trình ra
-            // trước mặt người dùng.
             throw new LoiApi(404, 'contest.ma_de_khong_ro',
                 `Không tìm thấy đề có mã “${maDe}”. `
                 + 'Kiểm lại cột “Mã đề” ở trang Đề bài — và đề phải đã xuất bản.');
@@ -277,7 +201,6 @@ document.getElementById('form-them-de').addEventListener('submit', async (ev) =>
 });
 
 document.getElementById('cong-bo').addEventListener('click', async () => {
-    // Công bố là một chiều: nó mở bảng đã đóng băng cho mọi người và không hoàn tác được.
     if (!confirm('Công bố bảng xếp hạng đầy đủ cho mọi người? Không hoàn tác được.')) {
         return;
     }

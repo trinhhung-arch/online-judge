@@ -1,10 +1,3 @@
-# ★ 14 test tấn công sandbox — SEC1, nfrplan 4.1 và 4.5.
-#
-# "Bộ 14 test tấn công chạy CI mỗi push từ tuần 4 — FAIL 1 CASE = FAIL BUILD."
-#
-# Vì sao đây là workflow riêng chứ không phải một bước trong ci.yml: khi nó đỏ, dấu X phải nói
-# ngay "sandbox hỏng" chứ không phải "build hỏng". Đây là vùng duy nhất trong dự án chạy mã
-# của người lạ, và một lần đỏ ở đây khác hẳn về mức độ so với một unit test đỏ.
 name: sandbox-attack
 
 on:
@@ -31,8 +24,6 @@ jobs:
           java-version: '21'
           distribution: temurin
 
-      # Khoá cache RIÊNG — không `cache: maven`: khoá ấy dùng chung với ci và quet-phu-thuoc,
-      # workflow nào xong trước thì ghi bản thiếu cho cả ba. Xem bước cache của ci.yml.
       - name: Cache Maven của sandbox-attack
         uses: actions/cache@v6
         with:
@@ -42,18 +33,12 @@ jobs:
           key: maven-sandbox-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
           restore-keys: maven-sandbox-
 
-      # Build từ nguồn, không tải binary dựng sẵn: xem đầu scripts/build-isolate.sh.
-      # Runner ubuntu-latest dùng cgroup v2 và có systemd, hai điều kiện của isolate 2.x.
       - name: Build isolate
         run: sudo ./scripts/build-isolate.sh
 
-      # oj-contract + oj-worker là đủ: oj-api không có class nào chạm sandbox.
       - name: 14 test tấn công + đường chấm thật
         run: ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 -pl oj-contract,oj-worker -am verify
 
-      # ⛔ Chốt cuối: bộ 14 ca KHÔNG được phép biến mất trong im lặng. Nếu ai đó xoá một file
-      # tấn công, đổi tên lớp IT, hay thêm một @Disabled, thì bước trên vẫn xanh — và cổng
-      # chuyển của M2 trở lại thành một lời hứa.
       - name: Đủ 14 ca và không ca nào bị skip
         run: |
           files=$(ls oj-worker/src/test/resources/attacks/*.cpp | wc -l)
@@ -79,3 +64,4 @@ jobs:
           name: sandbox-reports
           path: 'oj-worker/target/failsafe-reports/'
           if-no-files-found: ignore
+

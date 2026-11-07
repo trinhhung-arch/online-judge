@@ -1,6 +1,3 @@
-// Tấn công 13/14 — tạo 10.000 file trong /box.
-// Không phải để thoát sandbox mà để làm cạn inode/RAM của tmpfs dùng chung, và để
-// làm bước dọn box chậm tới mức mất slot.
 #include <cstdio>
 int main() {
     int created = 0;

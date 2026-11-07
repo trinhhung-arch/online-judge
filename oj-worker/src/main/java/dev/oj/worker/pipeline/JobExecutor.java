@@ -20,25 +20,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
-/**
- * Vòng đời một job: mượn slot → mở box → biên dịch → chạy từng test → <b>dọn box trong
- * {@code finally}</b>. Bước 2.6 của {@code build-order.md}.
- *
- * <h2>Ba thứ được cấu trúc bảo đảm, không phải kỷ luật bảo đảm</h2>
- * <ol>
- *   <li>Box luôn được dọn — {@code try (var box = ...)}, không phải một dòng
- *       {@code finally} mà người sửa sau có thể vô tình nhảy qua bằng một {@code return}.</li>
- *   <li>Slot luôn được trả — {@code finally} bọc ngoài cùng, kể cả khi {@code IsolateBox.open}
- *       ném ngay ở dòng đầu.</li>
- *   <li>Không có đường nào ra khỏi đây mà không trả về một {@link JudgeResultDto} hoặc ném —
- *       và {@code IsolateJudgeRunner} biến mọi cú ném thành {@code IE}.</li>
- * </ol>
- *
- * <h2>Early exit: dừng ở test sai đầu tiên</h2>
- * Cắt khoảng một nửa thời gian chấm trung bình ({@code oj-worker/CLAUDE.md} mục 4), vì phần
- * lớn bài sai thì sai sớm. <b>Trừ khi</b> đề chấm theo {@code SUBTASK}: lúc đó test 3 sai
- * không nói gì về nhóm 2, và dừng sớm là chấm sai điểm.
- */
 @Component
 public class JobExecutor {
 
@@ -83,15 +64,9 @@ public class JobExecutor {
 
     private JudgeResultDto judgeAllTests(JudgeJobDto job, IsolateBox box,
                                          Compiler.CompileResult compiled, Instant startedAt) {
-        // ★ host_factor lấy từ phép đo của CHÍNH máy này, không lấy từ hằng số trong config:
-        // API gửi giới hạn đã quy về máy chấm chuẩn, worker nhân tiếp hệ số của mình
-        // (JudgeJobDto javadoc ghi chú 1). Nhân ở phía API nữa là nhân hai lần.
         java.math.BigDecimal hostFactor = hostBenchmark.current();
         Checker checker = Checkers.of(job.checkerType(), job.checkerEpsilon());
 
-        // ★ Bước 3.7 — try-with-resources vì lô cuối gần như không bao giờ đủ 20, và với
-        // early exit thì một lô dở dang là chuyện thường chứ không phải ngoại lệ: bài sai ở
-        // test 3 chỉ có ba phần tử trong lô đầu.
         try (BatchReporter.Session progress = batchReporter.open(job)) {
             SubtaskScorer.TestExecutor executor = testcase -> {
                 TestRunner.TestOutcome outcome = testRunner.run(
@@ -101,12 +76,6 @@ public class JobExecutor {
                 return outcome;
             };
 
-            // ★ Bước 3.3 — HAI đường chấm, không phải một vòng lặp có `if` bên trong.
-            //
-            // Chúng khác nhau ở chỗ căn bản chứ không ở chi tiết: chấm cả bài thì DỪNG ở test
-            // sai đầu tiên, còn chấm theo nhóm thì test 3 sai không nói gì về nhóm 2 — dừng
-            // sớm là chấm sai điểm. Nhồi cả hai vào một vòng lặp là mời một ngày nào đó có
-            // người "dọn dẹp" cái `if` và làm hỏng đúng thứ mà FR-PROB-06 sinh ra để đúng.
             SubtaskScorer.Result scored = job.scoringMode() == ScoringMode.SUBTASK
                     ? SubtaskScorer.score(job, executor)
                     : scoreAllOrNothing(job, executor);
@@ -123,15 +92,6 @@ public class JobExecutor {
         }
     }
 
-    /**
-     * Chấm cả bài: đúng hết thì trọn điểm, sai một test thì 0 — và <b>dừng ngay</b> ở test
-     * sai đầu tiên.
-     *
-     * <p>Early exit cắt khoảng một nửa thời gian chấm trung bình
-     * ({@code oj-worker/CLAUDE.md} mục 4), vì phần lớn bài sai thì sai sớm. Nó đúng ở đây
-     * chính vì điểm chỉ có hai giá trị: khi đã biết không phải trọn điểm thì mọi test còn
-     * lại không đổi được kết quả nữa.
-     */
     private static SubtaskScorer.Result scoreAllOrNothing(JudgeJobDto job,
                                                           SubtaskScorer.TestExecutor executor) {
         Verdict verdict = Verdict.AC;
@@ -146,8 +106,6 @@ public class JobExecutor {
             maxCpuMs = Math.max(maxCpuMs, outcome.cpuTimeMs());
             maxMemoryKb = Math.max(maxMemoryKb, outcome.memoryKb());
             if (!outcome.accepted()) {
-                // Verdict của cả bài là verdict của test SAI ĐẦU TIÊN, không phải test sai
-                // cuối cùng: đó là test mà thí sinh cần xem tới trước.
                 verdict = outcome.verdict();
                 failedOrdinal = testcase.ordinal();
                 break;

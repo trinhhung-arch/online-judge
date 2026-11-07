@@ -1,7 +1,3 @@
-# build-order.md Bước 0.8 · nfrplan M3 (CI < 10 phút).
-#
-# Trước khi có file này, mọi câu "ép bằng CI, không bằng lời hứa" trong ArchitectureTest
-# và nfrplan 8.2 đều chưa có thật. Đây là chỗ những lời đó thành sự thật.
 name: ci
 
 on:
@@ -17,7 +13,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15          # nfrplan M3: > 15 phút là người ta bắt đầu bỏ qua CI
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
@@ -28,18 +24,6 @@ jobs:
           java-version: '21'
           distribution: temurin
 
-      # ★ CACHE RIÊNG CHO WORKFLOW NÀY — không dùng `cache: maven` của setup-java.
-      #
-      # Đỏ 2026-09-24 (f6cfbb5): Maven Central trả 429 Too Many Requests khi tải
-      # surefire-junit-platform 3.5.6, dù log ghi "Cache hit". `cache: maven` băm MỖI pom.xml
-      # làm khoá, nên ba workflow (ci, quet-phu-thuoc, sandbox-attack) dùng CHUNG một khoá.
-      # quet-phu-thuoc chạy `-DskipTests package` và xong trước nên ghi cache trước; bản ấy
-      # thiếu những gì chỉ cần khi CHẠY test (provider của surefire/failsafe…). Từ đó ci luôn
-      # "hit" một cache thiếu: lần nào cũng tải lại từ Central, và không bao giờ ghi bù được,
-      # vì khoá trùng thì actions/cache không lưu. Một lần Central giới hạn tốc độ runner là đỏ.
-      #
-      # `restore-keys`: đổi pom thì vẫn khôi phục bản cũ gần nhất và chỉ tải phần chênh, thay vì
-      # tải lại cả ~120MB từ Central. ~/.m2/wrapper là bản Maven mà mvnw tải về, cũng từ Central.
       - name: Cache Maven của ci
         uses: actions/cache@v6
         with:
@@ -49,47 +33,15 @@ jobs:
           key: maven-ci-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
           restore-keys: maven-ci-
 
-      # oj-worker giờ có IT cần sandbox thật (SandboxAttackIT, IsolateJudgeRunnerIT), và
-      # chúng CỐ Ý fail thay vì skip khi thiếu isolate trên một máy Linux — một cái skip lặng
-      # lẽ biến cổng chuyển của M2 thành lời hứa. Nên `mvnw verify` ở đây cũng cần isolate,
-      # nếu không nó không còn nghĩa là "mọi thứ xanh" (CLAUDE.md mục 8).
-      #
-      # sandbox-attack.yml cài lại isolate một lần nữa, có chủ ý: khi sandbox đỏ thì dấu X
-      # phải nói ngay là sandbox đỏ, chứ không phải build đỏ.
       - name: Build isolate
         run: sudo ./scripts/build-isolate.sh
 
-      # Surefire (unit) + Failsafe (integration, *IT.java).
-      #
-      # Bộ IT chạy trên Postgres 16 THẬT qua Testcontainers — ubuntu-latest có sẵn Docker.
-      # Đó là nơi bốn chaos test chứng minh R1 ("0 bài mất") và R2 ("0 bài chấm 2 lần"):
-      # những tính chất phụ thuộc FOR UPDATE SKIP LOCKED và hành vi transaction, tức là
-      # những thứ mà không unit test nào với repository giả nhìn thấy được.
-      #
-      # retryHandler.count=6: resolver 1.9 (Maven 3.9.16) đã tự thử lại khi gặp 429/503, mặc
-      # định 3 lần — lần đỏ kể trên tiêu 61 giây cho ba lượt ấy mà vẫn thua. Cache ở trên mới
-      # là cách sửa; dòng này chỉ cho lượt đầu tiên của một khoá cache mới (lượt phải tải
-      # nhiều nhất) thêm chỗ thở.
-      #
-      # ⚠️ excludedGroups=minio-that — TẠM, từ 2026-09-26: MinIO thôi phát ảnh công khai
-      # (Docker Hub 404, quay.io `unauthorized`), runner không kéo được ảnh, và MinioTestdataStoreIT
-      # chặn MỌI PR. Lớp ấy vẫn chạy trong `./mvnw verify` trên máy prod (ảnh còn trong cache).
-      # CI KHÔNG còn kiểm đường ghi/đọc testdata trên MinIO thật cho tới khi gỡ dòng này — xem
-      # javadoc MinioTestdataStoreIT.
       - name: mvnw verify
         run: ./mvnw -B --no-transfer-progress -Daether.connector.http.retryHandler.count=6 -DexcludedGroups=minio-that verify
 
-      # Luật 5d của CodingRulesTest — phần mà ArchUnit KHÔNG làm được.
-      # Từ Java 9, `a + b` biên dịch thành invokedynamic nên ArchUnit không thấy nối chuỗi.
-      #
-      # Luật nằm trong scripts/, không nằm inline ở đây, vì một lý do đã trả giá rồi: bản
-      # inline chỉ tái hiện được bằng cách push rồi chờ CI. Giờ nó chạy ở máy trong một giây.
       - name: Cấm nối chuỗi trong SQL
         run: ./scripts/kiem-noi-chuoi-sql.sh
 
-      # Cả HAI thư mục. Lần đỏ đầu tiên của bước trên là một IT (failsafe), mà artifact
-      # lúc ấy chỉ có surefire — tức là đúng báo cáo cần đọc thì không được giữ lại, và
-      # cách duy nhất để biết test nào hỏng là chạy lại CI.
       - name: Báo cáo test
         if: always()
         uses: actions/upload-artifact@v7
@@ -100,8 +52,6 @@ jobs:
             **/target/failsafe-reports/
           if-no-files-found: ignore
 
-      # In thẳng tên test hỏng ra log. Artifact phải tải về mới đọc được; dòng này thì nhìn
-      # là thấy, và đó là khác biệt giữa sửa trong một vòng push và sửa trong ba vòng.
       - name: Test nào hỏng?
         if: failure()
         run: |
@@ -111,24 +61,3 @@ jobs:
             cat "$f"
             echo "::endgroup::"
           done
-
-# -----------------------------------------------------------------------------
-# Bốn workflow, trạng thái hôm nay (build-order 0.8 dự kiến ba; cái thứ tư là SEC2):
-#
-#   ci.yml               file này.
-#   sandbox-attack.yml   BẬT ở M2, cùng lúc IsolateJudgeRunner thay ScriptedJudgeRunner.
-#   buildx.yml           BẬT 2026-09-15. Nó dựng ảnh oj-worker cho amd64 + arm64 trên
-#                        runner gốc của từng kiến trúc (C1). Đoạn ghi ở đây trước đó nói
-#                        buildx phải chờ Dockerfile của oj-api — chỉ đúng một nửa:
-#                        oj-api vẫn chưa có Dockerfile, nhưng infra/isolate/Dockerfile
-#                        thì có, và nó dựng đúng cái ảnh chạy mã người lạ. Chờ nốt nửa
-#                        kia đã trả giá 10 ngày host chạy ảnh cũ — xem đầu buildx.yml.
-#
-#   quet-phu-thuoc.yml   BẬT 2026-09-21. Trivy, CRITICAL/HIGH có bản vá thì CI ĐỎ (SEC2).
-#                        Riêng một workflow và chạy song song, nên nó không tiêu phút nào
-#                        của ngân sách < 10 phút ở đây.
-#
-# Quét phụ thuộc (nfrplan 4.3) chia làm hai: .github/dependabot.yml lo phần "biết" (lịch mở
-# PR nâng version), quet-phu-thuoc.yml lo phần "chặn" (làm CI đỏ). Phần còn lại — biến dấu
-# đỏ thành không-merge-được — là branch protection trên GitHub, không commit vào repo được.
-# -----------------------------------------------------------------------------

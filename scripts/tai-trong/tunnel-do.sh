@@ -1,36 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Tên miền ĐO qua Cloudflare — để kịch bản ky-thi đi đúng đường người dùng thật đi:
-#   Internet → Cloudflare → tunnel → API, mà KHÔNG chạm prod.
-#
-#   ./scripts/tai-trong/tunnel-do.sh do.onlinejudge67.click    dựng (lần đầu: tạo tunnel + DNS) rồi chạy
-#   ./scripts/tai-trong/tunnel-do.sh --xoa                       tắt
-#
-# ★ VÌ SAO KHÔNG ĐO THẲNG TÊN MIỀN CHÍNH: nó là API prod trên ojdb_prod. Load test ở đó là 1000 tài khoản
-#   có hash mật khẩu công khai trong git, hàng nghìn bài nộp giả và một kỳ thi giả trong database thật.
-#   Tên miền con này trỏ vào STACK ĐO (cổng 18080, database ojdb) — dựng bằng dung-stack-do.sh.
-#
-# ★ TUNNEL RIÊNG "oj-do", KHÔNG SỬA ~/.cloudflared/config.yml. Thêm luật vào tunnel prod là phải khởi
-#   động lại cloudflared của prod (site thật rớt kết nối), và một lần sai thứ tự luật là mở /internal
-#   của prod. Cái giá: đo một cloudflared THỨ HAI trên cùng máy — cùng phần mềm, cùng đường Cloudflare.
-#   Từ 2026-09-23 tunnel này KHÔNG giữ sẵn: đã xoá cùng lúc cert.pem rời máy (docs/bao-mat-plan.md Tầng 3).
-#   Mỗi lượt đo: chép cert.pem vào → script tự tạo lại tunnel + trỏ lại DNS → đo xong xoá cert.pem.
-#
-# ★ DNS PHẢI TRỎ BẰNG CẤU HÌNH CỦA TUNNEL ĐO. Đo 2026-09-11: `cloudflared tunnel route dns oj-do <tên>`
-#   đọc ~/.cloudflared/config.yml (tunnel: <id PROD>) và trỏ bản ghi vào TUNNEL PROD — tên miền đo trả
-#   404 từ luật bắt-tất-cả của prod, kể cả khi tunnel đo đã tắt. Nên: --config của tunnel đo, id thay
-#   cho tên, đối chiếu tunnelID trong kết quả, và trước khi mở phải thấy 530 (Cloudflare nhận ra đúng
-#   tunnel đo, đang tắt). 404 hay 200 lúc ấy là đang đi vào một tunnel khác.
-#
-# ★ PHẢI CHẶN NGƯỜI LẠ. Stack đo chạy profile dev: Turnstile tắt, tài khoản tai-* có mật khẩu ai đọc repo
-#   cũng biết. Luật WAF phải chứa CẢ IPv4 LẪN dải IPv6 /64 của máy đo: macOS đổi địa chỉ IPv6 tạm thời,
-#   còn k6 và Python chọn họ địa chỉ theo cách riêng. Đo 2026-09-11: luật chỉ có một địa chỉ IPv6, và
-#   request IPv4 của chính máy này vẫn KHÔNG bị chặn — tức luật đó không chặn ai cả (chưa Deploy).
-#
-# ★ ĐO TỪ CHÍNH MÁY NÀY thì dữ liệu ra Cloudflare rồi quay về: băng thông nhà bị dùng CẢ HAI CHIỀU.
-# =============================================================================
 set -uo pipefail
-# ★ KHÔNG `| grep -q` với pipefail — xem đầu dung-stack-do.sh.
 NHA=${OJ_STACK_DO_DIR:-$HOME/oj-stack-do}
 GOC=$(cd "$(dirname "$0")/../.." && pwd)
 TEN=oj-do CONG_API=18080
@@ -45,14 +14,11 @@ id_tunnel() {
 ip_cong_khai() { curl "-$1" -fsS --max-time 8 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | sed -n 's/^ip=//p'; }
 ma_http() { curl "-$1" -s -o /dev/null -w '%{http_code}' --max-time 8 "https://$MIEN/api/v1/status" 2>/dev/null; }
 
-# Tunnel đo đang TẮT: đúng thì Cloudflare trả 530 (thấy tunnel, không có kết nối) cho mọi họ địa chỉ của máy này.
 kiem_truoc_khi_mo() {
     local v ip m
     for v in 4 6; do
         ip=$([ "$v" = 4 ] && echo "$ip4" || echo "$ip6")
         [ -n "$ip" ] || continue
-        # Chờ tới khi ra 530 hoặc 403. 404/200 ngay sau khi vừa GHI ĐÈ bản ghi DNS là edge chưa cập nhật —
-        # đo 2026-09-11: lượt đầu sau --overwrite-dns ra 404, chạy lại ngay sau đó ra 530.
         for _ in $(seq 20); do m=$(ma_http "$v"); case "$m" in 530|403) break ;; esac; sleep 3; done
         case "$m" in
             530) ok "IPv$v → 530: Cloudflare đưa $MIEN tới tunnel đo (đang tắt), và luật WAF cho máy này qua" ;;
@@ -147,7 +113,6 @@ echo $! > "$PID"
 for _ in $(seq 30); do grep 'Registered tunnel connection' "$LOG" >/dev/null && break; sleep 1; done
 grep 'Registered tunnel connection' "$LOG" >/dev/null || { kill "$(cat "$PID")"; rm -f "$PID"; tail -5 "$LOG" >&2; loi "Tunnel đo không lên sau 30s. Log: $LOG"; }
 for _ in $(seq 20); do [ "$(ma_http 6)" = 200 ] || [ "$(ma_http 4)" = 200 ] && break; sleep 3; done
-# CLOUDFLARED_CONFIG bắt buộc: thiếu nó thì mục 2b đọc config PROD, nơi $MIEN rơi vào luật bắt-tất-cả 404 → xanh mà không đo gì.
 CLOUDFLARED_CONFIG="$CAU_HINH" "$GOC/scripts/kiem-tunnel.sh" "$MIEN" || { kill "$(cat "$PID")"; rm -f "$PID"; loi "Tunnel đo KHÔNG đạt kiểm — đã TẮT lại. Log: $LOG"; }
 cat <<EOF
 

@@ -21,13 +21,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ <b>R1 — 0 bài mất.</b> Worker chết giữa lúc chấm thì bài phải tự quay lại hàng đợi và
- * được chấm lại, còn kết quả về muộn của worker đã chết phải bị loại.
- *
- * <p>Đây là kịch bản mà reaper sinh ra để cứu, và là một trong năm loại sự cố nó xử lý bằng
- * cùng một cơ chế ({@code nfrplan.md} 5.1).
- */
 class KillWorkerMidJudgeIT extends PostgresIT {
 
     private static final ClaimRequestDto REQUEST =
@@ -45,30 +38,24 @@ class KillWorkerMidJudgeIT extends PostgresIT {
         long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
                 PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
 
-        // ---- worker A nhận việc rồi "chết": không bao giờ trả kết quả ----
         JudgeJobDto first = claimJudgeJob.claim(REQUEST).orElseThrow();
         assertThat(first.attempt()).isEqualTo(1);
         assertThat(status(id)).isEqualTo("JUDGING");
 
-        // ---- 120 giây trôi qua ----
         expireLease(id);
         assertThat(reapStaleJobs.reap()).isEqualTo(1);
 
-        // Bài về hàng đợi, và attempt KHÔNG tăng ở bước này — lần claim kế tiếp mới tăng.
         assertThat(status(id)).isEqualTo("QUEUED");
         assertThat(queueAttempt(id)).isEqualTo(1);
 
-        // ---- worker B nhận lại, attempt = 2 ----
         JudgeJobDto second = claimJudgeJob.claim(REQUEST).orElseThrow();
         assertThat(second.submissionId()).isEqualTo(id);
         assertThat(second.attempt()).isEqualTo(2);
 
-        // ---- worker A hồi sinh và trả kết quả CŨ (attempt=1) -> phải bị loại im lặng ----
         assertThat(recordJudgeResult.record(result(id, 1, Verdict.WA))).isEqualTo(Outcome.IGNORED);
-        assertThat(status(id)).isEqualTo("JUDGING");     // chưa có verdict nào được ghi
+        assertThat(status(id)).isEqualTo("JUDGING");
         assertThat(countJudgeRuns(id)).isZero();
 
-        // ---- worker B trả kết quả đúng ----
         assertThat(recordJudgeResult.record(result(id, 2, Verdict.AC))).isEqualTo(Outcome.RECORDED);
         assertThat(status(id)).isEqualTo("DONE");
         assertThat(verdict(id)).isEqualTo("AC");
@@ -76,12 +63,6 @@ class KillWorkerMidJudgeIT extends PostgresIT {
         assertThat(queueDepth()).isZero();
     }
 
-    /**
-     * ★ V16, ADR 019 — <b>bài độc</b>: worker chết ở MỌI lần chấm (bài làm sập worker, hoặc đề
-     * mất testdata). Bản trước thả lại mãi; giờ hết {@code oj.judge.max-reaps} lượt thả lại thì
-     * lần hết lease kế tiếp ghi IE. Kiểm cả hai nửa của R1/R2: bài có verdict (không kẹt), và
-     * đúng MỘT bản ghi chấm — kết quả muộn của attempt cuối vẫn bị khoá lạc quan loại.
-     */
     @Test
     @DisplayName("★ bài độc: hết lượt thả lại → IE, hàng đợi trống, một bản ghi chấm, kết quả muộn bị loại")
     void bai_doc_het_luot_tha_lai_thi_ghi_IE() {
@@ -96,7 +77,6 @@ class KillWorkerMidJudgeIT extends PostgresIT {
             assertThat(status(id)).as("lần thả lại thứ %d", lan).isEqualTo("QUEUED");
         }
 
-        // Lần giao cuối, rồi lại chết.
         int cuoi = claimJudgeJob.claim(REQUEST).orElseThrow().attempt();
         assertThat(cuoi).isEqualTo(maxReaps + 1);
         expireLease(id);
@@ -108,17 +88,11 @@ class KillWorkerMidJudgeIT extends PostgresIT {
         assertThat(countJudgeRuns(id)).isEqualTo(1);
         assertThat(claimJudgeJob.claim(REQUEST)).as("không còn gì để quay vòng").isEmpty();
 
-        // Worker của attempt cuối hồi sinh và trả AC muộn — khoá lạc quan loại, IE đứng yên.
         assertThat(recordJudgeResult.record(result(id, cuoi, Verdict.AC))).isEqualTo(Outcome.IGNORED);
         assertThat(verdict(id)).isEqualTo("IE");
         assertThat(countJudgeRuns(id)).isEqualTo(1);
     }
 
-    /**
-     * Vì sao trần đếm trên cột riêng {@code reap_count} chứ không trên {@code attempt}:
-     * rejudge chèn hàng với {@code attempt} đánh số TIẾP từ lượt chấm trước. Một bài đã rejudge
-     * vài lần vẫn phải được thả lại ở lần hết lease đầu tiên của lượt chấm mới.
-     */
     @Test
     @DisplayName("bài có attempt cao (như sau rejudge) vẫn được thả lại ở lần hết lease đầu tiên")
     void attempt_cao_van_duoc_tha_lai() {
@@ -135,10 +109,6 @@ class KillWorkerMidJudgeIT extends PostgresIT {
         assertThat(queueDepth()).isEqualTo(1);
     }
 
-    /**
-     * DoD M1: {@code traceId} xuyên API → hàng đợi → worker → kết quả. Ở đây kiểm chặng cuối —
-     * mã truy vết của request ghi verdict phải nằm lại trong {@code judge_runs}.
-     */
     @Test
     void traceId_duoc_ghi_lai_cung_ban_ghi_cham() {
         long id = submitSolution.submit(new SubmitSolutionUseCase.Command(

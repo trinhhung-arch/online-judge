@@ -16,28 +16,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Bước 4.6 và 4.8 — chốt phân quyền có <b>thật sự chặn</b> không.
- *
- * <h2>Vì sao test này bắt buộc phải tồn tại, và phải là một IT chứ không phải unit test</h2>
- * {@code @RequiresRole} được ép bằng một AOP advisor, và advisor đó có một kiểu hỏng <b>hoàn
- * toàn im lặng</b>: thiếu {@code @Role(ROLE_INFRASTRUCTURE)} trên bean thì
- * {@code InfrastructureAdvisorAutoProxyCreator} bỏ qua nó, không log gì cả, không ném gì cả —
- * và mọi use-case chạy <i>không được kiểm quyền</i> trong khi mã nguồn trông vẫn đúng.
- *
- * <p>Unit test không phát hiện được: test đơn vị dựng use-case bằng {@code new}, không có
- * proxy nào, nên nó xanh dù advisor có được gắn hay không. Chỉ một context Spring thật mới
- * trả lời được câu hỏi <i>"chốt này có đang chạy không"</i>.
- *
- * <p>Đó là lý do lớp này mở đầu bằng {@link CoThatSuDuocGan} — hỏi thẳng Spring xem bean có
- * phải proxy không, để khi nó đỏ thì thông báo chỉ đúng vào nguyên nhân thay vì để người đọc
- * đoán từ một loạt test 403 bỗng nhiên xanh nhầm.
- */
 class AuthorizationIT extends PostgresIT {
 
-    @Autowired AnonymizeAccountUseCase anonymize;      // @RequiresRole(ADMIN)
-    @Autowired GetProfileUseCase getProfile;           // @RequiresRole  (USER)
-    @Autowired SubmitSolutionUseCase submitSolution;   // @RequiresRole  (USER)
+    @Autowired AnonymizeAccountUseCase anonymize;
+    @Autowired GetProfileUseCase getProfile;
+    @Autowired SubmitSolutionUseCase submitSolution;
     @Autowired GetSubmissionUseCase getSubmission;
 
     @Nested
@@ -63,9 +46,7 @@ class AuthorizationIT extends PostgresIT {
         @Test
         @DisplayName("use-case @PublicAccess và @InternalAccess KHÔNG cần bọc — pointcut không khớp")
         void public_va_internal_khong_bi_boc() {
-            // Không phải chi tiết thẩm mỹ: nếu pointcut khớp cả chúng thì mọi endpoint công
-            // khai đòi đăng nhập, và worker không claim được việc nào.
-            assertThat(AopUtils.isAopProxy(getSubmission)).isTrue();   // @RequiresRole
+            assertThat(AopUtils.isAopProxy(getSubmission)).isTrue();
         }
     }
 
@@ -81,8 +62,6 @@ class AuthorizationIT extends PostgresIT {
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.FORBIDDEN)
                     .hasFieldOrPropertyWithValue("code", "auth.thieu_quyen");
 
-            // Điểm quan trọng nhất: không phải "trả về rỗng rồi lặng lẽ không làm gì" mà là
-            // KHÔNG CHẠM tới dữ liệu. Tài khoản setter còn nguyên.
             assertThat(jdbc.sql("SELECT status FROM users WHERE id = :id")
                     .param("id", SETTER_ID).query(String.class).single())
                     .isEqualTo("ACTIVE");
@@ -113,27 +92,11 @@ class AuthorizationIT extends PostgresIT {
         }
     }
 
-    /**
-     * Gỡ 2FA mà {@code PostgresIT} bật sẵn cho ADMIN, để đo chính cái cổng ấy.
-     *
-     * <p>Chỉ ba ca trong file này cần trạng thái "ADMIN chưa bật 2FA"; mọi IT khác giả định
-     * ngược lại. Nên gỡ tại chỗ chứ không gỡ ở {@code @BeforeEach} chung — bộ IT dùng CHUNG
-     * một database và không truncate giữa các test, nên trạng thái rò ra ngoài là rò thật.
-     * Đo ngày 2026-09-05: một lần rò như thế làm {@code SubmissionRateLimitIT} đỏ với
-     * "expected 202 but was 401", một thông báo không có chữ nào nhắc tới 2FA.
-     */
     private void goHaiLopCuaAdmin() {
         jdbc.sql("DELETE FROM user_two_factor WHERE user_id = :id")
                 .param("id", ADMIN_ID).update();
     }
 
-    /**
-     * Chèn thẳng một hàng {@code user_two_factor} đã bật.
-     *
-     * <p>Bí mật ở đây không cần giải mã được: {@code TwoFactorGate} chỉ hỏi "có bật không",
-     * và không có ca nào trong file này kiểm mã. Ca kiểm mã nằm ở
-     * {@code TwoFactorUseCaseTest}, nơi có fake cipher.
-     */
     private void batHaiLopCho(long userId) {
         jdbc.sql("""
                 INSERT INTO user_two_factor (user_id, secret_enc, enabled, confirmed_at)
@@ -169,8 +132,6 @@ class AuthorizationIT extends PostgresIT {
         void duong_bat_2fa_khong_bi_chan() {
             goHaiLopCuaAdmin();
             try (var phien = GiaLapDanhTinh.dongVai(ADMIN_ID, "admin", Role.ADMIN)) {
-                // getProfile mang @RequiresRole mức USER. Cổng chỉ được hỏi khi canCo là
-                // ADMIN, nên mọi endpoint /api/v1/me/** — kể cả /me/2fa — vẫn vào được.
                 assertThat(getProfile.thucHien().handle()).isEqualTo("admin");
                 assertThat(phien).isNotNull();
             }
@@ -218,7 +179,6 @@ class AuthorizationIT extends PostgresIT {
                 assertThat(khach).isNotNull();
             }
 
-            // Và không có dòng rác nào bị bỏ lại: chốt chạy TRƯỚC khi mở transaction.
             assertThat(jdbc.sql("SELECT count(*) FROM submissions").query(Integer.class).single())
                     .isZero();
         }

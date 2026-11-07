@@ -19,37 +19,12 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/**
- * FR-CON-01 — tạo kỳ thi và gắn đề. Bước 5.2.
- *
- * <h2>★ Thêm đề vào kỳ thi là thao tác NHẠY CẢM nhất ở đây</h2>
- * Nó khoá đề khỏi công chúng (FR-CON-03) và cấm sửa đề (FR-PROB-11) ngay khi kỳ thi bắt đầu.
- * Làm nhầm trên một đề đang được dùng để luyện tập là đột nhiên nó biến mất với mọi người.
- *
- * <p>Vì thế mọi thao tác ở đây ghi {@code audit_log}: câu hỏi <i>"vì sao đề này biến mất"</i>
- * phải có câu trả lời truy được.
- *
- * <h2>★ {@code @RequiresRole(SETTER)} là SÀN, không phải toàn bộ phép kiểm</h2>
- * Chỉ chủ kỳ thi (hoặc ADMIN) sửa được nó, và chỉ chủ đề (hoặc ADMIN) gắn được đề ấy. Bản
- * trước chỉ có cái sàn, nên SETTER bất kỳ gỡ được đề khỏi kỳ thi của người khác và giấu được
- * đề công khai của người khác (rà bảo mật 2026-09-23). Điều kiện chủ sở hữu nằm trong câu SQL
- * của {@link ContestAuthoringRepository}; {@code ContestChuSoHuuIT} ghim từng đường.
- */
 @RequiresRole(Role.SETTER)
 @Service
 public class AuthorContestUseCase {
 
-    /** Cùng khuôn với mã đề: xuất hiện trong URL và trong mọi liên kết đã chia sẻ. */
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,63}$");
 
-    /**
-     * Nhãn đề kiểu ICPC: A, B, ... hoặc AA. Ngắn vì nó là tiêu đề cột của bảng xếp hạng.
-     *
-     * <p>★ Từ V12 nó còn <b>là</b> thứ tự đề: danh sách đề sắp bằng
-     * {@code ORDER BY length(label), label}, và không còn cột thứ tự nào khác. Nới khuôn này
-     * ra chuỗi tự do — {@code 'Bài 10'} phải đứng sau {@code 'Bài 9'} — là phá luôn thứ tự,
-     * và lúc đó phải trả cột thứ tự về. ADR 015.
-     */
     private static final Pattern NHAN = Pattern.compile("^[A-Z]{1,2}$");
 
     private final CurrentUserProvider currentUser;
@@ -83,24 +58,7 @@ public class AuthorContestUseCase {
         return id;
     }
 
-    /**
-     * Gắn một <b>đề của chính mình</b> vào <b>kỳ thi của chính mình</b> — ADMIN thì mọi đề,
-     * mọi kỳ thi.
-     *
-     * <p>Chốt nằm trong câu SQL của {@link ContestAuthoringRepository#themDe}, không ở đây:
-     * một câu {@code EXISTS} trên {@code problems} vừa kiểm đề có thật, vừa kiểm đề là của
-     * người gọi. Đề không có thật và đề của người khác cho <b>cùng một câu</b>.
-     *
-     * <p><b>Vì sao đề của người khác không gắn được</b>, kể cả đề đã công khai: gắn nó là giấu
-     * nó khỏi kho với mọi người tới hết kỳ thi (FR-CON-03), khoá chủ đề không sửa được, và
-     * làm nó không bao giờ xoá được nữa — ba việc làm trên tài sản của người khác. Kỳ thi
-     * nhiều người ra đề thì ADMIN ghép, hoặc chủ kỳ thi soạn đề ngay trong kỳ thi
-     * ({@link #soanDeRieng}).
-     */
     public void themDe(long contestId, long problemId, String nhan, int diem) {
-        // Thêm đề sau khi kỳ thi đã bắt đầu là đổi luật giữa chừng: người vào sớm đã thấy một
-        // bộ đề khác người vào muộn, và bảng xếp hạng so hai thứ không so được. Phép kiểm ấy
-        // nằm trong kiemGanDe cùng hai phép kia.
         CurrentUser nguoiGoi = currentUser.current();
         kiemGanDe(contestId, nhan, diem, nguoiGoi);
         soanKyThi.themDe(contestId, problemId, nhan, diem, nguoiGoi.id(), nguoiGoi.isAdmin());
@@ -108,30 +66,9 @@ public class AuthorContestUseCase {
                 Map.of("problemId", problemId, "nhan", nhan));
     }
 
-    /**
-     * ★ V10 — soạn một đề <b>sinh ra cho kỳ thi này</b>, không mượn từ kho đề chung.
-     *
-     * <h2>Vì sao nó tồn tại</h2>
-     * Đường cũ chỉ có một lối: soạn đề ở trang Đề bài rồi gắn vào kỳ thi bằng mã. Lối ấy làm
-     * một đề luyện tập đang có người giải <b>biến mất</b> khỏi kho suốt thời gian kỳ thi chưa
-     * kết thúc (FR-CON-03) — hai mục dính vào nhau ở chỗ không ai muốn chúng dính. Đề soạn
-     * riêng thì chưa từng ở trong kho, nên nó không lấy đi của ai cái gì.
-     *
-     * <p>Sau khi kỳ thi kết thúc nó vào kho như mọi đề khác — FR-CON-07. Đây là tách theo
-     * <b>thời gian</b>, không phải hai kho vĩnh viễn.
-     *
-     * <h2>Một transaction, hai bảng</h2>
-     * {@code @Transactional} trần chạy trên transaction manager {@code app} (xem
-     * {@code DataSourceConfig}), đúng pool của cả hai câu ghi. Không có nó thì một lần gắn
-     * hỏng để lại một đề DRAFT mồ côi mà chẳng ai biết nó được sinh ra để làm gì.
-     *
-     * @return {@code problemId} của đề vừa soạn — người gọi cần nó để mở trang soạn đề tiếp
-     */
     @Transactional
     public long soanDeRieng(long contestId, AuthorProblemUseCase.Command deMoi,
                             String nhan, int diem) {
-        // Kiểm quyền trên kỳ thi TRƯỚC khi soạn đề: bị từ chối thì không được để lại một đề
-        // DRAFT nào — kể cả khi transaction rollback, ID của nó đã bị tiêu.
         CurrentUser nguoiGoi = currentUser.current();
         kiemGanDe(contestId, nhan, diem, nguoiGoi);
         long problemId = authorProblem.tao(deMoi);
@@ -142,20 +79,6 @@ public class AuthorContestUseCase {
         return problemId;
     }
 
-    /**
-     * ★ Gỡ một đề khỏi kỳ thi — thao tác mà javadoc của {@code camSuaKhiDangThi} đã trỏ tới
-     * từ M5 (<i>"cách đúng là huỷ đề khỏi kỳ thi"</i>) nhưng chưa ai viết.
-     *
-     * <p>Thiếu nó thì gắn nhầm một đề là không sửa được: đề ấy vừa không gỡ ra được khỏi kỳ
-     * thi, vừa không xoá được ({@code AuthorProblemUseCase.xoa} từ chối đề còn thuộc kỳ thi),
-     * và cũng vắng khỏi trang Đề bài cho tới khi kỳ thi kết thúc. Một ngõ cụt hoàn chỉnh.
-     *
-     * <p><b>Chỉ trước giờ bắt đầu.</b> Gỡ một đề giữa kỳ thi là xoá điểm của những người đã
-     * giải nó — cùng lý do với việc cấm thêm đề, và tệ hơn một bậc.
-     *
-     * <p>KHÔNG xoá đề. Đề quay về kho đề chung, và nếu nó được soạn riêng cho kỳ thi này thì
-     * nó thành một đề bình thường như mọi đề khác — người ra đề tự quyết xoá hay giữ.
-     */
     public void goDeKhoiKyThi(long contestId, long problemId) {
         CurrentUser nguoiGoi = currentUser.current();
         Contest contest = soanKyThi.timDeSoan(contestId, nguoiGoi.id(), nguoiGoi.isAdmin())
@@ -172,11 +95,6 @@ public class AuthorContestUseCase {
                 Map.of("problemId", problemId));
     }
 
-    /**
-     * Bốn phép kiểm dùng chung cho cả {@link #themDe} lẫn {@link #soanDeRieng}. Quyền trên kỳ
-     * thi đứng ĐẦU: người không soạn được kỳ thi này nhận 404 trước khi nghe bất cứ điều gì
-     * về nhãn, điểm hay giờ mở của nó.
-     */
     private void kiemGanDe(long contestId, String nhan, int diem, CurrentUser nguoiGoi) {
         Contest contest = soanKyThi.timDeSoan(contestId, nguoiGoi.id(), nguoiGoi.isAdmin())
                 .orElseThrow(ContestsException::khongTimThay);
@@ -194,7 +112,6 @@ public class AuthorContestUseCase {
         }
     }
 
-    /** @param freezeAt {@code null} = không đóng băng */
     public record Lenh(String slug, String title, String format,
                        Instant startsAt, Instant endsAt, Instant freezeAt,
                        int penaltyMinutes, boolean registrationRequired,
@@ -222,8 +139,6 @@ public class AuthorContestUseCase {
                 throw ContestsException.khongHopLe("contest.gio_dong_bang_khong_hop_le",
                         "Giờ đóng băng phải nằm trong khung giờ thi.");
             }
-            // Tạo một kỳ thi đã bắt đầu trong quá khứ nghĩa là đăng ký đã đóng ngay lúc tạo,
-            // và không ai vào được. Hầu như luôn là gõ nhầm múi giờ.
             if (!startsAt.isAfter(bayGio)) {
                 throw ContestsException.khongHopLe("contest.bat_dau_trong_qua_khu",
                         "Giờ bắt đầu phải ở tương lai — nếu không thì đăng ký đóng ngay lúc tạo.");

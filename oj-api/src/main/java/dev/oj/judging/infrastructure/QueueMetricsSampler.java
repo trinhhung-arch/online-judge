@@ -17,29 +17,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Lấy mẫu hàng đợi mỗi 10 giây — Bước 6.10 và 6.11. Nguồn của cả Micrometer lẫn
- * {@code queue_metrics}.
- *
- * <h2>★ Vì sao lấy mẫu định kỳ chứ không đo lúc có người hỏi</h2>
- * Ba lý do, và lý do thứ ba là lý do thật:
- *
- * <ol>
- *   <li>Trang trạng thái công khai (FR-ADM-05) là trang người ta bấm F5 khi hệ thống có vẻ
- *       chậm — tức là <b>lưu lượng của nó cao nhất đúng lúc database đang tải nặng nhất</b>.
- *       Đọc từ một biến trong bộ nhớ thì số lần gọi không đổi thành số truy vấn.</li>
- *   <li>Micrometer {@code Gauge} phải đọc được bất cứ lúc nào scrape tới, và một gauge chạy
- *       truy vấn trong hàm đọc là một truy vấn ta không kiểm soát nhịp.</li>
- *   <li><b>{@code queue_metrics} cần một chuỗi thời gian.</b> "Hàng đợi đang dài 40 bài" không
- *       nói được gì; "40 bài và mười phút trước là 5" mới là thông tin. Không lưu mẫu thì
- *       sau sự cố không có gì để nhìn lại — và dashboard vận hành sinh ra chính vì lúc 2 giờ
- *       sáng không ai dựng lại được quá khứ.</li>
- * </ol>
- *
- * <h2>Nhịp 10 giây là con số của V6</h2>
- * Comment trên bảng {@code queue_metrics} viết "ghi mỗi 10 giây bởi job nền". Giữ nguyên: mỗi
- * dòng vài chục byte, 8.640 dòng/ngày trên một bảng nguội.
- */
 @Component
 public class QueueMetricsSampler {
 
@@ -57,12 +34,6 @@ public class QueueMetricsSampler {
     private final Clock clock;
     private final AppProperties properties;
 
-    /**
-     * Mẫu gần nhất. Micrometer đọc từ đây, không chạy truy vấn — xem javadoc lớp.
-     *
-     * <p>Khởi tạo bằng một mẫu rỗng thay vì {@code null}: một gauge đọc {@code null} trước
-     * lần lấy mẫu đầu tiên sẽ báo {@code NaN}, và {@code NaN} trên dashboard đọc như một sự cố.
-     */
     private final AtomicReference<QueueStatusQuery.TrangThai> mau =
             new AtomicReference<>(new QueueStatusQuery.TrangThai(0, 0, 0, null, 0));
 
@@ -88,15 +59,10 @@ public class QueueMetricsSampler {
                 .description("Máy chấm còn báo danh trong cửa sổ host-liveness").register(registry);
     }
 
-    /** Mẫu gần nhất, cho trang trạng thái và health check. Không chạm database. */
     public QueueStatusQuery.TrangThai mauGanNhat() {
         return mau.get();
     }
 
-    /**
-     * Nuốt mọi ngoại lệ: Spring <b>huỷ hẳn</b> một tác vụ {@code @Scheduled} ném ra ngoài, và
-     * mất bộ lấy mẫu nghĩa là mất luôn dashboard — đúng thứ cần khi có sự cố.
-     */
     @Scheduled(fixedDelayString = "${oj.judge.metrics-interval}")
     public void layMau() {
         try {

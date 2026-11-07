@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-/** Giới hạn 64KB (FR-SUB-01) và khoá khử trùng lặp. JUnit trần, không Spring context. */
 class SourceBlobTest {
 
     private static final String SOURCE = "#include <bits/stdc++.h>\nint main(){return 0;}";
@@ -24,7 +23,6 @@ class SourceBlobTest {
         assertThat(blob.content()).isEqualTo(SOURCE);
     }
 
-    /** Cùng source thì cùng khoá: khử trùng lặp DB, cache biên dịch, cache AI review. */
     @Test
     void cung_noi_dung_thi_cung_khoa() {
         assertThat(SourceBlob.of(SOURCE).sha256()).isEqualTo(SourceBlob.of(SOURCE).sha256());
@@ -43,20 +41,15 @@ class SourceBlobTest {
                 .satisfies(e -> {
                     assertThat(e.kind()).isEqualTo(DomainException.Kind.INVALID);
                     assertThat(e.code()).isEqualTo("submission.source_too_large");
-                    // Câu ra người dùng phải nói cả giới hạn lẫn kích thước thật của họ.
                     assertThat(e.publicMessage()).contains(
                             String.valueOf(DomainRules.MAX_SOURCE_BYTES + 1),
                             String.valueOf(DomainRules.MAX_SOURCE_BYTES));
                 });
     }
 
-    /**
-     * Đếm byte chứ không đếm ký tự. Một bài toàn comment tiếng Việt chạm trần byte trước khi
-     * chạm trần ký tự — đếm bằng {@code length()} là để lọt một bài gấp ba giới hạn.
-     */
     @Test
     void tieng_viet_duoc_dem_theo_byte_khong_theo_ky_tu() {
-        String tieng_viet = "ộ".repeat(DomainRules.MAX_SOURCE_BYTES / 2);   // 3 byte mỗi ký tự
+        String tieng_viet = "ộ".repeat(DomainRules.MAX_SOURCE_BYTES / 2);
 
         assertThat(tieng_viet.length()).isLessThan(DomainRules.MAX_SOURCE_BYTES);
         assertThatExceptionOfType(JudgingException.class)
@@ -72,12 +65,6 @@ class SourceBlobTest {
                 .isThrownBy(() -> SourceBlob.of(null));
     }
 
-    /**
-     * ★ Bất biến #9 — không bao giờ log mã nguồn người dùng.
-     *
-     * <p>Record sinh sẵn {@code toString()} in ra mọi thành phần, nên một dòng
-     * {@code log.info("... {}", blob)} sẽ đổ toàn bộ bài của người dùng vào file log.
-     */
     @Test
     void toString_khong_bao_gio_lo_noi_dung() {
         SourceBlob blob = SourceBlob.of(SOURCE);

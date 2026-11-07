@@ -10,28 +10,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Đọc thẳng các hằng SQL trong tầng {@code infrastructure} và kiểm những tính chất mà
- * {@code docs/build-order.md} Bước M1-7 cảnh báo là dễ mất nhất:
- *
- * <blockquote>
- * "Viết lại 'cho gọn' là cách nhanh nhất mất {@code SKIP LOCKED}, mất {@code RETURNING},
- * hoặc thêm một {@code COUNT(*)}."
- * </blockquote>
- *
- * <h2>Vì sao test này tồn tại thay cho {@code SchemaInvariantsIT}</h2>
- * Test đúng cho tầng này là Testcontainers với Postgres thật — H2 không có partial index,
- * {@code SKIP LOCKED}, hay {@code ON CONFLICT ... WHERE}. Nhưng Testcontainers cần một
- * dependency mới (phải hỏi người, {@code CLAUDE.md} mục 5.2) và cần Docker.
- *
- * <p>Test này <b>không thay thế</b> nó: nó không chạy một câu SQL nào, nên nó không biết câu
- * lệnh có đúng cú pháp hay không. Cái nó giữ là thứ khác và vẫn đáng giữ — một lần refactor
- * "cho gọn" làm mất {@code SKIP LOCKED} sẽ đỏ ở đây, ngay lập tức, không cần Docker. Xoá nó
- * khi {@code SchemaInvariantsIT} đã chạy trong CI.
- */
 class JudgingSqlInvariantsTest {
 
-    /** Mọi hằng SQL của bốn repository, khoá là {@code Class.FIELD}. */
     private static final Map<String, String> SQL = doc();
 
     @Test
@@ -42,7 +22,6 @@ class JudgingSqlInvariantsTest {
         assertThat(claim).contains("FOR UPDATE SKIP LOCKED");
         assertThat(claim).contains("attempt = q.attempt + 1");
         assertThat(claim).contains("RETURNING");
-        // Thứ tự lấy việc: ưu tiên trước, rồi tới lượt vào hàng. Đổi nó là đổi tính công bằng.
         assertThat(claim).contains("ORDER BY priority, enqueued_at, submission_id");
     }
 
@@ -54,8 +33,6 @@ class JudgingSqlInvariantsTest {
         assertThat(release).startsWith("DELETE FROM judge_queue");
         assertThat(release).contains("q.attempt = :attempt");
         assertThat(release).contains("RETURNING");
-        // Hai cột này là lý do câu lệnh dùng USING submissions — thiếu chúng thì phải thêm
-        // một SELECT vào đúng transaction ngắn nhất của hệ thống.
         assertThat(release).contains("s.language_id").contains("s.testdata_version");
     }
 
@@ -116,13 +93,11 @@ class JudgingSqlInvariantsTest {
     void moi_cau_sql_deu_la_hang_so_va_dung_named_parameter() {
         assertThat(SQL).isNotEmpty();
         SQL.forEach((name, sql) -> {
-            // Dấu ? là tham số theo VỊ TRÍ — đảo hai cái là sai âm thầm. Chỉ dùng :tên.
             assertThat(sql).as("%s dùng tham số '?' theo vị trí", name).doesNotContain("?");
             assertThat(sql).as("%s có vẻ được ghép chuỗi", name).doesNotContain("' +", "+ '");
         });
     }
 
-    /** Truy vấn 6: chống IDOR bằng điều kiện chủ sở hữu NẰM TRONG câu query. */
     @Test
     void hai_cau_doc_bai_nop_deu_mang_dieu_kien_chu_so_huu() {
         assertThat(sql("JdbcSubmissionRepository.FIND_FOR_REQUESTER"))
@@ -142,7 +117,6 @@ class JudgingSqlInvariantsTest {
         return value;
     }
 
-    /** Gom mọi field {@code private static final String} chứa SQL của bốn repository. */
     private static Map<String, String> doc() {
         Map<String, String> all = new LinkedHashMap<>();
         for (Class<?> type : new Class<?>[]{
@@ -152,8 +126,6 @@ class JudgingSqlInvariantsTest {
                 if (f.getType() == String.class && Modifier.isStatic(f.getModifiers())) {
                     f.setAccessible(true);
                     try {
-                        // Gộp khoảng trắng: text block xuống dòng và thụt đầu dòng không phải
-                        // thứ ta muốn kiểm, còn "status = 'JUDGING'" thì có.
                         String value = ((String) f.get(null)).replaceAll("\\s+", " ").trim();
                         all.put(type.getSimpleName() + "." + f.getName(), value);
                     } catch (IllegalAccessException e) {

@@ -18,28 +18,6 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Gắn đề vào kỳ thi — vi phạm ràng buộc phải thành CÂU NÓI, không thành HTTP 500.
- *
- * <h2>Vì sao file này tồn tại</h2>
- * {@code contest_problems} có ba ràng buộc, và trước bản vá này chỉ MỘT trong ba được dịch:
- *
- * <ul>
- *   <li>{@code UNIQUE (contest_id, label)} — đã dịch từ đầu.</li>
- *   <li>{@code PRIMARY KEY (contest_id, problem_id)} — không bao giờ nổ, vì {@code THEM_DE}
- *       có {@code ON CONFLICT DO UPDATE}. Thêm lại cùng một đề là <i>sửa</i> nó.</li>
- *   <li>{@code FOREIGN KEY (problem_id)} — <b>không ai dịch</b>. Một id gõ nhầm rơi ra ngoài
- *       như {@link DataIntegrityViolationException} và người dùng nhận "Có lỗi phía hệ
- *       thống", cho một lỗi hoàn toàn phía người gõ.</li>
- * </ul>
- *
- * <p>Ca thật đã gặp: người ra đề tạo một đề mang <b>mã</b> {@code "15"}, rồi gõ {@code 15}
- * vào ô nhận <b>id</b>. Đề đó có id 3. Không dòng log nào nói ra điều ấy, và trang chỉ hiện
- * một khung đỏ nói rằng lỗi nằm ở phía máy chủ — nên người dùng đi tìm sai chỗ.
- *
- * <p>Bài học rộng hơn: khoá ngoại là một chốt <i>hoàn hảo</i> nhưng chỉ <i>một nửa</i>. Nó
- * bắt được mọi trường hợp, và nó không nói được trường hợp nào. Nửa còn lại là bản dịch.
- */
 class ContestProblemsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
@@ -50,13 +28,6 @@ class ContestProblemsIT extends PostgresIT {
 
     private static final Instant MOC = Instant.now();
 
-    /**
-     * Kỳ thi chưa mở — {@code AuthorContestUseCase} chỉ cho gắn đề trước giờ bắt đầu.
-     *
-     * <p>Của {@code SETTER_ID}, vì các ca dưới đóng vai chính người ấy: từ 2026-09-23 chỉ chủ
-     * kỳ thi (hoặc ADMIN) soạn được nó. Bản cũ tạo dưới tên ADMIN rồi soạn bằng SETTER —
-     * chính đường vòng mà {@code ContestChuSoHuuIT} giờ chặn.
-     */
     private long kyThiChuaMo() {
         return contests.tao(new ContestRepository.ContestMoi(
                 "gan-de-" + System.nanoTime(), "Thi thử", "ICPC",
@@ -75,16 +46,6 @@ class ContestProblemsIT extends PostgresIT {
         }
     }
 
-    // =========================================================================
-
-    /**
-     * ★ Ca hồi quy của lỗi thật.
-     *
-     * <p>Khẳng định hai thứ, và cả hai đều cần: <b>kiểu</b> ngoại lệ phải là
-     * {@link DomainException} (mã lỗi có, HTTP 4xx), và <b>câu chữ</b> phải nhắc lại con số
-     * người dùng vừa gõ. Một câu "Không có đề nào" không kèm số thì với người vừa gõ nhầm
-     * nó vẫn là một lời phủ nhận không kiểm chứng được.
-     */
     @Test
     @DisplayName("★ id đề không có thật là LỖI NGƯỜI DÙNG, không phải lỗi hệ thống")
     void id_de_khong_co_that_khong_thanh_loi_he_thong() {
@@ -96,11 +57,6 @@ class ContestProblemsIT extends PostgresIT {
                 .hasMessageContaining("999999");
     }
 
-    /**
-     * Bản dịch mới KHÔNG được nuốt bản dịch cũ: {@code DuplicateKeyException} là con của
-     * {@code DataIntegrityViolationException}, nên đặt nhầm thứ tự hai nhánh {@code catch}
-     * là mọi nhãn trùng đột nhiên báo "đề không tồn tại".
-     */
     @Test
     @DisplayName("nhãn trùng vẫn báo đúng câu của nó, không bị nhánh mới nuốt")
     void nhan_trung_van_bao_dung_cau() {
@@ -114,21 +70,6 @@ class ContestProblemsIT extends PostgresIT {
                 .hasFieldOrPropertyWithValue("code", "contest.nhan_de_trung");
     }
 
-    /**
-     * ★ V12 — thứ tự đề LÀ thứ tự nhãn, và nó xác định.
-     *
-     * <h2>Cái nó chốt lại</h2>
-     * Trước V12 {@code contest_problems} có thêm một cột {@code ordinal} không ràng buộc, và
-     * câu liệt kê là {@code ORDER BY cp.ordinal} trần. Hai đề cùng {@code ordinal} thì SQL
-     * không hứa gì về thứ tự giữa chúng — giữa kỳ thi, "bài B" đổi nghĩa giữa hai lần tải
-     * trang, và đó là chuyện công bằng chứ không phải chuyện giao diện. Dữ liệu dev đã có sẵn
-     * đúng một cặp như thế trước khi V12 chạy.
-     *
-     * <p>Gắn đề theo thứ tự nhãn <b>đảo ngược</b>, để thứ tự trả về không thể là thứ tự chèn
-     * một cách tình cờ. Và có {@code 'AA'} để chốt phần {@code length(label)} đứng trước
-     * trong {@code ORDER BY}: sắp theo chữ cái trần thì {@code 'AA' < 'B'}, nên bỏ
-     * {@code length} đi là AA chen vào giữa A và B — ca này đỏ ngay.
-     */
     @Test
     @DisplayName("★ danh sách đề sắp theo nhãn A, B, Z rồi AA — không theo thứ tự chèn")
     void thu_tu_de_la_thu_tu_nhan() {
@@ -145,16 +86,6 @@ class ContestProblemsIT extends PostgresIT {
                 .containsExactly("A", "B", "Z", "AA");
     }
 
-    // =========================================================================
-
-    /**
-     * ★ V10 — soạn đề RIÊNG cho kỳ thi.
-     *
-     * <h2>Vấn đề nó giải</h2>
-     * Đường cũ chỉ có một lối: soạn đề ở kho chung rồi mượn vào kỳ thi. Lối ấy làm một đề
-     * luyện tập đang có người giải <b>biến mất</b> khỏi kho suốt thời gian kỳ thi chưa kết
-     * thúc (FR-CON-03) — hai mục dính vào nhau ở chỗ không ai muốn chúng dính.
-     */
     @org.junit.jupiter.api.Nested
     @DisplayName("Soạn đề riêng cho kỳ thi")
     class SoanDeRieng {
@@ -198,10 +129,6 @@ class ContestProblemsIT extends PostgresIT {
                     .satisfies(d -> assertThat(d.soanRieng()).isFalse());
         }
 
-        /**
-         * Nguồn gốc là dữ kiện lịch sử, không phải một thuộc tính bấm lại được. Gắn đè lên
-         * một đề đã soạn riêng chỉ đổi nhãn và điểm.
-         */
         @Test
         @DisplayName("gắn đè bằng themDe không xoá được dấu 'soạn riêng'")
         void nguon_goc_dinh() {
@@ -221,14 +148,6 @@ class ContestProblemsIT extends PostgresIT {
             });
         }
 
-        /**
-         * ★ Ca giữ {@code @Transactional}.
-         *
-         * <p>Nhãn "A" đã có, nên bước gắn đề nổ SAU khi bước tạo đề đã ghi xong. Không có
-         * ranh giới transaction thì đề vẫn nằm lại trong bảng {@code problems} — một bản
-         * nháp mồ côi mà không ai biết nó sinh ra để làm gì, và người ra đề thì vừa nhận
-         * một thông báo lỗi nên tin rằng chẳng có gì được tạo.
-         */
         @Test
         @DisplayName("★ gắn hỏng thì KHÔNG để lại đề mồ côi")
         void gan_hong_thi_khong_de_lai_de_mo_coi() {
@@ -255,7 +174,7 @@ class ContestProblemsIT extends PostgresIT {
             long ky = contests.tao(new ContestRepository.ContestMoi(
                     "dang-chay-" + System.nanoTime(), "Thi thử", "ICPC",
                     MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null,
-                    20, true, true, SETTER_ID));   // của chính người soạn — xem kyThiChuaMo
+                    20, true, true, SETTER_ID));
 
             try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
                 assertThat(phien).isNotNull();
@@ -267,13 +186,6 @@ class ContestProblemsIT extends PostgresIT {
         }
     }
 
-    // =========================================================================
-
-    /**
-     * Ghi lại hành vi {@code ON CONFLICT DO UPDATE} thành một khẳng định, vì nó là lý do
-     * nhánh {@code catch} mới KHÔNG cần lo cho khoá chính. Nếu ai đó bỏ mệnh đề ấy đi, ca
-     * này đỏ ngay — thay vì để một "đề này đã có rồi" giả xuất hiện ở nhánh mới.
-     */
     @Test
     @DisplayName("thêm lại cùng một đề là CẬP NHẬT nhãn và điểm, không phải lỗi")
     void them_lai_cung_de_la_cap_nhat() {

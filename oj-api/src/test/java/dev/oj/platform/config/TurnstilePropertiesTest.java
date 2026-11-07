@@ -12,10 +12,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Một hàng rào bật-nhưng-không-cấu-hình là hàng rào tệ nhất — nên thiếu cấu hình thì API không
- * khởi động. Ở đây giữ phần {@code hostnames}: thiếu nó thì token giải ở bất cứ đâu cũng qua.
- */
 class TurnstilePropertiesTest {
 
     private static TurnstileProperties bat(List<String> hostnames) {
@@ -39,11 +35,6 @@ class TurnstilePropertiesTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    /**
-     * Prod đưa giá trị vào bằng MỘT chuỗi env ({@code OJ_TURNSTILE_HOSTNAMES=a,b}), không phải
-     * một {@code List}. Ca này đi qua chính {@link Binder} của Spring Boot: dấu phẩy phải tách,
-     * khoảng trắng phải được bỏ, và chuỗi rỗng khi bật phải làm API không khởi động.
-     */
     @Test
     @DisplayName("★ chuỗi env có dấu phẩy được tách đúng; chuỗi rỗng khi BẬT thì không khởi động")
     void bind_tu_chuoi_env() {

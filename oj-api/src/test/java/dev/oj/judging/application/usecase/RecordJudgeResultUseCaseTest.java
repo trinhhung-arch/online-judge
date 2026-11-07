@@ -10,13 +10,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Khoá lạc quan — bất biến #7, chỉ số R2 ("0 bài bị chấm 2 lần").
- *
- * <p>RabbitMQ là at-least-once và reaper có thật, nên hai tình huống dưới đây <b>sẽ</b> xảy
- * ra trong đời hệ thống, không phải "có thể": một kết quả về muộn sau khi bài đã bị thu hồi,
- * và một kết quả được giao hai lần.
- */
 class RecordJudgeResultUseCaseTest {
 
     private JudgingFakes fakes;
@@ -32,10 +25,6 @@ class RecordJudgeResultUseCaseTest {
                 JudgingFakes.properties(), JudgingFakes.CLOCK, events, fakes.publisher);
     }
 
-    /**
-     * ★ Bước 3.9 — verdict phải đi ra luồng SSE, nếu không thì trang bài nộp đứng im cho tới
-     * khi người dùng tự F5, và FR-SUB-05 chỉ tồn tại trên giấy.
-     */
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("★ ghi verdict xong thì đẩy sự kiện realtime")
     void ghi_verdict_thi_day_su_kien() {
@@ -48,11 +37,6 @@ class RecordJudgeResultUseCaseTest {
         org.assertj.core.api.Assertions.assertThat(event.isTerminal()).isTrue();
     }
 
-    /**
-     * ★ Bất biến #1 ở tầng sự kiện. Sự kiện SSE đi thẳng ra trình duyệt mà KHÔNG qua bộ lọc
-     * {@code feedback_level} — nên nó không được phép mang bất cứ thứ gì bộ lọc ấy có thể
-     * cấm. Bài này sai ở test 7; con số đó phải ở lại phía sau.
-     */
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("★ SEC3 — kiểu sự kiện SSE không có chỗ nào để chứa chi tiết test")
     void su_kien_khong_co_cho_chua_chi_tiet_test() {
@@ -65,10 +49,6 @@ class RecordJudgeResultUseCaseTest {
                 .map(name -> name.toLowerCase(java.util.Locale.ROOT))
                 .toList();
 
-        // Hai phép ĐẾM được cho phép tường minh. Chúng nói "đã chạy 40/100", không nói test
-        // nào sai — và một con số đếm thì không có chỗ nào để giấu một chi tiết.
-        // Mọi trường MỚI chứa những chuỗi trên đều phải được thêm vào đây một cách có ý thức,
-        // và lúc thêm thì người sửa buộc phải đọc javadoc của SubmissionEventBus.
         var explicitlyAllowed = java.util.Set.of("testsdone", "totaltests");
 
         for (String name : fields) {
@@ -83,18 +63,15 @@ class RecordJudgeResultUseCaseTest {
                         .doesNotContain(bad);
             }
         }
-        // testsDone/totalTests là hai phép ĐẾM, không phải danh sách — chúng được phép, và
-        // vòng lặp trên cố ý không cấm chữ "tests" ở dạng số nhiều đếm được.
         org.assertj.core.api.Assertions.assertThat(fields)
                 .contains("submissionid", "status", "verdict");
     }
 
-    /** Kết quả bị khoá lạc quan từ chối thì không có gì xảy ra — kể cả một sự kiện. */
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("kết quả trùng bị từ chối thì KHÔNG đẩy sự kiện nào")
     void ket_qua_trung_khong_day_su_kien() {
         useCase.record(result(Verdict.AC, 1));
-        fakes.queue.lockWins = false;                    // hàng judge_queue đã bị xoá ở lần một
+        fakes.queue.lockWins = false;
         useCase.record(result(Verdict.WA, 1));
 
         org.assertj.core.api.Assertions.assertThat(events.published)
@@ -120,11 +97,6 @@ class RecordJudgeResultUseCaseTest {
                 "submissions.markDone");
     }
 
-    /**
-     * ★ Lock trả 0 dòng → <b>không ghi gì</b>. Đây là kết quả của một attempt đã bị reaper
-     * thu hồi, hoặc bản giao trùng của RabbitMQ. Bỏ qua im lặng là hành vi đúng, không phải
-     * thiếu sót — và worker vẫn nhận 204.
-     */
     @Test
     void lock_tu_choi_thi_khong_mot_cau_ghi_nao_chay() {
         fakes.queue.lockWins = false;
@@ -137,13 +109,12 @@ class RecordJudgeResultUseCaseTest {
         assertThat(fakes.submissions.doneOutcome).isNull();
     }
 
-    /** ★ Gọi hai lần: lần hai bị khoá lạc quan chặn, verdict lần một không đổi. */
     @Test
     void goi_hai_lan_thi_verdict_khong_doi() {
         useCase.record(result(Verdict.WA, 1));
         var first = fakes.submissions.doneOutcome;
 
-        fakes.queue.lockWins = false;                    // hàng judge_queue đã bị xoá ở lần một
+        fakes.queue.lockWins = false;
         var second = useCase.record(result(Verdict.AC, 1));
 
         assertThat(second).isEqualTo(RecordJudgeResultUseCase.Outcome.IGNORED);
@@ -151,16 +122,6 @@ class RecordJudgeResultUseCaseTest {
         assertThat(fakes.submissions.doneOutcome.verdict()).isEqualTo(Verdict.WA);
     }
 
-    /**
-     * FR-SUB-12 — {@code IE} còn lượt thì bài quay lại hàng đợi và <b>không có verdict nào
-     * được ghi</b>. Nhánh này phải rẽ TRƯỚC khoá lạc quan: rẽ sau thì hàng đã bị xoá và bài
-     * không còn đường quay lại.
-     *
-     * <p><b>Bước 6.13 thêm một lời gọi vào danh sách này</b>, và nó phải ở đúng chỗ: tiếng
-     * chuông gõ cửa đứng SAU {@code retryIe}, không đứng trước. IE là trường hợp người nộp đã
-     * chờ lâu nhất — họ vừa mất trọn một lượt chấm cho một lỗi không phải của họ — nên để bài
-     * nằm tới nhịp poll kế tiếp là phạt họ thêm lần nữa.
-     */
     @Test
     void IE_con_luot_thi_khong_ghi_verdict_va_khong_dung_toi_khoa_lac_quan() {
         fakes.queue.ieRetryAccepted = true;
@@ -171,13 +132,6 @@ class RecordJudgeResultUseCaseTest {
         assertThat(fakes.calls).containsExactly("queue.retryIe", "events.publishEnqueued");
     }
 
-    /**
-     * Cùng nhánh trên, nhưng chuông hỏng: bài <b>vẫn</b> quay lại hàng đợi.
-     *
-     * <p>Cùng luật với đường nộp bài — {@code judge_queue} là sự thật, chuông chỉ là tối ưu.
-     * Nếu một ngày ai đó bỏ {@code try/catch} quanh lời gọi chuông thì ca này đỏ, và nó đỏ
-     * trước khi có ai mất một bài nộp thật.
-     */
     @Test
     void IE_chuong_hong_thi_bai_van_quay_lai_hang_doi() {
         fakes.queue.ieRetryAccepted = true;
@@ -189,7 +143,6 @@ class RecordJudgeResultUseCaseTest {
         assertThat(fakes.calls).contains("queue.retryIe");
     }
 
-    /** Hết lượt retry thì {@code IE} thành verdict thật để người dùng biết chuyện gì xảy ra. */
     @Test
     void IE_het_luot_thi_ghi_verdict_IE() {
         fakes.queue.ieRetryAccepted = false;
@@ -205,10 +158,6 @@ class RecordJudgeResultUseCaseTest {
                 "submissions.markDone");
     }
 
-    /**
-     * {@code judge_runs} lấy {@code language_id} và {@code testdata_version} từ chính câu khoá
-     * lạc quan — không có câu {@code SELECT} nào thêm trên transaction ngắn nhất của hệ thống.
-     */
     @Test
     void judge_run_lay_du_lieu_tu_cau_khoa_lac_quan() {
         useCase.record(result(Verdict.AC, 1));
@@ -221,11 +170,6 @@ class RecordJudgeResultUseCaseTest {
         assertThat(run.attempt()).isEqualTo(1);
     }
 
-    /**
-     * CE thì chưa test nào chạy — {@code JudgeOutcome} bỏ hai con số đo thay vì từ chối kết
-     * quả. Từ chối là rollback, rollback là bài quay lại hàng đợi và sinh ra đúng kết quả đó
-     * lần nữa.
-     */
     @Test
     void CE_van_ghi_duoc_verdict_du_worker_gui_kem_so_do() {
         var ce = new JudgeResultDto(101L, 1, Verdict.CE, 0, 100, null, 0, 999, 999,

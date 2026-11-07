@@ -1,6 +1,3 @@
-// Tấn công 8/14 — ptrace vào tiến trình khác.
-// PID 1 trong PID-namespace của box là init của chính box; ngoài namespace là
-// systemd của host. Attach được vào bất kỳ pid nào không phải chính mình là rò rỉ.
 #include <cstdio>
 #include <sys/ptrace.h>
 #include <unistd.h>

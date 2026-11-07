@@ -10,18 +10,11 @@ import dev.oj.worker.config.WorkerProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Điểm G của {@code build-order.md}: <b>M1 không thực thi một dòng mã người dùng nào.</b>
- *
- * <p>Luật ArchUnit 6 ({@code WorkerArchitectureTest}) chặn ở tầng kiểu — không package nào
- * ngoài {@code sandbox} được chạm {@code ProcessBuilder}. Test này canh mặt còn lại: hành vi.
- */
 class ScriptedJudgeRunnerTest {
 
     private final ScriptedJudgeRunner runner = new ScriptedJudgeRunner(properties());
@@ -33,8 +26,6 @@ class ScriptedJudgeRunnerTest {
 
         assertThat(result.verdict()).isEqualTo(Verdict.IE);
         assertThat(result.score()).isZero();
-        // Nếu mặc định là AC thì ngày bản giả chạy trên host thật, MỌI bài đều AC và hệ thống
-        // trông vẫn "chạy bình thường" — mọi con số "đã giải bao nhiêu bài" thành vô nghĩa.
     }
 
     @Test
@@ -45,7 +36,6 @@ class ScriptedJudgeRunnerTest {
         assertThat(runner.run(job("// EXPECT: TLE\nint main(){}")).verdict()).isEqualTo(Verdict.TLE);
     }
 
-    /** Kịch bản CRASH tồn tại để chaos test có cách giết worker giữa chừng và kiểm reaper. */
     @Test
     void kich_ban_CRASH_nem_loi_de_test_reaper() {
         assertThatThrownBy(() -> runner.run(job("// EXPECT: CRASH\nint main(){}")))
@@ -53,10 +43,6 @@ class ScriptedJudgeRunnerTest {
                 .hasMessageContaining("CRASH");
     }
 
-    /**
-     * ★ Chỉ đọc dòng ĐẦU TIÊN. Quét cả file thì một bài nộp thật có chuỗi {@code EXPECT: AC}
-     * trong comment ở giữa sẽ tự điều khiển được kết quả chấm của chính nó.
-     */
     @Test
     void chi_thi_nam_giua_file_khong_co_tac_dung() {
         String source = """
@@ -74,7 +60,7 @@ class ScriptedJudgeRunnerTest {
         var result = runner.run(job("// EXPECT: AC\n"));
 
         assertThat(result.score()).isEqualTo(result.maxScore());
-        assertThat(result.failedTestOrdinal()).isNull();   // AC mà có test sai là mâu thuẫn
+        assertThat(result.failedTestOrdinal()).isNull();
     }
 
     @Test
@@ -86,7 +72,6 @@ class ScriptedJudgeRunnerTest {
         assertThat(result.startedAt()).isNotNull();
     }
 
-    /** {@code toString()} của kết quả không được mang log compiler ra một dòng log. */
     @Test
     void toString_cua_ket_qua_khong_lo_log_compiler() {
         var result = runner.run(job("// EXPECT: CE\n"));

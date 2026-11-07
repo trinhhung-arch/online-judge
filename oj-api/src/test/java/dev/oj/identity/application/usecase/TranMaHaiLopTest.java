@@ -19,13 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ V15 · trần mã hai lớp THEO TÀI KHOẢN (rà soát 2026-09-24, F2).
- *
- * <p>Người đã có mật khẩu ADMIN xoay được địa chỉ IP sau mỗi 5 lần sai — trần của FR-AUTH-08
- * không giữ được họ. Ca ở đây giữ điều mà trần IP không giữ: đếm trên TÀI KHOẢN ĐÍCH, và khi đã
- * khoá thì cả mã đúng cũng bị từ chối (không thì kẻ dò vẫn biết mình trúng).
- */
 class TranMaHaiLopTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-24T10:00:00Z");
@@ -87,7 +80,7 @@ class TranMaHaiLopTest {
         saiLan(9, BAY_GIO);
         assertThatCode(() -> checker(BAY_GIO).kiem(USER, ma(BAY_GIO, true))).doesNotThrowAnyException();
 
-        Instant sau = BAY_GIO.plusSeconds(90);   // bước khác — mã cũ đã bị ghi là đã dùng
+        Instant sau = BAY_GIO.plusSeconds(90);
         saiLan(9, sau);
 
         assertThat(haiLop.khoaHaiLopToi(USER)).as("9 + 9 không liên tiếp — không được khoá").isEmpty();

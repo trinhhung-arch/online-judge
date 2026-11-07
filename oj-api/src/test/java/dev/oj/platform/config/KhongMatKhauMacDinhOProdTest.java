@@ -11,7 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** F7 · rà soát 2026-09-24 — mật khẩu mặc định ở profile prod thì không khởi động. */
 class KhongMatKhauMacDinhOProdTest {
 
     private static Map<String, String> manh() {

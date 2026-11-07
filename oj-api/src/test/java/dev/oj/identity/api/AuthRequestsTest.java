@@ -10,25 +10,8 @@ import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bất biến #9 ở tầng {@code api}: <b>không DTO nào tự in mật khẩu hay token ra log</b>.
- *
- * <h2>Vì sao là một test bằng phản chiếu chứ không phải ba câu assert viết tay</h2>
- * Vì thứ cần bảo vệ là <i>tương lai</i>. Ai đó sẽ thêm một record mới vào {@code AuthRequests}
- * — {@code ResetPassword}, {@code VerifyEmail}, {@code ApiKey} — và record Java sinh sẵn
- * {@code toString()} in mọi trường. Một test liệt kê sẵn ba class chỉ bảo vệ ba class đó;
- * test này duyệt <b>mọi</b> record trong file và bắt cả những cái chưa được viết.
- *
- * <p><b>Cái thứ hai trong danh sách ấy đã tới thật</b>: {@code XacMinhEmail} (V13,
- * FR-AUTH-09). Vế {@code hasSize} dưới đây đỏ ngay lần biên dịch đầu tiên sau khi record mới
- * được thêm, đúng như thiết kế — người thêm phải dừng lại ở file này và quyết định xem
- * {@code toString()} của nó có được phép in gì.
- *
- * <p>Nó cũng chính là bài học của {@code SubmissionEvent} ở M3, áp lại cho một họ class khác.
- */
 class AuthRequestsTest {
 
-    /** Giá trị mồi: nếu chuỗi này xuất hiện trong {@code toString()} thì trường đã bị lộ. */
     private static final String BI_MAT = "MAT-KHAU-KHONG-DUOC-VAO-LOG-9f3a";
 
     @Test
@@ -43,7 +26,6 @@ class AuthRequestsTest {
                 new AuthRequests.Refresh(BI_MAT),
                 new AuthRequests.ChangePassword(BI_MAT, BI_MAT));
 
-        // Nếu ai đó thêm record mới mà quên đưa vào danh sách trên thì vế dưới đỏ.
         assertThat(AuthRequests.class.getDeclaredClasses())
                 .describedAs("thêm record mới thì thêm một dòng vào danh sách kiểm ở trên")
                 .hasSize(records.size());
@@ -61,7 +43,6 @@ class AuthRequestsTest {
         var r = new SessionResponse(BI_MAT, BI_MAT, 900, 1L, "dev", "USER");
 
         assertThat(r.toString()).doesNotContain(BI_MAT);
-        // ...nhưng vẫn phải nói được nó là của ai, nếu không thì log vô dụng.
         assertThat(r.toString()).contains("dev");
     }
 

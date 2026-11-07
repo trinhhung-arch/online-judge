@@ -1,26 +1,3 @@
--- =============================================================================
--- Kỳ thi cho kịch bản `ky-thi` — chay.sh tự chạy SAU lượt khởi động, in ra id kỳ thi mới.
---
---   docker exec -i oj-postgres psql -U ojuser -d ojdb -q -tA -v xac_nhan_db=ojdb \
---       -v de_ma=A-PLUS-B -v phut=15 < seed-ky-thi.sql
---
--- ★ VÌ SAO PHẢI CÓ KỲ THI RIÊNG
--- Bảng xếp hạng chỉ đổi khi có bài nộp VÀO một kỳ thi đang chạy. Contest 7 của dev-seed không có
--- đề nào (đo 2026-09-11): 1000 kết nối SSE chỉ nhận nhịp tim, không đo được gì của FR-CON-04/P8.
---
--- ★ MỖI LƯỢT MỘT KỲ THI MỚI. Dùng lại kỳ thi cũ thì tài khoản tai-* đã có dòng "giải 1 bài" từ lượt
--- trước, bài AC mới không đổi bảng, và ô "người xem không thấy bài AC của mình" báo hỏng giả.
---
--- ★ ĐỀ NẰM TRONG KỲ THI ĐANG CHẠY THÌ MỌI BÀI NỘP VÀO ĐỀ ĐÓ ĐỀU THUỘC KỲ THI (SubmitSolutionUseCase
--- suy contestId ở máy chủ, lấy kỳ thi id nhỏ nhất). Nên: kỳ thi tự hết hạn sau :phut phút — lượt bị
--- Ctrl+C không để lại một kỳ thi nuốt bài của on-dinh/dot-bien; kỳ thi load test cũ bị kết thúc
--- trước; và kỳ thi KHÁC chưa kết thúc mà chứa cùng đề thì từ chối.
---
--- registration_required = FALSE: chốt BI_KHOA (JdbcContestWindowQuery) cho qua người đã đăng nhập
--- VÀ khách — trang đề công khai vẫn đọc được, nên bước bắt tay của chay.sh vẫn chạy.
--- =============================================================================
-
--- ★ HÀNG RÀO — cùng khối với seed-nguoi-dung.sql (nhúng thẳng: file đi qua stdin vào container).
 \set ON_ERROR_STOP on
 \if :{?xac_nhan_db}
 \else

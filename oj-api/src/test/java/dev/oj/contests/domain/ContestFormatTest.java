@@ -12,18 +12,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Hai thể thức tính điểm — FR-CON-06. Java thuần, không Spring, chạy trong mili giây.
- *
- * <h2>Vì sao lớp này đáng nhiều ca hơn vẻ ngoài của nó</h2>
- * Bảng xếp hạng là thứ một kỳ thi <b>bán</b>. Sai ở đây không hiện ra như một lỗi: nó hiện ra
- * như một thứ hạng, và không ai kiểm lại thứ hạng cho tới khi có người khiếu nại — thường là
- * sau khi đã trao giải, tức là sau khi không sửa được nữa.
- *
- * <p>Ba cạnh sắc được canh riêng: <b>nộp lại sau khi AC</b> (ICPC: không phạt),
- * <b>nộp tệ hơn sau khi đã tốt</b> (IOI: giữ bản tốt), và <b>đề chưa đạt</b> (ICPC: không
- * đóng penalty nào).
- */
 class ContestFormatTest {
 
     private static final Instant BAT_DAU = Instant.parse("2026-05-01T09:00:00Z");
@@ -37,8 +25,6 @@ class ContestFormatTest {
     private static BaiDaCham bai(long id, boolean ac, int diem, int phutSauKhiBatDau) {
         return new BaiDaCham(id, 7L, 42L, ac, diem, BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ ICPC")
@@ -81,8 +67,6 @@ class ContestFormatTest {
             KetQuaDe sauAc = chay(bai(1, true, 100, 37));
             KetQuaDe sauKhiNopThem = chay(bai(1, true, 100, 37), bai(2, false, 0, 90));
 
-            // Nếu bài sai sau khi AC vẫn cộng penalty thì người ta bị phạt vì kiểm tra lại
-            // bài của chính mình — và ai cũng học được rằng đừng làm thế.
             assertThat(sauKhiNopThem.soLanSaiTruocKhiDat())
                     .isEqualTo(sauAc.soLanSaiTruocKhiDat());
             assertThat(format.penaltyGiay(List.of(sauKhiNopThem), c))
@@ -99,7 +83,6 @@ class ContestFormatTest {
             }
 
             assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(20);
-            // Phạt việc CỐ GẮNG là dạy người ta đừng thử.
             assertThat(format.penaltyGiay(List.of(kq), c)).isZero();
             assertThat(format.tongHop(List.of(kq)).soBaiDat()).isZero();
         }
@@ -124,16 +107,12 @@ class ContestFormatTest {
             KetQuaDe haiLan = chay(bai(1, false, 0, 10), bai(2, true, 100, 37),
                     bai(2, true, 100, 37));
 
-            // StandingsUpdater SẼ chạy lại cùng một bài nộp sau restart hoặc sau rebuild.
             assertThat(haiLan).isEqualTo(motLan);
         }
 
         @Test
         @DisplayName("★ áp lại một bài SAI đã tính không thêm lần sai — ca mà ca trên không thấy")
         void ap_lai_bai_sai_khong_them_lan_sai() {
-            // Ca `idempotent` ở trên áp lại bài AC, mà sau AC thì quy tắc 1 đã nuốt mọi thứ.
-            // Bài sai TRƯỚC khi đạt mới là nhánh cộng dồn — và là đúng ca mà hai lượt cập nhật
-            // chen nhau từng đếm thành hai (BangXepHangGhiSongSongIT).
             KetQuaDe motLan = chay(bai(1, false, 0, 10));
             KetQuaDe haiLan = chay(bai(1, false, 0, 10), bai(1, false, 0, 10));
 
@@ -145,8 +124,6 @@ class ContestFormatTest {
                     .isEqualTo(1);
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ IOI")
@@ -168,7 +145,6 @@ class ContestFormatTest {
         void giu_diem_cao_nhat() {
             KetQuaDe kq = chay(bai(1, false, 70, 10), bai(2, false, 30, 20));
 
-            // Cả điểm của thể thức này là khuyến khích thử. Lấy bài cuối là phạt việc thử.
             assertThat(kq.diemCaoNhat()).isEqualTo(70);
             assertThat(kq.baiDatId()).isEqualTo(1L);
         }
@@ -215,7 +191,7 @@ class ContestFormatTest {
         @Test
         @DisplayName("★ penaltyGiay là 0 qua chính interface — không cần instanceof ở tầng gọi")
         void penalty_bang_khong_qua_interface() {
-            ContestFormat qua = format;   // gọi qua interface, không qua kiểu cụ thể
+            ContestFormat qua = format;
 
             assertThat(qua.penaltyGiay(List.of(new KetQuaDe(1L, 100, 0, BAT_DAU, 1L, 1L)), c))
                     .isZero();
@@ -237,8 +213,6 @@ class ContestFormatTest {
         @Test
         @DisplayName("mã lạ ném lỗi ồn ào, không im lặng rơi về một thể thức mặc định")
         void ma_la_thi_no() {
-            // Rơi về một mặc định nghĩa là một contest cấu hình sai vẫn chạy, và tính điểm
-            // bằng thể thức không ai chọn.
             org.assertj.core.api.Assertions
                     .assertThatThrownBy(() -> ContestFormats.tuMa("CODEFORCES"))
                     .isInstanceOf(IllegalArgumentException.class);

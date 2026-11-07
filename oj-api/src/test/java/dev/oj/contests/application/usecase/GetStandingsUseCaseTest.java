@@ -25,24 +25,6 @@ import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Danh tính phải sống sót qua ranh giới thread — FR-CON-04, FR-CON-05.
- *
- * <h2>Lỗi mà file này canh</h2>
- * {@code StandingsSseController} đẩy khung đầu trên thread của request, rồi đẩy mọi khung sau
- * từ thread điều phối của {@code RedisMessageListenerContainer}. Danh tính người gọi nằm
- * trong một {@code ThreadLocal} mà {@code JwtAuthFilter} đặt rồi xoá — nên trên thread thứ hai
- * nó rỗng.
- *
- * <p>Hậu quả không hề vô hại: {@code cuaToi} thành {@code null} kể từ khung thứ hai, và dòng
- * của chính thí sinh <b>biến mất</b> khỏi bảng ngay ở lần cập nhật đầu tiên — trên đúng trang
- * người ta nhìn nhiều nhất trong cả kỳ thi. Trước bản sửa này không có test nào chạm đường
- * SSE của bảng xếp hạng, nên lỗi sống sót qua toàn bộ M5.
- *
- * <p>Mỗi ca dưới đây chạy <b>cặp đôi</b>: bản có người gọi tường minh phải đúng, và bản đọc
- * {@code ThreadLocal} phải sai. Chỉ khẳng định vế đầu thì test vẫn xanh nếu ai đó lỡ tay đưa
- * lời gọi trong lambda về lại bản không tham số.
- */
 class GetStandingsUseCaseTest {
 
     private static final Instant BAT_DAU = Instant.parse("2026-05-01T09:00:00Z");
@@ -59,14 +41,11 @@ class GetStandingsUseCaseTest {
             currentUser, new ContestGia(), new StandingsGia(),
             AppPropertiesGia.macDinh(), Clock.fixed(BAY_GIO, ZoneOffset.UTC));
 
-    // =========================================================================
-
     @Test
     @DisplayName("★ dòng của mình KHÔNG biến mất khi khung được đẩy từ thread khác")
     void cua_toi_song_sot_qua_ranh_gioi_thread() throws Exception {
         currentUser.dat(THI_SINH);
 
-        // Chỗ gọi phân giải danh tính TRÊN thread request, rồi giữ lại — đúng như SSE làm.
         var nguoiGoi = useCase.nguoiGoiHienTai();
         assertThat(nguoiGoi).isEqualTo(THI_SINH);
 
@@ -83,8 +62,6 @@ class GetStandingsUseCaseTest {
 
         var bang = oThreadKhac(() -> useCase.thucHien(1L));
 
-        // Đây chính là lỗi cũ. Nếu ngày nào đó nó không còn đúng thì `thucHien(long)` đã an
-        // toàn trên mọi thread, và cả file này nên được đọc lại.
         assertThat(bang.cuaToi()).isNull();
         assertThat(bang.hangCuaToi()).isNull();
     }
@@ -97,8 +74,6 @@ class GetStandingsUseCaseTest {
 
         assertThat(oThreadKhac(() -> useCase.thucHien(1L, nguoiGoi)).dongBang()).isFalse();
 
-        // Cùng thread ấy, bản không tham số coi admin là khán giả và trả bảng đã đóng băng.
-        // Hướng sai này KHÔNG rò rỉ gì — nó giấu bớt — nên nó sống sót lâu đến vậy.
         assertThat(oThreadKhac(() -> useCase.thucHien(1L)).dongBang()).isTrue();
     }
 
@@ -121,9 +96,6 @@ class GetStandingsUseCaseTest {
     @Test
     @DisplayName("★ StandingsSseController KHÔNG được gọi bản không tham số")
     void controller_sse_phai_giu_lai_nguoi_goi() throws Exception {
-        // Bốn ca trên khẳng định use-case CÓ THỂ dùng đúng; ca này khẳng định chỗ gọi thật sự
-        // DÙNG đúng. Thiếu nó thì đưa lời gọi trong lambda về `thucHien(contestId)` vẫn xanh —
-        // và lỗi quay lại y nguyên, ở đúng chỗ nó vừa được sửa.
         String nguon = boBinhLuan(Files.readString(Path.of("src", "main", "java", "dev", "oj",
                 "contests", "api", "StandingsSseController.java")));
 
@@ -135,16 +107,9 @@ class GetStandingsUseCaseTest {
                 .doesNotContain("thucHien(contestId)");
     }
 
-    /**
-     * Bình luận trong chính file ấy GIẢI THÍCH lỗi cũ, nên nó chứa đúng chuỗi bị cấm. Quét cả
-     * bình luận thì test đỏ vì một câu văn — và cách sửa rẻ nhất khi đó là xoá lời giải thích,
-     * tức là test tự ăn mất thứ nó đang bảo vệ.
-     */
     private static String boBinhLuan(String nguon) {
         return nguon.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
     }
-
-    // =========================================================================
 
     private static <T> T oThreadKhac(Callable<T> viec) throws Exception {
         ExecutorService thread = Executors.newSingleThreadExecutor();
@@ -155,7 +120,6 @@ class GetStandingsUseCaseTest {
         }
     }
 
-    /** Bắt chước {@code CurrentUserHolder}: một {@code ThreadLocal}, ném khi rỗng. */
     private static final class CurrentUserGia implements CurrentUserProvider {
         private final ThreadLocal<CurrentUser> hienTai = new ThreadLocal<>();
 

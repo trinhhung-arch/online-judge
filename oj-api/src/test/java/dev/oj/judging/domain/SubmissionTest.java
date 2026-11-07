@@ -14,12 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
-/**
- * Vòng đời một bài nộp — FR-SUB-03. JUnit trần, không Spring context, chạy dưới một giây.
- *
- * <p>Ba bất biến được kiểm ở đây là ba thứ mà nếu sai thì không sửa được bằng một bản vá:
- * {@code attempt} chỉ tăng · verdict chỉ ghi cho bài đang được chấm · không có đường xoá bài.
- */
 class SubmissionTest {
 
     private static final Instant T0 = Instant.parse("2026-03-01T10:00:00Z");
@@ -52,7 +46,6 @@ class SubmissionTest {
         void claim_voi_attempt_khong_lon_hon_thi_bi_tu_choi() {
             Submission judging = queued().markJudging(2);
 
-            // Một lời gọi lùi số là dấu hiệu hai đường ghi đang tranh nhau cùng một bài.
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> judging.markQueued().markJudging(2))
                     .withMessageContaining("attempt chỉ tăng");
@@ -63,7 +56,7 @@ class SubmissionTest {
             Submission reclaimed = queued().markJudging(1).markQueued();
 
             assertThat(reclaimed.status()).isEqualTo(SubmissionStatus.QUEUED);
-            assertThat(reclaimed.attempt()).isEqualTo(1);   // lần claim kế tiếp mới tăng
+            assertThat(reclaimed.attempt()).isEqualTo(1);
         }
     }
 
@@ -163,11 +156,6 @@ class SubmissionTest {
         }
     }
 
-    /**
-     * FR-SUB-09 — không ai xoá được bài nộp. Hàng rào thật là
-     * {@code REVOKE DELETE, TRUNCATE ... FROM oj_app} (V8); test này giữ cho phía Java không
-     * mọc ra một phương thức mời gọi ai đó viết câu SQL tương ứng.
-     */
     @Test
     void khong_ton_tai_phuong_thuc_xoa_bai_nop() {
         assertThat(Submission.class.getDeclaredMethods())

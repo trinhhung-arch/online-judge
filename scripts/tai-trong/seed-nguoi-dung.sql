@@ -1,28 +1,3 @@
--- =============================================================================
--- Tài khoản ảo cho load test — chạy TRƯỚC k6-tai.js
---
---   docker exec -i oj-postgres psql -U ojuser -d ojdb -v xac_nhan_db=ojdb -v so_nguoi=1000 \
---       < seed-nguoi-dung.sql      (chay.sh tự làm bước này)
---
--- ★ VÌ SAO SEED BẰNG SQL CHỨ KHÔNG ĐĂNG KÝ QUA API
---
--- `bcrypt-cost: 12` là ~250ms mỗi lần băm. Đăng ký 1000 tài khoản qua API là
--- ~4 phút CPU chỉ để dựng sân, và nó nhuộm luôn phép đo: máy chủ đang gánh
--- bcrypt trong lúc ta tưởng mình đang đo đường nộp bài.
---
--- Băm dưới đây là của "matkhau-dev-123", chép từ R__seed_du_lieu_dev.sql. Nó
--- KHÔNG phải mật khẩu thật của ai — và cũng vì thế, đừng chạy file này lên một
--- database có người dùng thật.
---
--- Handle mang tiền tố `tai-` để `don-dep.sql` xoá lại được chính xác, và để
--- không ai nhầm chúng với tài khoản thật.
--- =============================================================================
-
--- ★ HÀNG RÀO — gõ lại đúng tên database đang kết nối; tên có "prod" thì từ chối luôn.
--- Nhúng thẳng ở đây chứ không \ir từ file khác: file này được PIPE qua stdin vào psql trong
--- container, nơi không có file nào khác của repo. Seed nhầm vào prod là 1000 tài khoản với mật
--- khẩu có hash công khai trong git; dọn nhầm là xoá mọi tài khoản thật tên "tai-*". Từ
--- 2026-09-11 container có cả ojdb lẫn ojdb_prod, và "$OJ_DB_URL" trong .env trỏ vào ojdb_prod.
 \set ON_ERROR_STOP on
 \if :{?xac_nhan_db}
 \else

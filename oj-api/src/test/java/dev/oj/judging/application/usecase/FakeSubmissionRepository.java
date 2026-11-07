@@ -11,28 +11,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * {@link SubmissionRepository} giả — tách khỏi {@link JudgingFakes} ở M4.
- *
- * <h2>Vì sao tách, và vì sao tách ĐÚNG cái này</h2>
- * {@code JudgingFakes} vượt trần 300 dòng của {@code CLAUDE.md} mục 7. Trong bảy fake ở đó,
- * đây là cái lớn nhất (tám phương thức, chín trường trạng thái) và là cái được dùng nhiều
- * nhất — hơn ba mươi chỗ gọi. Nó đủ phức tạp để đáng có một file riêng dù không có trần nào cả.
- *
- * <h2>{@code calls} nhận qua constructor, không phải qua inner class</h2>
- * Bản cũ là một inner class nên nó nhìn thấy thẳng trường {@code calls} của lớp bao. Chuyển
- * ra ngoài thì mối liên hệ ấy phải viết ra thành tham số — và đó là một cải thiện chứ không
- * phải cái giá: giờ nhìn vào constructor là biết fake này ghi vào đâu.
- *
- * <p><b>Mọi chỗ gọi giữ nguyên.</b> Test vẫn viết {@code fakes.submissions.inserted}; thứ đổi
- * là kiểu của trường đó, và không một dòng test nào nhắc tới kiểu ấy.
- *
- * <h2>Vì sao fake này GHI LẠI thay vì chỉ trả về</h2>
- * Chín trường trạng thái ở đây tồn tại để test khẳng định được <i>đã gọi với tham số gì</i>.
- * Ví dụ {@link #requesterId} và {@link #requesterRole}: chúng là cách kiểm rằng use-case
- * truyền danh tính người gọi xuống câu query — tức là chống IDOR nằm trong query chứ không
- * phải trong một câu {@code if} ở tầng trên ({@code oj-api/CLAUDE.md} mục 2).
- */
 class FakeSubmissionRepository implements SubmissionRepository {
 
     private final List<String> calls;
@@ -67,7 +45,6 @@ class FakeSubmissionRepository implements SubmissionRepository {
             return Optional.ofNullable(found);
         }
 
-        /** Mức phản hồi của "đề" trong test — đổi nó để kiểm FeedbackPolicy. */
         dev.oj.problems.domain.FeedbackLevel feedbackLevel =
                 dev.oj.problems.domain.FeedbackLevel.TEST_INDEX;
 
@@ -116,14 +93,13 @@ class FakeSubmissionRepository implements SubmissionRepository {
             requeued = submissionIds;
             return submissionIds.size();
         }
-    /** FR-SUB-09 — Bước 6.13. Bản giả chỉ ghi lại lời gọi; luật thật nằm trong câu SQL. */
     final java.util.List<String> daAn = new java.util.ArrayList<>();
 
     @Override
     public boolean datAn(long submissionId, boolean an, long adminId, java.time.Instant luc) {
         String khoa = submissionId + ":" + an;
         if (daAn.contains(khoa)) {
-            return false;      // đã ở đúng trạng thái ấy — giống AND hidden_at IS NULL
+            return false;
         }
         daAn.add(khoa);
         return true;

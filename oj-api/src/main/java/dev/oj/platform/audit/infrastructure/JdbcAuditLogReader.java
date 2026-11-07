@@ -14,24 +14,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Hiện thực {@link AuditLogReader} — FR-ADM-02, Bước 6.5. Pool {@code app}.
- *
- * <h2>Con trỏ mang hai giá trị vì khoá chính có hai cột</h2>
- * {@code audit_log} phân mảnh theo {@code occurred_at}, nên khoá chính là
- * {@code (occurred_at, id)} chứ không phải {@code id} — một bảng phân mảnh không có khoá chính
- * chỉ gồm {@code id} được. Con trỏ chỉ mang {@code id} sẽ bỏ sót dòng ngay khi hai bản ghi
- * trùng mốc thời gian, và trong nhật ký kiểm toán thì trùng mốc là chuyện thường: một thao tác
- * ghi ba dòng trong cùng một transaction đều mang {@code now()} giống hệt nhau.
- *
- * <p>Vì thế mệnh đề phân trang là so sánh <b>bộ đôi</b>:
- * {@code (occurred_at, id) < (:cursorAt, :cursorId)} — Postgres so sánh tuple theo từ điển,
- * và nó dùng được đúng index {@code (occurred_at DESC, id DESC)} ngầm của khoá chính.
- *
- * <h2>Không có {@code COUNT(*)}, và ở bảng này thì đó không phải là sự cầu toàn</h2>
- * {@code audit_log} là bảng chỉ lớn lên. Một câu đếm để hiện "trang 3/482" sẽ quét mọi
- * partition, và nó sẽ chậm dần đúng theo tốc độ hệ thống được dùng.
- */
 @Repository
 public class JdbcAuditLogReader implements AuditLogReader {
 
@@ -72,7 +54,7 @@ public class JdbcAuditLogReader implements AuditLogReader {
                 .param("den", odt(loc.den()))
                 .param("cursorAt", odt(con.at()))
                 .param("cursorId", con.id())
-                .param("gioiHan", size + 1)     // xin dư 1 để biết còn trang sau — CursorPage.of
+                .param("gioiHan", size + 1)
                 .query(this::doc)
                 .list();
         return CursorPage.of(rows, size, e -> new Con(e.occurredAt(), e.id()).ghi());
@@ -100,29 +82,6 @@ public class JdbcAuditLogReader implements AuditLogReader {
         return luc == null ? null : OffsetDateTime.ofInstant(luc, ZoneOffset.UTC);
     }
 
-    /**
-     * Con trỏ {@code "<microGiayTuEpoch>:<id>"}.
-     *
-     * <h2>★ MICRO giây, không phải mili giây — và đây là một lỗi đã thật sự xảy ra</h2>
-     * Bản đầu mã hoá bằng {@code Instant.toEpochMilli()}, và nó <b>bỏ sót dòng</b>:
-     * {@code timestamptz} của Postgres có độ chính xác micro giây, nên cắt xuống mili là làm
-     * con trỏ <i>lùi lại</i> tới 999 micro giây. Mệnh đề {@code (occurred_at, id) < (:cursorAt,
-     * :cursorId)} khi đó loại luôn mọi dòng nằm trong cùng mili giây nhưng ở micro giây thấp
-     * hơn dòng cuối trang — tức là những dòng lẽ ra phải nằm ở trang sau.
-     *
-     * <p>Triệu chứng: trang hai của nhật ký kiểm toán <b>thiếu vài dòng</b>, và chỉ thiếu khi
-     * các bản ghi được tạo đủ nhanh để rơi vào cùng một mili giây — đúng thứ xảy ra khi một
-     * thao tác quản trị ghi vài dòng liên tiếp. Nó đỏ ngẫu nhiên trong CI trước khi kịp gây
-     * hại thật, và đó là toàn bộ giá trị của việc {@code VanHanhIT} chạy cùng bộ với các lớp
-     * khác thay vì chạy một mình.
-     *
-     * <p>{@code long} micro giây đủ chỗ tới năm 294247 — không cần lo tràn.
-     *
-     * <h2>Con trỏ hỏng thì coi như trang đầu, KHÔNG ném</h2>
-     * Ngược với {@code SubmissionRepository} nơi cursor hỏng bị từ chối. Khác biệt là chủ ý:
-     * ở đó client lặp vô hạn trang đầu mà không ai biết, còn ở đây người dùng là một ADMIN
-     * đang nhìn màn hình và sẽ thấy ngay mình quay về đầu danh sách.
-     */
     private record Con(Instant at, Long id) {
 
         private static final long MICRO_MOI_GIAY = 1_000_000L;

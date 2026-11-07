@@ -23,19 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Xác minh email — FR-AUTH-09 (V13), mức mềm. Chạy bằng fake, không Postgres, không SMTP.
- *
- * <h2>Ba hàng rào được kiểm ở đây, và vì sao cả ba đều cần một ca riêng</h2>
- * Mã chỉ có 6 chữ số. Nó an toàn <b>chỉ khi</b> ba thứ cùng có hiệu lực: trần số lần thử ·
- * hạn dùng · mã mới huỷ mã cũ ({@code V13__xac_minh_email.sql}). Bỏ mất một trong ba thì
- * <b>mọi ca chức năng vẫn xanh</b> — mã đúng vẫn xác minh được, mã sai vẫn bị từ chối — và
- * thứ duy nhất biến mất là độ khó của việc dò. Nên mỗi hàng rào có một ca nói thẳng về nó.
- *
- * <h2>Đồng hồ giả được, và đó là điều kiện để kiểm hạn dùng lẫn khoảng chờ</h2>
- * {@link DongHo} tiến lên bằng một lời gọi thay vì bằng {@code Thread.sleep}. Một bộ test
- * ngủ 60 giây để kiểm một khoảng chờ 60 giây là một bộ test người ta thôi chạy.
- */
 class XacMinhEmailUseCaseTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-20T10:00:00Z");
@@ -51,7 +38,6 @@ class XacMinhEmailUseCaseTest {
     private AppProperties props;
     private long userId;
 
-    /** Đồng hồ tiến được — {@link Clock#fixed} thì không kiểm được thứ gì có hạn. */
     private static final class DongHo extends Clock {
 
         private Instant luc;
@@ -98,7 +84,6 @@ class XacMinhEmailUseCaseTest {
                 true, "oj@vi-du.test", TTL, soLanToiDa, CHO));
     }
 
-    /** Đẩy cả đồng hồ của use-case lẫn đồng hồ của repository giả — hai bên phải cùng giờ. */
     private void tienLen(Duration bao) {
         dongHo.tienLen(bao);
         maXacMinh.bayGio = dongHo.instant();
@@ -121,8 +106,6 @@ class XacMinhEmailUseCaseTest {
     private boolean daXacMinh() {
         return users.timTheoId(userId).orElseThrow().daXacMinhEmail();
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("Đăng ký phát mã và gửi thư")
@@ -157,9 +140,6 @@ class XacMinhEmailUseCaseTest {
             long moi = dangKy().thucHien("nguoi-moi", "moi@oj.test", "Người mới",
                     "matkhau-tot-123", "203.0.113.7", "captcha");
 
-            // Đây là điều kiện để thêm SMTP vào hệ thống này: một sự cố của nhà cung cấp thư
-            // KHÔNG được biến thành "không ai đăng ký được". Tài khoản có thật, dùng được
-            // ngay, và nút gửi lại ở trang hồ sơ là đường phục hồi.
             assertThat(users.timTheoId(moi)).isPresent();
             assertThat(hopThu.daGui).isEmpty();
         }
@@ -167,7 +147,7 @@ class XacMinhEmailUseCaseTest {
         @Test
         @DisplayName("tính năng TẮT thì không sinh mã và không gửi gì")
         void tat_thi_khong_sinh_ma() {
-            props = AppPropertiesGia.macDinh();     // xác minh email tắt
+            props = AppPropertiesGia.macDinh();
 
             long moi = dangKy().thucHien("nguoi-moi", "moi@oj.test", "Người mới",
                     "matkhau-tot-123", "203.0.113.7", "captcha");
@@ -176,8 +156,6 @@ class XacMinhEmailUseCaseTest {
             assertThat(maXacMinh.timMaDangSong(moi)).isEmpty();
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("Xác nhận bằng mã")
@@ -219,9 +197,6 @@ class XacMinhEmailUseCaseTest {
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.INVALID)
                     .hasFieldOrPropertyWithValue("code", "identity.ma_xac_minh_sai");
 
-            // Vế thứ hai mới là vế quan trọng. Nếu ConfirmEmailUseCase dùng @Transactional
-            // TRẦN thay vì noRollbackFor, ngoại lệ trên cuốn trôi lượt tăng này — và trần số
-            // lần thử biến mất trong im lặng, trong khi mọi ca chức năng vẫn xanh.
             assertThat(maXacMinh.timMaDangSong(userId)).get()
                     .extracting("soLanThu").isEqualTo(1);
             assertThat(daXacMinh()).isFalse();
@@ -239,7 +214,6 @@ class XacMinhEmailUseCaseTest {
             assertThatThrownBy(() -> xacNhan().thucHien(maKhac()))
                     .hasFieldOrPropertyWithValue("code", "identity.ma_xac_minh_da_chet");
 
-            // Đây là thứ làm cho 1 000 000 khả năng đủ an toàn: không có lượt thứ sáu.
             assertThatThrownBy(() -> xacNhan().thucHien(maDung))
                     .hasFieldOrPropertyWithValue("code", "identity.ma_xac_minh_sai");
             assertThat(daXacMinh()).isFalse();
@@ -276,14 +250,11 @@ class XacMinhEmailUseCaseTest {
                     .extracting("soLanThu").isEqualTo(0);
         }
 
-        /** Một mã 6 chữ số chắc chắn KHÁC mã đang sống. */
         private String maKhac() {
             String dung = hopThu.maMoiNhat();
             return "000000".equals(dung) ? "111111" : "000000";
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("Gửi lại mã")
@@ -312,8 +283,6 @@ class XacMinhEmailUseCaseTest {
             gui().thucHien();
 
             assertThat(hopThu.daGui).hasSize(2);
-            // Hàng rào thứ ba của V13. Không huỷ mã cũ thì mười lần bấm gửi lại là mười mã
-            // cùng sống, tức là chia mười độ khó của cùng một lượt dò.
             assertThatThrownBy(() -> xacNhan().thucHien(maCu))
                     .hasFieldOrPropertyWithValue("code", "identity.ma_xac_minh_sai");
             assertThatCode(() -> xacNhan().thucHien(hopThu.maMoiNhat()))
@@ -326,9 +295,6 @@ class XacMinhEmailUseCaseTest {
             gui().thucHien();
             tienLen(TTL.plusSeconds(1));
 
-            // Nếu huyMaCu() lỡ mang thêm điều kiện `expires_at > now()` thì câu chèn sau đó
-            // đâm vào ux_email_verifications_song — một lỗi chỉ xuất hiện sau đúng 30 phút,
-            // tức là không bao giờ gặp lúc đang viết code.
             assertThatCode(() -> gui().thucHien()).doesNotThrowAnyException();
             assertThat(hopThu.daGui).hasSize(2);
         }
@@ -358,9 +324,6 @@ class XacMinhEmailUseCaseTest {
         @Test
         @DisplayName("★ hai cú bấm cùng lúc → 429, KHÔNG phải 500")
         void hai_request_song_song_thi_429() {
-            // Cuộc đua thật: cả hai request cùng thấy không có mã sống, cùng huỷ, rồi cùng
-            // chèn. ux_email_verifications_song để đúng một cái thắng. Người thua phải nhận
-            // một câu đọc được — họ không làm gì sai, và mã đã nằm trong hộp thư rồi.
             maXacMinh.requestKhacChenTruoc = true;
 
             assertThatThrownBy(() -> gui().thucHien())

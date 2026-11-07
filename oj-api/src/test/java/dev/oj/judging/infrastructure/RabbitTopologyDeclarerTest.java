@@ -10,15 +10,6 @@ import org.springframework.amqp.rabbit.connection.ConnectionListener;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/**
- * Hai ca, và ca thứ hai mới là ca cứu một buổi sáng.
- *
- * <p>Ca một chỉ nói "có gọi khai báo không". Ca hai nói điều đắt hơn: khi broker đang chết,
- * API <b>vẫn phải khởi động</b>. Đổi {@code catch (AmqpException)} thành ném lên là biến một
- * sự cố hạ tầng chịu đựng được — đã có cầu dao, đã có reaper, đã có bảng degraded mode ở
- * {@code nfrplan.md} 7.2 — thành một API không lên nổi, tức là mất luôn cả đường nhận bài mà
- * Postgres vẫn phục vụ được.
- */
 class RabbitTopologyDeclarerTest {
 
     @Test
@@ -54,16 +45,6 @@ class RabbitTopologyDeclarerTest {
                 .isEqualTo(1);
     }
 
-    /**
-     * Fake viết tay thay cho thư viện mock — {@code CLAUDE.md} mục 6 gọi tên đúng kiểu này.
-     *
-     * <p>Hiện thực thẳng interface chứ không kế thừa {@code CachingConnectionFactory}:
-     * {@code createConnection()} ở lớp ấy là {@code final}, không đè được. Tám method còn lại
-     * trả giá trị rỗng vì lớp đang kiểm không gọi tới cái nào.
-     *
-     * <p>Trả {@code null} cho kết nối là đủ và có chủ đích: lớp đang kiểm cố ý KHÔNG đụng vào
-     * giá trị trả về — vòng đời kết nối thuộc về chính factory, không phải người gọi.
-     */
     private static final class ConnectionFactoryGia implements ConnectionFactory {
 
         private int soLanMoKetNoi;

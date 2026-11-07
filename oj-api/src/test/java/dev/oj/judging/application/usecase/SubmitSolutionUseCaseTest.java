@@ -22,11 +22,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/**
- * ★ Đường nóng, ngân sách 300ms. Test này canh <b>hình dạng</b> của use-case, không phải kết
- * quả của nó: {@code accept != process} là một tính chất về thứ tự lời gọi, và một assertion
- * trên giá trị trả về không nhìn thấy được nó.
- */
 class SubmitSolutionUseCaseTest {
 
     private JudgingFakes fakes;
@@ -53,10 +48,6 @@ class SubmitSolutionUseCaseTest {
         return new SubmitSolutionUseCase.Command(42L, "cpp20", JudgingFakes.SOURCE);
     }
 
-    /**
-     * ★ Bất biến #2 diễn đạt thành một danh sách: ba câu ghi nằm <b>trong</b> transaction,
-     * publish nằm <b>sau</b> COMMIT, và không có gì khác chen vào giữa.
-     */
     @Test
     @DisplayName("★ M5 · bài nộp ngoài kỳ thi có contest_id = null")
     void ngoai_ky_thi_thi_contest_id_null() {
@@ -72,9 +63,6 @@ class SubmitSolutionUseCaseTest {
 
         useCase.submit(command());
 
-        // Command chỉ có problemId, languageCode, source — không có chỗ nào để client khai
-        // contest. Nếu ngày nào đó ai thêm một trường contestId vào Command, ca này vẫn xanh
-        // nhưng ca dưới sẽ đỏ.
         assertThat(fakes.submissions.inserted.contestId()).isEqualTo(77L);
     }
 
@@ -87,9 +75,6 @@ class SubmitSolutionUseCaseTest {
                 .map(t -> t.toLowerCase(java.util.Locale.ROOT))
                 .toList();
 
-        // Client khai được contest nghĩa là khai được contest KHÁC, hoặc khai không có contest
-        // nào để bài của mình không vào bảng xếp hạng — nộp thử trong giờ thi mà không bị tính
-        // penalty. Cả hai đều phá đúng thứ hệ thống này bán.
         assertThat(truong).noneMatch(t -> t.contains("contest"));
     }
 
@@ -102,8 +87,6 @@ class SubmitSolutionUseCaseTest {
                 .isThrownBy(() -> useCase.submit(command()))
                 .satisfies(e -> {
                     assertThat(e.kind()).isEqualTo(DomainException.Kind.RATE_LIMITED);
-                    // retryAfter đi ra header Retry-After — FR-SUB-08 là quy tắc được CÔNG BỐ,
-                    // UI phải hiện được đếm ngược thay vì để người dùng đoán.
                     assertThat(e.retryAfter()).isNotNull();
                 });
 
@@ -140,11 +123,6 @@ class SubmitSolutionUseCaseTest {
                 "events.publishEnqueued");
     }
 
-    /**
-     * ★ Publish hỏng <b>không</b> làm hỏng bài nộp: hàng đã nằm trong {@code judge_queue} và
-     * reaper sẽ nhặt. Đây chính là lý do reaper tồn tại — bỏ dòng try/catch trong use-case
-     * thì test này đỏ, và người dùng nhận 500 cho một bài đã được ghi thành công.
-     */
     @Test
     void publisher_nem_loi_thi_van_nhan_bai() {
         fakes.publisher.explode = true;
@@ -161,7 +139,6 @@ class SubmitSolutionUseCaseTest {
         var accepted = useCase.submit(command());
 
         assertThat(accepted.status()).isEqualTo(SubmissionStatus.QUEUED);
-        // Không có lời gọi nào tới worker, tới hàng đợi kết quả, hay tới bất cứ thứ gì chờ đợi.
         assertThat(fakes.calls).noneMatch(c -> c.contains("judgeRuns") || c.contains("markDone")
                 || c.contains("claim"));
     }
@@ -173,7 +150,6 @@ class SubmitSolutionUseCaseTest {
         assertThat(fakes.queue.enqueuedPriority).isEqualTo(DomainRules.PRIORITY_LIVE);
     }
 
-    /** Bài nộp đóng dấu phiên bản testdata tại lúc nộp — FR-PROB-10 sống nhờ con số này. */
     @Test
     void dong_dau_testdata_version_va_khoa_source() {
         useCase.submit(command());
@@ -222,22 +198,11 @@ class SubmitSolutionUseCaseTest {
         assertThat(fakes.calls).doesNotContain("tx.begin");
     }
 
-    /** Command không được để mã nguồn lọt vào một dòng log (bất biến #9). */
     @Test
     void toString_cua_command_khong_chua_ma_nguon() {
         assertThat(command().toString()).doesNotContain("main", "return");
     }
 
-    /**
-     * Dùng chung với {@code AdminJudgingUseCasesTest} — hai bộ test cùng cần một
-     * {@code GetProblemUseCase} trả về (hoặc không trả về) một đề.
-     *
-     * <p>Để ở đây chứ không nhân đôi sang file kia: {@code publishedProblem()} có mười ba
-     * tham số, và hai bản sao của nó sẽ lệch nhau vào lần đầu tiên {@code Problem} thêm một
-     * trường.
-     *
-     * @param problemId {@code null} = đề không tồn tại
-     */
     static GetProblemUseCase getProblemUseCaseTraVe(Long problemId, LichThiGia lichThi) {
         Problem de = problemId == null ? null : publishedProblem();
         return new GetProblemUseCase(problemRepositoryReturning(de), statements(), lichThi,
@@ -270,10 +235,6 @@ class SubmitSolutionUseCaseTest {
         };
     }
 
-    /**
-     * {@code StatementService} thật nhưng với một cache rỗng — đường nộp bài không render đề,
-     * nên nó chỉ cần tồn tại để {@code GetProblemUseCase} dựng được.
-     */
     private static dev.oj.problems.application.StatementService statements() {
         var renderer = new dev.oj.problems.application.port.StatementRenderer() {
             @Override

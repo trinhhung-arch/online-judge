@@ -7,15 +7,10 @@
     <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
-     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
-     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
-     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
 <a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
 <main id="chinh">
     <h1>Đăng nhập</h1>
 
-    <!-- aria-live: kết quả đến bất đồng bộ, nên trình đọc màn hình phải được báo. -->
     <p id="thong-bao" class="thong-bao" role="status" aria-live="polite"></p>
 
     <form id="form-dang-nhap" class="the" novalidate>
@@ -25,10 +20,6 @@
         <label for="mat-khau">Mật khẩu</label>
         <input id="mat-khau" name="password" type="password" autocomplete="current-password" required>
 
-        <!-- ★ ẨN cho tới khi server nói tài khoản này cần mã (identity.can_totp).
-             Hiện sẵn ô này cho mọi người là nói với cả internet rằng hệ thống có 2FA và
-             mời họ đoán xem tài khoản nào bật — trong khi phần lớn người dùng không bật
-             và sẽ bối rối trước một ô họ không có gì để điền. -->
         <div id="nhom-hai-lop" hidden>
             <label for="ma-hai-lop">Mã xác thực</label>
             <input id="ma-hai-lop" name="maHaiLop" autocomplete="one-time-code"
@@ -42,10 +33,6 @@
     <h2>Chưa có tài khoản?</h2>
     <form id="form-dang-ky" class="the" novalidate>
         <label for="handle">Tên đăng nhập</label>
-        <!-- ★ `pattern` là BẢN SAO THỨ BA của cùng một luật (Java, CHECK của V1, và đây).
-             `IdentityDomainTest` đối chiếu cả ba, nên sửa một nơi là ba nơi cùng đỏ. Nó nằm
-             ở HTML chứ không phải trong login.js để JavaScript đọc lại từ DOM — một bản sao
-             ít hơn là một chỗ ít hơn để lệch. -->
         <input id="handle" name="handle" autocomplete="username" required
                pattern="^[A-Za-z0-9_.-]{3,32}$" minlength="3" maxlength="32"
                aria-describedby="goi-y-handle loi-handle">
@@ -66,12 +53,6 @@
         <input id="mat-khau-moi" name="password" type="password" autocomplete="new-password" required>
         <p class="goi-y">Ít nhất 8 ký tự.</p>
 
-        <!-- ★ Chống bot (FR-AUTH-01). Widget chỉ được dựng khi server nói captcha đang
-             BẬT — máy dev tắt thì khối này rỗng và không ai thấy gì.
-
-             Ô ẩn bên dưới là cầu nối: Turnstile trả token qua callback, JS ghi vào đây, và
-             hàm gửi form chung nhặt nó cùng mọi trường khác. Không có nó thì token mang tên
-             `cf-turnstile-response` của Cloudflare, lệch với tên trường mà API đọc. -->
         <div id="captcha-dang-ky"></div>
         <input type="hidden" name="captchaToken" id="captcha-token">
 

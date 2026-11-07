@@ -24,14 +24,6 @@ import java.util.OptionalLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Phần của quyền sở hữu nằm ở USE-CASE: ai được đưa vào câu SQL, và kiểm theo thứ tự nào.
- * Bản thân điều kiện SQL được đo trên Postgres thật ở {@code ContestChuSoHuuIT}.
- *
- * <p>Fake repository mô phỏng đúng ngữ nghĩa của câu SQL ({@code created_by = nguoiGoi OR
- * laAdmin}), nên một use-case truyền sai người — ví dụ truyền {@code contest.createdBy()} thay
- * cho người gọi — sẽ qua được fake và đỏ ở đây.
- */
 class AuthorContestUseCaseTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-23T10:00:00Z");
@@ -46,7 +38,6 @@ class AuthorContestUseCaseTest {
         Clock dongHo = Clock.fixed(BAY_GIO, ZoneOffset.UTC);
         var authorProblem = new AuthorProblemUseCase(() -> nguoiGoi, de,
                 (h, l, id, ct) -> { }, new KhongKyThiNao(), dongHo);
-        // ContestRepository chỉ phục vụ `tao` — không ca nào ở đây gọi tới.
         return new AuthorContestUseCase(() -> nguoiGoi, null, soan, authorProblem,
                 (h, l, id, ct) -> { }, dongHo);
     }
@@ -100,8 +91,6 @@ class AuthorContestUseCaseTest {
         assertThat(soan.loiGoi).isEmpty();
     }
 
-    // ---- fake ----------------------------------------------------------------------------
-
     private static AuthorProblemUseCase.Command lenhDe() {
         return new AuthorProblemUseCase.Command("DE-MOI", "Đề mới", "x", 1000, 262_144,
                 dev.oj.contract.CheckerType.TOKEN, null,
@@ -109,7 +98,6 @@ class AuthorContestUseCaseTest {
                 dev.oj.problems.domain.FeedbackLevel.TEST_INDEX, false);
     }
 
-    /** Một kỳ thi chưa mở, của {@link #CHU}; ngữ nghĩa khớp {@code JdbcContestAuthoringRepository}. */
     private static final class SoanKyThiGia implements ContestAuthoringRepository {
         final List<String> loiGoi = new ArrayList<>();
 
@@ -144,7 +132,6 @@ class AuthorContestUseCaseTest {
         }
     }
 
-    /** Chỉ đếm số đề được tạo — thứ duy nhất ca "không để lại đề mồ côi" cần. */
     private static final class DeGia implements ProblemAuthoringRepository {
         int soLanTao;
 

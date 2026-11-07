@@ -12,27 +12,6 @@ import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ {@code CLAUDE.md} mục 6, dòng cuối bảng: <b>migration phải chạy được trên DB rỗng
- * <i>và</i> DB đã có dữ liệu.</b>
- *
- * <p>Nửa đầu đã được cả bộ IT chứng minh — {@link PostgresIT} dựng một container trắng và
- * Flyway chạy hết. Nửa sau thì không ai chứng minh, và nó là nửa nguy hiểm: trên máy dev,
- * migration mới luôn gặp một database trắng; trên host thật, nó luôn gặp một database đầy.
- *
- * <h2>V9 là migration đầu tiên của dự án ĐỘNG VÀO MỘT INDEX ĐANG CÓ</h2>
- * Nó {@code DROP INDEX ux_jobs_one_active_per_type} rồi tạo một unique index khác trên cùng
- * bảng. Một unique index chỉ tạo được nếu dữ liệu <b>hiện có</b> thoả nó — và nếu không thoả
- * thì Flyway hỏng <i>giữa lúc deploy</i>, với một database đã áp một nửa số migration.
- *
- * <p>Ca dưới đây dựng đúng tình huống đáng ngờ nhất: hai job cùng loại đang sống, thuộc hai
- * đề khác nhau. Trước V9 chúng không tồn tại được; sau V9 chúng hợp lệ. Điểm cần kiểm là
- * <b>bước chuyển</b> — và nó chỉ kiểm được bằng cách chạy tới V8, chèn dữ liệu, rồi chạy tiếp.
- *
- * <h2>Container riêng, không dùng chung với {@link PostgresIT}</h2>
- * Bắt buộc: container kia đã ở phiên bản mới nhất từ lúc khởi động. Cái giá là khoảng hai
- * giây và một kết nối — không đi qua Spring context nên không tốn 26 connection của một pool.
- */
 class MigrationTrenDuLieuCoSanIT {
 
     @Test
@@ -41,12 +20,10 @@ class MigrationTrenDuLieuCoSanIT {
         try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
             pg.start();
 
-            // 1. Chạy tới V8 — trạng thái của một host đang chạy trước khi deploy M6 phần cuối.
             flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("8")).load()
                     .migrate();
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
-                // 2. Dữ liệu thật: một người dùng, hai đề, và HAI job cùng loại đang sống.
                 st.execute("""
                         INSERT INTO users (handle, email, display_name, password_hash, role)
                         VALUES ('nguoi', 'n@oj.test', 'Người', 'x', 'ADMIN')
@@ -55,8 +32,6 @@ class MigrationTrenDuLieuCoSanIT {
                         INSERT INTO jobs (type, status, params, created_by)
                         VALUES ('TESTDATA_IMPORT', 'RUNNING', '{"problemId": 1}'::jsonb, 1)
                         """);
-                // Dòng thứ hai chỉ chèn được VÌ index cũ đã bị V9 thay — nhưng V9 chưa chạy,
-                // nên ở đây nó phải bị TỪ CHỐI. Kiểm luôn để ca này chứng minh đúng bước chuyển.
                 assertThat(chenDuocKhong(st, """
                         INSERT INTO jobs (type, status, params, created_by)
                         VALUES ('TESTDATA_IMPORT', 'PENDING', '{"problemId": 2}'::jsonb, 1)
@@ -65,7 +40,6 @@ class MigrationTrenDuLieuCoSanIT {
                         .isFalse();
             }
 
-            // 3. Chạy nốt V9 trên database ĐÃ CÓ dữ liệu.
             flyway(pg).load().migrate();
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
@@ -85,9 +59,6 @@ class MigrationTrenDuLieuCoSanIT {
                         .isFalse();
             }
 
-            // 4. Hàm tạo partition audit_log vẫn gọi được sau khi V8 đổi nó thành SECURITY
-            //    DEFINER — nếu cú pháp sai thì Flyway đã hỏng ở bước 1, nhưng gọi thật mới
-            //    chứng minh nó CHẠY được.
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
                 st.execute("SELECT create_audit_log_partition("
                         + "(CURRENT_DATE + INTERVAL '2 month')::date)");
@@ -95,26 +66,12 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
-    /**
-     * ★ V12 chạy được trên một {@code contest_problems} <b>đang mâu thuẫn với chính nó</b>.
-     *
-     * <p>V12 bỏ cột {@code ordinal} vì nó và {@code label} cùng nói một chuyện mà không cột
-     * nào chịu trách nhiệm (ADR 015). Trạng thái đáng ngờ nhất lúc migration chạy là trạng
-     * thái mà cột ấy đã hỏng sẵn: hai đề cùng {@code ordinal}, nhãn thì {@code 'A'} và
-     * {@code 'D'} — đúng thứ có thật trong database dev trước khi V12 chạy.
-     *
-     * <p>Ca này chốt hai điều. Một: {@code DROP COLUMN} không cần dọn dữ liệu trước, nên
-     * không có bước backfill nào lỡ quên được. Hai — và đây mới là điều đáng ghi lại: đường
-     * còn lại (thêm {@code UNIQUE (contest_id, ordinal)}) sẽ <b>hỏng ngay tại đây</b>, giữa
-     * lúc deploy, trên một database đã áp một nửa số migration.
-     */
     @Test
     @DisplayName("★ V12 bỏ được cột ordinal kể cả khi dữ liệu đang có hai đề trùng ordinal")
     void v12_chay_duoc_tren_du_lieu_ordinal_trung() throws SQLException {
         try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
             pg.start();
 
-            // 1. Chạy tới V11 — trạng thái ngay trước V12.
             flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("11")).load()
                     .migrate();
 
@@ -135,8 +92,6 @@ class MigrationTrenDuLieuCoSanIT {
                         VALUES ('ky-thi', 'Kỳ thi', 'ICPC', now() + INTERVAL '1 hour',
                                 now() + INTERVAL '4 hour', 1)
                         """);
-                // Hai đề, HAI NHÃN KHÁC NHAU, nhưng CÙNG ordinal — hợp lệ trước V12 vì
-                // ordinal chưa từng có ràng buộc nào. Đây là cái làm ORDER BY bất định.
                 st.execute("""
                         INSERT INTO contest_problems (contest_id, problem_id, label, ordinal,
                                                       points)
@@ -146,7 +101,6 @@ class MigrationTrenDuLieuCoSanIT {
                         """);
             }
 
-            // 2. Chạy nốt V12 trên database ĐÃ CÓ dữ liệu mâu thuẫn.
             flyway(pg).load().migrate();
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
@@ -167,31 +121,12 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
-    /**
-     * ★ V13 thay được {@code ck_users_anonymized} trên một bảng {@code users} <b>đã có một
-     * tài khoản ẩn danh hoá</b>.
-     *
-     * <p>V13 làm hai việc mà không migration nào trước đó làm cùng lúc: thêm một cột vào
-     * {@code users}, rồi <b>DROP và ADD lại một CHECK đang có hiệu lực</b> trên chính bảng ấy.
-     * Câu {@code ADD CONSTRAINT} được Postgres kiểm lại trên <i>toàn bộ dữ liệu hiện có</i>,
-     * nên nếu một dòng nào đó không thoả, Flyway chết <b>giữa lúc deploy</b> — trên một
-     * database đã áp một nửa số migration.
-     *
-     * <p>Dòng duy nhất có thể không thoả là một tài khoản {@code ANONYMIZED}, vì ràng buộc
-     * mới chỉ nói về chúng. Ca này dựng đúng một dòng như thế trước khi V13 chạy.
-     *
-     * <p>Nó chốt luôn vế thứ hai, thứ mà phép kiểm lúc migrate không nói: sau V13, một tài
-     * khoản ẩn danh hoá <b>không nhận được</b> {@code email_verified_at}. Đó là lời hứa
-     * FR-AUTH-07 mở rộng sang cột mới, và nó là lý do cột ấy được đưa vào ràng buộc thay vì
-     * chỉ được nhớ trong câu {@code UPDATE} của {@code JdbcUserRepository}.
-     */
     @Test
     @DisplayName("★ V13 thay được ck_users_anonymized khi đã có tài khoản ẩn danh hoá")
     void v13_chay_duoc_khi_da_co_tai_khoan_an_danh() throws SQLException {
         try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
             pg.start();
 
-            // 1. Chạy tới V12 — trạng thái ngay trước V13.
             flyway(pg).target(org.flywaydb.core.api.MigrationVersion.fromVersion("12")).load()
                     .migrate();
 
@@ -200,15 +135,12 @@ class MigrationTrenDuLieuCoSanIT {
                         INSERT INTO users (handle, email, display_name, password_hash, role)
                         VALUES ('con-dung', 'con@oj.test', 'Còn dùng', 'x', 'USER')
                         """);
-                // Đúng hình dạng mà AnonymizeAccountUseCase để lại: email và băm mật khẩu
-                // đã bị xoá thật, dòng thì vẫn còn vì submissions tham chiếu tới nó.
                 st.execute("""
                         INSERT INTO users (handle, email, display_name, password_hash, status)
                         VALUES ('da-xoa', NULL, '[đã xoá #2]', NULL, 'ANONYMIZED')
                         """);
             }
 
-            // 2. Chạy nốt V13 trên database ĐÃ CÓ dòng ANONYMIZED.
             flyway(pg).load().migrate();
 
             try (Connection con = ket(pg); Statement st = con.createStatement()) {
@@ -237,11 +169,6 @@ class MigrationTrenDuLieuCoSanIT {
         }
     }
 
-    /**
-     * ★ V15 trên host đã có người bật 2FA. Dòng cũ phải nhận {@code failed_attempts = 0} và
-     * không có hạn khoá (deploy không khoá oan ai), và câu ghi của jar ĐANG CHẠY — không biết
-     * hai cột mới — phải còn chạy (lùi jar không cần lùi schema).
-     */
     @Test
     @DisplayName("★ V15 chạy trên tài khoản đang bật 2FA: không khoá oan, jar cũ vẫn ghi được")
     void v15_chay_duoc_khi_da_co_nguoi_bat_hai_lop() throws SQLException {
@@ -265,7 +192,6 @@ class MigrationTrenDuLieuCoSanIT {
                 rs.next();
                 assertThat(rs.getObject(1)).as("dòng cũ nhận DEFAULT 0, không phải NULL").isEqualTo(0);
                 assertThat(rs.getObject(2)).as("★ không ai bị khoá bước hai lớp chỉ vì deploy").isNull();
-                // Đúng câu LUU_BAN_NHAP của jar đang chạy trên host (52727b6).
                 assertThat(chenDuocKhong(st, """
                         INSERT INTO user_two_factor (user_id, secret_enc, enabled)
                         VALUES (2, 'ban-nhap', FALSE)
@@ -285,7 +211,6 @@ class MigrationTrenDuLieuCoSanIT {
         return DriverManager.getConnection(pg.getJdbcUrl(), pg.getUsername(), pg.getPassword());
     }
 
-    /** {@code true} nếu câu {@code INSERT} đi qua được ràng buộc. */
     private static boolean chenDuocKhong(Statement st, String sql) {
         try {
             st.execute(sql);

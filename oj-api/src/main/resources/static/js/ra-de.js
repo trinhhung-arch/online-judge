@@ -1,31 +1,3 @@
-/**
- * Soạn đề — FR-PROB-01, 07, 08. Bước G9.
- *
- * ★ MÁY CHỦ KHÔNG CÓ ENDPOINT "NHỮNG BẢN NHÁP CỦA TÔI"
- *
- * `GET /api/v1/problems` lọc `status = 'PUBLISHED'`, và `GET /problems/{code}` cũng chỉ thấy
- * `PUBLISHED`/`RETIRED`. Nghĩa là một bản nháp KHÔNG tra được bằng mã chữ; thứ duy nhất mở
- * lại được nó là `problemId` mà máy chủ trả về đúng một lần, lúc tạo.
- *
- * Trang này giữ danh sách id ấy trong `localStorage` để tác giả không phải chép tay. Đó là
- * bộ nhớ của MỘT TRÌNH DUYỆT, không phải dữ liệu — nói rõ ở HTML, vì một danh sách trông
- * giống "đề của tôi" mà thật ra là cache sẽ làm người ta tưởng đã mất đề khi đổi máy.
- *
- * ★ FORM NÀY GHI ĐÈ TRỌN BẢN GHI, NÊN NÓ PHẢI ĐỌC ĐƯỢC TRỌN BẢN GHI
- *
- * `PUT` đặt cả mười trường, kể cả những trường người dùng không chạm tới. Nghĩa là mọi thứ
- * form gửi đi mà không đọc vào trước sẽ bị xoá.
- *
- * Đã từng đúng như thế: `GET .../edit` trả `ProblemResponse` — bản dùng cho trang đề công
- * khai — vốn cố ý không mang `checkerEpsilon` lẫn `allowPublicSolutions`. Một vòng "mở đề
- * float → sửa tiêu đề → Lưu" xoá sạch sai số, và đề vẫn chấm, chỉ chấm sai. Nay endpoint trả
- * `ProblemAuthoringResponse` mang đủ, và `ProblemAuthoringRoundTripTest` giữ cho hai danh
- * sách trường ấy không lệch nhau nữa.
- *
- * Bài học vẫn còn giá trị ở đây: thêm một ô vào form này thì phải thêm cả ở `doVaoForm` lẫn
- * `docTuForm`. Thêm mỗi chỗ thứ hai là viết một cái nút xoá dữ liệu.
- */
-
 import { goi, LoiApi } from './api.js';
 import { chu, bao, vaiTroItNhat } from './khung.js';
 import { khoiDong } from './trang.js';
@@ -40,14 +12,6 @@ const form = document.getElementById('form-de');
 const khuKyThi = document.getElementById('khu-ky-thi');
 const nhanKyThi = document.getElementById('nhan-ky-thi');
 
-/**
- * ★ V10 — trang có HAI chế độ, khác nhau ở ĐÍCH ĐẾN của nút Lưu: `null` là kho đề chung
- * (POST /problems), `<id>` là soạn riêng cho kỳ thi ấy (POST /contests/<id>/problems/new —
- * một request làm cả hai việc trong một transaction).
- *
- * Chỉ áp dụng khi TẠO. Sửa đề đã có luôn là PUT /problems/<id>: đổi nội dung đề không phải
- * là đổi quan hệ giữa đề với kỳ thi.
- */
 const kyThiDich = (() => {
     const v = new URLSearchParams(location.search).get('kyThi');
     return v && /^[0-9]+$/.test(v) ? Number(v) : null;
@@ -61,10 +25,8 @@ const khuTrangThai = document.getElementById('trang-thai-de');
 const canhBaoPhanHoi = document.getElementById('canh-bao-phan-hoi');
 const ganDay = document.getElementById('gan-day');
 
-/** `null` = đang soạn đề mới; một số = đang sửa đề đã có. */
 let deHienTai = null;
 
-/** Khối xoá đề (`xoa-de.js`). Khởi tạo trước mọi lời gọi `datCheDo`, thứ đẩy trạng thái sang nó. */
 const xoaDe = ganXoaDe({
     o,
     khiXong: () => {
@@ -81,10 +43,6 @@ const GIAI_THICH_PHAN_HOI = {
         + 'chắc rằng những test bạn đánh dấu "sample" thật sự là test bạn muốn cho xem.',
 };
 
-// ---------------------------------------------------------------------------
-// Đổ dữ liệu vào form và đọc ngược ra
-// ---------------------------------------------------------------------------
-
 const NHAN_TRANG_THAI = {
     DRAFT: 'Bản nháp — chưa ai ngoài bạn thấy đề này.',
     PUBLISHED: 'Đã xuất bản — mọi người thấy đề và nộp bài được.',
@@ -97,8 +55,6 @@ function datCheDo(id, code, trangThai) {
     nutLuu.textContent = id ? 'Lưu thay đổi' : 'Tạo đề';
     khuTestdata.hidden = !id;
 
-    // ★ Chỉ hiện nút DÙNG ĐƯỢC. Bày cả "Xuất bản" lẫn "Gỡ xuống" cho một đề đang PUBLISHED
-    // là bắt người ta đoán đề đang ở đâu — mà chính máy chủ vừa nói ra điều đó.
     nutXuatBan.hidden = !id || trangThai === 'PUBLISHED';
     nutGoXuong.hidden = !id || trangThai !== 'PUBLISHED';
 
@@ -122,8 +78,6 @@ function doVaoForm(de) {
     form.allowPublicSolutions.checked = Boolean(de.allowPublicSolutions);
     form.scoringMode.value = de.scoringMode || 'ALL_OR_NOTHING';
     form.feedbackLevel.value = de.feedbackLevel || 'TEST_INDEX';
-    // Hai trường máy chủ không trả về: để nguyên giá trị mặc định của form, và câu cảnh báo
-    // ở `datCheDo` nói cho tác giả biết vì sao chúng trống.
     veGiaiThichPhanHoi();
 }
 
@@ -131,7 +85,7 @@ function docTuForm() {
     const eps = form.checkerEpsilon.value.trim();
     return {
         code: form.code.value.trim(),
-        title: form.elements.title.value.trim(),   // `form.title` = thuộc tính HTML
+        title: form.elements.title.value.trim(),
         statementMd: form.statementMd.value,
         timeLimitMs: Number(form.timeLimitMs.value),
         memoryLimitKb: Number(form.memoryLimitKb.value),
@@ -146,10 +100,6 @@ function docTuForm() {
 function veGiaiThichPhanHoi() {
     canhBaoPhanHoi.textContent = GIAI_THICH_PHAN_HOI[form.feedbackLevel.value] || '';
 }
-
-// ---------------------------------------------------------------------------
-// Hành động
-// ---------------------------------------------------------------------------
 
 async function moDe(id) {
     bao(o, '');
@@ -220,7 +170,6 @@ async function doiTrangThai(duongDan, hoi, xong) {
     }
 }
 
-/** Bật hai ô của `contest_problems` (nhãn, điểm) khi trang được mở từ một kỳ thi. */
 function batCheDoKyThi() {
     if (kyThiDich === null) return;
     khuKyThi.hidden = false;
@@ -230,13 +179,6 @@ function batCheDoKyThi() {
     document.getElementById('tieu-de-form').textContent = 'Đề mới cho kỳ thi';
 }
 
-/**
- * Mở sẵn một đề nếu đường dẫn nói tên nó. `?id=<số>` là đường của bản nháp; `?ma=<mã>` là
- * đường của nút Sửa ở trang Đề bài (mọi đề trong danh sách ấy đều đã xuất bản).
- *
- * <p>Hai tham số riêng thay vì một tham số đoán kiểu: một đề hoàn toàn có thể mang mã "15",
- * và đoán sai ở đó cho ra 404 mà không ai hiểu vì sao.
- */
 async function moTheoDuongDan() {
     const q = new URLSearchParams(location.search);
     const id = q.get('id');
@@ -255,12 +197,8 @@ async function moTheoDuongDan() {
     }
 }
 
-// ---------------------------------------------------------------------------
-
 if (o) {
     if (!vaiTroItNhat('SETTER')) {
-        // Không phải chốt bảo mật — `AuthorProblemUseCase` mới là nơi chặn (bất biến #11).
-        // Nói trước để người ta không gõ xong cả đề rồi mới nhận 403.
         bao(o, 'Tài khoản của bạn không có quyền soạn đề. Máy chủ sẽ từ chối mọi thao tác ở '
             + 'trang này.', 'loi');
     }

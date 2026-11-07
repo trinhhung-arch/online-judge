@@ -14,29 +14,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 
-/**
- * Ánh xạ dòng {@code submissions} sang domain. Tách khỏi {@code JdbcSubmissionRepository} vì
- * file đó vượt trần 300 dòng ({@code CLAUDE.md} mục 7) — không phải vì hai việc này khác nhau
- * về bản chất.
- *
- * <h2>Vì sao ánh xạ tay chứ không {@code query(Submission.class)}</h2>
- * Bộ chuyển đổi tự động không biết ba điều mà domain coi là bất biến: {@code verdict} và
- * {@code judged_at} phải cùng có hoặc cùng không, {@code status} là {@code TEXT} chứ không
- * phải enum của Postgres, và {@code getInt} trả {@code 0} cho một cột {@code NULL}. Cái thứ ba
- * là loại lỗi tệ nhất: một bài chưa chấm xong sẽ hiện <b>"0ms / 0KB"</b> thay vì ô trống, và
- * không ai nhận ra là sai vì nó trông giống một con số thật.
- */
 final class SubmissionRowMappers {
 
     static final RowMapper<Submission> SUBMISSION = SubmissionRowMappers::mapSubmission;
 
-    /**
-     * Trang chi tiết. Dùng lại {@link #mapSubmission} cho phần bài nộp, rồi bọc thêm ngữ cảnh
-     * của đề — nên hai câu query không bao giờ đọc {@code submissions} theo hai cách khác nhau.
-     *
-     * <p>Giới hạn được quy về máy chấm chuẩn bằng <b>đúng công thức mà máy chấm dùng</b>
-     * ({@code JudgeSpec.timeLimitOnReferenceHost}), không phải một bản chép lại.
-     */
     static final RowMapper<SubmissionRepository.SubmissionDetail> DETAIL = (rs, rowNum) ->
             new SubmissionRepository.SubmissionDetail(
                     mapSubmission(rs, rowNum),
@@ -69,9 +50,6 @@ final class SubmissionRowMappers {
 
     private static Submission mapSubmission(ResultSet rs, int rowNum) throws SQLException {
         Verdict verdict = verdict(rs);
-        // Một dòng DONE mà thiếu verdict là dữ liệu hỏng (ck_submissions_done chặn nó ở DB).
-        // Dựng outcome = null trong trường hợp đó để constructor của Submission nổ ngay lúc
-        // đọc lên, chứ không phải lúc render trang cho người dùng.
         JudgeOutcome outcome = verdict == null ? null : new JudgeOutcome(
                 verdict,
                 rs.getInt("score"),
@@ -102,7 +80,6 @@ final class SubmissionRowMappers {
         return code == null ? null : Verdict.fromCode(code);
     }
 
-    /** {@code getInt} trả 0 cho NULL — ba hàm này giữ NULL đúng là NULL. */
     private static Integer integer(ResultSet rs, String column) throws SQLException {
         int value = rs.getInt(column);
         return rs.wasNull() ? null : value;

@@ -7,14 +7,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-/**
- * Bảng {@code rendered_statements} (V2). Pool {@code app}.
- *
- * <p>{@code ON CONFLICT DO NOTHING} chứ không {@code DO UPDATE}: khoá là
- * {@code (statement_hash, renderer_version)}, nên hai bản ghi cùng khoá <b>có cùng nội dung
- * theo định nghĩa</b> — cả hai đều là kết quả của cùng một bộ render trên cùng một đầu vào.
- * Ghi đè chỉ tốn một lần ghi để có đúng thứ đang có.
- */
 @Repository
 public class JdbcRenderedStatementRepository implements RenderedStatementRepository {
 

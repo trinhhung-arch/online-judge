@@ -21,18 +21,6 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Một mã TOTP, một mã dự phòng — dùng được ĐÚNG MỘT LẦN, kể cả khi gửi song song. Postgres thật.
- *
- * <h2>Vì sao phải là Postgres thật</h2>
- * Chốt chống phát lại là <b>một câu {@code UPDATE} có điều kiện</b>, và thứ nó dựa vào là khoá
- * dòng của Postgres: request thứ hai chờ request thứ nhất commit rồi mới đánh giá lại mệnh đề
- * {@code WHERE}. Fake trong bộ nhớ không có khoá dòng nào, nên nó không chứng minh được điều ấy.
- *
- * <p>Bản cũ đọc {@code last_step} (hoặc danh sách mã dự phòng chưa dùng), so trong Java, rồi
- * mới ghi — và ghi vô điều kiện. Mọi request lọt vào giữa lượt đọc và lượt ghi đều qua.
- * Kẻ đứng giữa (proxy, extension trình duyệt) bắt được một mã là dùng lại được nó song song.
- */
 class ChongPhatLaiHaiLopIT extends PostgresIT {
 
     private static final int SO_LUOT = 8;
@@ -52,7 +40,7 @@ class ChongPhatLaiHaiLopIT extends PostgresIT {
     void batHaiLopChoDev() {
         biMat = Totp.sinhBiMat();
         haiLop.luuBanNhap(USER_ID, maHoa.maHoa(biMat));
-        haiLop.bat(USER_ID, 0L);   // bước 0 là năm 1970: mọi mã hiện tại đều mới hơn nó
+        haiLop.bat(USER_ID, 0L);
     }
 
     @Test
@@ -73,11 +61,6 @@ class ChongPhatLaiHaiLopIT extends PostgresIT {
         assertThat(haiLop.maDuPhongChuaDung(USER_ID)).isEmpty();
     }
 
-    /**
-     * Ngữ nghĩa của câu SQL, tách khỏi cuộc đua: bước chỉ được tiến, không được lặp hay lùi.
-     * Lùi mà ghi được thì một mã của bước trước (vẫn hợp lệ trong cửa sổ ±1 bước) mở lại được
-     * cửa cho mã của bước sau đã dùng.
-     */
     @Test
     @DisplayName("ghiBuoc chỉ nhận bước MỚI HƠN — trùng hay lùi đều đổi 0 dòng")
     void ghi_buoc_chi_tien_khong_lui() {
@@ -113,7 +96,6 @@ class ChongPhatLaiHaiLopIT extends PostgresIT {
         return qua;
     }
 
-    /** Dò mã của đúng bước hiện tại — cùng cách {@code TwoFactorUseCaseTest} làm. */
     private String maHienTai() {
         long giay = Instant.now().getEpochSecond();
         long buoc = Math.floorDiv(giay, Totp.BUOC_GIAY);

@@ -28,23 +28,6 @@ import java.util.zip.ZipOutputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Nạp testdata đầu-tới-cuối trên Postgres thật — FR-PROB-03, 04. Bước 4.10.
- *
- * <h2>Ca quan trọng nhất là {@link #noi_dung_test_an_khong_vao_postgres()}</h2>
- * Bất biến #1 nói rằng nội dung testcase ẩn không được rời khỏi worker. Nửa đầu của lời hứa đó
- * là <b>nó không bao giờ vào Postgres</b>, và V2 ép điều ấy bằng một khoá ngoại tổng hợp
- * {@code (testcase_id, is_sample)} — nhưng một ràng buộc chỉ có tác dụng nếu đường ghi thật sự
- * đi qua nó. Ca này là chỗ kiểm điều đó với dữ liệu thật.
- *
- * <h2>Kho được thay bằng bản trong bộ nhớ, và có lý do</h2>
- * Phần đáng kiểm ở đây là <i>bộ kiểm ZIP + job + ba bảng của V2</i>. MinIO chỉ là một chỗ để
- * byte nằm; dựng thêm một container cho nó làm chậm cả bộ IT mà không chứng minh thêm được
- * bất biến nào. Bản thân {@code MinioTestdataStore} được kiểm bằng tay khi chạy thật.
- *
- * <p>Đổi lại, {@code JdbcTestdataRepository} chạy trên <b>Postgres thật</b> — đúng như
- * {@code CLAUDE.md} mục 6 đòi cho mọi repository.
- */
 class TestdataImportIT extends PostgresIT {
 
     @Autowired ZipTestdataValidator validator;
@@ -54,10 +37,8 @@ class TestdataImportIT extends PostgresIT {
     private KhoTestdataTrongBoNho kho;
     private TestdataImportJob job;
 
-    /** Nội dung của một test ẩn — chuỗi này KHÔNG được xuất hiện ở bất kỳ đâu trong Postgres. */
     private static final String BI_MAT = "9999999 8888888 BI-MAT-KHONG-DUOC-VAO-POSTGRES";
 
-    /** FR-PROB-10 (Bước 6.14): job nạp testdata phải TỰ tạo job chấm lại khi đổi phiên bản. */
     @org.springframework.beans.factory.annotation.Autowired
     private dev.oj.platform.jobs.JobRepository jobs;
 
@@ -66,8 +47,6 @@ class TestdataImportIT extends PostgresIT {
         kho = new KhoTestdataTrongBoNho();
         job = new TestdataImportJob(validator, kho, testdata, auditLog, new NghiaVuChamLai(jobs));
     }
-
-    // -------------------------------------------------------------------------
 
     @Test
     @DisplayName("★ nạp xong: 3 test, đề chuyển sang phiên bản mới, tiến độ chạy tới 100%")
@@ -79,7 +58,7 @@ class TestdataImportIT extends PostgresIT {
 
         int version = jdbc.sql("SELECT current_testdata_version FROM problems WHERE id = :id")
                 .param("id", PROBLEM_ID).query(Integer.class).single();
-        assertThat(version).isEqualTo(2);   // seed đã có version 1
+        assertThat(version).isEqualTo(2);
 
         assertThat(jdbc.sql("SELECT count(*) FROM testcases "
                         + "WHERE problem_id = :id AND testdata_version = :v")
@@ -92,8 +71,6 @@ class TestdataImportIT extends PostgresIT {
     void noi_dung_test_an_khong_vao_postgres() {
         chay(goiChuan());
 
-        // Test 1 là sample: nội dung của nó ĐƯỢC phép nằm ở sample_testcase_contents.
-        // Lọc theo phiên bản 2 — phiên bản 1 là của dev-seed và cũng có một sample.
         assertThat(jdbc.sql("""
                         SELECT s.input_text FROM sample_testcase_contents s
                           JOIN testcases t ON t.id = s.testcase_id
@@ -101,7 +78,6 @@ class TestdataImportIT extends PostgresIT {
                         """).query(String.class).list())
                 .singleElement().asString().contains("1 2");
 
-        // Test 2 và 3 là ẩn. Chuỗi bí mật của chúng phải không tồn tại ở bất kỳ cột nào.
         assertThat(jdbc.sql("""
                         SELECT count(*) FROM sample_testcase_contents
                          WHERE input_text LIKE :mau OR output_text LIKE :mau
@@ -110,7 +86,6 @@ class TestdataImportIT extends PostgresIT {
                 .describedAs("nội dung test ẩn lọt vào Postgres — bất biến #1 bị phá")
                 .isZero();
 
-        // Và bảng testcases chỉ có hash, không có cột nội dung nào cả.
         assertThat(jdbc.sql("""
                         SELECT count(*) FROM information_schema.columns
                          WHERE table_name = 'testcases'
@@ -138,7 +113,6 @@ class TestdataImportIT extends PostgresIT {
     @DisplayName("★ chạy lại KHÔNG tạo bản sao — điều kiện để Quy tắc 5 có nghĩa")
     void chay_lai_khong_tao_ban_sao() {
         var lanDau = chay(goiChuan());
-        // Mô phỏng instance chết rồi job được nhặt lại: cùng cursor, chạy lại từ đầu.
         var lanSau = chayVoiViTri(goiChuan(), lanDau.viTriDaLuu);
 
         assertThat(jdbc.sql("SELECT count(*) FROM testcases WHERE problem_id = :id")
@@ -150,9 +124,6 @@ class TestdataImportIT extends PostgresIT {
                 .describedAs("chạy lại phải dùng lại phiên bản đã lưu, không tạo phiên bản mới")
                 .isEqualTo(2);
 
-        // FR-PROB-10: lần chạy đầu đã tạo job chấm lại; lần chạy lại đụng CHÍNH job đó.
-        // Trước bản sửa, chỗ này ghi ERROR "phải tạo job chấm lại bằng tay" — một chỉ dẫn sai
-        // gửi thẳng tới người vận hành.
         assertThat(lanSau.mucSuKien)
                 .describedAs("chạy lại gặp job chấm lại của chính mình là chuyện bình thường")
                 .doesNotContain("ERROR");
@@ -164,7 +135,6 @@ class TestdataImportIT extends PostgresIT {
     @Test
     @DisplayName("★ FR-PROB-10 · đã có job chấm lại tạo TRƯỚC khi đổi testdata → vẫn báo ERROR")
     void job_cham_lai_cu_van_bao_dong() {
-        // Job ADMIN bấm tay lúc testdata còn ở phiên bản 1 — không mang testdataVersion.
         long cu = jobs.tao(JobType.REJUDGE, Map.of(JobParams.PROBLEM_ID, PROBLEM_ID), ADMIN_ID);
 
         var ctx = chay(goiChuan());
@@ -190,7 +160,7 @@ class TestdataImportIT extends PostgresIT {
     @DisplayName("★ hỏng giữa chừng thì đề VẪN dùng phiên bản cũ")
     void hong_giua_chung_khong_kich_hoat() {
         var goiHong = goiChuan();
-        goiHong.remove("tests/03.out");   // thiếu nửa cặp -> lỗi ở bước kiểm
+        goiHong.remove("tests/03.out");
 
         assertThatThrownBy(() -> chay(goiHong)).isInstanceOf(Exception.class);
 
@@ -213,8 +183,6 @@ class TestdataImportIT extends PostgresIT {
         assertThat(jdbc.sql("SELECT current_testdata_version FROM problems WHERE id = :id")
                 .param("id", PROBLEM_ID).query(Integer.class).single()).isEqualTo(1);
     }
-
-    // =========================================================================
 
     private static Map<String, byte[]> goiChuan() {
         var m = new LinkedHashMap<String, byte[]>();

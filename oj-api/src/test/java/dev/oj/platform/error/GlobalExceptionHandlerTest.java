@@ -11,22 +11,6 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/**
- * ★ Client ngắt kết nối SSE không được rơi xuống lưới cuối.
- *
- * <h2>Ca này canh một lỗi đã quan sát được trên hệ thống đang chạy</h2>
- * Rời trang chi tiết bài nộp làm socket đứt. Nhịp heartbeat kế tiếp gọi {@code complete()},
- * thứ đẩy một async dispatch trở lại Tomcat, nơi Spring dựng lại
- * {@link AsyncRequestNotUsableException}. Trước bản sửa, nó rơi xuống
- * {@code handleUnexpected} và sinh ra <b>hai</b> stack trace cho một hành vi hoàn toàn bình
- * thường của người dùng:
- *
- * <pre>
- *   ERROR  Lỗi ngoài dự kiến                    ← lưới cuối
- *   WARN   No converter for ApiError with
- *          preset Content-Type text/event-stream ← hệ quả của việc cố trả JSON
- * </pre>
- */
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
@@ -37,14 +21,6 @@ class GlobalExceptionHandlerTest {
         Method m = GlobalExceptionHandler.class
                 .getMethod("handleClientDaNgatKetNoi", AsyncRequestNotUsableException.class);
 
-        // ★ Đây là khẳng định quan trọng nhất của cả file.
-        //
-        // Response đã mang Content-Type: text/event-stream trước khi ngoại lệ xảy ra. Trả về
-        // một ResponseEntity<ApiError> là yêu cầu Spring tuần tự hoá JSON vào chính response
-        // ấy — không có converter nào làm được, và đó CHÍNH LÀ stack trace thứ hai trong log.
-        //
-        // Một lần "dọn dẹp" tương lai đổi void thành ResponseEntity cho "nhất quán với các
-        // handler khác" sẽ mang lỗi ấy trở lại mà không ai nhận ra, vì nó chỉ hiện trong log.
         assertThat(m.getReturnType())
                 .as("phải là void: client đã đi rồi, không có ai nhận thân response")
                 .isEqualTo(void.class);
@@ -61,10 +37,6 @@ class GlobalExceptionHandlerTest {
                 .doesNotThrowAnyException();
     }
 
-    /**
-     * Lưới cuối vẫn phải là lưới cuối: nó bắt {@code Exception}, và Spring chọn handler
-     * <b>cụ thể nhất</b> — nên thêm handler ở trên không làm mất đường xử lý lỗi thật.
-     */
     @Test
     @DisplayName("lưới cuối vẫn còn nguyên, và vẫn trả 500 kèm traceId")
     void luoi_cuoi_van_con() {

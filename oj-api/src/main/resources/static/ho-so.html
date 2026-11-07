@@ -17,9 +17,6 @@
         <section class="the">
             <h2>Thông tin</h2>
 
-            <!-- Tên đăng nhập, email và vai trò KHÔNG sửa được ở đây: server không có
-                 endpoint nào cho chúng. Hiện dạng chỉ đọc thay vì một ô nhập bị tắt —
-                 một ô nhập tắt mời người ta đi tìm cách bật nó lên. -->
             <dl id="chi-so-doc"></dl>
 
             <form id="form-ho-so" novalidate>
@@ -39,9 +36,6 @@
         <section class="the">
             <h2>Đổi mật khẩu</h2>
 
-            <!-- ★ Nói TRƯỚC, không phải sau. Server thu hồi mọi refresh token khi đổi mật
-                 khẩu (FR-AUTH-04), kể cả phiên đang thao tác. Người dùng bị đá ra mà không
-                 được báo trước sẽ tưởng là lỗi. -->
             <p class="goi-y">Đổi mật khẩu sẽ đăng xuất bạn khỏi <strong>mọi thiết bị</strong>,
                 kể cả thiết bị này. Bạn sẽ cần đăng nhập lại.</p>
 
@@ -66,23 +60,15 @@
         <section class="the">
             <h2>Xác minh email</h2>
 
-            <!-- ★ Nói ra rằng nó KHÔNG bắt buộc. Người dùng của một hệ thống chấm bài đã
-                 quen với việc mọi cảnh báo màu vàng đều chặn họ làm gì đó; nếu không nói,
-                 họ sẽ tưởng bài nộp của mình không được chấm cho tới khi xác minh xong.
-                 Mức mềm là một lời hứa, và lời hứa phải đọc được trên màn hình. -->
             <p class="goi-y">Xác minh cho chúng tôi biết hộp thư này là của bạn thật.
                 <strong>Không bắt buộc</strong> — chưa xác minh thì bạn vẫn đăng nhập, vẫn
                 nộp bài và vẫn dự thi bình thường.</p>
 
             <p id="xac-minh-trang-thai" class="goi-y" role="status" aria-live="polite">Đang tải…</p>
 
-            <!-- Chưa xác minh -->
             <div id="xac-minh-chua" hidden>
                 <p><button type="button" id="nut-gui-ma">Gửi mã tới email của tôi</button></p>
 
-                <!-- Chỉ hiện sau khi server nhận gửi mã. Bày sẵn một ô nhập mã cho người
-                     chưa có mã nào là mời họ gõ bừa — và mỗi lần gõ bừa tiêu một trong năm
-                     lượt thử của một mã họ còn chưa nhận. -->
                 <form id="form-xac-minh" novalidate hidden>
                     <label for="xac-minh-ma">Mã 6 chữ số trong thư</label>
                     <input id="xac-minh-ma" name="ma" inputmode="numeric"
@@ -94,15 +80,11 @@
                 </form>
             </div>
 
-            <!-- Đã xác minh: không còn gì để làm, nên không bày nút nào. -->
         </section>
 
         <section class="the">
             <h2>Xác thực hai lớp</h2>
 
-            <!-- ★ Nói TRƯỚC vì sao lại có mục này. Người dùng thường coi 2FA là phiền toái
-                 cho tới lúc hiểu nó bảo vệ cái gì. Với tài khoản quản trị, nó KHÔNG phải
-                 tuỳ chọn: server từ chối mọi thao tác quản trị khi chưa bật. -->
             <p class="goi-y">Sau khi bật, mỗi lần đăng nhập bạn sẽ cần thêm mã 6 chữ số từ
                 ứng dụng xác thực (Google Authenticator, Authy, 1Password…).
                 <strong>Tài khoản quản trị bắt buộc phải bật</strong> mới dùng được quyền
@@ -110,19 +92,15 @@
 
             <p id="hai-lop-trang-thai" class="goi-y" role="status" aria-live="polite">Đang tải…</p>
 
-            <!-- Chưa bật -->
             <div id="hai-lop-tat" hidden>
                 <p><button type="button" id="nut-bat-hai-lop">Bật xác thực hai lớp</button></p>
             </div>
 
-            <!-- Đang đăng ký thiết bị -->
             <div id="hai-lop-dang-ky" hidden>
                 <p>Quét mã dưới đây bằng ứng dụng xác thực:</p>
                 <p><img id="hai-lop-qr" alt="Mã QR để thêm tài khoản vào ứng dụng xác thực"
                         width="200" height="200"></p>
 
-                <!-- Quét hụt là chuyện thường: máy ảnh mờ, màn hình chói, hoặc dùng máy tính
-                     bàn không có camera. Luôn có đường nhập tay bên cạnh. -->
                 <p class="goi-y">Không quét được? Nhập tay khoá này vào ứng dụng:</p>
                 <p><code id="hai-lop-bi-mat"></code></p>
 
@@ -135,11 +113,8 @@
                 </form>
             </div>
 
-            <!-- Mã dự phòng — hiện ĐÚNG MỘT LẦN -->
             <div id="hai-lop-ma-du-phong" hidden>
                 <h3>Mã dự phòng</h3>
-                <!-- ★ Cảnh báo phải đứng TRƯỚC danh sách. Đứng sau thì người ta đã đóng tab
-                     mất rồi mới đọc tới. -->
                 <p class="goi-y"><strong>Lưu ngay bây giờ.</strong> Đây là lần duy nhất
                     chúng được hiện — máy chủ chỉ giữ bản băm. Mỗi mã dùng được một lần, và
                     chúng là thứ duy nhất cứu bạn khi mất điện thoại.</p>
@@ -147,7 +122,6 @@
                 <p><button type="button" id="nut-da-luu-ma">Tôi đã lưu</button></p>
             </div>
 
-            <!-- Đang bật -->
             <div id="hai-lop-bat" hidden>
                 <form id="form-hai-lop-tat" novalidate>
                     <p class="goi-y">Tắt cần <strong>cả</strong> mật khẩu lẫn mã hiện tại —
@@ -166,11 +140,6 @@
         </section>
     </div>
 </main>
-<!-- ★ Thư viện QR, GHIM BẰNG SRI.
-     Trang này hiện bí mật TOTP, nên một script lạ ở đây đọc được nó. `integrity` khoá đúng
-     bộ byte của phiên bản 1.4.4. Từ 2026-09-24 file nằm ở static/vendor/ (rà soát F3) — vẫn
-     giữ integrity: sửa lén file trong repo mà quên SHA256SUMS thì trình duyệt vẫn TỪ CHỐI chạy.
-     Không có nó thì phần nhập tay vẫn chạy — QR chỉ là đường tắt. -->
 <script src="/vendor/npm/qrcode-generator@1.4.4/qrcode.js"
         integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k"
         crossorigin="anonymous"></script>

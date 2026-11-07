@@ -15,30 +15,8 @@ import java.time.ZoneOffset;
 import java.util.Locale;
 import java.util.Optional;
 
-/**
- * Đường soạn đề của SETTER/ADMIN — FR-PROB-01, 07, 08. Bước 4.9.
- *
- * <h2>File riêng, không phải một nửa của {@link JdbcProblemRepository}</h2>
- * Hai lý do, và lý do đầu quan trọng hơn:
- *
- * <ol>
- *   <li><b>Hai port là hai bất biến khác nhau.</b> File kia chỉ trả đề <i>đã xuất bản</i>;
- *       file này trả đề <i>của chính người gọi, kể cả chưa xuất bản</i>. Để chung thì một lần
- *       gọi nhầm hàm có thể lộ đề của contest tuần sau (FR-PROB-08), và không có gì trong tên
- *       file nhắc người đọc rằng hai nhóm hàm ấy khác nhau.</li>
- *   <li>File kia đã chạm trần 300 dòng của {@code CLAUDE.md} mục 7.</li>
- * </ol>
- *
- * <h2>{@code (:laAdmin OR owner_id = :requesterId)} là toàn bộ phép chống IDOR ở đây</h2>
- * Nó nằm <b>trong câu query</b>. Một câu {@code if (problem.ownerId() == user.id())} ở use-case
- * cũng chặn được, nhưng nó chặn <i>sau khi đã đọc cả đề lên bộ nhớ</i> — và ngày có người thêm
- * một dòng log hoặc một trường vào response trước câu {@code if} đó thì đề của người khác đã
- * ra ngoài ({@code oj-api/CLAUDE.md} mục 2, Bước 4.8).
- */
 @Repository
 public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepository {
-
-
 
     private static final String FIND_FOR_AUTHOR = """
             SELECT id, code, title, statement_md,
@@ -62,14 +40,6 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
                AND (:laAdmin OR owner_id = :requesterId)
             """;
 
-    /**
-     * ★ {@code allow_public_solutions} phải có mặt ở ĐÂY, không chỉ ở {@link #CAP_NHAT}.
-     *
-     * <p>Bản đầu bỏ sót nó, nên cột nhận {@code DEFAULT FALSE} của V2 dù tác giả gửi
-     * {@code true} — và vì {@code CAP_NHAT} thì lại ghi, lỗi chỉ hiện ra khi ai đó tạo đề với
-     * cờ bật rồi đọc lại. Cột có {@code DEFAULT} là cột mà một câu INSERT thiếu vẫn chạy trót
-     * lọt: không lỗi, không cảnh báo, chỉ là một giá trị khác thứ người dùng yêu cầu.
-     */
     private static final String TAO_MOI = """
             INSERT INTO problems (code, title, statement_md, statement_hash,
                                   time_limit_ms, memory_limit_kb,
@@ -100,10 +70,6 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
                AND (:laAdmin OR owner_id = :requesterId)
             """;
 
-    /**
-     * {@code published_at} dùng {@code COALESCE}: một đề gỡ xuống rồi đăng lại không phải một
-     * đề mới, và {@code ck_problems_published} chỉ đòi nó khác NULL.
-     */
     private static final String DOI_TRANG_THAI = """
             UPDATE problems
                SET status = :status,
@@ -118,12 +84,6 @@ public class JdbcProblemAuthoringRepository implements ProblemAuthoringRepositor
             SELECT EXISTS (SELECT 1 FROM submissions WHERE problem_id = :problemId)
             """;
 
-    /**
-     * Điều kiện chủ sở hữu nằm TRONG câu xoá, không ở một câu {@code if} phía trên — cùng
-     * khuôn chống IDOR với {@code CAP_NHAT} và {@code DOI_TRANG_THAI}
-     * ({@code oj-api/CLAUDE.md} mục 2). Một chốt đúng ở tầng trên vẫn là lỗ hổng nếu câu
-     * lệnh bên dưới xoá được bất kỳ dòng nào.
-     */
     private static final String XOA = """
             DELETE FROM problems
              WHERE id = :id

@@ -14,22 +14,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
-/**
- * Hiện thực {@link RejudgeRepository} — Bước 6.3. Pool {@code app}.
- *
- * <h2>Pool {@code app}, không phải pool {@code judge}</h2>
- * Pool {@code judge} có 6 connection và tồn tại để worker <b>luôn</b> ghi được verdict, kể cả
- * khi 500 người đang nộp bài ({@code postgres-design.md} mục 11). Một job nền mượn connection
- * từ đó là lấy đúng thứ dự trữ ấy đi, vào đúng lúc nó cần nhất — và triệu chứng là bài đang
- * chấm dở bị reaper thu hồi rồi chấm lại.
- */
 @Repository
 public class JdbcRejudgeRepository implements RejudgeRepository {
 
-    /**
-     * Hai giá trị trong một lượt round-trip. Cả hai đều lọc {@code claimed_at IS NULL} nên
-     * cùng chạy trên {@code ix_judge_queue_ready}.
-     */
     private static final String NHIP = """
             SELECT count(*) FILTER (WHERE priority = :uuTienRejudge)          AS rejudge_dang_cho,
                    min(enqueued_at) FILTER (WHERE priority = :uuTienLive)     AS live_cho_lau_nhat
@@ -48,11 +35,6 @@ public class JdbcRejudgeRepository implements RejudgeRepository {
             SELECT count(*) FROM submissions WHERE problem_id = :problemId
             """;
 
-    /**
-     * {@code ON CONFLICT DO NOTHING}: bài đang nằm trong hàng đợi thì để yên. {@code RETURNING}
-     * cho biết dòng nào thật sự vào — đó là danh sách phải đổi {@code submissions.status} theo,
-     * và cũng là con số tiến độ thật.
-     */
     private static final String DAY_VAO_HANG_DOI = """
             INSERT INTO judge_queue (submission_id, priority, attempt, enqueued_at)
             SELECT s.id, :uuTien, s.attempt, :bayGio
@@ -109,20 +91,11 @@ public class JdbcRejudgeRepository implements RejudgeRepository {
                 .query(Integer.class).single();
     }
 
-    /**
-     * Một transaction cho cả lô. Nửa chừng mà hỏng thì <b>không</b> có bài nào ở trạng thái
-     * "trong hàng đợi nhưng submissions vẫn nói DONE" — trạng thái đó không sai theo nghĩa mất
-     * dữ liệu, nhưng nó làm trang chi tiết hiện một verdict cũ kèm chữ "đã xong" trong khi
-     * worker đang chấm lại, và không ai truy được vì sao.
-     */
     @Override
     public List<Long> dayVaoHangDoi(List<Long> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }
-        // Đồng hồ của ứng dụng, không phải now() của Postgres: enqueued_at là thứ cái phanh
-        // của RejudgeJob đo, và nó so với cùng một Clock. Hai nguồn thời gian lệch nhau vài
-        // trăm mili giây ở đây là cái phanh nhả sớm hoặc kẹt, tuỳ chiều lệch.
         OffsetDateTime bayGio = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         List<Long> daVao = tx.execute(status -> {
             List<Long> vao = jdbc.sql(DAY_VAO_HANG_DOI)

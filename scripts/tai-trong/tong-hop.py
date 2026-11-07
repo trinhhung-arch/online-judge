@@ -1,26 +1,11 @@
 #!/usr/bin/env python3
-"""So các mức của kịch bản QUÉT và chỉ ra ĐIỂM VỠ.
-
-    python3 tong-hop.py /tmp/oj-tai-trong/quet-<giờ>
-
-Đọc các `tom-tat-<mức>.json` mà k6 ghi và bao-cao-db.py đã vá số DB vào. Không gọi mạng, không
-đụng database. Mọi ngưỡng đọc từ nguong.json qua nguong_chung.py.
-
-★ "chịu tới N" là TIỀN TỐ LIÊN TỤC các mức đạt, không phải max(mức đạt): 100 và 200 đạt, 400
-trượt, 500 lại đạt thì câu trả lời là 200 — cái 500 kia gần như chắc chắn là nhiễu (hàng đợi mức
-trước chưa rút cạn, hoặc máy throttle rồi hồi lại).
-
-★ Một mức chỉ ĐẠT khi đạt CẢ đường API lẫn R1/R2/R3 đếm ở DB. Mức không có số DB (bao-cao-db.py
-chưa chạy hoặc hỏng) là KHÔNG đạt — thiếu bằng chứng thì không kết luận.
-"""
 import io
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong  # noqa: E402
-
+from nguong_chung import ap_dung, cham, dinh_dang, doc_so, nap_nguong
 
 def nap(thu_muc):
     ra = []
@@ -32,12 +17,10 @@ def nap(thu_muc):
                 ra.append((int(d['nguoi']), d))
     return sorted(ra, key=lambda x: x[0])
 
-
 def dat_o(run, nguong):
     if 'dat' in run:
         return run['dat'] is True
     return all(cham(run['metrics'], r)[1] is True for r in ap_dung(nguong['cung'], 'quet'))
-
 
 def main():
     thu_muc = sys.argv[1] if len(sys.argv) > 1 else '.'
@@ -87,7 +70,6 @@ def main():
     print(f'  Hàng đợi dài → {mc["judge_slot"]} judge slot × ~{mc["throughput_cham_uoc_tinh"]} bài/s là trần'
           ' đã biết của máy chấm, không sửa được bằng cách sửa API.\n')
     return 0
-
 
 if __name__ == '__main__':
     sys.exit(main())

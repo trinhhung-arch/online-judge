@@ -12,15 +12,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bề mặt {@code /internal/judge/*} — ai qua được đây thì <b>ghi được verdict cho bất kỳ bài
- * nộp nào</b>.
- *
- * <p>{@code CLAUDE.md} mục 6 bắt mọi endpoint mới phải có test phân quyền, với yêu cầu rất cụ
- * thể: gọi sai quyền phải bị <b>từ chối</b>, không phải nhận "200 rỗng". Ở M1 chưa có JWT nên
- * ba endpoint công khai chưa kiểm được điều đó, nhưng hai endpoint nội bộ thì có — và chúng
- * mới là bề mặt nguy hiểm.
- */
 class InternalSecretFilterTest {
 
     private static final String SECRET = "day-la-mot-secret-du-32-ky-tu-tro-len";
@@ -60,7 +51,6 @@ class InternalSecretFilterTest {
         assertThat(chainCalled).isFalse();
     }
 
-    /** Đúng một tiền tố cũng không đủ — {@code MessageDigest.isEqual} chạy hết chuỗi. */
     @Test
     void dung_tien_to_cung_khong_qua_duoc() throws Exception {
         request.addHeader(InternalSecretFilter.HEADER, SECRET.substring(0, SECRET.length() - 1));
@@ -78,13 +68,9 @@ class InternalSecretFilterTest {
         filter.doFilter(request, response, chain);
 
         assertThat(chainCalled).isTrue();
-        assertThat(response.getStatus()).isEqualTo(200);   // chưa ai đổi, controller sẽ đặt
+        assertThat(response.getStatus()).isEqualTo(200);
     }
 
-    /**
-     * Phản hồi từ chối không được nói thiếu cái gì: phân biệt "thiếu header" với "sai giá trị"
-     * là xác nhận cho người dò rằng họ đã tìm đúng tên header.
-     */
     @Test
     void hai_kieu_tu_choi_cho_cung_mot_phan_hoi() throws Exception {
         var khongHeader = new MockHttpServletResponse();
@@ -98,11 +84,6 @@ class InternalSecretFilterTest {
         assertThat(response.getContentAsString()).isEqualTo(khongHeader.getContentAsString());
     }
 
-    /**
-     * ★ Lớp 2: request đi qua Cloudflare bị từ chối <b>kể cả khi mang đúng secret</b> — lộ
-     * secret không còn là đủ để ghi verdict từ internet. Mỗi header được thử RIÊNG: bỏ một cái
-     * khỏi danh sách thì ca của nó đỏ.
-     */
     @Test
     @DisplayName("★ đúng secret nhưng mang dấu Cloudflare → 404, không tới controller")
     void dung_secret_nhung_qua_cloudflare_thi_404() throws Exception {
@@ -120,11 +101,6 @@ class InternalSecretFilterTest {
         }
     }
 
-    /**
-     * Qua Cloudflare mà KHÔNG có secret cũng phải là 404, không phải 401: phép kiểm tunnel đứng
-     * trước. {@code kiem-tunnel.sh} đọc 401 là "hai lớp đầu cùng thủng" — nếu thứ tự đảo, mọi
-     * lần chạy script trên một host lành đều báo động giả.
-     */
     @Test
     @DisplayName("qua Cloudflare mà không có secret → vẫn 404, không phải 401")
     void qua_cloudflare_khong_secret_van_404() throws Exception {

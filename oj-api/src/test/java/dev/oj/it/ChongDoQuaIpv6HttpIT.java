@@ -14,17 +14,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Rà soát bảo mật 2026-09-24 · F2 — chống dò qua IPv6, qua HTTP và Postgres thật.
- *
- * <p>Đo phần unit test không chạm tới: SQL {@code <<=}/{@code >>=} trên kiểu {@code inet} của
- * khoá đăng nhập, câu {@code UPDATE … RETURNING} của trần mã hai lớp (V15), và việc
- * {@code ClientIp} đọc địa chỉ từ {@code CF-Connecting-IP} khi request tới từ loopback — đúng
- * đường của Cloudflare Tunnel.
- */
 class ChongDoQuaIpv6HttpIT extends HttpIT {
 
-    /** Hạt giống RFC 6238 — cùng chuỗi với IdentityHttpIT. */
     private static final String BI_MAT = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
 
     @Autowired
@@ -75,10 +66,6 @@ class ChongDoQuaIpv6HttpIT extends HttpIT {
                 .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    /**
-     * Mỗi lần thử từ một /64 KHÁC — nên trần theo IP không bao giờ chạm (1 lần sai mỗi dải).
-     * Chỉ trần theo tài khoản còn giữ được, và đó đúng là điều ca này đo.
-     */
     @Test
     @DisplayName("★ V15: 10 mã hai lớp sai từ 10 dải khác nhau → khoá TÀI KHOẢN; mã đúng từ dải mới cũng 429")
     void tran_ma_hai_lop_theo_tai_khoan() {
@@ -99,11 +86,6 @@ class ChongDoQuaIpv6HttpIT extends HttpIT {
                 .as("người trực phải thấy: có người đã gõ đúng mật khẩu rồi dò mã").isEqualTo(1);
     }
 
-    /**
-     * ★ Đường "tắt 2FA" chạy trong {@code @Transactional}: mã sai ném ngoại lệ, và thiếu
-     * {@code noRollbackFor} thì lần ghi đếm cuộn lại cùng nó — ai đã có phiên + mật khẩu dò mã
-     * ở đây không giới hạn. Chỉ transaction THẬT mới chứng minh được điều ngược lại.
-     */
     @Test
     @DisplayName("★ mã sai ở đường TẮT 2FA cũng được đếm — không bị cuộn lại cùng ngoại lệ")
     void duong_tat_hai_lop_cung_dem() {
@@ -133,7 +115,6 @@ class ChongDoQuaIpv6HttpIT extends HttpIT {
                 .param("id", USER_ID).param("bi", cipher.maHoa(BI_MAT)).update();
     }
 
-    /** Mã mà cả cửa sổ ±1 bước đều từ chối — không để may rủi quyết ca "mã sai". */
     private static String maSai() {
         long giay = Instant.now().getEpochSecond();
         for (int i = 0; i < 1_000_000; i++) {

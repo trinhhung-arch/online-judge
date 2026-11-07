@@ -24,18 +24,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Lưới an toàn của bảng xếp hạng phải có người kéo — FR-CON-09.
- *
- * <h2>Lỗ hổng mà file này canh</h2>
- * {@code StandingsDriftCheckJob} có đủ mọi thứ trừ một chỗ gọi. Trước lớp
- * {@link StandingsDriftCheckScheduler}, toàn bộ mã nguồn chỉ có ba chỗ tạo job và không chỗ
- * nào tạo loại {@code STANDINGS_DRIFT_CHECK} — nên bảng {@code standings_drift_checks} rỗng
- * suốt vòng đời hệ thống và mọi lệch đều vô hình.
- *
- * <p>Đó là loại lỗi không test nào bắt được bằng cách chạy thứ đang có: mọi thành phần đều
- * đúng, chỉ có sợi dây nối là không tồn tại.
- */
 class StandingsDriftCheckSchedulerTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-04T10:00:00Z");
@@ -79,7 +67,7 @@ class StandingsDriftCheckSchedulerTest {
     @DisplayName("★ việc soát đang chạy thì bỏ qua, KHÔNG làm hỏng nhịp cho kỳ thi sau")
     void job_dang_chay_khong_chan_ky_thi_khac() {
         standings.canSoat = List.of(1L, 2L, 3L);
-        jobs.nemChoContest = 2L;   // ux_jobs_one_active_per_entity của V9
+        jobs.nemChoContest = 2L;
 
         nhip.nhip();
 
@@ -93,7 +81,7 @@ class StandingsDriftCheckSchedulerTest {
     void loi_khong_duoc_thoat_ra_ngoai() {
         standings.nem = true;
 
-        nhip.nhip();   // không được ném
+        nhip.nhip();
 
         assertThat(jobs.daTao).isEmpty();
     }
@@ -107,8 +95,6 @@ class StandingsDriftCheckSchedulerTest {
 
         assertThat(jobs.daTao).isEmpty();
     }
-
-    // =========================================================================
 
     private record ViecDaTao(JobType type, Map<String, Object> params) {
     }

@@ -1,27 +1,3 @@
-/**
- * Lịch sử bài nộp của chính mình — FR-SUB-07, Bước G1.
- *
- * ★ MÃ ĐỀ ĐƯỢC PHÂN GIẢI THÀNH ID, KHÔNG BẮT NGƯỜI DÙNG NHẬP SỐ
- *
- * Server lọc theo `problemId`, còn thứ người ta nhớ là mã đề (`A-PLUS-B`). Trang này nhận
- * mã rồi tự hỏi `/api/v1/problems/{code}` để lấy id. Tốn một request khi bộ lọc đổi — không
- * phải mỗi trang — và đổi lại người dùng không phải đi tra một con số nội bộ.
- *
- * Mã không tồn tại thì server trả 404 và câu chữ của nó đi thẳng ra: xem mục 2 của
- * `api.js`. Ở đây chỉ thêm bối cảnh "mã đề", vì 404 trần trên trang này không nói rõ là
- * không có đề hay không có bài nộp.
- *
- * ★ TÊN NGÔN NGỮ ĐƯỢC NỐI Ở CLIENT
- *
- * `SubmissionSummaryResponse` mang `languageId` (số), `/api/v1/languages` mang `id` +
- * `displayName`. Ba dòng tham chiếu tải một lần rồi nối trong bộ nhớ — xem javadoc
- * `LanguageRepository.LanguageOption` để biết vì sao không thêm `JOIN` vào truy vấn danh
- * sách bài nộp, vốn chạy trên bảng nóng.
- *
- * Nối hỏng thì hiện `#id`, KHÔNG để trống: một ô trống nói "bài này không có ngôn ngữ",
- * còn `#3` nói "có, nhưng trang chưa tra được tên".
- */
-
 import { goi, LoiApi } from './api.js';
 import { chu, bao } from './khung.js';
 import { khoiDong, gio } from './trang.js';
@@ -36,10 +12,8 @@ if (o) {
     const chonVerdict = document.getElementById('verdict');
     const chonNgonNgu = document.getElementById('ngon-ngu');
 
-    /** id ngôn ngữ -> tên hiển thị. Rỗng cho tới khi `/languages` trả về. */
     const tenNgonNgu = new Map();
 
-    /** Kết quả phân giải mã đề gần nhất. `undefined` = không lọc theo đề. */
     let deId;
 
     for (const [ma, nhan] of VERDICT) {
@@ -70,8 +44,6 @@ if (o) {
 
         tr.append(chu('td', tenNgonNgu.get(b.languageId) || `#${b.languageId}`));
 
-        // ★ Không dùng riêng màu để truyền tin (a11y mức A): luôn có chữ.
-        // Bài chưa chấm xong không có verdict — hiện trạng thái thay vì một ô trống.
         const oKq = chu('td');
         const nhan = b.verdict || (b.status === 'DONE' ? '—' : 'đang chấm');
         const lop = b.verdict ? `verdict ${b.verdict}` : 'verdict cho';
@@ -82,7 +54,6 @@ if (o) {
 
         tr.append(chu('td', b.score === null || b.score === undefined ? '—' : b.score));
 
-        // RuntimeFormatter đã làm tròn 10ms ở server (FR-SUB-11); đừng làm tròn lần nữa.
         tr.append(chu('td', b.timeMs === null || b.timeMs === undefined ? '—' : `${b.timeMs} ms`));
 
         return tr;
@@ -99,7 +70,6 @@ if (o) {
         loiChung: 'Không tải được danh sách bài nộp.',
     });
 
-    /** Phân giải mã đề -> id. Ném `LoiApi` để nơi gọi hiện đúng câu của server. */
     async function phanGiaiDe(ma) {
         if (!ma) return undefined;
         const de = await goi(DUONG.de.theoMa(ma));
@@ -120,8 +90,6 @@ if (o) {
         trang.lamMoi();
     });
 
-    // Danh sách ngôn ngữ là tiện nghi: hỏng thì bộ lọc mất, bảng vẫn xem được.
-    // Không để một request phụ làm hỏng trang chính.
     goi(DUONG.ngonNgu).then((ds) => {
         for (const n of ds) {
             tenNgonNgu.set(n.id, n.displayName);
@@ -129,7 +97,6 @@ if (o) {
             opt.value = n.id;
             chonNgonNgu.append(opt);
         }
-        // Bảng có thể đã vẽ xong trước khi danh sách về — vẽ lại để thay `#id` bằng tên.
         if (bang.childElementCount) trang.lamMoi();
     }).catch(() => {
         chonNgonNgu.disabled = true;

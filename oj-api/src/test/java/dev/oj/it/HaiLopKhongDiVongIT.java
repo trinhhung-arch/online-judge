@@ -25,27 +25,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ ADMIN chưa bật 2FA KHÔNG đi vòng được cổng hai lớp qua {@code isAdmin()} — phần 1:
- * đề, testdata, bài nộp, job.
- *
- * <h2>Lỗ đã có thật</h2>
- * Cổng từng chỉ được hỏi khi use-case khai {@code @RequiresRole(ADMIN)}. Các use-case dưới đây
- * khai SETTER hoặc USER rồi trao quyền ADMIN bằng {@code isAdmin()} / {@code role()} — nên
- * ADMIN chưa bật 2FA tải được testdata mọi đề, đọc được source mọi người. Chốt giờ nằm ở
- * {@code JwtCurrentUserProvider}; lớp này ghim từng chỗ để gỡ chốt ấy là CI đỏ.
- *
- * <h2>Mỗi ca đi theo cùng một khuôn, và thứ tự là cố ý</h2>
- * <ol>
- *   <li><b>Chưa bật 2FA → bị chặn, và không chạm dữ liệu.</b></li>
- *   <li><b>Bật lại → cùng lời gọi ấy QUA.</b> Nửa này không phải trang trí: thiếu nó thì nửa
- *       đầu xanh cả khi lời gọi hỏng vì một lý do chẳng liên quan gì tới 2FA — đúng kiểu dấu
- *       xanh không chứng minh điều nó có vẻ chứng minh ({@code bao-mat-plan.md} nguyên tắc 1).</li>
- * </ol>
- * Chặn trước, qua sau, để thao tác phá huỷ (xoá đề) chỉ thật sự chạy một lần.
- *
- * <p>Phần 2 — lịch thi và bảng xếp hạng — ở {@link HaiLopKhongDiVongKyThiIT}.
- */
 class HaiLopKhongDiVongIT extends HttpIT {
 
     @Autowired SubmitSolutionUseCase submitSolution;
@@ -81,14 +60,12 @@ class HaiLopKhongDiVongIT extends HttpIT {
     @Test
     @DisplayName("★ đọc bài nộp của người khác — :requesterRole = 'ADMIN' trong SQL")
     void doc_bai_nop_nguoi_khac() {
-        // Nộp TRƯỚC, bằng danh tính USER của PostgresIT — AdminHaiLop.lay xoá danh tính khi đóng.
         long cuaDev = submitSolution.submit(new SubmitSolutionUseCase.Command(
                 PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
 
         AdminHaiLop.go(jdbc);
         assertThatThrownBy(() -> AdminHaiLop.lay(() -> getSubmission.detailById(cuaDev)))
                 .hasFieldOrPropertyWithValue("code", "submission.not_found");
-        // byId là cửa của luồng SSE (WatchSubmissionUseCase) — một câu SQL khác, cùng tham số.
         assertThatThrownBy(() -> AdminHaiLop.lay(() -> getSubmission.byId(cuaDev)))
                 .hasFieldOrPropertyWithValue("code", "submission.not_found");
 
@@ -101,14 +78,11 @@ class HaiLopKhongDiVongIT extends HttpIT {
     @Test
     @DisplayName("sửa đề của người khác — và bị chặn thì đề KHÔNG đổi")
     void sua_de_nguoi_khac() {
-        // Giữ nguyên nội dung đề: chỉ tiêu đề đổi, để không để lại dấu cho IT chạy sau.
         String deBai = jdbc.sql("SELECT statement_md FROM problems WHERE id = :id")
                 .param("id", PROBLEM_ID).query(String.class).single();
         var lenh = new AuthorProblemUseCase.Command("A-PLUS-B", "Tiêu đề do admin sửa",
                 deBai, 1000, 262144, CheckerType.TOKEN, null,
                 ScoringMode.ALL_OR_NOTHING, FeedbackLevel.TEST_INDEX, false);
-        // Đọc tại chỗ, không so với "A + B" của seed: ResetGiuaCacTest không hoàn nguyên
-        // `title`, và ContestAccessIT chạy trước (thứ tự alphabetical) đã đổi nó. Đo 2026-09-23.
         String truoc = tieuDeDe(PROBLEM_ID);
 
         AdminHaiLop.go(jdbc);
@@ -161,11 +135,6 @@ class HaiLopKhongDiVongIT extends HttpIT {
         assertThat(conDe(id)).isFalse();
     }
 
-    /**
-     * Nửa "qua" dùng một mẹo để không phải dựng một gói ZIP và một job nền: đặt đề vào một kỳ
-     * thi ĐANG CHẠY. Qua được chốt chủ sở hữu thì lời gọi dừng ở chốt kế tiếp —
-     * {@code problem.dang_trong_ky_thi} — và chính mã lỗi ấy là bằng chứng đã qua.
-     */
     @Test
     @DisplayName("nạp testdata cho đề của người khác")
     void nap_testdata_de_nguoi_khac() {
@@ -202,13 +171,10 @@ class HaiLopKhongDiVongIT extends HttpIT {
         assertThat(AdminHaiLop.lay(() -> getJob.thucHien(jobId)).job().id()).isEqualTo(jobId);
         assertThat(AdminHaiLop.lay(() -> getJob.cuaToi(null, 20)).items())
                 .anyMatch(j -> j.id() == jobId);
-        // Qua chốt chủ sở hữu thì dừng ở chốt trạng thái: job đã DONE không huỷ được nữa.
         assertThatThrownBy(() -> AdminHaiLop.lam(() -> cancelJob.thucHien(jobId)))
                 .isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("code", "job.da_ket_thuc");
     }
-
-    // ---- sân -----------------------------------------------------------------------------
 
     private SimpleEntry<HttpStatusCode, String> taiTestdata() {
         return http.get().uri("/api/v1/problems/{id}/testdata", PROBLEM_ID)
@@ -260,3 +226,4 @@ class HaiLopKhongDiVongIT extends HttpIT {
                 .params(Map.of("c", contestId, "p", problemId)).update();
     }
 }
+

@@ -20,19 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
-/**
- * ★ Chỉ chủ kỳ thi sửa được kỳ thi, chỉ chủ đề gắn được đề — ADMIN thì mọi thứ.
- *
- * <h2>Lỗ đã có thật (rà bảo mật 2026-09-23)</h2>
- * {@code AuthorContestUseCase} chỉ có {@code @RequiresRole(SETTER)}, và câu SQL gắn/gỡ đề
- * không nhận người gọi. SETTER bất kỳ gỡ được đề khỏi kỳ thi sắp diễn ra của người khác, và
- * giấu được đề công khai của người khác bằng một kỳ thi tự tạo kéo tới năm 2099.
- *
- * <h2>Mỗi ca chặn ĐÚNG MỘT điều kiện</h2>
- * "Kẻ khác" ({@code USER_ID} đóng vai SETTER) có kỳ thi riêng và đề riêng. Ca "kỳ thi của
- * người khác" dùng đề CỦA KẺ ẤY, ca "đề của người khác" dùng kỳ thi CỦA KẺ ẤY — để mỗi lần
- * bị chặn chỉ có một lý do, và lý do ấy đúng là thứ ca muốn đo.
- */
 class ContestChuSoHuuIT extends HttpIT {
 
     @Autowired ContestRepository contests;
@@ -53,7 +40,6 @@ class ContestChuSoHuuIT extends HttpIT {
         try (var keKhac = GiaLapDanhTinh.dongVai(USER_ID, "ke-khac", Role.SETTER)) {
             assertThatThrownBy(() -> author.themDe(ky, deCuaKeKhac, "B", 100))
                     .hasFieldOrPropertyWithValue("code", "contest.khong_tim_thay");
-            // Gắn lại một đề đã có = đổi nhãn/điểm (ON CONFLICT DO UPDATE) — cùng chốt.
             assertThatThrownBy(() -> author.themDe(ky, PROBLEM_ID, "Z", 999))
                     .hasFieldOrPropertyWithValue("code", "contest.khong_tim_thay");
         }
@@ -96,10 +82,6 @@ class ContestChuSoHuuIT extends HttpIT {
         assertThat(deTrongKyThi(ky)).isEmpty();
     }
 
-    /**
-     * Đường giấu đề: gắn đề công khai của người khác vào kỳ thi của mình. Bị chặn, VÀ câu trả
-     * lời giống hệt câu cho một id không có thật — nếu không, lỗi này thành cách dò đề DRAFT.
-     */
     @Test
     @DisplayName("★ không gắn được đề của người khác vào kỳ thi của mình — cùng câu với id rác")
     void khong_gan_duoc_de_cua_nguoi_khac() {
@@ -172,7 +154,6 @@ class ContestChuSoHuuIT extends HttpIT {
                 .getStatusCode().value()).isEqualTo(404);
         assertThat(deTrongKyThi(ky)).containsKey(PROBLEM_ID);
 
-        // Giao diện chỉ hiện khu gắn/gỡ đề cho người soạn được — cờ do server tính.
         String slug = jdbc.sql("SELECT slug FROM contests WHERE id = :id")
                 .param("id", ky).query(String.class).single();
         assertThat(goi(http.get().uri("/api/v1/contests/{s}", slug).header(
@@ -183,9 +164,6 @@ class ContestChuSoHuuIT extends HttpIT {
                 .getBody()).containsEntry("duocSoan", true);
     }
 
-    // ---- sân -----------------------------------------------------------------------------
-
-    /** Kỳ thi chưa mở — chỉ lúc ấy mới gắn/gỡ được đề, nên chốt sở hữu là chốt duy nhất đo. */
     private long kyThiCua(long chu) {
         return contests.tao(new ContestRepository.ContestMoi(
                 "so-huu-" + System.nanoTime(), "Kỳ thi của " + chu, "ICPC",
@@ -204,7 +182,6 @@ class ContestChuSoHuuIT extends HttpIT {
                 .query(Long.class).single();
     }
 
-    /** problemId → "nhãn:điểm", để một ca đổi nhãn thất bại cũng lộ ra được. */
     private Map<Long, String> deTrongKyThi(long ky) {
         var ds = new java.util.LinkedHashMap<Long, String>();
         jdbc.sql("SELECT problem_id, label, points FROM contest_problems WHERE contest_id = :k")

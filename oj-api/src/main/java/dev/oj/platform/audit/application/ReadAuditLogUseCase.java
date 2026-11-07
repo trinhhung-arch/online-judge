@@ -9,13 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
-/**
- * FR-ADM-02 — <b>ô cuối cùng của ma trận hiển thị</b>: {@code audit_log} chỉ ADMIN thấy.
- *
- * <p>Ngắn, và cố ý ngắn. Giá trị của nó nằm ở đúng hai dòng: {@code @RequiresRole(ADMIN)} và
- * {@code clampSize}. Cả hai đều là thứ mà nếu để ở controller thì một endpoint thứ hai đọc
- * cùng dữ liệu sẽ quên mất ({@code CLAUDE.md} bất biến #11 và #8).
- */
 @RequiresRole(Role.ADMIN)
 @Service
 public class ReadAuditLogUseCase {
@@ -28,10 +21,6 @@ public class ReadAuditLogUseCase {
         this.properties = properties;
     }
 
-    /**
-     * @param size {@code null} là mặc định 20. Xin 1000 thì nhận 50, không nhận lỗi
-     *             ({@code oj-api/CLAUDE.md} mục 3)
-     */
     public CursorPage<AuditLogReader.Entry> tim(Long actorId, String action, Instant tu,
                                                 Instant den, String cursor, Integer size) {
         AppProperties.Page page = properties.page();

@@ -14,16 +14,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ ADMIN chưa bật 2FA KHÔNG đi vòng được cổng hai lớp qua {@code isAdmin()} — phần 2:
- * lịch thi và bảng xếp hạng. Cùng khuôn với {@link HaiLopKhongDiVongIT}: chưa bật thì bị
- * chặn, bật lại thì cùng lời gọi ấy qua.
- *
- * <p>Bốn chỗ ở đây đều là <b>công bằng kỳ thi</b>, thứ hệ thống này bán đầu tiên: xem đề
- * trước giờ mở, thấy nó trong danh sách, thấy danh sách đề của kỳ thi, và xem bảng xếp hạng
- * thật trong lúc đóng băng. Cả bốn đều là {@code @PublicAccess} — cổng cũ không bao giờ được
- * hỏi ở đây, kể cả khi cổng còn nằm đúng chỗ của nó.
- */
 class HaiLopKhongDiVongKyThiIT extends PostgresIT {
 
     private static final String SLUG_CHUA_MO = "tuan-sau";
@@ -92,8 +82,6 @@ class HaiLopKhongDiVongKyThiIT extends PostgresIT {
         assertThat(AdminHaiLop.lay(() -> getStandings.thucHien(contestId)).dongBang())
                 .isFalse();
     }
-
-    // ---- sân -----------------------------------------------------------------------------
 
     private List<String> maDeThay() {
         return AdminHaiLop.lay(() -> listProblems.thucHien(null, null, null, 50)).items()

@@ -18,14 +18,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/**
- * ★ FR-ADM-01 — {@code RejudgeJobHandler} trên Postgres thật. Bước 6.3.
- *
- * <p>Ba thứ chỉ chứng minh được ở đây, không chứng minh được bằng unit test:
- * <b>trần 30% thật sự chặn</b> (nó đọc số dòng trong bảng), <b>job chạy tiếp được sau
- * restart</b> (vị trí nằm trong {@code cursor_state}, không trong bộ nhớ), và <b>verdict cũ
- * không bị ghi đè</b> (ràng buộc của schema).
- */
 class RejudgeIT extends PostgresIT {
 
     @Autowired
@@ -57,40 +49,21 @@ class RejudgeIT extends PostgresIT {
                 .isEqualTo(2);
     }
 
-    /**
-     * ★ Quy tắc 5: job phải chạy tiếp được sau restart, và "chạy tiếp" nghĩa là <b>không làm
-     * lại từ đầu</b>. Vị trí nằm trong {@code cursor_state}; một handler giữ vị trí trong bộ
-     * nhớ sẽ qua được mọi ca khác và đỏ ở ca này.
-     */
     @Test
     @DisplayName("★ chạy tiếp từ cursor_state, không đẩy lại bài đã đẩy")
     void chay_tiep_tu_cursor() {
         List<Long> bai = taoBaiDaCham(6);
 
-        chayRoiDonHangDoi();      // lô 1: hai bài đầu
+        chayRoiDonHangDoi();
         long viTri1 = viTriDaLuu();
 
-        chayRoiDonHangDoi();      // lô 2: hai bài tiếp
+        chayRoiDonHangDoi();
         long viTri2 = viTriDaLuu();
 
         assertThat(viTri1).isEqualTo(bai.get(1));
         assertThat(viTri2).isEqualTo(bai.get(3));
     }
 
-    /**
-     * ★ Tiến độ phải CỘNG DỒN qua các lần tạm nghỉ, không đếm lại từ đầu.
-     *
-     * <h2>Ca này lấp đúng khe hở mà {@link #chay_tiep_tu_cursor} để lại</h2>
-     * Ca kia kiểm vị trí trong {@code cursor_state} tiến đúng — và nó xanh cả khi bộ đếm tiến
-     * độ về 0 sau mỗi lần nghỉ, vì hai thứ đó độc lập nhau. Kết quả: công việc chạy đúng và
-     * xong đủ, nhưng {@code done_items} luôn hiện số bài của riêng lượt chạy hiện tại.
-     *
-     * <p>Đo được trên hệ thống đang chạy trước khi sửa: một job chấm lại 34 bài đứng nguyên ở
-     * {@code 2/34} suốt thời gian chạy rồi nhảy thẳng lên {@code 34/34} lúc kết thúc. Job này
-     * tạm nghỉ theo <b>thiết kế</b> — mỗi lô đẩy nhiều nhất {@code max-in-flight} bài — nên
-     * một lượt chấm lại 5000 bài sẽ hiện "2/5000" trong hàng giờ, và người vận hành đọc ra
-     * "job đang kẹt" trong khi nó đang chạy tốt. FR-ADM-01 đòi tiến độ.
-     */
     @Test
     @DisplayName("★ tiến độ cộng dồn qua các lần tạm nghỉ, không đếm lại từ đầu")
     void tien_do_cong_don_qua_cac_lan_tam_nghi() {
@@ -119,16 +92,12 @@ class RejudgeIT extends PostgresIT {
                 assertThat(ctx.daXongCuoi).isEqualTo(ctx.tongCuoi);
                 return;
             } catch (JobsException e) {
-                donHangDoi();     // giả lập worker đã chấm xong lô vừa đẩy
+                donHangDoi();
             }
         }
         throw new AssertionError("job không kết thúc sau khi duyệt hết bài");
     }
 
-    /**
-     * ★ Chốt (2) của {@code RejudgeJobHandler}: một kỳ thi khai mạc <b>giữa lúc</b> job đang
-     * chạy. Chốt lúc tạo job không nói gì về phút thứ 25, và đây là chỗ duy nhất bắt được.
-     */
     @Test
     @DisplayName("★ kỳ thi khai mạc giữa chừng thì job tự nhường lượt")
     void ky_thi_khai_mac_giua_chung() {
@@ -155,13 +124,6 @@ class RejudgeIT extends PostgresIT {
         assertThat(dangChoRejudge()).isZero();
     }
 
-    /**
-     * ★ FR-ADM-01: <i>"verdict cũ không bị ghi đè mà lưu thành attempt mới"</i>.
-     *
-     * <p>Bài quay về {@code QUEUED} nhưng <b>vẫn giữ verdict cũ</b> — {@code ck_submissions_done}
-     * cố ý không ép chiều ngược lại (xem V3), để UI hiện "WA · đang chấm lại" thay vì một ô
-     * trống. Và {@code attempt} <b>không</b> bị đụng: lần claim kế tiếp mới tăng.
-     */
     @Test
     @DisplayName("★ verdict cũ giữ nguyên, attempt không bị đụng")
     void verdict_cu_giu_nguyen() {
@@ -181,8 +143,6 @@ class RejudgeIT extends PostgresIT {
         assertThat(sau.get(2)).isEqualTo(attemptTruoc);
     }
 
-    // -------------------------------------------------------------------------
-
     private void chayRoiDonHangDoi() {
         try {
             handler.chay(ctx);
@@ -192,7 +152,6 @@ class RejudgeIT extends PostgresIT {
         donHangDoi();
     }
 
-    /** Giả lập worker đã chấm xong: hàng biến khỏi {@code judge_queue}. */
     private void donHangDoi() {
         jdbc.sql("DELETE FROM judge_queue WHERE priority = :p")
                 .param("p", DomainRules.PRIORITY_REJUDGE).update();
@@ -235,3 +194,4 @@ class RejudgeIT extends PostgresIT {
         return ids;
     }
 }
+

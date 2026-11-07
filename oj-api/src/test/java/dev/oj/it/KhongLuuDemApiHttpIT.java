@@ -10,17 +10,6 @@ import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Mọi response dưới {@code /api/v1/} mang {@code Cache-Control: no-store} — qua Tomcat thật.
- *
- * <p>Chạy trên cổng TCP thật vì cùng lý do với {@link GioiHanApiHttpIT}: phạm vi của bộ lọc do
- * container chọn trên đường dẫn ĐÃ chuẩn hoá, và {@code MockHttpServletRequest} không chuẩn hoá
- * gì cả. Một biến thể đường dẫn tới được controller mà thiếu header là response cá nhân có thể
- * nằm lại trong cache của máy dùng chung.
- *
- * <p>Mỗi ca kiểm MÃ trước rồi mới kiểm header: một biến thể mà Tomcat trả 400 vì lý do khác thì
- * header có hay không cũng không chứng minh gì.
- */
 class KhongLuuDemApiHttpIT extends HttpIT {
 
     private record TraLoi(int ma, String cacheControl) {
@@ -66,7 +55,6 @@ class KhongLuuDemApiHttpIT extends HttpIT {
         assertThat(tl.cacheControl()).isNotEqualTo("no-store");
     }
 
-    /** Đường dẫn NGUYÊN VĂN — xem {@code GioiHanApiHttpIT.goiTho}. */
     private TraLoi goiTho(String duongDan, String bearer) {
         var yeuCau = http.get().uri(URI.create("http://localhost:" + port + duongDan));
         if (bearer != null) {

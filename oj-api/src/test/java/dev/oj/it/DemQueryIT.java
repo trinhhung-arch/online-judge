@@ -9,28 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bước 6.15 — <b>N+1 là lỗi duy nhất không có triệu chứng trong test.</b>
- *
- * <p>Kết quả đúng, mọi khẳng định xanh, chỉ số lượt round-trip tăng tuyến tính theo số dòng.
- * Nó lộ ra trên dữ liệu thật, ở đúng trang người dùng mở nhiều nhất, và thường lộ ra dưới
- * dạng "dạo này site chậm" — một câu không chỉ vào file nào.
- *
- * <p>Cách duy nhất biến nó thành một test đỏ là khẳng định về <b>số lượng</b> truy vấn. Xem
- * {@link DemQuery} về việc vì sao bộ đếm ở đây là {@code java.lang.reflect.Proxy} tám mươi
- * dòng chứ không phải một dependency mới.
- *
- * <h2>Ngưỡng là hằng số nhỏ, KHÔNG phải một hàm của số dòng</h2>
- * Đó là toàn bộ ý nghĩa của những ca dưới đây. Mỗi ca dựng nhiều dòng hơn kích thước trang, và
- * khẳng định số truy vấn <i>không đổi</i>. Một ngưỡng kiểu {@code ≤ n + 1} sẽ xanh với chính
- * cái lỗi nó phải bắt.
- */
 class DemQueryIT extends PostgresIT {
 
-    /**
-     * Một truy vấn cho danh sách. {@code + 1} là chỗ dư cho một câu đếm hoặc một lần
-     * {@code SET} của pool; ba mươi dòng dữ liệu <b>không</b> được làm con số này nhúc nhích.
-     */
     private static final int TRAN = 2;
 
     @Autowired
@@ -74,11 +54,6 @@ class DemQueryIT extends PostgresIT {
         assertThat(soQuery).isLessThanOrEqualTo(TRAN);
     }
 
-    /**
-     * Bộ đếm phải <b>thật sự đếm</b>. Không có ca này thì một lỗi trong {@link DemQuery} — ví
-     * dụ danh sách interface của proxy thiếu {@code DataSource}, hoặc tên phương thức đổi ở
-     * một bản JDK sau — làm mọi ca ở trên xanh vĩnh viễn mà không kiểm gì cả.
-     */
     @Test
     @DisplayName("★ bộ đếm tự kiểm: một truy vấn tay phải đếm ra ít nhất 1")
     void bo_dem_that_su_dem() {
@@ -87,8 +62,6 @@ class DemQueryIT extends PostgresIT {
 
         assertThat(DemQuery.dem()).isPositive();
     }
-
-    // -------------------------------------------------------------------------
 
     private void taoBaiNop(int soLuong) {
         jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) VALUES "

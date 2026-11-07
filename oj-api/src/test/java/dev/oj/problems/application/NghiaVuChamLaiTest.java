@@ -21,14 +21,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ FR-PROB-10 — ba nghĩa của "đã có job chấm lại". Xem javadoc của {@link NghiaVuChamLai}.
- *
- * <p>Ca quan trọng nhất là {@link #chay_lai_gap_job_cua_chinh_minh_khong_bao_dong()}: trước
- * bản sửa này nó ghi ERROR "phải tạo job chấm lại bằng tay" trong khi job ấy đã có sẵn. Ca đối
- * trọng là {@link #job_cu_tu_truoc_khi_doi_testdata_van_bao_dong()} — sửa ca đầu mà làm mất ca
- * này là đổi một báo động giả lấy một sai lệch im lặng.
- */
 class NghiaVuChamLaiTest {
 
     private static final long DE = 42L;
@@ -72,7 +64,7 @@ class NghiaVuChamLaiTest {
     @Test
     @DisplayName("★ job ADMIN có từ trước khi đổi testdata → VẪN báo ERROR")
     void job_cu_tu_truoc_khi_doi_testdata_van_bao_dong() {
-        jobs.dangChay = job(5L, Map.of(JobParams.PROBLEM_ID, DE));   // không có testdataVersion
+        jobs.dangChay = job(5L, Map.of(JobParams.PROBLEM_ID, DE));
 
         assertThat(nghiaVu.thucHien(ctx, DE, 3, SETTER)).isNull();
         assertThat(ctx.muc).containsExactly("ERROR");
@@ -91,8 +83,7 @@ class NghiaVuChamLaiTest {
     @Test
     @DisplayName("job kia vừa kết thúc giữa lúc đụng và lúc hỏi → thử lại một lần và tạo được")
     void job_kia_vua_ket_thuc_thi_thu_lai() {
-        jobs.dungLanLuot.add(true);   // lần tạo đầu đụng index, lần sau thì không
-        // dangChay = null: lúc hỏi thì job kia đã xong
+        jobs.dungLanLuot.add(true);
 
         Long id = nghiaVu.thucHien(ctx, DE, 3, SETTER);
 
@@ -110,14 +101,11 @@ class NghiaVuChamLaiTest {
         assertThat(ctx.muc).containsExactly("ERROR");
     }
 
-    // =========================================================================
-
     private static Job job(long id, Map<String, Object> params) {
         return new Job(id, JobType.REJUDGE, JobStatus.RUNNING, params, Map.of(), null, 0,
                 "api-1", null, null, Instant.EPOCH, null, null, null);
     }
 
-    /** Ghi lại mức và nội dung từng sự kiện — thứ người vận hành đọc trên trang job. */
     private static final class NguCanh implements JobContext {
         final List<String> muc = new ArrayList<>();
         final List<String> thongDiep = new ArrayList<>();
@@ -137,10 +125,6 @@ class NghiaVuChamLaiTest {
         }
     }
 
-    /**
-     * {@code tao} đụng index khi có {@link #dangChay}, hoặc theo hàng đợi {@link #dungLanLuot}
-     * để giả lập job kia kết thúc giữa chừng.
-     */
     private static final class JobsGia implements JobRepository {
         final List<Map<String, Object>> daTao = new ArrayList<>();
         final Deque<Boolean> dungLanLuot = new ArrayDeque<>();

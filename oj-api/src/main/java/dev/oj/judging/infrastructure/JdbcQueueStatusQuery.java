@@ -11,30 +11,6 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
-/**
- * Hiện thực {@link QueueStatusQuery} — truy vấn 12 của {@code duong_nong.sql}, Bước 6.11.
- *
- * <h2>Một câu, hai bảng, không {@code JOIN}</h2>
- * Số liệu hàng đợi và số máy chấm sống đến từ hai bảng không liên quan nhau. Nối chúng bằng
- * một {@code CROSS JOIN} với subquery giữ nguyên một lượt round-trip mà không tạo ra quan hệ
- * giả nào — và endpoint công khai này có thể bị gọi rất nhiều lần (trang trạng thái tự làm
- * mới), nên một lượt thay vì hai là đáng.
- *
- * <h2>★ "Máy chấm sống" ở đây mịn tới đâu, và vì sao nói ra</h2>
- * {@code judge_hosts.last_seen_at} chỉ được cập nhật bởi endpoint {@code benchmark}, mà worker
- * gọi <b>15 phút một lần</b> ({@code oj.worker.sandbox.benchmark.interval}). Nên cửa sổ
- * liveness phải là hai chu kỳ — 30 phút — và con số này <b>không</b> phát hiện được một worker
- * vừa chết ba phút trước.
- *
- * <p>Đó là giới hạn thật, và cách chữa đúng không phải là bịa một con số mịn hơn mà là nhìn
- * đúng chỗ: trong contest, chỉ số nói lên "máy chấm có đang làm việc không" là
- * {@code dangCham} — nó thời gian thực, vì nó đếm lease đang giữ. Dashboard hiện cả hai, và
- * {@code JudgeHostHealthIndicator} cũng vậy.
- *
- * <p>Một heartbeat riêng sẽ mịn hơn, nhưng nó phải là một lượt {@code UPDATE} trên cùng một
- * dòng {@code judge_hosts} từ cả sáu slot — và {@code JdbcJudgeRunRepository} đã ghi rõ từ M1
- * vì sao không làm thế trên đường verdict: sáu slot tuần tự hoá trên một dòng.
- */
 @Repository
 public class JdbcQueueStatusQuery implements QueueStatusQuery {
 

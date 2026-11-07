@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** FR-AUTH-10 · V11 — xác thực hai lớp. */
 class TwoFactorUseCaseTest {
 
     private static final Instant BAY_GIO = Instant.parse("2026-09-05T10:00:00Z");
@@ -53,7 +52,6 @@ class TwoFactorUseCaseTest {
                 maHoa, hasher, checker(), nhatKy, Clock.fixed(BAY_GIO, ZoneOffset.UTC));
     }
 
-    /** Bí mật nằm trong fake dưới dạng "enc:<thô>", nên test tính được mã đúng như app. */
     private String maDung() {
         String biMat = maHoa.giaiMa(haiLop.tim(userId).orElseThrow().secretEnc());
         long giay = BAY_GIO.getEpochSecond();
@@ -136,7 +134,6 @@ class TwoFactorUseCaseTest {
         @Test
         @DisplayName("★ CHỐNG PHÁT LẠI — cùng một mã dùng lần thứ hai phải hỏng")
         void chong_phat_lai() {
-            // Mã dùng để xác nhận đã được ghi làm last_step, nên chính nó không dùng lại được.
             String ma = maDung();
             var c = checker();
 
@@ -182,7 +179,7 @@ class TwoFactorUseCaseTest {
             useCase().batDau();
             List<String> duPhong = useCase().xacNhan(maDung());
             haiLop.theoUser.computeIfPresent(userId,
-                    (id, tf) -> new TwoFactor(id, tf.secretEnc(), true, null));   // mã hiện tại lại "mới"
+                    (id, tf) -> new TwoFactor(id, tf.secretEnc(), true, null));
             haiLop.requestKhacDungMaTruoc = true;
             var c = checker();
 
@@ -221,7 +218,6 @@ class TwoFactorUseCaseTest {
         @Test
         @DisplayName("đủ mật khẩu và mã thì tắt, và xoá sạch cả mã dự phòng")
         void tat_thanh_cong() {
-            // Bước tiếp theo nên cần một mã của bước khác — đẩy đồng hồ đi 30 giây.
             var ucSau = new TwoFactorUseCase(IdentityFakes.nguoiGoi(userId, Role.ADMIN), users,
                     haiLop, maHoa, hasher,
                     new TotpChecker(haiLop, maHoa, dev.oj.platform.config.AppPropertiesGia.macDinh(), nhatKy,

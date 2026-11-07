@@ -29,14 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Fake cho toàn bộ port của {@code judging} — không Mockito, không Spring context.
- *
- * <p>Điểm chính là {@link #calls}: mọi fake ghi tên phương thức vào cùng một danh sách, kể cả
- * {@code tx.begin} và {@code tx.commit}. Nhờ vậy test kiểm được thứ <b>quan trọng nhất</b> mà
- * một assertion trên giá trị trả về không bao giờ chạm tới được: <b>thứ tự</b>, và cụ thể là
- * việc lời gọi publish nằm ở phía nào của chữ COMMIT ({@code oj-api/CLAUDE.md} mục 1).
- */
 class JudgingFakes {
 
     static final Instant NOW = Instant.parse("2026-03-01T10:00:00Z");
@@ -54,11 +46,6 @@ class JudgingFakes {
     final FakeLanguages languages = new FakeLanguages();
     final PlatformTransactionManager txManager = new RecordingTxManager();
 
-    /**
-     * Bus sự kiện giả — <b>ghi lại</b> thay vì nuốt, để test khẳng định được rằng verdict có
-     * đẩy ra luồng SSE. Một bus không làm gì cả thì test nào cũng xanh, kể cả ngày ai đó xoá
-     * mất dòng publish.
-     */
     static final class FakeEventBus implements dev.oj.judging.application.port.SubmissionEventBus {
 
         final java.util.List<SubmissionEvent> published = new java.util.ArrayList<>();
@@ -75,7 +62,6 @@ class JudgingFakes {
         }
     }
 
-    /** Tắt theo mặc định; {@link #chan} bật lên để kiểm chốt chạy TRƯỚC khi persist. */
     static final class RateLimiterGia
             implements dev.oj.judging.application.port.SubmissionRateLimiter {
 
@@ -99,7 +85,6 @@ class JudgingFakes {
         return () -> new CurrentUserProvider.CurrentUser(id, "nguoi-dung", role);
     }
 
-    /** Bài DONE bắt buộc có outcome (ck_submissions_done) — chính domain đã bắt lỗi này. */
     static Submission submission(long id, SubmissionStatus status, int attempt) {
         boolean done = status == SubmissionStatus.DONE;
         return new Submission(id, 7L, 42L, null, 3, SHA, SOURCE.length(), NOW,
@@ -226,7 +211,6 @@ class JudgingFakes {
         }
     }
 
-    /** Ghi lại đúng hai mốc: mở transaction và commit. Không có DB nào ở đây. */
     class RecordingTxManager implements PlatformTransactionManager {
 
         @Override
@@ -254,14 +238,6 @@ class JudgingFakes {
     static BigDecimal hostFactor() {
         return new BigDecimal("1.000");
     }
-    /**
-     * {@link dev.oj.platform.settings.SystemSettings} giả — mặc định <b>mọi công tắc đều bật</b>.
-     *
-     * <p>Mặc định "bật" chứ không "tắt": {@code SubmitSolutionUseCase} hỏi công tắc
-     * {@code submissions.accepting} ở dòng đầu tiên (Bước 6.12), nên một bản giả mặc định tắt
-     * sẽ làm mọi ca nộp bài đỏ với lý do không liên quan tới thứ chúng kiểm. Đây cũng là mặc
-     * định của hiện thực thật khi không đọc được database — hỏng theo hướng nhận bài.
-     */
     static final class CongTacGia implements dev.oj.platform.settings.SystemSettings {
 
         final java.util.Map<String, Boolean> giaTri = new java.util.LinkedHashMap<>();

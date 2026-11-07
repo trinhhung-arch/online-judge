@@ -17,18 +17,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ FR-PROB-07 · FR-SUB-06 — bộ lọc {@code feedback_level} trên Postgres THẬT.
- *
- * <h2>Vì sao ca này cần một cơ sở dữ liệu thật</h2>
- * Vì bộ lọc chỉ đúng khi <b>ba thứ khớp nhau</b>: cột {@code problems.feedback_level} đọc
- * được, câu query của trang chi tiết join đúng bảng đó, và {@code FeedbackPolicy} được gọi.
- * Test đơn vị với repository giả kiểm được mảnh thứ ba; hai mảnh đầu chỉ hiện ra ở đây.
- *
- * <p>Đây cũng là ca đóng lại một khoảng hở có thật: trước Bước 3.11,
- * {@code revealsFailedTestOrdinal()} <b>không được gọi ở bất kỳ đâu</b> trong {@code src/main}
- * — bộ lọc tồn tại như một hàm, và trang chi tiết đơn giản là không trả con số nào.
- */
 class SubmissionFeedbackIT extends PostgresIT {
 
     @Autowired SubmitSolutionUseCase submitSolution;
@@ -51,18 +39,9 @@ class SubmissionFeedbackIT extends PostgresIT {
         var hien = getSubmission.detailById(id);
         assertThat(hien.failedTestOrdinal()).isEqualTo(7);
 
-        // Cùng một dòng trong `submissions`, hai câu trả lời khác nhau — nên con số vẫn được
-        // LƯU đầy đủ, chỉ khác ở thứ được phép rời khỏi hệ thống.
         assertThat(rawFailedOrdinal(id)).isEqualTo(7);
     }
 
-    /**
-     * ★ FR-SUB-06 — log compiler <b>không</b> đi qua bộ lọc.
-     *
-     * <p>Ma trận hiển thị ({@code oj-api/CLAUDE.md} mục 2) cho tác giả xem vô điều kiện: đó là
-     * output từ chính mã của họ, không phải dữ liệu của đề. Một đề mức {@code NONE} vẫn phải
-     * nói được vì sao bài không biên dịch nổi, nếu không thì {@code CE} là một bức tường.
-     */
     @Test
     @DisplayName("★ log compiler hiện cả ở mức NONE — nó là output của chính bài nộp")
     void log_compiler_khong_bi_feedback_level_chan() {
@@ -72,10 +51,6 @@ class SubmissionFeedbackIT extends PostgresIT {
         assertThat(getSubmission.detailById(id).compileLog()).contains("cảnh báo giả");
     }
 
-    /**
-     * Chuỗi chẩn đoán của {@code isolate} chứa đường dẫn bên trong box. Nó tới được tầng
-     * {@code api} để rút một mã tín hiệu cho câu giải thích, và <b>dừng ở đó</b>.
-     */
     @Test
     @DisplayName("★ SEC3 — isolateStatus tới được use-case nhưng không có trường nào để đi tiếp")
     void isolate_status_khong_co_duong_ra_response() {
@@ -87,7 +62,6 @@ class SubmissionFeedbackIT extends PostgresIT {
                         .contains("isolate"));
     }
 
-    /** Nộp → claim → ghi verdict WA ở test 7, đúng đường thật. */
     private long judgeAsWrongAnswer() {
         var accepted = submitSolution.submit(new SubmitSolutionUseCase.Command(
                 PROBLEM_ID, "cpp20", "// EXPECT: WA\nint main(){}"));

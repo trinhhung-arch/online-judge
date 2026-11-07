@@ -15,37 +15,20 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Redis <b>treo</b> — khác với Redis <b>hỏng nhanh</b> mà {@code SuyGiamIT} đã đo.
- *
- * <p>{@code SuyGiamIT} làm Redis "chết" bằng một khoá sai kiểu: lệnh trả lỗi WRONGTYPE ngay
- * tức thì, và đường lùi về Postgres chạy đúng. Nhưng một Redis treo — tiến trình đứng, máy
- * quá tải, mạng nuốt gói tin — không trả lỗi nào cả: lệnh nằm chờ tới hết timeout của client.
- * Thời gian chờ ấy mới là thứ người nộp bài thấy.
- *
- * <p>Test làm treo chính container Redis dùng chung bằng {@code docker pause} (đông cứng tiến
- * trình, kết nối TCP vẫn mở) rồi nhả ra trong {@code finally}. Không dựng Redis riêng: thêm một
- * context Spring là thêm 26 connection vào một Postgres đã dùng 79/100 — xem {@link DiemHenSql}.
- */
 class RedisTreoHttpIT extends HttpIT {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTreoHttpIT.class);
 
-    /** Ngưỡng cảnh báo của P2 ({@code nfrplan.md} Phần 1: alert khi p95 &gt; 800ms). */
     private static final Duration NGUONG_CANH_BAO_P2 = Duration.ofMillis(800);
 
     @Test
     @DisplayName("★ Redis treo: nộp bài vẫn 202 và KHÔNG treo theo Redis")
     void redis_treo_nop_bai_khong_treo_theo() {
-        String token = bearerDev();          // ký thẳng: đăng nhập cũng đi qua Redis
-        // Làm nóng đường nộp bài khi Redis còn sống: số đo dưới chỉ được mang phần trễ do Redis
-        // treo, không mang chi phí JIT của request đầu tiên — thứ làm test chập chờn trên CI.
-        // Bằng tài khoản KHÁC: lúc Redis treo, rate limit lùi về Postgres và thấy đúng bài làm
-        // nóng vừa nộp chưa đủ 10 giây — 429, tức là đường lùi đang chạy đúng (đã thấy thật).
+        String token = bearerDev();
         quenLuotNopVuaRoi(SETTER_ID);
         assertThat(nopBai(bearer(SETTER_ID, "setter", Role.SETTER)).getStatusCode())
                 .isEqualTo(HttpStatus.ACCEPTED);
-        quenLuotNopVuaRoi(USER_ID);          // trước khi treo — sau đó thì không xoá được nữa
+        quenLuotNopVuaRoi(USER_ID);
 
         tamDungRedis();
         long batDau = System.nanoTime();

@@ -1,27 +1,6 @@
-/**
- * Xác thực hai lớp trên trang hồ sơ — FR-AUTH-10 (V11).
- *
- * ★ MỌI CHUỖI TỪ SERVER VÀO DOM QUA `textContent`.
- * Không một `innerHTML` nào trong file này. Đây là trang hiển thị bí mật TOTP và mã dự
- * phòng; một lỗ XSS ở đúng đây đọc được cả hai. Xem javadoc `khung.js`.
- *
- * ★ MÃ QR DỰNG Ở TRÌNH DUYỆT, KHÔNG PHẢI Ở SERVER.
- * Sinh ảnh QR ở server nghĩa là bí mật đi thêm một vòng qua tầng ảnh, qua log truy cập, và
- * có thể qua cache của proxy. Ở đây nó chỉ đi từ response JSON vào bộ nhớ của tab.
- *
- * ★ TÁCH KHỎI `ho-so.js` vì hai lý do, và lý do thứ hai mới là lý do thật:
- *   1. `ho-so.js` đã 127 dòng, gộp vào là vượt trần 300 dòng (CLAUDE.md mục 7).
- *   2. Thư viện QR chỉ nạp cho trang này. Một module riêng làm ranh giới ấy nhìn thấy được
- *      — grep 'qrcode' ra đúng một file, thay vì phải đọc cả file hồ sơ để biết nó có đụng
- *      thư viện ngoài hay không.
- */
-
 import { goi, LoiApi } from './api.js';
 import { chu, bao } from './khung.js';
 import { DUONG } from './duong-dan.js';
-
-// KHÔNG gọi khoiDong() ở đây: `ho-so.js` nạp trước và đã gọi rồi. Gọi lần hai sẽ vẽ
-// thanh điều hướng hai lần và gắn thêm một listener unhandledrejection nữa.
 
 const o = document.getElementById('thong-bao');
 const oTrangThai = document.getElementById('hai-lop-trang-thai');
@@ -33,7 +12,6 @@ const khoi = {
     bat:      document.getElementById('hai-lop-bat'),
 };
 
-/** Chỉ một khối hiện tại một thời điểm — trạng thái nhập nhằng là trạng thái người dùng bấm nhầm. */
 function hien(ten, nhan) {
     Object.entries(khoi).forEach(([k, el]) => { el.hidden = k !== ten; });
     oTrangThai.textContent = nhan;
@@ -41,8 +19,6 @@ function hien(ten, nhan) {
 
 function veQr(uri) {
     const img = document.getElementById('hai-lop-qr');
-    // Thư viện không nạp được (CDN chặn, mạng hỏng, SRI không khớp) thì ẩn ảnh đi và để
-    // phần nhập tay làm việc. Một ô ảnh vỡ cạnh một khoá bí mật trông như trang bị lỗi.
     if (typeof window.qrcode !== 'function') {
         img.hidden = true;
         return;
@@ -100,7 +76,6 @@ document.getElementById('form-hai-lop-xac-nhan').addEventListener('submit', asyn
             return li;
         }));
         hien('maDuPhong', 'Đã BẬT. Hãy lưu mã dự phòng trước khi rời trang.');
-        // Xoá khỏi DOM ngay: bí mật không còn việc gì để làm ở đây nữa.
         document.getElementById('hai-lop-bi-mat').textContent = '';
         document.getElementById('hai-lop-qr').removeAttribute('src');
     } catch (e) {
@@ -112,7 +87,6 @@ document.getElementById('form-hai-lop-xac-nhan').addEventListener('submit', asyn
 });
 
 document.getElementById('nut-da-luu-ma').addEventListener('click', () => {
-    // Xoá mã khỏi DOM khi người dùng nói đã lưu — chúng không cần nằm lại trong tab.
     document.getElementById('hai-lop-danh-sach-ma').replaceChildren();
     hien('bat', 'Đang BẬT. Mỗi lần đăng nhập sẽ cần mã từ ứng dụng xác thực.');
 });

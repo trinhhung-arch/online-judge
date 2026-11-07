@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
-/** Kết quả một lần chấm: cái gì là mâu thuẫn (ném), cái gì chỉ là vô nghĩa (chuẩn hoá). */
 class JudgeOutcomeTest {
 
     @Test
@@ -22,7 +21,6 @@ class JudgeOutcomeTest {
                 .isThrownBy(() -> new JudgeOutcome(null, 0, 100, 1, 10, 10));
     }
 
-    /** AC mà vẫn chỉ ra một test sai là mâu thuẫn nội tại — thường là bug gộp kết quả ở worker. */
     @Test
     void AC_ma_van_co_test_sai_la_mau_thuan() {
         assertThatIllegalArgumentException()
@@ -39,11 +37,6 @@ class JudgeOutcomeTest {
                         DomainRules.MAX_TEST_ORDINAL + 1, 10, 10));
     }
 
-    /**
-     * ★ CE và IE thì <b>chuẩn hoá, không ném</b>: chưa test nào chạy nên hai con số đo vô
-     * nghĩa. Ném lỗi ở đây sẽ chặn đúng đường ghi verdict, và một verdict không ghi được là
-     * một bài quay lại hàng đợi mãi mãi.
-     */
     @Test
     void CE_va_IE_bo_hai_con_so_do_thay_vi_tu_choi_ket_qua() {
         JudgeOutcome ce = new JudgeOutcome(Verdict.CE, 0, 100, null, 1234, 99999);
@@ -59,7 +52,7 @@ class JudgeOutcomeTest {
     void TLE_giu_nguyen_so_do_that_de_tang_api_con_lam_tron_10ms() {
         JudgeOutcome tle = new JudgeOutcome(Verdict.TLE, 0, 100, 3, 2034, 65536);
 
-        assertThat(tle.timeMs()).isEqualTo(2034);   // làm tròn là việc của api (FR-SUB-11)
+        assertThat(tle.timeMs()).isEqualTo(2034);
         assertThat(tle.isAccepted()).isFalse();
         assertThat(tle.isSystemFailure()).isFalse();
     }

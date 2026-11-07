@@ -11,21 +11,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Vòng đời danh tính đi qua <b>HTTP thật</b>, với <b>BCrypt thật</b> — Bước 4.3 → 4.7.
- *
- * <h2>Vì sao lớp này tồn tại bên cạnh {@code IdentityUseCasesTest}</h2>
- * Bộ unit test chạy bằng {@code IdentityFakes.BamGia} — băm bằng một phép nối chuỗi, để cả bộ
- * xong trong một giây. Nghĩa là nó <b>không</b> chứng minh được rằng cost 12 thật hoạt động,
- * rằng JSON serialize đúng, rằng {@code JwtAuthFilter} đứng đúng chỗ trong chuỗi filter, hay
- * rằng cột {@code inet} nhận được thứ {@code ClientIp} trả về.
- *
- * <p>Bốn thứ đó chỉ hiện ra khi có một cổng TCP thật và một Postgres thật, và cả bốn đều là
- * kiểu lỗi mà mọi test trước đó đều xanh trong khi hệ thống hỏng.
- *
- * <p>Vòng đời phiên (xoay vòng, thu hồi, khoá đăng nhập) nằm ở {@link SessionLifecycleHttpIT} —
- * tách ra vì trần 300 dòng của {@code CLAUDE.md} mục 7.
- */
 class IdentityHttpIT extends HttpIT {
 
     @Nested
@@ -57,7 +42,6 @@ class IdentityHttpIT extends HttpIT {
             assertThat(hoSo).containsEntry("id", (int) id)
                     .containsEntry("handle", "nguoi-moi")
                     .containsEntry("email", "moi@oj.test");
-            // Hồ sơ KHÔNG được mang băm mật khẩu ra ngoài dưới bất kỳ tên trường nào.
             assertThat(hoSo.toString()).doesNotContain("$2a$", "password");
         }
 
@@ -95,8 +79,6 @@ class IdentityHttpIT extends HttpIT {
                     .isEqualTo(saiMatKhau.getBody().get("message"));
         }
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ JwtAuthFilter đứng đúng chỗ")
@@ -144,8 +126,6 @@ class IdentityHttpIT extends HttpIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-AUTH-06 · vai trò sai trả 403, KHÔNG phải 200 rỗng")
     class PhanQuyenQuaHttp {
@@ -180,24 +160,13 @@ class IdentityHttpIT extends HttpIT {
         }
     }
 
-    // =========================================================================
-    // =========================================================================
-
     @org.springframework.beans.factory.annotation.Autowired
     dev.oj.identity.application.port.SecretCipher cipher;
 
-    /**
-     * ★ V11 · FR-AUTH-10 — đường đăng nhập 2FA THẬT, qua HTTP.
-     *
-     * <p>{@code TwoFactorUseCaseTest} đã đo logic bằng fake; ca ở đây đo phần mà fake không
-     * chạm tới: {@code AuthRequests.Login} có thêm trường {@code maHaiLop}, Jackson phải bind
-     * được nó, và client CŨ không gửi trường ấy vẫn phải đăng nhập được như trước.
-     */
     @Nested
     @DisplayName("★ V11 · đăng nhập hai lớp qua HTTP")
     class DangNhapHaiLop {
 
-        /** Hạt giống RFC 6238 — cùng chuỗi mà TotpTest dùng, nên mã tính ra đối chiếu được. */
         private static final String BI_MAT = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
 
         private void batHaiLopChoDev() {

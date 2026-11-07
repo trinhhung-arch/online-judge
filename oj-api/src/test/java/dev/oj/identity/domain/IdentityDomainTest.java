@@ -13,22 +13,12 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * {@code identity.domain} — Java thuần, không Spring context, chạy dưới một giây
- * ({@code CLAUDE.md} mục 3 luật 1).
- */
 class IdentityDomainTest {
 
     @Nested
     @DisplayName("Handle")
     class Handle {
 
-        /**
-         * ★ Cùng một quy tắc sống ở hai nơi: {@link User#HANDLE_REGEX} và
-         * {@code ck_users_handle_format} trong V1. Test này đọc thẳng file migration và đối
-         * chiếu — nếu ai đó nới regex ở Java mà quên database (hoặc ngược lại), nó đỏ ngay,
-         * chứ không đợi tới lúc một người dùng thật gặp lỗi 500 khó hiểu.
-         */
         @Test
         @DisplayName("★ regex ở Java trùng đúng CHECK trong V1")
         void trung_voi_rang_buoc_database() throws Exception {
@@ -41,20 +31,6 @@ class IdentityDomainTest {
                     .contains(User.HANDLE_REGEX);
         }
 
-        /**
-         * ★ Bản sao THỨ BA: thuộc tính {@code pattern} của ô tên đăng nhập trong
-         * {@code login.html}.
-         *
-         * <p>Nó tồn tại vì câu của server liệt kê thứ được phép chứ không nói ô của người
-         * dùng sai ở đâu — một người gõ "Hùng" nhận về một danh sách quy tắc và phải tự đoán
-         * ra rằng vấn đề là dấu thanh. Trang kiểm trước và nói thẳng, nhưng cái giá là luật
-         * này giờ sống ở ba nơi.
-         *
-         * <p>Bản HTML là bản dễ mục nhất: nới regex ở Java và V1 mà quên nó thì form từ chối
-         * một cái tên server chấp nhận, và <b>không có gì báo</b> — người dùng chỉ thấy một
-         * ô không cho qua. {@code login.js} đọc {@code pattern} từ DOM chứ không tự viết
-         * regex, nên đúng một bản HTML là đủ cho cả frontend.
-         */
         @Test
         @DisplayName("★ regex ở Java trùng đúng pattern của ô tên đăng nhập trong login.html")
         void trung_voi_form_dang_ky() throws Exception {
@@ -107,8 +83,6 @@ class IdentityDomainTest {
         @Test
         @DisplayName("★ quá 72 BYTE bị từ chối — BCrypt cắt cụt im lặng ở đó")
         void qua_72_byte() {
-            // Không có phép kiểm này thì hai mật khẩu dưới đây băm ra CÙNG một chuỗi, và cái
-            // thứ hai mở được tài khoản của cái thứ nhất.
             String bay_muoi_hai = "a".repeat(72);
             PasswordPolicy.kiemTra(bay_muoi_hai);
 
@@ -119,7 +93,6 @@ class IdentityDomainTest {
         @Test
         @DisplayName("★ đếm theo BYTE chứ không theo ký tự — tiếng Việt tốn 2-3 byte mỗi chữ")
         void dem_theo_byte_khong_theo_ky_tu() {
-            // 30 ký tự, nhưng 90 byte UTF-8. Đếm bằng length() sẽ cho lọt, và mật khẩu bị cắt.
             String tiengViet = "ậ".repeat(30);
             assertThat(tiengViet).hasSize(30);
             assertThat(tiengViet.getBytes(StandardCharsets.UTF_8).length).isGreaterThan(72);
@@ -192,7 +165,7 @@ class IdentityDomainTest {
             assertThat(song.conHieuLuc(t.plusSeconds(1))).isTrue();
             assertThat(thuHoi.conHieuLuc(t.plusSeconds(2))).isFalse();
             assertThat(hetHan.conHieuLuc(t)).isFalse();
-            assertThat(hetHan.daThuHoi()).isFalse();   // hết hạn KHÔNG phải bị thu hồi
+            assertThat(hetHan.daThuHoi()).isFalse();
         }
 
         @Test

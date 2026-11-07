@@ -1,20 +1,3 @@
-/**
- * Nhật ký kiểm toán — FR-ADM-02. Bước G12.
- *
- * ★ `chiTiet` LÀ DỮ LIỆU TỰ DO, NÊN NÓ CHỈ ĐƯỢC LÀ CHỮ
- *
- * Máy chủ trả một `Map<String, Object>` mà nội dung do chỗ ghi log quyết định. Đưa nó vào
- * `innerHTML` là mở một đường XSS đi qua chính bảng dùng để điều tra sự cố — và người đọc
- * bảng ấy luôn là ADMIN. `chu()` đặt `textContent`, nên mọi thứ ở đây là chữ, kể cả khi nó
- * trông giống thẻ HTML.
- *
- * ★ HAI Ô THỜI GIAN LÀ GIỜ ĐỊA PHƯƠNG, MÁY CHỦ NHẬN UTC
- *
- * Cùng cái bẫy đã ghi ở `contests.js`: `datetime-local` cho ra `2026-09-04T19:00` không kèm
- * múi giờ. Gửi thẳng là lệch bảy tiếng ở Việt Nam — và ở một bảng dùng để trả lời "lúc ấy ai
- * làm gì", lệch bảy tiếng nghĩa là tìm nhầm người.
- */
-
 import { chu } from './khung.js';
 import { khoiDong, gio } from './trang.js';
 import { DS } from './duong-dan.js';
@@ -45,7 +28,6 @@ function chiTiet(d) {
     try {
         return JSON.stringify(c);
     } catch {
-        // Vòng tham chiếu thì thôi, đừng làm hỏng cả bảng vì một dòng.
         return '(không đọc được)';
     }
 }
@@ -77,9 +59,6 @@ function veDong(d) {
 
 function boLoc() {
     const q = new URLSearchParams();
-    // ★ `formLoc.action` là thuộc tính có sẵn của <form> (URL gửi đi). Trình duyệt cho
-    // control trùng tên thắng, nhưng dựa vào luật ấy là viết một dòng mà người đọc sau phải
-    // tra spec mới biết là đúng. `elements.` nói thẳng ý định.
     const action = formLoc.elements.action.value.trim();
     if (action) q.set('action', action);
 

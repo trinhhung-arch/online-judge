@@ -23,12 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Map;
 
-/**
- * Kỳ thi — FR-CON-01, 02, 04, 05, 07.
- *
- * <p>Không một câu {@code if} nào về quyền hay về thời gian trong file này. Cả hai đều nằm ở
- * use-case, nơi consumer, job nền và test đều phải đi qua (bất biến #11).
- */
 @RestController
 @RequestMapping("/api/v1/contests")
 public class ContestController {
@@ -54,12 +48,6 @@ public class ContestController {
         this.clock = clock;
     }
 
-    /**
-     * FR-CON-01 — lịch thi. Công khai, phân trang cursor (bất biến #8).
-     *
-     * <p>Xin {@code size=1000} thì nhận {@code page.max-size}, không nhận lỗi
-     * ({@code oj-api/CLAUDE.md} mục 3).
-     */
     @GetMapping
     public CursorPage<ContestResponses.TomTat> danhSach(
             @RequestParam(required = false) String cursor,
@@ -76,7 +64,6 @@ public class ContestController {
         return ContestResponses.ChiTiet.tu(getContest.theoSlug(slug), clock.instant());
     }
 
-    /** FR-CON-04. Đường REST này cũng là <b>fallback bắt buộc</b> của luồng SSE. */
     @GetMapping("/{contestId}/standings")
     public ContestResponses.BangXepHang bangXepHang(@PathVariable long contestId) {
         return ContestResponses.BangXepHang.tu(getStandings.thucHien(contestId));
@@ -101,13 +88,6 @@ public class ContestController {
                 body.points() == null ? 100 : body.points());
     }
 
-    /**
-     * ★ V10 — soạn đề riêng cho kỳ thi, một request cho cả hai việc.
-     *
-     * <p>Không tách thành "tạo đề" rồi "gắn đề" ở phía client: hỏng giữa chừng để lại một đề
-     * DRAFT mồ côi không ai biết nó sinh ra để làm gì. Xem
-     * {@link AuthorContestUseCase#soanDeRieng}.
-     */
     @PostMapping("/{contestId}/problems/new")
     public ResponseEntity<Map<String, Object>> soanDeRieng(
             @PathVariable long contestId, @RequestBody SoanDeRequest body) {
@@ -116,21 +96,18 @@ public class ContestController {
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("problemId", problemId));
     }
 
-    /** Gỡ một đề khỏi kỳ thi. Xem {@link AuthorContestUseCase#goDeKhoiKyThi}. */
     @DeleteMapping("/{contestId}/problems/{problemId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void goDe(@PathVariable long contestId, @PathVariable long problemId) {
         author.goDeKhoiKyThi(contestId, problemId);
     }
 
-    /** FR-CON-05, FR-CON-07 — công bố bảng đầy đủ. Xem {@link RevealStandingsUseCase}. */
     @PostMapping("/{contestId}/reveal")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void congBo(@PathVariable long contestId) {
         reveal.thucHien(contestId);
     }
 
-    /** @param penaltyMinutes chỉ ICPC dùng; mặc định 20 khớp {@code DEFAULT} của V7 */
     public record TaoContestRequest(String slug, String title, String format,
                                     Instant startsAt, Instant endsAt, Instant freezeAt,
                                     Integer penaltyMinutes, Boolean registrationRequired,
@@ -144,20 +121,9 @@ public class ContestController {
         }
     }
 
-    /**
-     * @param label vừa là tên đề trong kỳ thi vừa <b>là</b> thứ tự của nó — A đứng trước B.
-     *              Từ V12 không còn trường thứ tự riêng; ADR 015 nói vì sao
-     */
     public record ThemDeRequest(long problemId, String label, Integer points) {
     }
 
-    /**
-     * ★ V10 — soạn một đề mới ngay trong kỳ thi.
-     *
-     * <p>{@code de} lồng nguyên {@link ProblemAuthoringRequest} thay vì trải phẳng mười ba
-     * trường ra đây. Trải phẳng thì hai bản mô tả cùng một thứ sẽ lệch nhau vào ngày trang
-     * soạn đề có thêm một trường — và bên lệch sẽ là bên này, vì nó ít được sờ tới hơn.
-     */
     public record SoanDeRequest(ProblemAuthoringRequest de, String label, Integer points) {
     }
 }

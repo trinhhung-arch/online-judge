@@ -21,32 +21,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Vòng lặp chấm bài: {@code claim → run → report}, chạy trên {@code slots} luồng song song.
- *
- * <h2>PULL, không PUSH</h2>
- * Worker tự đi xin việc. Server không giữ danh sách worker, không heartbeat, không service
- * discovery — bật thêm một worker là nó tự vào việc, <b>không sửa một dòng config nào phía
- * API</b> (S2, ADR 004). Đó cũng là thứ làm bài test scalability tuần 12 (Mac + hai WSL)
- * không tốn đồng nào.
- *
- * <h2>Số luồng = {@code slots}, cố định theo cấu hình</h2>
- * <b>Không</b> theo số core. M1 Max có 10 core nhưng chạy 6 slot: chạy full core 10-15 phút
- * sẽ throttle, và bài phút thứ 90 chấm chậm hơn bài phút thứ 5 — mất công bằng ngay giữa
- * contest, mà không ai nhận ra (ADR 008).
- *
- * <h2>Hàng đợi rỗng thì chờ, không quay vòng</h2>
- * {@code 204} nghĩa là hết việc. Hỏi lại ngay lập tức là sáu luồng quay tít đốt CPU và dội
- * request vào API — đúng lúc rảnh việc thì lại tốn nhiều tài nguyên nhất.
- *
- * <p><b>M6 · Bước 6.4:</b> nhịp ngủ {@code oj.worker.idle-poll} trở thành một lần
- * {@link JudgeDoorbell#cho} — dậy ngay khi API gõ cửa qua RabbitMQ, và <i>vẫn</i> dậy sau
- * {@code idlePoll} nếu không có tiếng nào. Vế thứ hai là thứ giữ cho bước 6.4 an toàn: broker
- * chết thì worker quay về đúng hành vi M1. Xem javadoc {@code JudgeDoorbell}.
- *
- * <h2>Tắt máy êm — Bước 6.8, A3</h2>
- * {@link #stop()} <b>không</b> gọi {@code shutdownNow()} nữa. Xem javadoc của nó.
- */
 @Component
 public class JudgeLoop implements SmartLifecycle {
 
@@ -58,7 +32,6 @@ public class JudgeLoop implements SmartLifecycle {
     private final JudgeDoorbell chuong;
     private final WorkerProperties properties;
 
-    /** Dùng chung cho mọi slot — xem javadoc {@link ClaimBackoff} về vì sao log phải chung. */
     private final ClaimBackoff backoff;
 
     private ExecutorService slots;
@@ -80,9 +53,6 @@ public class JudgeLoop implements SmartLifecycle {
         slots = Executors.newFixedThreadPool(properties.slots(), r -> {
             Thread t = new Thread(r);
             t.setName("oj-judge-slot-" + t.threadId());
-            // Luồng thường, KHÔNG virtual thread: đây là công việc bị CPU chặn trong sandbox,
-            // và virtual thread không giúp gì cho loại đó. Virtual thread là chuyện của SSE
-            // phía API (1000 kết nối chờ I/O), không phải chuyện ở đây.
             t.setDaemon(false);
             return t;
         });
@@ -94,7 +64,6 @@ public class JudgeLoop implements SmartLifecycle {
                 properties.apiBaseUrl());
     }
 
-    /** Một slot: xin việc, chấm, xếp kết quả vào buffer, lặp lại. */
     private void pullLoop() {
         ClaimRequestDto request =
                 ClaimRequestDto.single(properties.hostName(), properties.arch());
@@ -105,17 +74,13 @@ public class JudgeLoop implements SmartLifecycle {
                 backoff.ghiNhanCoLai();
                 lienTiepHong = 0;
                 if (job.isEmpty()) {
-                    // Hàng đợi rỗng: chờ tiếng chuông, tối đa idlePoll. Bước 6.4.
                     if (!chuong.cho(properties.idlePoll())) {
-                        return;      // bị ngắt -> đang tắt máy
+                        return;
                     }
                     continue;
                 }
                 judge(job.get());
             } catch (JudgeApiException e) {
-                // API đang xuống. Giãn nhịp và ghi log MỘT lần — bản trước ngủ đúng idlePoll
-                // rồi ghi một dòng WARN mỗi lần, tức 12 dòng/giây với sáu slot, không đổi dù
-                // API đã chết một tiếng. Xem javadoc ClaimBackoff.
                 Duration cho = backoff.cho(++lienTiepHong);
                 backoff.ghiNhanMat(e.getMessage(), cho);
                 sleep(cho);
@@ -126,14 +91,6 @@ public class JudgeLoop implements SmartLifecycle {
         }
     }
 
-    /**
-     * Chấm đúng một bài.
-     *
-     * <p>{@link JudgeRunner} cam kết không ném ra ngoài, nhưng ở đây vẫn bắt: một hiện thực
-     * tương lai vi phạm cam kết đó sẽ làm <b>mất một lượt chấm mà API không được báo gì</b>,
-     * và bài phải chờ hết lease 120s. Đổi nó thành {@code IE} thì API cho chấm lại ngay
-     * (FR-SUB-12).
-     */
     private void judge(JudgeJobDto job) {
         Instant startedAt = Instant.now();
         JudgeResultDto result;
@@ -150,11 +107,6 @@ public class JudgeLoop implements SmartLifecycle {
         results.submit(result);
     }
 
-    /**
-     * Chấm lâu hơn lease nghĩa là reaper đã thu hồi bài và giao cho người khác — kết quả sắp
-     * gửi đi <b>chắc chắn sẽ bị khoá lạc quan từ chối</b>. Không phải lỗi, nhưng là tín hiệu
-     * vận hành: hoặc lease quá ngắn, hoặc máy này đang quá tải.
-     */
     private void warnIfOverLease(JudgeJobDto job, Instant startedAt) {
         Duration elapsed = Duration.between(startedAt, Instant.now());
         if (elapsed.compareTo(properties.lease()) > 0) {
@@ -164,31 +116,6 @@ public class JudgeLoop implements SmartLifecycle {
         }
     }
 
-    /**
-     * ★ Bước 6.8 — SIGTERM: ngừng nhận job mới, <b>chấm nốt bài đang chạy</b>, rồi mới thoát.
-     *
-     * <h2>Bản M1 gọi {@code shutdownNow()}, và đó là một lỗi thật</h2>
-     * {@code shutdownNow()} <b>ngắt</b> mọi luồng đang chạy — kể cả sáu slot đang chấm dở.
-     * Mỗi lần deploy worker là sáu bài bị cắt ngang giữa chừng: chúng không mất (lease 120s
-     * hết hạn thì reaper giao lại), nhưng người nộp chờ thêm hai phút cho một verdict mà máy
-     * đã tính gần xong. Nhân với một lần deploy giữa contest thì đó là A3 bị phá:
-     * <i>"deploy worker: 0 bài mất"</i> đúng theo nghĩa đen, sai theo nghĩa người dùng thấy.
-     *
-     * <p>{@code shutdown()} thì ngược lại: không nhận việc mới, để luồng đang chạy làm nốt.
-     *
-     * <h2>Ba việc, đúng thứ tự — {@code oj-worker/CLAUDE.md} mục 5</h2>
-     * <ol>
-     *   <li>{@code running = false} — slot nào xong bài hiện tại thì thoát, không claim nữa.</li>
-     *   <li>{@link JudgeDoorbell#reo()} — <b>đánh thức slot đang chờ chuông</b>. Không có dòng
-     *       này thì một worker rảnh việc phải nằm hết {@code idlePoll} rồi mới thấy cờ đã đổi,
-     *       và mỗi lần tắt máy đội thêm chừng ấy thời gian mà không vì lý do gì.</li>
-     *   <li>Chờ tới {@code shutdown-grace}. Hết hạn mà còn slot chạy thì mới cắt — một bài
-     *       chấm lâu bất thường không được giữ tiến trình lại vô hạn.</li>
-     * </ol>
-     *
-     * <p>Việc gửi nốt kết quả và dọn box nằm ở {@code GracefulShutdown}, chạy <b>sau</b> lớp
-     * này (phase thấp hơn).
-     */
     @Override
     public void stop() {
         running = false;

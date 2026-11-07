@@ -4,57 +4,20 @@ spring:
 
   servlet:
     multipart:
-      # FR-PROB-03 — gói testdata ≤ 200MB. PHẢI khớp TestdataLimits.MAX_ZIP_BYTES:
-      # đặt nhỏ hơn thì Tomcat từ chối trước khi mã của ta chạy, và người dùng nhận một
-      # lỗi 500 của framework thay vì câu tiếng Việt giải thích giới hạn.
       max-file-size: 200MB
-      max-request-size: 210MB      # dư cho phần bao multipart, không phải một giới hạn thứ hai
-      # Ghi thẳng ra đĩa thay vì đệm trong RAM. Không có dòng này thì hai người cùng nạp
-      # testdata là 400MB heap.
+      max-request-size: 210MB
       file-size-threshold: 1MB
 
-  # KHÔNG cấu hình spring.datasource ở đây: DataSourceConfig tự dựng HAI pool
-  # (oj.datasource.app / oj.datasource.judge) và đánh dấu @Primary, nên khối
-  # spring.datasource sẽ bị bỏ qua trong im lặng — đúng loại cấu hình trông như có
-  # tác dụng mà không có. Xem oj.datasource ở cuối file.
   flyway:
-    # ★ BIẾN RIÊNG, không dùng chung với oj.datasource.* — và đây là điểm chính.
-    #
-    # V8 tách hai role: Flyway chạy bằng role SỞ HỮU schema (oj_migrator), ứng dụng chạy
-    # bằng oj_app đã bị REVOKE hết quyền DDL. Bản trước của khối này đọc OJ_DB_APP_USER cho
-    # cả hai, nên trên host thật, đúng cái thao tác hoàn tất V8 — đặt OJ_DB_APP_USER=oj_app —
-    # cũng đẩy Flyway sang oj_app, và migration kế tiếp chết với `permission denied`.
-    #
-    # Nói cách khác: cấu hình cũ khiến V8 chỉ dùng được khi KHÔNG ai bật nó lên. Hai biến
-    # tách rời làm cho hai role thành hai thứ đặt được độc lập, đúng như V8 giả định.
-    #
-    # Mặc định vẫn là ojuser cho cả hai, nên máy dev và Testcontainers không đổi gì.
     url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}
     user: ${OJ_DB_MIGRATOR_USER:${OJ_DB_APP_USER:ojuser}}
     password: ${OJ_DB_MIGRATOR_PASSWORD:${OJ_DB_APP_PASSWORD:ojpass}}
-
 
   data:
     redis:
       host: localhost
       port: 6379
-      # docker-compose bật `--requirepass` từ CÙNG biến này. Mặc định rỗng là cho Testcontainers
-      # (Redis không mật khẩu): chuỗi rỗng thì Lettuce không gửi AUTH. Trên host thật mà quên
-      # biến thì kết nối hỏng NOAUTH ngay lúc khởi động — không có đường lùi về Redis không khoá.
-      #
-      # Trước 2026-09-16 Redis không có mật khẩu và nghe *:6379: một máy bất kỳ trong LAN xoá
-      # được khoá rate limit, ghi đè cache bảng xếp hạng, và PUBLISH verdict giả vào kênh SSE.
       password: ${OJ_REDIS_PASSWORD:}
-      # ★ Cùng cái bẫy với RabbitMQ ngay dưới: để trống thì Lettuce chờ mỗi lệnh 60 GIÂY. Mọi
-      # đường gọi Redis đều có lối lùi (Postgres, hoặc cho qua), nhưng lối lùi chỉ chạy SAU khi
-      # lệnh hỏng — và một Redis treo thì không hỏng, nó im. Đo 2026-10-15 (RedisTreoHttpIT,
-      # `docker pause`): một POST /api/v1/submissions mất 121 giây — GioiHanApiFilter chờ 60s,
-      # rồi rate limit nộp bài chờ thêm 60s — trả 202, nhưng qua Cloudflare Tunnel (~100s) người
-      # dùng đã thấy 524 và bấm nộp lại. 200ms mỗi lệnh: hai lệnh trên đường nộp bài là ~0,4s
-      # khi Redis treo — vượt mục tiêu P2 300ms, dưới ngưỡng cảnh báo 800ms. Muốn giữ cả P2 khi
-      # Redis treo thì cần thêm cầu dao như RabbitJudgeJobPublisher (chưa làm, đã cân nhắc).
-      # Bình thường một lệnh tới Redis cùng máy mất dưới 1ms; lệnh nặng nhất là ZADD nạp cache
-      # bảng xếp hạng, vài mili giây.
       timeout: 200ms
       connect-timeout: 200ms
 
@@ -63,33 +26,8 @@ spring:
     port: ${OJ_RABBIT_PORT:5672}
     username: ${OJ_RABBIT_USER:ojuser}
     password: ${OJ_RABBIT_PASSWORD:ojpass}
-    # ★ Bước 6.9. Mặc định là 60 GIÂY, và nó nằm trên đường nộp bài: broker chết thì mỗi lần
-    # nộp treo 60 giây trước khi ngoại lệ được nuốt. 200ms là trần cho MỘT lần thử; cầu dao
-    # trong RabbitJudgeJobPublisher lo phần "đừng thử lại mỗi bài".
     connection-timeout: 200ms
 
-  # ===========================================================================
-  # SMTP — FR-AUTH-09 (V13), xác minh email.
-  #
-  # ★ KHÔNG CÓ MẶC ĐỊNH CHO `host`, và đó là cách tính năng này tự tắt trên máy dev:
-  # Spring Boot chỉ dựng bean JavaMailSender khi `spring.mail.host` có giá trị. Biến trống
-  # -> không có bean -> SmtpEmailSender chạy ở chế độ tắt và ghi một dòng WARN. Bộ IT không
-  # cần một máy chủ thư nào.
-  #
-  # ★ BA TIMEOUT DƯỚI ĐÂY KHÔNG PHẢI TUỲ CHỌN.
-  # Mặc định của JavaMail là chờ VÔ HẠN. Một máy chủ SMTP treo — không từ chối, không đóng
-  # kết nối, chỉ im lặng — giữ luôn luồng Tomcat đang chạy lượt đăng ký, và giữ mãi. Vài
-  # chục lượt như thế là hết luồng, và triệu chứng không phải "không gửi được thư" mà là
-  # "cả site không phản hồi".
-  #
-  # Chúng được đọc lại lúc boot: `SmtpEmailSender` hỏi chính đối tượng JavaMailSender xem ba
-  # khoá này có mặt không, và TỪ CHỐI KHỞI ĐỘNG nếu thiếu. Lý do nằm ở bài học của
-  # `TurnstileVerifier.HttpConfig` — một trần thời gian khai trong yml mà không tới được nơi
-  # cần là kiểu hỏng tệ nhất: im lặng và trông như đúng.
-  #
-  # 10 giây, không phải 3 giây như Turnstile: bắt tay SMTP có TLS và AUTH là nhiều vòng đi
-  # về hơn một lượt POST, và lá thư này không có ai ngồi chờ verdict ở đầu kia.
-  # ===========================================================================
   mail:
     host: ${OJ_MAIL_HOST:}
     port: ${OJ_MAIL_PORT:587}
@@ -99,7 +37,6 @@ spring:
       mail:
         smtp:
           auth: true
-          # STARTTLS trên cổng 587. Thiếu dòng này thì mật khẩu SMTP đi qua mạng dạng thô.
           starttls:
             enable: true
             required: true
@@ -107,30 +44,6 @@ spring:
           timeout: 10000
           writetimeout: 10000
 
-  # ★ SÁU tác vụ @Scheduled, và mặc định của Spring là MỘT luồng cho tất cả.
-  #
-  # M6 đã gặp đúng lỗi này một lần: JobRunner chạy job đồng bộ trên luồng ấy, nên một lần nạp
-  # testdata 200MB là reaper không chạy, và bài kẹt JUDGING quá lease 120s (R1). Bản sửa cho
-  # JobRunner một executor riêng — nhưng năm tác vụ còn lại vẫn dùng chung một luồng:
-  #
-  #   StaleJobReaper           15s   ← thứ R1 phụ thuộc vào
-  #   QueueMetricsSampler      10s
-  #   StandingsUpdater          2s   đọc lô 500 bài rồi tính lại bảng
-  #   FreezeStandingsScheduler  5s   chụp bảng xếp hạng, có thể là hàng trăm dòng
-  #   JobRunner                 5s   giờ chỉ gửi việc, tiêu vài micro giây
-  #   AuditPartitionScheduler  03:15 CREATE TABLE ... PARTITION OF
-  #
-  # Dòng cuối là dòng nguy hiểm: nó lấy ACCESS EXCLUSIVE trên `audit_log`, một bảng đang được
-  # ghi liên tục. Kẹt lock ở đó là kẹt luôn reaper — mất bài nộp vì một cái partition, vào
-  # 3 giờ sáng, tức là đúng lúc không ai nhìn.
-  #
-  # Năm luồng, không phải sáu: JobRunner đã tự có luồng riêng từ M6 nên nhịp @Scheduled của
-  # nó chỉ gửi việc rồi trả về. Không tác vụ nào ở đây dùng chung trạng thái trong bộ nhớ với
-  # tác vụ khác, nên chạy song song là an toàn.
-  #
-  # Con số này KHÔNG được viết tay lần nữa: HopDongVanHanhTest đếm số @Scheduled bằng phản
-  # chiếu và so với dòng dưới. Nó đã bắt đúng một lỗi ngay lần chạy đầu — bản viết tay đầu
-  # tiên ghi 4, vì StandingsUpdater khai annotation bằng tên đầy đủ và grep trượt.
   task:
     scheduling:
       pool:
@@ -138,86 +51,33 @@ spring:
 
 server:
   port: 8080
-  # ★ CHỈ NGHE 127.0.0.1. Mặc định của Spring là mọi địa chỉ, tức là cả LAN gọi thẳng được
-  # /internal/judge/* — đi vòng qua luật chặn của cloudflared, lớp phòng thủ thứ nhất của cửa
-  # ấy (infra/cloudflared/config.yml). Đo ngày 2026-09-16 trên host Mac (OrbStack): một cổng
-  # bind 127.0.0.1 vẫn tới được từ cloudflared (localhost) và từ container kiểu worker
-  # (host.docker.internal + --add-host host-gateway); máy khác trong LAN thì không.
-  # Cần thử từ điện thoại trong LAN thì đặt SERVER_ADDRESS=0.0.0.0 cho lượt chạy đó, đừng sửa ở đây.
   address: 127.0.0.1
-  # KHÔNG đặt servlet.context-path=/api/v1 (build-order.md 0.6 đề nghị thế, và nó SAI):
-  # context-path bọc TOÀN BỘ ứng dụng, nên /internal/judge/* sẽ thành
-  # /api/v1/internal/judge/* — đúng thứ mà oj-api/CLAUDE.md mục 5 cấm, và nó sẽ lọt ra
-  # tunnel cùng với phần công khai. Tiền tố /api/v1 nằm trong @RequestMapping của từng
-  # controller công khai; hai endpoint nội bộ cố ý đứng ngoài.
 
-# =============================================================================
-# Actuator — Bước 6.7 và 6.10.
-#
-# ★ CỔNG RIÊNG, và đây là phần quan trọng nhất của khối này.
-# Cloudflare Tunnel chỉ publish cổng `server.port` (8080). Đặt actuator ở 8081 nghĩa là
-# /actuator/** không có lối vào từ internet — cùng cơ chế đã dùng cho /internal/judge/*,
-# và cùng lý do: một bề mặt vận hành lọt ra ngoài là một bề mặt tấn công.
-#
-# UptimeRobot giám sát TỪ BÊN NGOÀI (nfrplan 7.2) nên nó không gọi được cổng này; nó ping
-# một endpoint công khai. Điều đó đúng — health check chi tiết là cho người vận hành, còn
-# "site còn sống không" là câu hỏi khác và có câu trả lời khác.
-# =============================================================================
 management:
   server:
     port: 8081
-    # `show-details: always` ở dưới chỉ an toàn khi cổng này là nội bộ THẬT. Trước 2026-09-16
-    # nó nghe *:8081 — cả LAN đọc được tình trạng từng thành phần hạ tầng. Xem server.address.
     address: 127.0.0.1
   endpoints:
     web:
       exposure:
-        include: health          # KHÔNG mở env/configprops: ở đó có OJ_JWT_SECRET
+        include: health
   endpoint:
     health:
-      show-details: always       # chỉ nghe trên 8081, nội bộ — chi tiết là thứ cần khi trực
+      show-details: always
       show-components: always
-      # ★ HAI BỀ MẶT, HAI NGƯỜI ĐỌC — và gộp chúng làm một là có hại.
-      #
-      # /actuator/health          -> cho NGƯỜI trực. Gộp mọi thành phần, kể cả những thứ
-      #                              hỏng mà hệ thống vẫn chạy (Redis, RabbitMQ, worker).
-      # /actuator/health/sanSang  -> cho MÁY. 503 ở đây nghĩa là "restart tôi đi".
-      #
-      # Vì sao phải tách: bảng degraded mode (nfrplan 7.2) liệt kê năm thành phần, và
-      # ĐÚNG MỘT trong năm là chí mạng. Redis chết thì bảng xếp hạng đọc Postgres; RabbitMQ
-      # chết thì worker quay về nhịp poll; worker chết hết thì bài vẫn vào hàng đợi. Trả 503
-      # cho những trường hợp ấy là bảo bộ giám sát restart một API đang chạy đúng — và
-      # restart không mang một worker nào trở lại.
-      #
-      # nfrplan 7.2 nói "một health check luôn xanh còn tệ hơn không có health check". Mặt
-      # còn lại cũng đúng: một health check đỏ vì chuyện không phải sự cố sẽ bị người ta tắt
-      # thông báo, và lúc đó nó cũng vô dụng như một cái luôn xanh.
       group:
         sanSang:
-          include: db            # chỉ Postgres. Mất nó là mất tất cả (R1)
+          include: db
           show-details: always
-      # OUT_OF_SERVICE = "một năng lực đang thiếu", không phải "tôi hỏng". Mặc định của Boot
-      # ánh xạ nó sang 503; ở đây nó là 200 kèm thân nói rõ, còn 503 để dành cho DOWN.
       status:
         http-mapping:
           out-of-service: 200
   health:
-    # Postgres/Redis/RabbitMQ đã có HealthIndicator sẵn của Boot. `db` kiểm CẢ HAI pool
-    # (app và judge) vì Boot dò mọi bean DataSource — đúng thứ ta muốn: pool judge chết mà
-    # pool app sống nghĩa là verdict không ghi được, và đó KHÔNG phải "UP".
     defaults:
       enabled: true
   metrics:
     tags:
       application: oj-api
-    # P1 < 200ms và P2 < 300ms là mục tiêu p95, nên phải khai báo — không có khối này thì
-    # Micrometer chỉ giữ count/sum/max, và p95 KHÔNG tính được từ ba con số đó.
-    #
-    # Hai dòng, hai mục đích khác nhau, và cần cả hai:
-    #   percentiles            -> Micrometer tự tính p95 TRONG TIẾN TRÌNH. Đây là thứ
-    #                             OpsDashboardController đọc; không có nó thì ô p95 luôn là 0.
-    #   percentiles-histogram  -> phát ra bucket cho một backend gộp số liệu nhiều instance.
-    #                             Chưa dùng tới, nhưng bỏ đi thì ngày dựng backend phải nhớ.
     distribution:
       percentiles:
         http.server.requests: 0.95
@@ -230,95 +90,43 @@ logging:
   level:
     org.springframework.security: DEBUG
 
-# =============================================================================
-# Mọi ngưỡng, giới hạn, timeout của hệ thống — CLAUDE.md mục 7: không có số ma
-# thuật rải trong code. Ánh xạ 1-1 sang dev.oj.platform.config.AppProperties,
-# và các compact constructor ở đó đối chiếu ngược với hằng số trong oj-contract
-# rồi CRASH LÚC BOOT nếu lệch.
-#
-# ⚠️ Sáu con số dưới đây ĐỔI LÀ PHẢI HỎI NGƯỜI (CLAUDE.md mục 5.4):
-#    max-source-bytes 64KB · rate-limit 10s · lease 120s · ai.daily-quota 5
-#    · page.max-size 50 · result-batch-size 20
-# =============================================================================
 oj:
   submission:
-    max-source-bytes: 65536       # FR-SUB-01 · CHECK trên source_blobs · JudgeJobDto
-    rate-limit: 10s               # FR-SUB-08 — hiệu lực từ M4, khai báo sẵn từ M1
+    max-source-bytes: 65536
+    rate-limit: 10s
 
   judge:
-    lease: 120s                   # FR-SUB-03 — kẹt JUDGING quá ngần này thì reaper thu hồi
-    reaper-interval: 15s          # PHẢI nhỏ hơn lease, nếu không một bài kẹt chờ hai chu kỳ
-    max-ie-retries: 2             # FR-SUB-12
-    # FR-SUB-03, ADR 019 — reaper thả bài hết lease về hàng đợi tối đa ngần này lần; lần hết
-    # lease KẾ TIẾP thì ghi IE thay vì thả lại. 2 = "trần 3 lần hết lease" mà chủ dự án chốt
-    # 2026-10-15, cùng con số "DLQ sau 3 lần" của nfrplan 5.1. Bài độc thôi quay vòng sau
-    # ~3 × (lease + reaper-interval) ≈ 7 phút thay vì mãi mãi.
+    lease: 120s
+    reaper-interval: 15s
+    max-ie-retries: 2
     max-reaps: 2
-    result-batch-size: 20         # = JudgeProgressDto.BATCH_SIZE, dùng từ M3
-    reference-host-name: mac-m1max-host # mọi con số thời gian quy chiếu về máy này (FR-SUB-11)
+    result-batch-size: 20
+    reference-host-name: mac-m1max-host
 
-    # Bước 6.7/6.11 — cửa sổ coi một máy chấm là còn sống. PHẢI ≥ 2 lần
-    # oj.worker.sandbox.benchmark.interval (15 phút), vì đó là nhịp DUY NHẤT cập nhật
-    # judge_hosts.last_seen_at. Đặt nhỏ hơn là báo động giả mỗi 15 phút.
     host-liveness: 30m
-    # FR-ADM-05 "thời gian chờ ước tính". Đây là con số của SLO P4 (≥5 bài/s trên host
-    # chuẩn), KHÔNG phải một phép đo — trang trạng thái phải nói rõ nó là ước tính.
     throughput-estimate: 5.0
-    # Nhịp lấy mẫu hàng đợi — con số ghi trong comment của bảng queue_metrics (V6).
     metrics-interval: 10s
 
     rejudge:
-      # FR-ADM-01 · Bước 6.3 — luật ở judging.domain.RejudgeJob, đây chỉ là ba con số.
-      #
-      # max-in-flight LÀ cách viết "trần 30% năng lực chấm" thành thứ kiểm được: mỗi dòng
-      # rejudge đang chờ là nhiều nhất một judge slot có thể bận vì nó, nên 2 trên 6 slot
-      # (OJ_WORKER_SLOTS, ADR 008) là 33%. Đổi số slot ở worker thì phải đổi số này —
-      # HopDongVanHanhTest đọc cả hai file yml và bắt lúc chúng lệch nhau.
       max-in-flight: 2
-      live-wait-brake: 5s     # = P6 (p95 queue_wait < 5s). Live chờ lâu hơn -> rejudge về 0
-      batch-size: 200         # bất biến #8
+      live-wait-brake: 5s
+      batch-size: 200
 
     rabbit:
-      # Bước 6.4 — false = quay về NoopJudgeJobPublisher của M1 (worker tự PULL). Dùng khi
-      # broker chưa dựng, và trong test không cần một container RabbitMQ.
-      #
-      # Tên exchange và hàng đợi KHÔNG ở đây mà là hằng số trong RabbitJudgeJobPublisher:
-      # phía API vừa khai báo hình trạng vừa gửi, nên một con số duy nhất trong Java là đủ.
-      # Phía worker phải lặp lại tên trong yml của nó — HopDongVanHanhTest đối chiếu hai bên.
       enabled: ${OJ_RABBIT_ENABLED:true}
 
   sse:
-    # FR-SUB-05 · Bước 3.9. Phải NHỎ HƠN trần của Cloudflare Tunnel: chủ động đóng thì
-    # client biết mở lại, bị tunnel cắt thì client ngồi nhìn một kết nối đã chết.
     timeout: 5m
-    heartbeat: 15s               # im lặng là trạng thái BÌNH THƯỜNG của trang này
+    heartbeat: 15s
 
   page:
-    default-size: 20              # bất biến #8 — mọi danh sách đều có LIMIT
-    max-size: 50                  # xin 1000 thì trả 50, không trả lỗi
+    default-size: 20
+    max-size: 50
 
   internal:
-    # Không có giá trị mặc định, cố ý: một secret mặc định là một secret công khai.
-    # Thiếu biến môi trường này thì API không khởi động được — đó là hành vi đúng.
     shared-secret: ${OJ_INTERNAL_SHARED_SECRET}
 
   security-headers:
-    # Gắn vào MỌI response. Xem SecurityHeadersProperties để biết vì sao từng directive
-    # có mặt — chuỗi này viết từ việc quét toàn bộ static/, không phải chép từ blog.
-    #
-    # ⚠️ Sửa nó là phải MỞ TRANG THẬT LÊN XEM CONSOLE. Một directive thiếu không làm
-    #    server báo lỗi: trang vẫn trả 200, tài nguyên bị chặn lặng lẽ.
-    #
-    #   script-src KHÔNG có 'unsafe-inline' — static/ không có script nội tuyến nào, và
-    #     giữ được điều đó là điều kiện để cả chính sách này có giá trị. Thêm một
-    #     <script> nội tuyến là buộc phải nới, và nới là mất tác dụng chặn XSS.
-    #   style-src-attr 'unsafe-inline' — KaTeX sinh thuộc tính style lúc chạy. Không có
-    #     dòng này thì công thức toán vỡ hình. Nó KHÔNG nới lỏng script-src.
-    #   KHÔNG còn cdn.jsdelivr.net (từ 2026-09-24, rà soát F3): KaTeX, qrcode và CodeMirror
-    #     nằm ở static/vendor/. Mở cả host jsDelivr là cho phép MỌI gói npm chạy trong trang
-    #     giữ access token — một lỗ XSS bất kỳ là nạp được thư viện tuỳ ý qua đó.
-    #     TaiNguyenGiaoDienTest đỏ nếu chuỗi dưới đây nhắc lại jsdelivr.
-    #   challenges.cloudflare.com — host ngoài DUY NHẤT: widget Turnstile ở trang đăng ký.
     content-security-policy: >-
       default-src 'none';
       script-src 'self' https://challenges.cloudflare.com;
@@ -332,151 +140,65 @@ oj:
       base-uri 'none';
       frame-ancestors 'none';
       object-src 'none'
-    # 0 = TẮT, và đó là mặc định đúng cho máy dev. Trình duyệt NHỚ HSTS kể cả sau khi
-    # header biến mất, nên bật nhầm trên http://localhost là tự khoá mình khỏi máy dev.
-    # Chỉ đặt OJ_HSTS_MAX_AGE=31536000 khi đã có HTTPS thật trên tên miền thật.
+
     hsts-max-age: ${OJ_HSTS_MAX_AGE:0s}
 
   auth:
-    # Bước 4.5 — FR-AUTH-02, FR-AUTH-08.
-    # Cùng lý do với shared-secret: không có giá trị mặc định. Một khoá ký mặc định
-    # là một khoá ký công khai, và ai biết nó thì tự phát được token ADMIN.
     jwt-secret: ${OJ_JWT_SECRET}
-    access-ttl: 15m               # FR-AUTH-02 — cũng là trần của "vai trò đã hạ vẫn còn hiệu lực"
-    refresh-ttl: 7d               # FR-AUTH-02
-    bcrypt-cost: 12               # FR-AUTH-01 · khớp comment trên users.password_hash
-    max-login-failures: 5         # FR-AUTH-08 — bảng giới hạn, oj-api/CLAUDE.md mục 8
-    login-window: 60s             # FR-AUTH-08
-    lockout: 15m                  # FR-AUTH-08
-    # ★ HAI DÒNG NÀY CHỈNH ĐƯỢC, khác bảy dòng trên. Một lớp học sau NAT là MỘT IP:
-    # ba mươi học sinh đăng ký trong mười phút nhìn giống hệt một bot. Buổi nào có lớp
-    # thì nâng OJ_MAX_REGISTRATIONS_PER_IP rồi hạ lại — quyết định vận hành, không phải
-    # hằng số hệ thống. Xem javadoc AuthProperties.
+    access-ttl: 15m
+    refresh-ttl: 7d
+    bcrypt-cost: 12
+    max-login-failures: 5
+    login-window: 60s
+    lockout: 15m
     max-registrations-per-ip: ${OJ_MAX_REGISTRATIONS_PER_IP:10}
     registration-window: 1h
-    # Xác thực hai lớp — V10. Khoá RIÊNG, không dùng chung với jwt-secret: xoay khoá ký
-    # token là việc nên làm định kỳ, dùng chung thì mỗi lần xoay làm hỏng đăng ký 2FA
-    # của tất cả mọi người. AuthProperties crash lúc boot nếu hai chuỗi này bằng nhau.
     totp-key: ${OJ_TOTP_KEY}
-    # Mặc định BẬT: ADMIN đọc được testdata mọi đề, nên một mật khẩu ADMIN bị lộ là mất
-    # chính thứ hệ thống này bán. Tắt được để chạy thử, đừng tắt trên máy công khai.
     require-admin-two-factor: ${OJ_REQUIRE_ADMIN_2FA:true}
-    # ★ Trần CỨNG cho số lần băm BCrypt chạy song song. FR-AUTH-08 chỉ khoá lượt SAI,
-    # nên một bot có tài khoản hợp lệ đăng nhập ĐÚNG liên tục là ăn hết CPU (đo được
-    # 17,5 lượt/giây là trần của cả máy). Vượt trần thì TỪ CHỐI NGAY, không xếp hàng —
-    # xếp hàng là giữ luồng Tomcat và kéo mọi endpoint khác chết theo.
     bcrypt-concurrency: ${OJ_BCRYPT_CONCURRENCY:4}
     bcrypt-wait: 150ms
-    # Khoảng cách tối thiểu giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản.
-    # Chỉ áp cho lượt thành công, cố ý: áp cho lượt sai thì ai cũng khoá được người khác
-    # ra ngoài bằng cách gõ sai mật khẩu của họ liên tục.
     login-min-interval: 2s
 
-    # Trần mã hai lớp THEO TÀI KHOẢN — V15, rà soát bảo mật 2026-09-24 (F2). Một dòng trong
-    # bảng giới hạn (oj-api/CLAUDE.md mục 8); AuthProperties crash nếu khác. Lý do nó theo tài
-    # khoản mà không vi phạm lập trường của FR-AUTH-08: tới được bước này là đã có mật khẩu.
     totp-max-failures: 10
     totp-lockout: 15m
 
-    # Cloudflare Turnstile — chặn bot ở cửa đăng ký (FR-AUTH-01).
-    #
-    # ★ MẶC ĐỊNH TẮT vì máy dev và bộ IT không có khoá. TurnstileVerifier ghi một dòng WARN
-    # lúc khởi động khi nó tắt, để một máy công khai quên bật không im lặng trôi qua.
-    #
-    # Bật mà thiếu secret thì CRASH lúc boot: một hàng rào bật-nhưng-không-cấu-hình là hàng
-    # rào tệ nhất, vì nó trông như đang bảo vệ.
     turnstile:
       enabled: ${OJ_TURNSTILE_ENABLED:false}
-      # Công khai — nó nằm trong HTML của mọi trang đăng ký.
       site-key: ${OJ_TURNSTILE_SITE_KEY:}
       secret: ${OJ_TURNSTILE_SECRET:}
-      # Nơi token được phép được giải — so với `hostname` trong phản hồi siteverify. Phân tách
-      # bằng dấu phẩy. Bắt buộc khi bật: thiếu thì token giải trên localhost của người lạ cũng
-      # được nhận (xem TurnstileProperties).
       hostnames: ${OJ_TURNSTILE_HOSTNAMES:}
-      # Tham số hoá để test trỏ vào máy chủ giả thay vì gọi ra internet.
       verify-url: ${OJ_TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
       timeout: 3s
 
-    # =========================================================================
-    # Xác minh email — FR-AUTH-09 (V13). MỨC MỀM.
-    #
-    # ★ "Mức mềm" nghĩa là nhãn users.email_verified_at KHÔNG CHẶN GÌ CẢ: chưa xác minh thì
-    # vẫn đăng nhập, vẫn nộp bài, vẫn dự thi. Đó là điều kiện để thêm SMTP vào hệ thống này —
-    # nhà cung cấp thư chết thì hôm ấy không ai xác minh được, và không ai mất gì. Chặn đăng
-    # nhập thì một sự cố của họ trở thành sự cố truy cập của ta, đúng vào ngày contest.
-    # Xem docs/adr/016-xac-minh-email-muc-mem.md.
-    #
-    # ★ ĐÂY KHÔNG PHẢI HÀNG RÀO CHỐNG BOT. Việc đó là của turnstile ở trên. Xác minh email
-    # chặn bot rất kém (hộp thư dùng-một-lần có hàng nghìn tên miền) và tồn tại cho một mục
-    # tiêu khác: CÓ một kênh liên lạc đã xác minh, thứ mà quên-mật-khẩu sẽ dựa vào.
-    #
-    # ★ MẶC ĐỊNH TẮT, cùng lý do với turnstile: máy dev và bộ IT không có máy chủ thư.
-    # SmtpEmailSender ghi một dòng WARN lúc khởi động khi nó tắt.
-    #
-    # ★ BA CON SỐ DƯỚI ĐÂY LÀ THỨ LÀM CHO MÃ 6 CHỮ SỐ AN TOÀN, không phải độ dài mã.
-    # Một triệu khả năng chỉ đủ khi: số lần thử bị chặn (max-attempts), mã có hạn (ttl), và
-    # mã mới huỷ mã cũ (ux_email_verifications_song trong V13). Nới bất kỳ con số nào ở đây
-    # là nới đúng cái đang giữ cho mã ngắn dùng được. EmailVerificationProperties crash lúc
-    # boot nếu ai đó nới quá xa.
-    # =========================================================================
     email-verification:
       enabled: ${OJ_EMAIL_VERIFICATION_ENABLED:false}
-      # Phải thuộc tên miền đã cấu hình SPF/DKIM. Không thì thư vào thẳng hộp spam — và
-      # "mã rơi vào spam" là trải nghiệm tệ hơn không có xác minh.
       from: ${OJ_MAIL_FROM:}
       ttl: 30m
       max-attempts: 5
-      # Bảo vệ HỘP THƯ của người dùng, không bảo vệ server: trần API chung (100 lượt/phút/
-      # người) không coi 100 lá thư trong một phút vào hộp thư của chính mình là vấn đề.
       resend-cooldown: 60s
 
   jobs:
-    # Khung job nền — Quy tắc 5 của frplan.md. Kéo lên từ M6 theo phương án (a) của
-    # build-order.md PHẦN 6, vì Bước 4.10 (upload ZIP 200MB) phải là job nền.
-    lease: 120s                   # job im lặng quá ngần này thì bị coi là bỏ rơi
-    poll-interval: 5s             # PHẢI nhỏ hơn lease — xem AppProperties.Jobs
+    lease: 120s
+    poll-interval: 5s
 
   contest:
-    # M5 — FR-CON-04, P8. Bảng xếp hạng cập nhật theo LÔ, không phải mỗi verdict:
-    # 500 người nộp cùng lúc là 500 lần ghi lại bảng nếu làm theo từng verdict.
-    standings-interval: 2s        # con số đã hứa với người dùng, không phải tham số vận hành
-    standings-batch-size: 500     # bất biến #8 — mọi truy vấn đều có LIMIT
-    standings-grace: 5m           # bài nộp giây cuối vẫn đang chấm khi chuông reo
-    top-size: 50                  # FR-CON-04 — top 50 + vùng quanh mình
+    standings-interval: 2s
+    standings-batch-size: 500
+    standings-grace: 5m
+    top-size: 50
 
-    # FR-CON-09 — nhịp đối soát bảng xếp hạng đã denormalize.
-    # Cửa sổ RỘNG hơn nhiều so với standings-grace vì lệch thường tới MUỘN: một lần
-    # rejudge đổi verdict nhiều ngày sau khi kỳ thi kết thúc vẫn làm bảng sai, và id
-    # bài nộp thì không đổi nên watermark đã vượt qua nó.
-    drift-check-interval: 15m     # mỗi lần soát là một lần tính lại toàn bộ kỳ thi
-    drift-check-window: 7d        # kỳ thi cũ hơn thế coi như đã chốt
+    drift-check-interval: 15m
+    drift-check-window: 7d
 
-  # ---------------------------------------------------------------------------
-  # Trần chung cho mọi endpoint /api/v1/ — nfrplan 4.2, oj-api/CLAUDE.md mục 8.
-  # Ba giới hạn kia (nộp bài, đăng nhập, đăng ký) chỉ chắn ba đường đắt nhất; đây là trần cuối
-  # cùng, đặt ở bộ lọc nên không use-case nào quên được.
-  # ---------------------------------------------------------------------------
   api-rate-limit:
-    per-user: ${OJ_API_RATE_LIMIT_USER:100}     # con số đã công bố ở bảng giới hạn
-    # Chỉ đếm lượt ẩn danh. Rộng hơn một bậc vì một IP là NHIỀU người: phòng thi sau NAT, 4G.
+    per-user: ${OJ_API_RATE_LIMIT_USER:100}
     per-ip: ${OJ_API_RATE_LIMIT_IP:600}
     window: 1m
 
   ai:
-    daily-quota: 5                # FR-AI-03 — tuần 14-15
-    timeout: 30s                  # cứng, không có ngoại lệ (nfrplan.md 10.5)
+    daily-quota: 5
+    timeout: 30s
 
-  # ---------------------------------------------------------------------------
-  # HAI POOL, KHÔNG PHẢI MỘT — postgres-design.md mục 11.
-  #
-  # 500 người nộp bài cùng lúc có thể vét sạch pool. Nếu worker dùng chung pool đó,
-  # nó không lấy được connection để GHI VERDICT, và bài đang chấm dở bị reaper thu
-  # hồi rồi chấm lại — mọi thứ tệ thêm đúng lúc đang tệ nhất. Số 6 khớp số judge slot.
-  #
-  # Thiếu khối này thì API KHÔNG KHỞI ĐỘNG ĐƯỢC: HikariConfig rỗng ném
-  # "dataSource or dataSourceClassName or jdbcUrl is required".
-  # ---------------------------------------------------------------------------
   datasource:
     app:
       jdbc-url: ${OJ_DB_URL:jdbc:postgresql://localhost:5432/ojdb}

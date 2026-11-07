@@ -7,26 +7,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Một bản TOTP sai KHÔNG hỏng ồn ào: nó hoặc khoá vĩnh viễn người quản trị ra ngoài, hoặc
- * chấp nhận mã của người khác. Cả hai đều chỉ lộ ra khi đã quá muộn.
- *
- * <p>Nên ca đầu tiên là <b>vector chuẩn của RFC 6238 Phụ lục B</b>, không phải một mã do
- * chính code này sinh ra rồi tự kiểm lại — cách sau chỉ chứng minh code nhất quán với chính
- * nó, kể cả khi nó nhất quán sai.
- */
 class TotpTest {
 
-    /**
-     * Hạt giống của RFC 6238: chuỗi ASCII {@code "12345678901234567890"} (20 byte),
-     * mã hoá Base32.
-     */
     private static final String HAT_GIONG = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
 
-    /**
-     * RFC 6238 in mã 8 chữ số; sáu chữ số là sáu chữ số CUỐI của chúng, vì
-     * {@code (x mod 10^8) mod 10^6 = x mod 10^6}.
-     */
     @ParameterizedTest(name = "T={0} → {1}")
     @DisplayName("★ vector chuẩn RFC 6238 Phụ lục B (SHA-1)")
     @CsvSource({
@@ -52,9 +36,8 @@ class TotpTest {
     @Test
     @DisplayName("cửa sổ ±1 bước — điện thoại lệch đồng hồ vài giây vẫn vào được")
     void cua_so_mot_buoc() {
-        // 287082 đúng ở T=59, tức bước 1. Nó phải còn hợp lệ ở bước 0 và bước 2.
-        assertThat(Totp.kiem(HAT_GIONG, "287082", 29L)).isEqualTo(1L);   // bước 0
-        assertThat(Totp.kiem(HAT_GIONG, "287082", 89L)).isEqualTo(1L);   // bước 2
+        assertThat(Totp.kiem(HAT_GIONG, "287082", 29L)).isEqualTo(1L);
+        assertThat(Totp.kiem(HAT_GIONG, "287082", 89L)).isEqualTo(1L);
         assertThat(Totp.kiem(HAT_GIONG, "287082", 119L))
                 .as("bước 3 đã ngoài cửa sổ")
                 .isNull();
@@ -89,7 +72,6 @@ class TotpTest {
 
         assertThat(a).hasSize(32).matches("[A-Z2-7]+");
         assertThat(a).isNotEqualTo(b);
-        // Dùng được ngay: sinh ra rồi kiểm một mã của chính nó phải khớp.
         assertThat(Totp.kiem(a, maCuaChinhNo(a, 1_000_000L), 1_000_000L)).isNotNull();
     }
 
@@ -107,7 +89,6 @@ class TotpTest {
                 .contains("period=30");
     }
 
-    /** Dò mã đúng của một bí mật bất kỳ bằng cách thử — chỉ dùng trong test. */
     private static String maCuaChinhNo(String biMat, long giay) {
         for (int i = 0; i < 1_000_000; i++) {
             String ma = String.format("%06d", i);

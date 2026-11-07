@@ -23,33 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/**
- * ★ Đối soát bảng xếp hạng đã denormalize — FR-CON-09. Bước 5.10.
- *
- * <h2>Vì sao một hệ thống đúng vẫn cần job này</h2>
- * {@code contest_standings} là dữ liệu <b>suy ra</b>: nó được tính từ {@code submissions} bởi
- * {@code StandingsUpdater}. Mọi dữ liệu suy ra đều có thể lệch khỏi nguồn, và ở đây có ít nhất
- * ba đường:
- *
- * <ul>
- *   <li>Một bài nộp bị rejudge, verdict đổi, nhưng {@code id} thì không — nên watermark đã
- *       vượt qua nó và bảng giữ kết quả cũ.</li>
- *   <li>Một lô bị bỏ sót vì watermark nhảy (chỉ xảy ra nếu thứ tự id bị phá, nhưng "chỉ xảy
- *       ra nếu" là thứ job này tồn tại để kiểm chứng).</li>
- *   <li>Một lỗi trong chính thể thức, sửa sau khi kỳ thi đã chạy.</li>
- * </ul>
- *
- * <p>Không có job này thì lệch <b>không bao giờ được phát hiện</b> — bảng xếp hạng vẫn hiện
- * ra, vẫn trông hợp lý, và không ai kiểm lại một thứ hạng.
- *
- * <h2>Nó CHỈ đo, không tự sửa</h2>
- * Phát hiện lệch thì ghi vào {@code standings_drift_checks} và log ở mức ERROR. Sửa là việc
- * của {@link RebuildStandingsJob}, và người bấm là người tổ chức.
- *
- * <p>Tự sửa nghe hấp dẫn nhưng sai: nếu job này viết đè bảng xếp hạng giữa kỳ thi thì thứ
- * hạng đổi mà không ai biết vì sao — và nếu chính nó tính sai thì nó vừa phá bảng đúng. Một
- * công cụ đo phải là công cụ đo.
- */
 @Component
 public class StandingsDriftCheckJob implements JobHandler {
 
@@ -60,15 +33,6 @@ public class StandingsDriftCheckJob implements JobHandler {
     private final JudgingQueries judging;
     private final AppProperties properties;
 
-    /**
-     * P8 trên dashboard vận hành — Bước 6.10.
-     *
-     * <p>{@code AtomicInteger} chứ không phải một trường {@code volatile int}: Micrometer giữ
-     * <b>tham chiếu yếu</b> tới đối tượng của gauge. Một trường nguyên thuỷ phải được bọc lại
-     * mỗi lần đọc, và cái bọc đó bị thu gom ngay — gauge sẽ báo {@code NaN} sau lần GC đầu tiên.
-     * Đây là cái bẫy kinh điển của Micrometer, và triệu chứng của nó (ô dashboard trống sau vài
-     * phút chạy) trông giống hệt một lỗi cấu hình.
-     */
     private final java.util.concurrent.atomic.AtomicInteger soDongLechGanNhat =
             new java.util.concurrent.atomic.AtomicInteger();
 
@@ -110,8 +74,6 @@ public class StandingsDriftCheckJob implements JobHandler {
             DiemDaLuu b = daLuu.get(userId);
             if (a == null || !a.equals(b)) {
                 soDongLech++;
-                // Chỉ ghi mười dòng đầu: cột `detail` là JSONB và một kỳ thi lệch toàn bộ sẽ
-                // ghi vài megabyte vào một bảng dùng để CẢNH BÁO.
                 if (lech.size() < 10) {
                     lech.put(String.valueOf(userId), moTa(a, b));
                 }
@@ -123,8 +85,6 @@ public class StandingsDriftCheckJob implements JobHandler {
                 "soDongLech", soDongLech, "mau", lech));
 
         if (soDongLech > 0) {
-            // ERROR chứ không WARN: bảng xếp hạng lệch là một sự cố về tính công bằng, và nó
-            // phải đi vào cùng đường cảnh báo với "mất bài nộp".
             log.error("★ DRIFT: bảng xếp hạng contest {} lệch {}/{} dòng. "
                             + "Chạy RebuildStandingsJob để dựng lại.",
                     contestId, soDongLech, soDongKiem);
@@ -134,12 +94,6 @@ public class StandingsDriftCheckJob implements JobHandler {
         ctx.tienDo(soDongKiem, soDongKiem);
     }
 
-    /**
-     * Tính lại từ {@code submissions}, <b>không đụng vào bảng xếp hạng</b>.
-     *
-     * <p>Dùng chính {@link ContestFormat} mà đường thường dùng — nếu tính bằng một hiện thực
-     * khác thì job này đang so hai thứ khác nhau và luôn báo lệch.
-     */
     private Map<Long, DiemDaLuu> tinhLaiTuDau(Contest contest, JobContext ctx) {
         Map<Long, Map<Long, KetQuaDe>> theoNguoi = new LinkedHashMap<>();
         ContestFormat format = contest.format();

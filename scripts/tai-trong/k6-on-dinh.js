@@ -1,19 +1,3 @@
-/**
- * Kịch bản ỔN ĐỊNH — nfrplan 2.4 (b): "tải ổn định 2 bài/s trong 30 phút". Chạy qua `chay.sh on-dinh`.
- *
- * ★ ĐÂY LÀ KỊCH BẢN DUY NHẤT MÀ P3 VÀ P6 CÓ NGHĨA. P3 là "hàng đợi rỗng", P6 là "tải bình thường";
- *   2 bài/s dưới năng lực chấm ~5.8 bài/s nên hàng đợi gần như luôn rỗng. Ở kịch bản quét, cả
- *   hai con số chỉ là thời gian xếp hàng. P3/P6 lấy từ DB (bao-cao-db.py), không lấy ở đây.
- *
- * ★ MÔ HÌNH MỞ (constant-arrival-rate). Bài đến đúng TOC_DO mỗi giây bất kể máy chủ nhanh hay
- *   chậm — người thật không chờ bài người khác chấm xong mới nộp. Mô hình đóng tự giảm tải khi
- *   máy chủ chậm và làm đẹp p95 (coordinated omission). `dropped_iterations` khác 0 = k6 không
- *   phát nổi TOC_DO, và tải thật thấp hơn tải khai báo.
- *
- * ★ BỂ TÀI KHOẢN. Người ảo id v sở hữu KHOI tài khoản riêng và xoay vòng (luật 2 trong chung.js).
- *   KHOI = TOC_DO × 10s × 1.25, nên kể cả khi k6 dồn MỌI vòng lặp vào một người ảo, một tài khoản
- *   vẫn nộp cách nhau ≥ 12.5s — rate limit 10s không bao giờ chạm. `ti_le_429` khác 0 là bể sai.
- */
 import http from 'k6/http';
 import { check } from 'k6';
 import { Trend } from 'k6/metrics';
@@ -29,9 +13,8 @@ const THOI_LUONG = __ENV.THOI_LUONG || '30m';
 const VU_NOP = Number(__ENV.VU_NOP || 10);
 const VU_DOC = Number(__ENV.VU_DOC || 10);
 const KHOI = Math.ceil(TOC_DO * 10 * 1.25);
-// id người ảo là toàn cục qua mọi scenario, nên bể phải phủ cả người ảo đọc và người giám sát.
 const BE = (VU_NOP + VU_DOC + 1) * KHOI;
-const BO_QUA_DAU_MS = 60000;   // JIT và cache Postgres của phút đầu không thuộc "trạng thái ổn định"
+const BO_QUA_DAU_MS = 60000;
 
 const docMs = new Trend('doc_ms', true);
 const dangDo = () => exec.instance.currentTestRunDuration >= BO_QUA_DAU_MS;
@@ -74,7 +57,6 @@ export function nop(du) {
     check(r, { 'nộp bài 202': (x) => x.status === 202 });
 }
 
-/** Ẩn danh: hai endpoint này công khai, và đọc không cần gắn với bể tài khoản của người nộp. */
 export function doc() {
     const url = Math.random() < 0.5
         ? `${BASE}/api/v1/problems?size=20`

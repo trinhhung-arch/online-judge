@@ -18,19 +18,6 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * ★ Ai được vào đâu, và khi nào — M5, FR-CON-02, FR-CON-03, và FR-PROB-11.
- *
- * <p>Bảng xếp hạng nằm ở {@link ContestStandingsIT} — đường cắt theo <b>câu hỏi</b>, không
- * theo số dòng: đây hỏi <i>"ai được thấy gì"</i>, bên kia hỏi <i>"điểm tính thế nào"</i>.
- *
- * <h2>Vì sao gần hết các ca ở đây là ca TỪ CHỐI</h2>
- * Một kỳ thi bán sự công bằng, và sự công bằng bị phá bởi những thứ trông rất giống lòng tốt:
- * cho đăng ký muộn, cho xem đề sớm, cho sửa đề giữa chừng, cho thấy bảng đã đóng băng. Bốn
- * thứ ấy đều tiện cho ai đó, và cả bốn đều là lỗ hổng.
- *
- * <p>Ca <i>cho phép</i> thì ít và dễ; ca <i>từ chối</i> mới là thứ hệ thống này phải giữ.
- */
 class ContestAccessIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
@@ -42,7 +29,6 @@ class ContestAccessIT extends PostgresIT {
 
     private static final Instant MOC = Instant.now();
 
-    /** Kỳ thi đang chạy, chứa đề A-PLUS-B. */
     private long dangChay() {
         return dungContest(MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null);
     }
@@ -55,21 +41,6 @@ class ContestAccessIT extends PostgresIT {
         return id;
     }
 
-    // =========================================================================
-
-    /**
-     * ★ Trang DANH SÁCH kỳ thi không được lộ đề — Bước G4, FR-CON-01.
-     *
-     * <h2>Vì sao ca này nằm ở file "ai được thấy gì", không ở một file phân trang</h2>
-     * {@code GetContestUseCase} đã giấu danh sách đề tới giờ bắt đầu, và
-     * {@link TruyCapDe} bên dưới canh điều đó. Nhưng endpoint danh sách là một
-     * đường thứ hai tới cùng dữ liệu, và nó là đường mà một người chưa đăng nhập dùng để
-     * <i>tìm</i> kỳ thi — tức là đường dễ bị quên nhất khi rà soát.
-     *
-     * <p>Cách hỏng cụ thể mà ca này chặn: ai đó tái dùng {@code ContestResponses.ChiTiet}
-     * cho trang danh sách "cho đỡ phải viết DTO mới". Nó biên dịch được, trang chạy đẹp, và
-     * mã đề của mọi kỳ thi chưa mở nằm sẵn trong JSON.
-     */
     @Nested
     @DisplayName("★ FR-CON-01 · danh sách kỳ thi")
     class DanhSach {
@@ -172,8 +143,6 @@ class ContestAccessIT extends PostgresIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-CON-03 · đề chỉ mở trong khung giờ")
     class TruyCapDe {
@@ -185,8 +154,6 @@ class ContestAccessIT extends PostgresIT {
                     MOC.plus(Duration.ofHours(4)), null);
             contests.dangKy(id, USER_ID, MOC);
 
-            // 404 chứ không 403: 403 xác nhận đề tồn tại và đang thuộc một kỳ thi, mà đó
-            // chính là thứ không được lộ trước giờ thi.
             assertThatThrownBy(() -> getProblem.byCode("A-PLUS-B"))
                     .hasFieldOrPropertyWithValue("kind", DomainException.Kind.NOT_FOUND);
         }
@@ -229,8 +196,6 @@ class ContestAccessIT extends PostgresIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-PROB-11 · cấm sửa đề đang trong kỳ thi")
     class CamSuaDe {
@@ -253,8 +218,6 @@ class ContestAccessIT extends PostgresIT {
                 assertThat(phien).isNotNull();
             }
 
-            // Sửa đề giữa kỳ thi tạo ra hai nhóm thí sinh — nhóm đọc bản cũ và nhóm đọc bản
-            // mới — và không có cách nào đền bù cho nhóm thứ nhất.
             assertThat(jdbc.sql("SELECT title FROM problems WHERE id = :id")
                     .param("id", PROBLEM_ID).query(String.class).single()).isEqualTo(tieuDeCu);
         }

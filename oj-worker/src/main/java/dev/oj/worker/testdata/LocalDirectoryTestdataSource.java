@@ -7,36 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
- * Nguồn testdata đọc từ một thư mục trên máy — hiện thực của M2, giờ là <b>đường phụ</b>.
- *
- * <p>Đường chính là {@link ApiTestdataSource}. Bật lớp này bằng
- * {@code oj.worker.testdata-source: local}, và nó vẫn đáng giữ cho đúng hai việc: chấm thử
- * offline khi không dựng nổi API, và dò lỗi bằng cách đổ testdata vào tay để loại trừ đoạn
- * vận chuyển.
- *
- * <p>Một thư mục đánh địa chỉ bằng hash <b>chính là</b> thứ kho content-addressed trông như
- * thế từ phía worker — nên đây không phải bản giả, nó là cùng một hình dạng dữ liệu với một
- * transport khác.
- *
- * <h2>★ {@code @ConditionalOnMissingBean} đã bị GỠ ở M6 — nó là một lỗi, không phải một lựa chọn</h2>
- * Bản M2 mang {@code @ConditionalOnMissingBean(TestdataSource.class)} trên chính class này,
- * với ý định "bean này được phép thua bất kỳ hiện thực nào khác". Ý định đúng; cơ chế thì sai.
- *
- * <p>{@code @ConditionalOnMissingBean} <b>chỉ đáng tin trong auto-configuration</b>, nơi
- * Spring bảo đảm nó chạy sau khi mọi bean của người dùng đã đăng ký. Trên một class được
- * component scan, nó được đánh giá <i>trong lúc</i> quét — thời điểm mà bean factory còn gần
- * như rỗng — và kết quả là bean này <b>không bao giờ được đăng ký</b>. Tiến trình worker chết
- * lúc dựng context với {@code No qualifying bean of type 'TestdataSource'}.
- *
- * <p>Không test nào bắt được suốt từ M2 tới M6, vì mọi test của {@code oj-worker} đều dựng
- * đối tượng bằng {@code new}. Xem {@code WorkerContextSmokeTest}.
- *
- * <p>Ngày ấy đã tới: {@link ApiTestdataSource} là hiện thực thứ hai. Cách chọn giữa hai cái
- * là <b>một thuộc tính, hai giá trị đối nhau</b> — {@code oj.worker.testdata-source} nhận
- * {@code api} (mặc định) hoặc {@code local}. Đọc {@code application.yml} là biết đường nào
- * đang chạy, không phải đọc thứ tự quét package.
- */
 @ConditionalOnProperty(name = "oj.worker.testdata-source", havingValue = "local")
 @Component
 public class LocalDirectoryTestdataSource implements TestdataSource {

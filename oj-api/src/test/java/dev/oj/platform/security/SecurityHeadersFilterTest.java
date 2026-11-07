@@ -12,10 +12,6 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Access token nằm trong {@code localStorage}, nên một lỗ XSS là một tài khoản bị chiếm.
- * Những ca dưới đây giữ cho lưới thứ hai không bị tháo mất trong một lần dọn dẹp.
- */
 class SecurityHeadersFilterTest {
 
     private static final String CSP_THU = "default-src 'none'; script-src 'self'";
@@ -69,9 +65,6 @@ class SecurityHeadersFilterTest {
 
         filter.doFilter(new MockHttpServletRequest("GET", "/api/v1/submissions/1/theo-doi"),
                 response, (req, res) ->
-                        // Bên trong chain, header PHẢI đã có mặt rồi. Đây là điều kiện để một
-                        // response giữ mở lâu (SSE) vẫn được bảo vệ: sau khi byte đầu tiên đi
-                        // ra, setHeader bị container bỏ qua trong im lặng.
                         assertThat(((MockHttpServletResponse) res)
                                 .getHeader(SecurityHeadersFilter.CSP)).isEqualTo(CSP_THU));
 

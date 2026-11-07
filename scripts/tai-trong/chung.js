@@ -1,35 +1,15 @@
-/**
- * Phần dùng chung của ba kịch bản k6 (`k6-tai.js` · `k6-on-dinh.js` · `k6-dot-bien.js`).
- *
- * ★ BA LUẬT MÀ MỌI KỊCH BẢN PHẢI THEO — cả ba đều từng sai và cho ra số giả
- *
- * 1. KHÔNG CÓ BASE MẶC ĐỊNH, KHÔNG ĐO QUA TÊN MIỀN CÔNG KHAI. Ngày 2026-09-11 cổng 8080 của máy
- *    này trở thành API prod (`ojdb_prod`, công khai qua tunnel) — đúng cái địa chỉ từng là mặc
- *    định ở đây. Đo qua tunnel còn tệ hơn: số đo gồm cả Cloudflare, và Cloudflare có thể chặn.
- *
- * 2. MỖI TÀI KHOẢN ẢO THUỘC ĐÚNG MỘT NGƯỜI ẢO. Refresh token XOAY VÒNG, và trình lại một token
- *    đã thu hồi là thu hồi TOÀN BỘ phiên của tài khoản đó (RefreshSessionUseCase). Hai người ảo
- *    dùng chung một tài khoản thì lần làm mới thứ hai đăng xuất cả hai — ở phút 15 của kịch bản
- *    30 phút (access-ttl 15m), và mọi request sau đó 401.
- *
- * 3. ĐĂNG NHẬP XONG TRƯỚC KHI ĐO. bcrypt cost 12 ≈ 250ms CPU mỗi lần. Đăng nhập trong lúc đo là
- *    đo một máy chủ đang bận băm mật khẩu. `setup()` đăng nhập hết, theo lô nhỏ hơn trần
- *    `bcrypt-concurrency` (4), rồi mới tới giai đoạn đo.
- */
 import http from 'k6/http';
 import { sleep } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
 
 export const NGUONG = JSON.parse(open('./nguong.json'));
 
-// 429 là rate limit làm đúng việc (FR-SUB-08), không phải request hỏng.
 http.setResponseCallback(http.expectedStatuses({ min: 200, max: 299 }, 429));
 
 export const MAT_KHAU = __ENV.MAT_KHAU || 'matkhau-dev-123';
 export const NGON_NGU = __ENV.NGON_NGU || 'cpp20';
 export const DE_MA = __ENV.DE_MA || 'A-PLUS-B';
 
-/** Dưới `oj.auth.bcrypt-concurrency` (4): chạm trần là 429 ngay, không xếp hàng. */
 const LO_BCRYPT = 3;
 const JSON_HDR = { 'Content-Type': 'application/json' };
 
@@ -48,7 +28,6 @@ function laMayNoiBo(host) {
         || (p[0] === 192 && p[1] === 168);
 }
 
-/** Luật 1. Chạy ở init context, nên k6 dừng trước khi gửi request đầu tiên. */
 export function diaChiDich() {
     const base = __ENV.BASE;
     if (!base) {
@@ -78,7 +57,6 @@ function phienTu(res) {
     };
 }
 
-/** Luật 3. Thử lại có giới hạn khi chạm trần bcrypt; mọi lỗi khác là dừng cả lượt. */
 export function dangNhapTheoLo(base, handles) {
     const phien = {};
     for (let i = 0; i < handles.length; i += LO_BCRYPT) {
@@ -106,7 +84,6 @@ export function dangNhapTheoLo(base, handles) {
 
 const phienCuaVu = {};
 
-/** Luật 2 — chỉ gọi với tài khoản mà người ảo này sở hữu. */
 export function layToken(base, handle, phienBanDau) {
     let p = phienCuaVu[handle] || phienBanDau[handle];
     if (!p) throw new Error(`Không có phiên cho ${handle} — setup() chưa đăng nhập tài khoản này.`);
@@ -123,7 +100,6 @@ export function layToken(base, handle, phienBanDau) {
     return p.access;
 }
 
-/** Hỏi đề trong setup: sai mã đề thì dừng ngay, đừng để cả lượt nộp vào một đề 404. */
 export function timDe(base) {
     const r = http.get(`${base}/api/v1/problems/${encodeURIComponent(DE_MA)}`);
     if (r.status !== 200) throw new Error(`Đề ${DE_MA} → ${r.status} trên ${base}.`);
@@ -131,11 +107,6 @@ export function timDe(base) {
     return r.json('problemId');
 }
 
-/**
- * Bài A+B. `// EXPECT: AC` là dòng đầu cho ScriptedJudgeRunner và chỉ là comment với isolate.
- * Token duy nhất ở CUỐI để CompileCache (khoá sha256 source) không trả lời thay máy chấm —
- * đo 2026-09-05: source trùng nhau cho verdict p95 350ms, tức là đo tốc độ của cache.
- */
 const NGUON_GOC = `// EXPECT: AC
 #include <bits/stdc++.h>
 int main(){long long a,b;if(!(std::cin>>a>>b))return 0;std::cout<<a+b<<"\\n";}
@@ -149,20 +120,16 @@ export function nopBai(base, token, problemId, dangDo) {
         { headers: tieuDe(token), tags: { viec: 'nop' } });
     ti429.add(res.status === 429);
     if (res.status === 202) {
-        // Đếm MỌI lần 202, kể cả lúc dốc lên: đây là vế client của phép đối soát R1 với DB.
         nop202.add(1);
         if (dangDo) nopMs.add(res.timings.duration);
     }
     return res;
 }
 
-/** Dụng cụ đo: một người ảo, mỗi giây một lần, endpoint công khai và rẻ. */
 export function giamSatHangDoi(base) {
     const res = http.get(`${base}/api/v1/status`, { tags: { viec: 'giam-sat' } });
     if (res.status === 200) {
         hangDoi.add(res.json('dangCho'));
-        // KHÔNG PHẢI P6: đây là tuổi của bài đang chờ lâu nhất ở thời điểm hỏi. P6 là p95 thời
-        // gian chờ của TỪNG bài — bao-cao-db.py tính nó từ judge_runs.started_at.
         tuoiBaiChoLauNhat.add(res.json('choLauNhatMs'));
         mayChamSong.add(res.json('mayChamSong'));
     }

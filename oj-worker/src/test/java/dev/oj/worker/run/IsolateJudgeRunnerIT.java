@@ -27,15 +27,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Đường chấm thật, từ {@link IsolateJudgeRunner} xuống tới {@code isolate}: bảy verdict, mỗi
- * cái sinh ra bởi một chương trình C++ thật được biên dịch và chạy trong sandbox.
- *
- * <h2>Vì sao lớp này tồn tại bên cạnh {@code SandboxAttackIT}</h2>
- * 14 ca tấn công chứng minh sandbox <b>giam được</b> mã người lạ. Chúng không chứng minh máy
- * chấm <b>chấm đúng</b> — một sandbox trả {@code IE} cho mọi thứ cũng qua sạch 14 ca đó. Đây
- * là nửa còn lại: cùng một bộ máy, nhưng câu hỏi là "verdict có đúng không".
- */
 @DisplayName("Đường chấm thật: source C++ -> verdict")
 class IsolateJudgeRunnerIT {
 
@@ -58,7 +49,6 @@ class IsolateJudgeRunnerIT {
                 WorkerFixtures.sandbox(work, 910));
         WorkerFixtures.requireIsolate(properties.sandbox().isolateBinary());
 
-        // Kho testdata: "3 4" vào, "7" ra. Nằm NGOÀI box, đúng như MinIO sẽ nằm ở M4.
         var store = new ContentAddressedCache(work.resolve("testdata-store"));
         inputSha = Sha256.hexOf("3 4\n");
         outputSha = Sha256.hexOf("7\n");
@@ -71,8 +61,6 @@ class IsolateJudgeRunnerIT {
         runner = new IsolateJudgeRunner(
                 new JobExecutor(properties, new SlotPool(properties), new Compiler(properties),
                         new TestRunner(properties, fetcher), benchmark,
-                        // Bước 3.7: API giả không trả lời, và đó là ĐIỀU ĐANG KIỂM — lô tiến
-                        // độ gửi hỏng thì lượt chấm vẫn phải chạy tới verdict.
                         new dev.oj.worker.report.BatchReporter(
                                 new dev.oj.worker.client.JudgeApiClient(
                                         properties,
@@ -159,7 +147,6 @@ class IsolateJudgeRunnerIT {
     @Test
     @DisplayName("★ early exit — sai ở test 2 thì test 3 không chạy nữa")
     void earlyExit() {
-        // Ba test giống hệt nhau, nhưng chương trình cố tình sai từ lần đọc thứ hai.
         JudgeResultDto result = judge("""
                 #include <bits/stdc++.h>
                 int main(){static int n=0;int a,b;std::cin>>a>>b;

@@ -15,17 +15,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 
-/**
- * ★ <b>Đã commit thì còn; chưa commit thì không để lại mảnh vụn nào.</b>
- *
- * <p>Ba câu ghi của đường nộp bài — {@code source_blobs}, {@code submissions},
- * {@code judge_queue} — phải là một khối. Nếu câu thứ ba hỏng mà hai câu đầu ở lại, hệ thống
- * có một bài nộp <b>không bao giờ được chấm</b>: không có hàng trong {@code judge_queue} thì
- * reaper cũng không nhặt được, vì reaper quét hàng đợi chứ không quét bảng nóng.
- *
- * <p>Đó là cách một bài nộp biến mất trong im lặng, và R1 nói điều đó tuyệt đối không được
- * xảy ra.
- */
 class KillApiDuringSubmitIT extends PostgresIT {
 
     @MockitoSpyBean JudgeQueueRepository queue;
@@ -42,18 +31,11 @@ class KillApiDuringSubmitIT extends PostgresIT {
                 PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")))
                 .isInstanceOf(IllegalStateException.class);
 
-        // Không một dòng nào ở lại — kể cả source_blobs, câu ghi ĐẦU TIÊN của transaction.
         assertThat(countSubmissions()).isZero();
         assertThat(countBlobs()).isZero();
         assertThat(countQueue()).isZero();
     }
 
-    /**
-     * Hỏng ở khâu validate thì còn sạch hơn: chưa transaction nào được mở.
-     *
-     * <p>Người dùng nhận một lỗi <b>rõ ràng</b> (404 kèm câu tiếng người), không phải 500 —
-     * và có thể nộp lại ngay.
-     */
     @Test
     void de_khong_ton_tai_thi_khong_mo_transaction_nao() {
         assertThatExceptionOfType(ProblemNotFoundException.class).isThrownBy(() ->

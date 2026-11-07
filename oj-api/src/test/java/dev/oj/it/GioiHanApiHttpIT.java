@@ -11,20 +11,6 @@ import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Trần API chung phải đếm ĐÚNG những đường Spring định tuyến tới controller — qua Tomcat thật.
- *
- * <h2>Vì sao test này phải chạy trên một cổng TCP thật</h2>
- * Lỗ hổng nó giữ nằm ở <b>khoảng lệch giữa hai cách đọc một đường dẫn</b>. Tomcat và Spring
- * chuẩn hoá URI (bỏ {@code ;tham-so}, giải mã {@code %61}) trước khi chọn controller, còn bản
- * cũ của {@code GioiHanApiFilter} so tiền tố trên {@code getRequestURI()} — chuỗi THÔ. Nên
- * {@code /api/v1;x/status} tới đúng controller mà không bị đếm lượt nào: trần 100 lượt/phút
- * biến mất với ai biết thêm hai ký tự. {@code MockHttpServletRequest} không chuẩn hoá gì cả,
- * nên một unit test không bao giờ thấy được khoảng lệch ấy.
- *
- * <p>Test đọc thẳng bộ đếm trong Redis thay vì bắn 601 lượt để chờ một mã 429: nó kiểm đúng
- * câu hỏi <i>"lượt này có được đếm không"</i>, và nhanh hơn ba bậc.
- */
 class GioiHanApiHttpIT extends HttpIT {
 
     private static final String XO_AN_DANH = "oj:ratelimit:api:ip:*";
@@ -70,19 +56,11 @@ class GioiHanApiHttpIT extends HttpIT {
         assertThat(tongLuot("oj:ratelimit:api:*")).isEqualTo(truoc);
     }
 
-    /**
-     * Gửi đường dẫn ĐÚNG NGUYÊN VĂN. Truyền chuỗi cho {@code uri(String)} thì {@code RestClient}
-     * mã hoá lại {@code %61} thành {@code %2561}, và test sẽ kiểm một đường dẫn khác hẳn.
-     */
     private HttpStatusCode goiTho(String duongDan) {
         return http.get().uri(URI.create("http://localhost:" + port + duongDan))
                 .exchange((req, res) -> res.getStatusCode(), false);
     }
 
-    /**
-     * Cộng mọi ô thời gian, không đọc riêng ô hiện tại: một test chạy vắt qua ranh giới phút
-     * sẽ ghi sang khoá mới, và đọc một khoá thì thấy bộ đếm "giảm".
-     */
     private long tongLuot(String mau) {
         long tong = 0;
         for (String khoa : redis.keys(mau)) {

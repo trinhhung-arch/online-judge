@@ -17,47 +17,11 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Properties;
 
-/**
- * Gửi thư qua SMTP — FR-AUTH-09 (V13).
- *
- * <h2>★ Ba timeout của SMTP, và vì sao thiếu chúng thì class này crash lúc boot</h2>
- * Mặc định của JavaMail là <b>chờ vô hạn</b>. Một máy chủ SMTP treo — không từ chối, không
- * đóng kết nối, chỉ im lặng — giữ luôn luồng Tomcat đang chạy lượt đăng ký, và giữ mãi.
- * Vài chục lượt như thế là hết luồng, và triệu chứng không phải "không gửi được thư" mà là
- * "cả site không phản hồi".
- *
- * <p>Đây đúng là bài học đã ghi ở {@code TurnstileVerifier.HttpConfig}: một trần thời gian
- * khai trong {@code application.yml} mà không tới được nơi cần là kiểu hỏng tệ nhất — im
- * lặng và trông như đúng. Nên ở đây nó không được phép chỉ là một dòng yml: constructor
- * <b>đọc lại</b> ba thuộc tính ấy trên chính đối tượng sẽ gửi thư, và từ chối khởi động nếu
- * thiếu. Thà không chạy được còn hơn chạy với một trần không tồn tại.
- *
- * <h2>★ Mặc định TẮT, và nó nói ra điều đó</h2>
- * Máy dev không có SMTP. Tắt thì {@link #guiMaXacMinh} không làm gì — nhưng nó cũng không
- * được gọi tới, vì {@code SendVerificationEmailUseCase} đã dừng trước đó. Dòng WARN lúc khởi
- * động là thứ duy nhất nói cho một máy công khai biết nó đang quên bật.
- *
- * <h2>★ KHÔNG log mã, và KHÔNG log địa chỉ</h2>
- * Mã là thông tin xác thực dùng một lần (bất biến #9). Địa chỉ là dữ liệu định danh mà
- * FR-AUTH-07 hứa xoá được — một dòng log thì không xoá được, nên chép nó vào log là phá
- * chính lời hứa ấy từ một hướng khác. Mọi dòng log ở đây chỉ có {@code userId} của người
- * nhận, thứ vốn đã có mặt khắp nơi.
- *
- * <p>Có một lối tắt rất tiện mà <b>không được đi</b>: in mã ra log khi tính năng tắt, để dev
- * tự xác minh trên máy mình. Đó là ghi thẳng một thông tin xác thực vào file log, và một
- * dòng như thế sẽ sống sót qua ngày bật tính năng lên.
- *
- * <h2>Câu chữ của lá thư KHÔNG ở đây</h2>
- * Nó ở {@link ThuXacMinhEmail}, trong {@code domain}. Class này chỉ biết <i>cách</i> gửi —
- * máy chủ, cổng, TLS, timeout. Xem javadoc ở đó để biết vì sao ranh giới nằm đúng chỗ ấy,
- * và luật ArchUnit nào đã chỉ ra nó.
- */
 @Component
 public class SmtpEmailSender implements EmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(SmtpEmailSender.class);
 
-    /** Ba thuộc tính JavaMail phải có mặt, nếu không thì chờ vô hạn — xem javadoc. */
     private static final List<String> TIMEOUT_BAT_BUOC = List.of(
             "mail.smtp.connectiontimeout",
             "mail.smtp.timeout",
@@ -66,32 +30,6 @@ public class SmtpEmailSender implements EmailSender {
     private final EmailVerificationProperties properties;
     private final JavaMailSender mailSender;
 
-    /**
-     * ★ Chốt "thiếu máy chủ thư thì không boot" kiểm CHUỖI {@code mailHost}, không kiểm sự
-     * tồn tại của bean — và khác biệt ấy là một lỗi đã đo được, không phải sự cẩn thận thừa.
-     *
-     * <p>Bản đầu chỉ có {@code mailSender.getIfAvailable() == null}, dựa trên giả định rằng
-     * Spring Boot không dựng {@code JavaMailSender} khi thiếu {@code spring.mail.host}. Đo
-     * thật ngày 2026-09-20 bằng {@code ApplicationContextRunner}:
-     *
-     * <pre>
-     *   không khai spring.mail.host   →  KHÔNG có bean
-     *   spring.mail.host=             →  CÓ bean, với host = ''      ← chính là ta
-     *   spring.mail.host=smtp...      →  CÓ bean
-     * </pre>
-     *
-     * <p>{@code application.yml} viết {@code host: ${OJ_MAIL_HOST:}}, nên khi biến môi trường
-     * vắng mặt thì thuộc tính vẫn <b>tồn tại</b> với giá trị rỗng — và
-     * {@code @ConditionalOnProperty} coi "tồn tại nhưng rỗng" là có. Bean luôn được dựng, nên
-     * phép kiểm cũ <b>không bao giờ nổ</b>: bật tính năng mà quên {@code OJ_MAIL_HOST} thì
-     * ứng dụng khởi động bình thường rồi hỏng ở lượt gửi đầu tiên — đúng kiểu hỏng im lặng mà
-     * cả class này được viết ra để chặn.
-     *
-     * @param mailHost   {@code spring.mail.host}. Rỗng = chưa cấu hình máy chủ thư
-     * @param mailSender vẫn là {@code ObjectProvider}: nếu ai đó bỏ dòng {@code host} khỏi yml
-     *                   thì bean biến mất thật, và một tham số bắt buộc sẽ làm cả context
-     *                   không dựng được — tức là bộ IT hỏng vì một tính năng đang tắt
-     */
     public SmtpEmailSender(AppProperties app,
                            @Value("${spring.mail.host:}") String mailHost,
                            ObjectProvider<JavaMailSender> mailSender) {
@@ -121,17 +59,8 @@ public class SmtpEmailSender implements EmailSender {
         kiemTimeout(this.mailSender);
     }
 
-    /**
-     * Đọc lại ba timeout trên chính đối tượng sẽ gửi thư.
-     *
-     * <p>Không kiểm {@code application.yml}: yml là thứ ta viết, còn đây là thứ thư viện thật
-     * sự dùng. Hai thứ đó lệch nhau được — một tiền tố sai, một khối đặt nhầm chỗ — và chỉ vế
-     * thứ hai mới có hậu quả.
-     */
     private static void kiemTimeout(JavaMailSender sender) {
         if (!(sender instanceof JavaMailSenderImpl impl)) {
-            // Một hiện thực khác (test, hay một bean tự dựng) thì ta không đọc được cấu hình
-            // của nó. Nói ra thay vì im lặng bỏ qua phép kiểm.
             log.warn("JavaMailSender là {} — không kiểm được timeout SMTP. Bảo đảm nó có trần "
                     + "thời gian, nếu không một máy chủ treo sẽ giữ luồng Tomcat vô hạn.",
                     sender.getClass().getName());
@@ -166,8 +95,6 @@ public class SmtpEmailSender implements EmailSender {
         try {
             mailSender.send(thu);
         } catch (RuntimeException e) {
-            // e.toString() mang tên máy chủ SMTP và mã lỗi — hữu ích khi gỡ cấu hình, và
-            // không chứa gì bí mật. Địa chỉ người nhận thì KHÔNG có ở đây (xem javadoc class).
             log.warn("Không gửi được thư xác minh: {}", e.toString());
             throw IdentityException.khongGuiDuocThu();
         }

@@ -8,17 +8,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * {@link JobContext} giả, để chạy một {@code JobHandler} mà không cần {@code JobRunner}.
- *
- * <h2>Vì sao tách khỏi runner trong test</h2>
- * Hai thứ hỏng theo hai kiểu khác nhau và đáng được kiểm riêng: {@code JobRunner} lo
- * <b>vòng đời</b> (claim, lease, thu hồi job treo — kiểm ở {@code JobsIT} trên Postgres thật),
- * còn handler lo <b>việc</b>. Trộn chúng lại thì một ca đỏ không nói được cái nào hỏng.
- *
- * <p>Lớp này ghi lại tiến độ và vị trí đã lưu để test khẳng định được rằng handler <i>thật sự</i>
- * báo cáo — thứ mà hợp đồng của {@code JobHandler} đòi và một handler quên gọi vẫn chạy đúng.
- */
 final class JobContextGia implements JobContext {
 
     private final Map<String, Object> params;
@@ -26,7 +15,6 @@ final class JobContextGia implements JobContext {
 
     Map<String, Object> viTriDaLuu = new HashMap<>();
     final List<String> suKien = new ArrayList<>();
-    /** Mức của từng dòng trong {@link #suKien}, cùng thứ tự — {@code INFO}/{@code WARN}/{@code ERROR}. */
     final List<String> mucSuKien = new ArrayList<>();
     int daXongCuoi;
     Integer tongCuoi;

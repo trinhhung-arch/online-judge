@@ -2,8 +2,6 @@ spring:
   application:
     name: oj-worker
 
-  # Bước 6.4 — chỉ để NHẬN chuông. Worker không khai báo hàng đợi nào (oj-api làm việc đó);
-  # nó chỉ nghe theo tên. Xem javadoc JudgeQueueListener.
   rabbitmq:
     host: ${OJ_RABBIT_HOST:localhost}
     port: ${OJ_RABBIT_PORT:5672}
@@ -11,137 +9,64 @@ spring:
     password: ${OJ_RABBIT_PASSWORD:ojpass}
     listener:
       simple:
-        # Mặc định của Spring AMQP là 250. Với 250, một worker vừa khởi động hút sạch hàng
-        # đợi vào bộ đệm của nó và những worker khác thấy hàng đợi rỗng trong khi máy rảnh.
         prefetch: 1
         acknowledge-mode: manual
-        # Hàng đợi do oj-api tạo. Worker khởi động trước API là chuyện thường (docker compose
-        # không đợi), và `true` biến chuyện thường đó thành worker chết lúc boot.
         missing-queues-fatal: false
 
   main:
-    # Worker KHÔNG phải máy chủ: nó không mở cổng nào và không nhận request nào.
-    # Mở một cổng nghe ở đây là mở một bề mặt tấn công mới trên đúng cái máy sẽ chạy
-    # mã của người lạ (từ M2).
     web-application-type: none
 
-# =============================================================================
-# ⚠️ KHÔNG có thuộc tính database nào ở đây, và sẽ không bao giờ có (bất biến #3).
-# Worker biết đúng một địa chỉ HTTP và một secret. WorkerHasNoDataSourceTest đọc
-# pom.xml để giữ điều đó ở tầng dependency.
-# =============================================================================
 oj:
   worker:
-    # ★ Mặc định KHÔNG được là tên máy chấm chuẩn, và đây là lý do — đã xảy ra thật.
-    #
-    # `mayChamSong` đếm DÒNG judge_hosts (JdbcQueueStatusQuery), không đếm worker. Hai
-    # worker cùng tên thì con số ấy là 1, và — chỗ chết người — TẮT MỘT CÁI ĐI NÓ VẪN LÀ 1,
-    # vì cái còn lại vẫn touch chung một dòng. Chỉ số sinh ra để nói "máy chấm còn sống
-    # không" trả lời "còn" trong cả trường hợp một nửa năng lực đã chết. Kèm theo:
-    # judge_runs.host_id tra theo tên nên không lần chấm nào truy được về đúng máy đã chấm,
-    # và host_factor của máy chuẩn bị worker chưa hiệu chuẩn ghi đè mỗi 15 phút.
-    #
-    # Tên mặc định lạ thì phép đo bị RecordHostBenchmarkUseCase từ chối kèm một dòng warn
-    # nói đúng cách chữa, còn host_id/claimed_by_host nhận NULL (cả hai cột đều nullable,
-    # JdbcJudgeQueueRepository đã ghi rõ từ M1). Ồn ào và vô hại — thay vì im lặng và sai.
-    #
-    # KHÔNG bỏ hẳn mặc định để crash lúc boot: README "Cách đo lại trên một máy bất kỳ"
-    # dựa vào `./mvnw -pl oj-worker spring-boot:run` trần, và recipe ấy chỉ cần dòng log
-    # "Đo máy ... ms CPU" — nó vẫn in bình thường dưới tên này.
-    host-name: ${OJ_WORKER_HOST_NAME:worker-chua-dat-ten}   # khớp judge_hosts.name
+    host-name: ${OJ_WORKER_HOST_NAME:worker-chua-dat-ten}
     arch: ${OJ_WORKER_ARCH:arm64}
-    slots: ${OJ_WORKER_SLOTS:6}          # CỐ ĐỊNH theo cấu hình, không theo số core (ADR 008)
-    lease: 120s                          # bản sao của oj.judge.lease phía API, chỉ để cảnh báo
-    # Hàng đợi rỗng thì CHỜ, tối đa ngần này. Từ Bước 6.4 nó không còn là độ trễ giao việc
-    # mà là NHỊP DỰ PHÒNG: chuông RabbitMQ đánh thức ngay, con số này chỉ đỡ khi broker chết,
-    # khi reaper thả một bài, hoặc khi publish hỏng sau commit. Xem JudgeDoorbell.
+    slots: ${OJ_WORKER_SLOTS:6}
+    lease: 120s
     idle-poll: 500ms
-    # Bước 6.8 — SIGTERM: chờ tối đa ngần này cho slot chấm nốt bài đang chạy. Phải LỚN HƠN
-    # thời gian chấm một bài (~1.5s cho C++, lâu hơn cho bài TLE), và nhỏ hơn lease 120s —
-    # quá lease thì reaper đã giao lại bài cho worker khác trong lúc ta còn đang chờ.
     shutdown-grace: 30s
     request-timeout: 5s
     result-retry-min: 1s
     result-retry-max: 30s
-    host-factor: 1.000                   # khởi điểm; HostBenchmark (Bước 2.9) đo lại
-    # ★ Nguồn testdata: `api` (mặc định) hay `local`.
-    #
-    #   api    ApiTestdataSource  -> tải qua GET /internal/judge/testdata/{sha256}.
-    #          Worker KHÔNG có MinIO client và sẽ không bao giờ có (bất biến #3): API là thứ
-    #          duy nhất chạm kho. Worker cache theo hash, nên một bộ test đi qua API một lần
-    #          cho cả nghìn bài nộp cùng đề.
-    #
-    #   local  LocalDirectoryTestdataSource -> đọc <cache.dir>/testdata-store.
-    #          Giữ lại cho hai việc: chấm thử offline khi chưa dựng nổi API, và dò lỗi bằng
-    #          cách đổ testdata vào tay để loại trừ đoạn vận chuyển.
+    host-factor: 1.000
     testdata-source: ${OJ_WORKER_TESTDATA_SOURCE:api}
 
     api-base-url: ${OJ_API_BASE_URL:http://localhost:8080}
-    internal-secret: ${OJ_INTERNAL_SHARED_SECRET}   # không có mặc định, cố ý
+    internal-secret: ${OJ_INTERNAL_SHARED_SECRET}
 
     rabbit:
-      # false = quay về hành vi M1 (chỉ PULL theo nhịp idle-poll). Mọi bài vẫn được chấm —
-      # judge_queue là sự thật, RabbitMQ chỉ là đường dẫn.
       enabled: ${OJ_WORKER_RABBIT_ENABLED:true}
-      # ⚠️ HAI TÊN NÀY CŨNG NẰM Ở oj-api/src/main/resources/application.yml.
-      # Không đặt được vào oj-contract vì đó là hợp đồng đóng băng (CLAUDE.md mục 5.1), nên
-      # HopDongVanHanhTest đọc cả hai file và đỏ ngay lúc chúng lệch nhau — nếu không thì
-      # triệu chứng duy nhất là "worker nghe một hàng đợi không ai gửi vào", tức là im lặng.
       live-queue: judge.live
       rejudge-queue: judge.rejudge
 
-    # -------------------------------------------------------------------------
-    # Sandbox. Ở đây CHỈ có thứ hợp đồng không mang. CPU, RAM và output của một
-    # lượt chạy nằm trong JudgeJobDto vì chúng là thuộc tính của ĐỀ BÀI, không
-    # phải của máy chấm — chép chúng xuống đây là tạo nguồn sự thật thứ hai, và
-    # ngày hai nguồn lệch nhau thì cùng một bài AC ở máy này, TLE ở máy kia.
-    # -------------------------------------------------------------------------
     sandbox:
-      # false = giữ ScriptedJudgeRunner của M1 (không thực thi mã người dùng).
-      # KHÔNG phải cửa hậu bỏ sandbox: với false thì không có gì được chạy cả.
       enabled: ${OJ_SANDBOX_ENABLED:true}
       isolate-binary: ${OJ_ISOLATE_BIN:/usr/local/bin/isolate}
       box-root: ${OJ_ISOLATE_BOX_ROOT:/var/local/lib/isolate}
-      # Hai worker trên cùng một máy phải đặt lệch nhau, nếu không chúng giành box của nhau.
       first-box-id: ${OJ_WORKER_FIRST_BOX_ID:0}
-      # Chốt chặn khi chính isolate treo. Giới hạn thật là của isolate; cái này chỉ để
-      # worker không mất một slot vĩnh viễn.
       watchdog-slack: 10s
-      # isolate gọi execve, KHÔNG tra PATH: `g++` trong bảng languages phải được worker tra
-      # thành đường dẫn tuyệt đối, nếu không mọi bài nộp đều RE với exitcode 127.
       program-path: [/usr/bin, /bin, /usr/local/bin]
 
       compile:
-        processes: 64        # g++ fork ra cc1plus, as, collect2
-        open-files: 256      # #include lồng nhau mở rất nhiều file cùng lúc
+        processes: 64
+        open-files: 256
         max-file-size: 64MB
-        log-limit: 32KB      # = JudgeResultDto.MAX_COMPILE_LOG_BYTES; cắt sớm để 100MB
-                             # thông báo lỗi template không vào heap của worker
-        # Bước 3.5 — dựng bằng scripts/build-pch.sh. Chưa dựng thì bỏ trống: bài vẫn chấm
-        # đúng, chỉ mất phần tăng tốc. Cờ biên dịch phải KHỚP CHÍNH XÁC với languages
-        # .compile_command, lệch một cờ là GCC bỏ qua .gch trong im lặng.
+        log-limit: 32KB
         pch-dir: ${OJ_WORKER_PCH_DIR:/opt/oj/pch}
       run:
-        extra-time: 500ms    # ân hạn: báo thời gian THẬT thay vì đúng bằng giới hạn
-        processes: 1         # ⚠️ tạm của M2 — Java 21 cần vài chục. M3 phải mang con số
-                             # này trong bảng languages, xem javadoc Sandbox.Run
+        extra-time: 500ms
+        processes: 1
         open-files: 64
         max-file-size: 1MB
         stderr-limit: 8KB
-        # Đo được: /proc mặc định CÓ mặt và /proc/self/environ đọc được; /tmp mặc định
-        # ghi được. Test tấn công 6 và 11 chính là hai ca đó.
         hidden-dirs: [/proc, /tmp]
 
       cache:
-        # NGOÀI box_root — testdata trong box là bất biến #1 bị phá.
         dir: ${OJ_WORKER_CACHE_DIR:/var/tmp/oj-worker}
         max-entries: 512
 
       benchmark:
         interval: 15m
         samples: 3
-        # 0 = CHƯA hiệu chuẩn: worker vẫn đo và vẫn cảnh báo throttle nhiệt, nhưng không đổi
-        # giới hạn chấm. Điền con số đo trên máy chấm chuẩn ở Bước 2.10 (xem README).
         reference-cpu-ms: ${OJ_HOST_REFERENCE_CPU_MS:0}
         drift-alert-pct: 8.0
 

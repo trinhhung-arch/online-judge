@@ -1,28 +1,3 @@
-/**
- * Chỗ DUY NHẤT biết đường dẫn và hình dạng payload của API — Bước G1.
- *
- * ★ VÌ SAO GOM VÀO MỘT FILE
- *
- * Ba lần liên tiếp khi kiểm thử tay backend, người viết file này gọi sai:
- *
- *   · đăng nhập nhận `dinhDanh`, không phải `handle` hay `email`
- *   · nộp bài nhận `problemId` (số), không phải `problemCode`
- *   · `/submissions` nhận `limit`, còn `problems` nhận `size`
- *
- * Hai cái đầu trả lỗi ngay nên tìm ra nhanh. Cái thứ ba thì KHÔNG: Spring bỏ qua tham số
- * lạ trong im lặng, nên client nhận đúng 20 dòng mặc định và tưởng phân trang đang chạy.
- * Loại lệch đó không bao giờ tự lộ ra.
- *
- * Một hằng viết sai ở đây thì sửa một lần. Viết rải ở tám trang thì sửa bảy lần và quên một.
- *
- * ★ VÀ NÓ ĐƯỢC ÉP BẰNG CI
- *
- * `BeMatFrontendTest` quét mọi chuỗi `/api/v1/...` trong thư mục này và khẳng định từng
- * đường dẫn khớp một `@RequestMapping` có thật. Nó bắt đúng thứ trình biên dịch không thấy:
- * backend đổi tên một đường dẫn, frontend vẫn chạy, và triệu chứng duy nhất là một nút
- * không làm gì cả.
- */
-
 export const DUONG = {
     auth: {
         captcha:  '/api/v1/auth/captcha',
@@ -39,9 +14,6 @@ export const DUONG = {
         haiLopBatDau:  '/api/v1/me/2fa/bat-dau',
         haiLopXacNhan: '/api/v1/me/2fa/xac-nhan',
 
-        // FR-AUTH-09 (V13). Cả hai đều CẦN ĐĂNG NHẬP, cố ý: một cửa phát thư ra ngoài mà
-        // gọi được khi chưa đăng nhập thì phải có bộ đếm theo IP riêng, và phải trả lời
-        // giống hệt nhau cho địa chỉ có thật lẫn không có thật. Xem SendVerificationEmailUseCase.
         xacMinhEmail:        '/api/v1/me/xac-minh-email',
         xacMinhEmailXacNhan: '/api/v1/me/xac-minh-email/xac-nhan',
     },
@@ -49,15 +21,11 @@ export const DUONG = {
     de: {
         theoMa: (ma) => `/api/v1/problems/${encodeURIComponent(ma)}`,
 
-        // ★ Soạn đề dùng problemId (SỐ), còn trang đề dùng code (CHỮ). Hai định danh cho
-        // cùng một thứ, và server không nhận lẫn: `/problems/A-PLUS-B` là bài đã xuất bản,
-        // `/problems/12/edit` là bản nháp. Trộn hai cái là 404 mà không ai hiểu vì sao.
         tao:      '/api/v1/problems',
         sua:      (id) => `/api/v1/problems/${encodeURIComponent(id)}`,
         soan:     (id) => `/api/v1/problems/${encodeURIComponent(id)}/edit`,
         xuatBan:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/publish`,
         goXuong:  (id) => `/api/v1/problems/${encodeURIComponent(id)}/retire`,
-        // Xoá HẲN. Máy chủ từ chối nếu đề đã có bài nộp hoặc còn thuộc kỳ thi.
         xoa:      (id) => `/api/v1/problems/${encodeURIComponent(id)}`,
         testdata: (id) => `/api/v1/problems/${encodeURIComponent(id)}/testdata`,
     },
@@ -94,7 +62,6 @@ export const DUONG = {
         dangKy:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/register`,
         tao:         '/api/v1/contests',
         themDe:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/problems`,
-        // V10 — soạn một đề SINH RA cho kỳ thi này, không mượn từ kho đề chung.
         soanDe:      (id) => `/api/v1/contests/${encodeURIComponent(id)}/problems/new`,
         goDe:        (id, pid) => `/api/v1/contests/${encodeURIComponent(id)}`
             + `/problems/${encodeURIComponent(pid)}`,
@@ -105,13 +72,6 @@ export const DUONG = {
     trangThai: '/api/v1/status',
 };
 
-/**
- * ★ Endpoint DANH SÁCH — mỗi cái mang theo tên tham số kích thước trang của CHÍNH NÓ.
- *
- * Server chưa thống nhất: `/submissions` nhận `limit`, những cái còn lại nhận `size`. Chừng
- * nào còn thế thì con số ấy phải đi kèm đường dẫn, chứ không phải nằm trong trí nhớ của
- * người viết trang. `js/phan-trang.js` nhận trọn một mô tả ở đây và không đoán gì.
- */
 export const DS = {
     de:     { url: '/api/v1/problems',    khoaSize: 'size'  },
     baiNop: { url: '/api/v1/submissions', khoaSize: 'limit' },
@@ -120,19 +80,12 @@ export const DS = {
     nguoiDung: { url: '/api/v1/admin/users',     khoaSize: 'size' },
 };
 
-/** Trạng thái kỳ thi — server suy, client chỉ hiển thị. Xem ListContestsUseCase.TrangThai. */
 export const TRANG_THAI_KY_THI = {
     SAP_DIEN_RA:  ['Sắp diễn ra', 'cho'],
     DANG_CHAY:    ['Đang diễn ra', 'AC'],
     DA_KET_THUC:  ['Đã kết thúc', ''],
 };
 
-/**
- * Bảy verdict của FR-SUB-04, kèm câu ngắn cho bộ lọc.
- *
- * Đây KHÔNG phải bản dịch của mã lỗi server — `api.js` đã nói rõ frontend không tự dịch.
- * Đây là nhãn cho một `<select>` mà server không có endpoint nào liệt kê.
- */
 export const VERDICT = [
     ['AC',  'AC · Đúng'],
     ['WA',  'WA · Sai kết quả'],

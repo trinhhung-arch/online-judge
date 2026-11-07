@@ -5,13 +5,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/**
- * Bảng {@code testdata_versions}, {@code testcases}, {@code sample_testcase_contents} (V2).
- * Pool {@code app} — job nạp dữ liệu là việc của phía API, không phải đường verdict.
- *
- * <p>Mọi câu đều {@code ON CONFLICT ... DO UPDATE}: xem javadoc của {@link TestdataRepository}
- * về vì sao idempotent là bắt buộc chứ không phải một sự cẩn thận thừa.
- */
 @Repository
 public class JdbcTestdataRepository implements TestdataRepository {
 
@@ -121,13 +114,6 @@ public class JdbcTestdataRepository implements TestdataRepository {
         jdbc.sql(KICH_HOAT).param("version", version).param("problemId", problemId).update();
     }
 
-    /**
-     * FR-PROB-12. {@code version IS NULL} -> phiên bản đang hoạt động của đề.
-     *
-     * <p>{@code CAST(:version AS integer)} bắt buộc: thiếu nó, Postgres không suy được kiểu
-     * của tham số {@code NULL} và trả {@code could not determine data type of parameter} —
-     * đúng lỗi 500 đã gặp ở danh sách đề tại M4.
-     */
     @Override
     public java.util.Optional<String> shaCuaPhienBan(long problemId, Integer version) {
         return jdbc.sql(SHA_CUA_PHIEN_BAN)

@@ -13,7 +13,6 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Bước 2.9 — hiệu chuẩn máy chấm và bẫy throttle nhiệt. */
 @DisplayName("HostBenchmark: đo tốc độ máy chấm")
 class HostBenchmarkIT {
 
@@ -44,7 +43,6 @@ class HostBenchmarkIT {
     @Test
     @DisplayName("đã hiệu chuẩn thì host_factor = thời gian đo / thời gian máy chuẩn")
     void hieuChuanThiTinhHeSo() {
-        // Giả sử máy chấm chuẩn chạy tải này mất 1000ms. Máy nào chậm gấp đôi thì factor ~2.
         HostBenchmark benchmark = new HostBenchmark(properties(1_000), null);
 
         benchmark.measure();
@@ -64,8 +62,6 @@ class HostBenchmarkIT {
         benchmark.measure();
         long second = benchmark.lastCpuMs();
 
-        // Baseline không đổi sau lần đầu, nên lastCpuMs() vẫn là số đo đầu tiên; ta chỉ cần
-        // biết lần đo thứ hai không ném và không làm hỏng trạng thái.
         assertThat(second).isEqualTo(first);
         assertThat(benchmark.current().signum()).isPositive();
     }

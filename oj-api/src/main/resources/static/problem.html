@@ -5,33 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Đề bài · Online Judge</title>
     <link rel="stylesheet" href="/css/app.css">
-    <!-- KaTeX vẽ công thức ở TRÌNH DUYỆT. Server chỉ render Markdown và giữ nguyên các
-         đoạn toán — quyết định của Bước 4.9, xem CommonMarkStatementRenderer.
-
-         ★ integrity= (SRI) là BẮT BUỘC ở đây, không phải tuỳ chọn.
-
-         Ba tệp này nạp từ một máy chủ không phải của ta, và katex.min.js chạy với toàn quyền
-         trên trang đang giữ access token. Không có SRI thì một CDN bị xâm nhập — hoặc một
-         phiên bản bị thay lặng lẽ — là mã tuỳ ý chạy trên trang của mọi thí sinh đang thi.
-         Trình duyệt so hash trước khi thực thi; sai một byte là tệp bị chặn.
-
-         Hash dưới đây tính từ chính tệp đã tải về, KHÔNG chép từ tài liệu:
-
-             openssl dgst -sha384 -binary <tệp> | openssl base64 -A
-
-         Từ 2026-09-24 tệp nằm ở static/vendor/ (rà soát F3: CSP không còn mở CDN). Nâng phiên
-         bản KaTeX là: tải bản mới vào vendor/, chạy lại lệnh SHA256SUMS ghi trong chính file
-         ấy, tính lại cả ba integrity dưới đây. Quên thì trang mất công thức toán ngay
-         lập tức và ồn ào — đó là kiểu hỏng đúng, hơn hẳn việc im lặng bỏ qua phép kiểm. -->
     <link rel="stylesheet" href="/vendor/npm/katex@0.16.11/dist/katex.min.css"
           integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+"
           crossorigin="anonymous">
 </head>
 <body>
-<!-- ★ a11y mức A — link bỏ qua nằm trong HTML TĨNH, không do JavaScript chèn.
-     khung.js dựng thanh điều hướng, nhưng nếu module đó lỗi (CDN chậm, một lỗi cú pháp
-     mới) thì người dùng bàn phím mất luôn đường tắt. Thứ giúp người khuyết tật không được
-     phụ thuộc vào thứ dễ hỏng nhất trên trang. -->
 <a class="bo-qua" href="#chinh">Bỏ qua tới nội dung chính</a>
 <main id="chinh">
     <h1 id="tieu-de">Đang tải…</h1>
@@ -41,9 +19,6 @@
     <div class="hai-cot">
         <section aria-labelledby="nhan-de">
             <h2 id="nhan-de">Đề bài</h2>
-            <!-- ★ Chỗ DUY NHẤT trong toàn bộ giao diện dùng innerHTML. An toàn vì server đã
-                 render bằng CommonMark với escapeHtml(true) + sanitizeUrls(true): mọi HTML thô
-                 trong đề đã thành văn bản. Xem CommonMarkStatementRenderer. -->
             <div id="de-bai" class="de-bai"></div>
         </section>
 
@@ -65,8 +40,6 @@
     </div>
 </main>
 
-<!-- Xem ghi chú về SRI ở phần <head>. Hai tệp này chạy mã, nên chúng là chỗ SRI quan
-     trọng nhất — quan trọng hơn cả tệp CSS ở trên. -->
 <script src="/vendor/npm/katex@0.16.11/dist/katex.min.js"
         integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg"
         crossorigin="anonymous" defer></script>

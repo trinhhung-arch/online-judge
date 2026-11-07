@@ -20,20 +20,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Bảng xếp hạng trên Postgres thật — M5, FR-CON-04 và FR-CON-05.
- *
- * <h2>Hai bất biến được canh ở đây</h2>
- * <ul>
- *   <li><b>Idempotent</b> — chạy lại một lô không nhân đôi điểm. {@code StandingsUpdater} SẼ
- *       chạy lại: sau restart, sau rebuild, sau khi lease hết hạn.</li>
- *   <li><b>Đóng băng lọc theo vai trò</b> — thí sinh thấy bản chụp, ADMIN thấy bảng thật. Sai
- *       chiều nào cũng hỏng: lộ bảng thì mất nghi thức trao giải, giấu nhầm ADMIN thì người
- *       tổ chức không điều hành được kỳ thi của mình.</li>
- * </ul>
- *
- * <p>Quyền truy cập nằm ở {@link ContestAccessIT}.
- */
 class ContestStandingsIT extends PostgresIT {
 
     @Autowired ContestRepository contests;
@@ -46,7 +32,6 @@ class ContestStandingsIT extends PostgresIT {
 
     private static final Instant MOC = Instant.now();
 
-    /** Kỳ thi đang chạy, chứa đề A-PLUS-B. */
     private long dangChay() {
         return dungContest(MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null);
     }
@@ -62,8 +47,6 @@ class ContestStandingsIT extends PostgresIT {
     private Contest doc(long id) {
         return contests.timTheoId(id).orElseThrow();
     }
-
-    // =========================================================================
 
     @Nested
     @DisplayName("★ FR-CON-04 · bảng xếp hạng")
@@ -86,21 +69,6 @@ class ContestStandingsIT extends PostgresIT {
             return id;
         }
 
-        /**
-         * ★ Bài id NHỎ hơn nhưng chấm xong MUỘN hơn vẫn phải vào bảng.
-         *
-         * <h2>Ca này tái hiện một lỗi có thật, đã đo trên Postgres</h2>
-         * {@code StandingsUpdater} tiến một watermark duy nhất theo {@code id}, còn lô đọc
-         * trước đây lọc {@code status='DONE'}. Hai thứ đó cộng lại nghĩa là bài đang chấm dở
-         * bị nhảy qua, watermark vượt lên, và <b>không lô nào đọc lại nó nữa</b>.
-         *
-         * <p>Trước khi sửa, ca này ra {@code lô1=1 · lô2=0 · bảng có 1 người}: bài AC của
-         * người nộp trước biến mất vĩnh viễn. Đó không phải tình huống hiếm mà là tình huống
-         * thường của một kỳ thi — thứ tự claim theo id, thứ tự chấm xong theo độ nặng của bài.
-         *
-         * <p>Bản sửa dùng {@code baiDaChamLienMach}: lô dừng ở bài chưa xong đầu tiên. Bảng
-         * đứng lại một nhịp thay vì thiếu một người, và nó tự đúng lại.
-         */
         @Test
         @DisplayName("★ bài id nhỏ hơn chấm xong sau vẫn vào bảng — watermark không nhảy qua")
         void watermark_khong_nhay_qua_bai_dang_cham() {
@@ -108,12 +76,11 @@ class ContestStandingsIT extends PostgresIT {
             contests.dangKy(c, USER_ID, MOC);
             contests.dangKy(c, SETTER_ID, MOC);
 
-            long cham = nopChuaCham(USER_ID);      // id nhỏ hơn, chấm lâu
-            long nhanh = nopChuaCham(SETTER_ID);   // id lớn hơn, xong trước
+            long cham = nopChuaCham(USER_ID);
+            long nhanh = nopChuaCham(SETTER_ID);
             assertThat(cham).isLessThan(nhanh);
 
             chamXong(nhanh);
-            // Lô này phải KHÔNG áp gì: bài id nhỏ hơn còn đang chấm, tiến qua nó là mất nó.
             assertThat(updater.capNhat(doc(c)))
                     .as("lô không được vượt qua bài chưa chấm xong")
                     .isZero();
@@ -126,7 +93,6 @@ class ContestStandingsIT extends PostgresIT {
                     .hasSize(2);
         }
 
-        /** Nộp thật nhưng KHÔNG chấm — bài nằm lại ở {@code QUEUED}. */
         private long nopChuaCham(long userId) {
             try (var phien = GiaLapDanhTinh.dongVai(userId, "nguoi" + userId, Role.USER)) {
                 quenLuotNopVuaRoi(userId);
@@ -170,7 +136,6 @@ class ContestStandingsIT extends PostgresIT {
 
             updater.capNhat(doc(id));
             var lanDau = standings.top(id, 50, false);
-            // Nhịp thứ hai: watermark đã vượt qua bài này, nên không có gì để làm.
             assertThat(updater.capNhat(doc(id))).isZero();
 
             assertThat(standings.top(id, 50, false)).isEqualTo(lanDau);
@@ -210,8 +175,6 @@ class ContestStandingsIT extends PostgresIT {
         }
     }
 
-    // =========================================================================
-
     @Nested
     @DisplayName("★ FR-CON-05 · đóng băng")
     class DongBang {
@@ -222,7 +185,6 @@ class ContestStandingsIT extends PostgresIT {
             long id = dungContest(MOC.minus(Duration.ofHours(2)),
                     MOC.plus(Duration.ofHours(1)), MOC.minus(Duration.ofMinutes(30)));
 
-            // Chụp một bảng rỗng (chưa ai ghi điểm) rồi mới cho một người ghi điểm.
             jdbc.sql("""
                     INSERT INTO contest_standings (contest_id, user_id, total_score,
                         penalty_seconds, solved_count, last_applied_submission_id)
@@ -259,7 +221,6 @@ class ContestStandingsIT extends PostgresIT {
             long id = dungContest(MOC.minus(Duration.ofHours(4)),
                     MOC.minus(Duration.ofHours(1)), MOC.minus(Duration.ofHours(2)));
 
-            // Cả điểm của nghi thức trao giải kiểu ICPC: bảng vẫn kín sau tiếng chuông.
             assertThat(doc(id).dangDongBang(Instant.now())).isTrue();
         }
     }

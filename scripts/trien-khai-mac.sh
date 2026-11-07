@@ -1,41 +1,4 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Triển khai oj-worker lên máy chấm Mac M1 Max (arm64).
-#
-#   OJ_INTERNAL_SHARED_SECRET=... ./scripts/trien-khai-mac.sh
-#   ./scripts/trien-khai-mac.sh --chi-kiem      # chỉ kiểm tiền đề, không build
-#   ./scripts/trien-khai-mac.sh --khong-build   # dùng lại ảnh đã có
-#   ./scripts/trien-khai-mac.sh --xoa           # dừng và xoá container
-#
-# ★ SCRIPT NÀY CHỈ TRIỂN KHAI WORKER.
-# Postgres · Redis · RabbitMQ · MinIO chạy bằng `docker compose up -d`; oj-api chạy
-# từ jar trong ~/oj-release, do launchd giữ sống — scripts/khoi-dong-api.sh (bản cũ
-# của dòng này ghi `spring-boot:run`, đã sai từ khi có ~/oj-release). Bốn ảnh hạ tầng
-# đều có bản arm64 nên không cần gì đặc biệt. Chỉ WORKER là khó, vì chỉ nó cần `isolate`.
-#
-# ★ VÌ SAO WORKER PHẢI NẰM TRONG CONTAINER TRÊN MAC
-# `isolate` là chương trình setuid root nói chuyện thẳng với cgroup v2 và
-# namespace của kernel Linux. macOS không có cả hai. Xem scripts/build-isolate.sh
-# — nó thoát ngay nếu `uname -s` khác Linux.
-#
-# ★ MỘT THỨ SCRIPT NÀY THÊM SO VỚI Dockerfile
-# Ảnh đặt ENTRYPOINT là `java -jar` và USER là `ojworker`. Nhưng header của
-# infra/isolate/Dockerfile nói `isolate-cg-keeper` phải chạy TRƯỚC worker, mà
-# keeper thì cần root để tạo cgroup. Hai điều đó không cùng lúc đúng được với
-# ENTRYPOINT mặc định, nên script ghi đè entrypoint: vào bằng root, dựng keeper,
-# đợi /run/isolate/cgroup xuất hiện, rồi HẠ QUYỀN xuống ojworker mới chạy JVM.
-#
-# Đó là chỗ duy nhất script này đi chệch khỏi ảnh, và nó đi chệch có chủ ý:
-# JVM chạy root là phá bất biến sandbox #7.
-#
-# ✔ ĐÃ CHẠY THẬT: 2026-09-15 trên Mac M1 Max (OrbStack). Container lên, 7 phép kiểm bên
-#   trong xanh, worker nối được RabbitMQ và /internal/judge/claim, 14/14 test tấn công đạt
-#   trên đúng ảnh ấy. Dòng "chưa chạy thử" cũ ở đây đã hết hạn.
-#
-#   Lần chạy đó cũng để lại một chốt mới ở phần "Kiểm tiền đề": nếu shell đã source .env
-#   thì OJ_RABBIT_HOST/OJ_API_BASE_URL mang giá trị `localhost` của host đi vào container
-#   và worker lên nhưng không chấm được gì. Xem chú thích tại chỗ.
-# =============================================================================
 set -euo pipefail
 
 ANH=${ANH:-oj-worker:arm64}
@@ -43,12 +6,10 @@ TEN=${TEN:-oj-worker}
 NEN_TANG=${NEN_TANG:-linux/arm64}
 GOC=$(cd "$(dirname "$0")/.." && pwd)
 
-# Trong container, `localhost` là chính container. Muốn với tới API và RabbitMQ
-# đang chạy trên macOS thì phải đi qua host-gateway.
 API=${OJ_API_BASE_URL:-http://host.docker.internal:8080}
 RABBIT=${OJ_RABBIT_HOST:-host.docker.internal}
-SLOTS=${OJ_WORKER_SLOTS:-6}          # ADR 008 — 6 chứ không 9, vì nhiệt
-HOST_NAME=${OJ_WORKER_HOST_NAME:-mac-m1max-host}   # khớp judge_hosts.name
+SLOTS=${OJ_WORKER_SLOTS:-6}
+HOST_NAME=${OJ_WORKER_HOST_NAME:-mac-m1max-host}
 TMPFS=${OJ_BOX_TMPFS:-8g}
 
 chi_kiem=0; khong_build=0
@@ -63,7 +24,6 @@ loi() { echo "✗ $*" >&2; exit 1; }
 ok()  { echo "✓ $*"; }
 luu_y(){ echo "  ! $*"; }
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo "── Kiểm tiền đề ──"
 
 [ "$(uname -s)" = "Darwin" ] || luu_y "Không phải macOS ($(uname -s)) — script vẫn chạy được, nhưng nó viết cho Mac."
@@ -73,8 +33,6 @@ docker buildx version >/dev/null 2>&1 || loi "Chưa có docker buildx — cần 
 docker info >/dev/null 2>&1 || loi "Docker chưa chạy."
 ok "docker + buildx"
 
-# Kiến trúc VM. Build arm64 trên VM amd64 sẽ đi qua QEMU: chạy được, nhưng mọi
-# con số thời gian vô nghĩa — mà đo thời gian đúng là lý do máy chấm chuẩn tồn tại.
 arch_vm=$(docker info --format '{{.Architecture}}' 2>/dev/null || echo '?')
 case "$arch_vm" in
     aarch64|arm64) ok "VM Docker là arm64" ;;
@@ -82,7 +40,6 @@ case "$arch_vm" in
        luu_y "và MỌI con số thời gian đo được sẽ sai. Không dùng máy này làm máy chấm chuẩn." ;;
 esac
 
-# RAM của VM: --tmpfs $TMPFS nằm trong đó, cộng 6 slot đang biên dịch C++.
 ram_byte=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
 ram_gb=$(( ram_byte / 1024 / 1024 / 1024 ))
 tmpfs_gb=${TMPFS%g}
@@ -97,27 +54,9 @@ fi
 [ ${#OJ_INTERNAL_SHARED_SECRET} -ge 32 ] || loi "OJ_INTERNAL_SHARED_SECRET chỉ ${#OJ_INTERNAL_SHARED_SECRET} ký tự, cần ≥ 32."
 ok "OJ_INTERNAL_SHARED_SECRET (${#OJ_INTERNAL_SHARED_SECRET} ký tự)"
 
-# Không có mặc định `ojpass` nữa: từ 2026-09-16 broker không nhận mật khẩu ấy (xem đầu
-# docker-compose.yml). Lùi về nó là dựng một worker lên xanh rồi nối RabbitMQ hỏng mãi mãi.
 [ -n "${OJ_RABBIT_PASSWORD:-}" ] || loi "Thiếu OJ_RABBIT_PASSWORD — lấy từ .env, cùng giá trị oj-api đang dùng."
 ok "OJ_RABBIT_PASSWORD"
 
-# ★ CHỐT CHỐNG MỘT SỰ CỐ ĐÃ XẢY RA THẬT — 2026-09-15, mất khoảng 3 phút worker không chấm.
-#
-# `.env` của dự án chứa đúng hai dòng này, và chúng ĐÚNG cho oj-api chạy thẳng trên macOS:
-#     OJ_RABBIT_HOST=localhost
-#     OJ_API_BASE_URL=http://localhost:8080
-# Ai đã `source .env` trong shell (chuyện thường khi chạy `./mvnw spring-boot:run`) rồi gọi
-# script này thì hai biến ấy ĐÃ ĐƯỢC ĐẶT, nên `${OJ_RABBIT_HOST:-host.docker.internal}` ở
-# đầu file KHÔNG rơi về mặc định — giá trị của host đi thẳng vào container.
-#
-# Bên trong container, `localhost` là chính container. Triệu chứng: vòng lặp vô tận
-# "Attempting to connect to: [localhost:5672]" mỗi 5 giây và ClaimBackoff báo mất API —
-# tức là container LÊN, mọi phép kiểm bên dưới XANH, và worker không chấm được bài nào.
-# Một cách hỏng im lặng, đúng loại mà file này vốn cẩn thận nhất để tránh.
-#
-# Không tự sửa thành host.docker.internal: đoán hộ người dùng ở một biến họ đặt tường minh
-# là cách sinh ra sự cố tiếp theo. Dừng, và nói ra lệnh đúng.
 for cap in "OJ_API_BASE_URL=$API" "OJ_RABBIT_HOST=$RABBIT"; do
     case "${cap#*=}" in
         *localhost*|*127.0.0.1*)
@@ -132,11 +71,6 @@ for cap in "OJ_API_BASE_URL=$API" "OJ_RABBIT_HOST=$RABBIT"; do
 done
 ok "địa chỉ API và RabbitMQ dùng được từ trong container"
 
-# Con số này đi thẳng vào `reference-cpu-ms` — một `int` của Spring. Giá trị không phải số
-# làm JVM chết ngay lúc bind properties, container thoát 1, rồi CẢ BẢY ca kiểm bên dưới
-# cùng báo "KHÔNG đạt" vì `docker exec` vào một container đã chết. Bảy dòng sai vì một lý
-# do trông y hệt một máy chấm hỏng toàn diện — đó là kiểu lỗi tốn nhiều giờ nhất.
-# Đo thật ngày 2026-09-05: dán nguyên chữ 'NNN' từ câu hướng dẫn ở cuối chính script này.
 ref_cpu=${OJ_HOST_REFERENCE_CPU_MS:-0}
 case "$ref_cpu" in
     ''|*[!0-9]*)
@@ -160,12 +94,9 @@ fi
 
 [ "$chi_kiem" -eq 1 ] && { echo; echo "Chỉ kiểm tiền đề — dừng ở đây."; exit 0; }
 
-# ─────────────────────────────────────────────────────────────────────────────
 if [ "$khong_build" -eq 0 ]; then
     echo
     echo "── Build $ANH cho $NEN_TANG ──"
-    # --load: nạp thẳng vào daemon để `docker run` thấy. isolate được build LẠI
-    # từ nguồn trong stage 1 cho đúng kiến trúc — không bao giờ copy binary.
     docker buildx build \
         --platform "$NEN_TANG" \
         -f "$GOC/infra/isolate/Dockerfile" \
@@ -173,46 +104,10 @@ if [ "$khong_build" -eq 0 ]; then
     ok "đã build $ANH"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo
 echo "── Chạy $TEN ──"
 docker rm -f "$TEN" >/dev/null 2>&1 || true
 
-# Vào bằng root để dựng keeper, rồi hạ quyền. Xem chú thích đầu file.
-# ★ REMOUNT /sys/fs/cgroup THÀNH GHI ĐƯỢC — dòng đầu tiên, trước cả keeper.
-#
-# Docker mount /sys/fs/cgroup READ-ONLY vào container, kể cả với --cgroupns=private.
-# `isolate --init` phải tạo một control group cho mỗi box, nên nó chết ngay ở box đầu tiên:
-#     Failed to create control group /sys/fs/cgroup//box-1: Read-only file system
-# Triệu chứng phía trên là MỌI bài nộp trả IE trong ~370ms — nhanh hơn cả ngân sách biên
-# dịch, vì nó hỏng trước khi kịp biên dịch. Đo trên host Mac (OrbStack) ngày 2026-09-05.
-#
-# Container đã có SYS_ADMIN nên remount được, và đây không phải nới thêm quyền: nó dùng
-# đúng cái quyền đã cấp có chủ ý ở --cap-add, để isolate siết được mã người dùng bên trong.
-#
-# KHÔNG ghi vào cgroup.subtree_control ở đây: cgroup gốc của container đang chứa tiến trình,
-# nên cgroup v2 trả EBUSY (luật 'no internal processes'). isolate tự lo phần đó trong --init.
-# ★ BA CGROUP, MỖI CÁI MỘT VAI. Đây là hình dạng bắt buộc của cgroup v2, không phải sở thích:
-#
-#   /sys/fs/cgroup/         controller đã bật, KHÔNG chứa tiến trình
-#   ├── init/               chứa shell + JVM          ← mọi tiến trình ở đây
-#   └── boxes/              controller đã bật, KHÔNG tiến trình ← nhà của box
-#       └── box-N/          isolate tạo, có memory.max
-#
-# Luật 'no internal processes' của cgroup v2: không bật được controller trên một cgroup còn
-# chứa tiến trình. Nên cgroup làm nhà cho box BẮT BUỘC phải rỗng tiến trình — và đó là lý do
-# không dùng được isolate-cg-keeper ở đây: keeper lấy cgroup của CHÍNH NÓ làm cg_root, mà
-# cgroup ấy đương nhiên chứa nó. Đo được lần lượt trên host Mac ngày 2026-09-05:
-#     keeper ở gốc  -> Cannot write /sys/fs/cgroup//box-1/memory.max: No such file or directory
-#     keeper ở /init -> Cannot write /sys/fs/cgroup/init/box-91/memory.max: ...
-#
-# Việc duy nhất keeper làm là ghi đường dẫn cgroup vào /run/isolate/cgroup (nơi `cg_root =
-# auto:` trỏ tới). Ta tự ghi được. Không có systemd thì cũng không ai dọn cgroup ấy đi, nên
-# phần 'keeper' của nó không cần thiết.
-#
-# Dòng `grep -q memory` là cái chốt: thà container không lên còn hơn lên mà --cg-mem không
-# ép gì — một sandbox không giới hạn RAM trông y hệt một sandbox bình thường cho tới lúc
-# có người khai thác nó.
 KHOI_DONG='set -e
 mount -o remount,rw /sys/fs/cgroup
 mkdir -p /sys/fs/cgroup/init /sys/fs/cgroup/boxes /run/isolate
@@ -225,19 +120,6 @@ grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control || { echo "khong bat 
 echo /sys/fs/cgroup/boxes > /run/isolate/cgroup
 exec setpriv --reuid=1500 --regid=1500 --init-groups java -jar /app/oj-worker.jar'
 
-# ★ SECCOMP MẶC ĐỊNH CỦA DOCKER, KHÔNG `unconfined` — đo 2026-09-24 (rà soát bảo mật, D0b).
-#   Bản trước chạy seccomp=unconfined + apparmor=unconfined. Đo bằng kiem-sandbox.sh (14 ca tấn
-#   công + 9 ca chấm thật) với từng biến thể:
-#     bỏ seccomp=unconfined  → 23/23 xanh: profile mặc định vẫn cho mount/unshare/setns khi có
-#                              SYS_ADMIN — đủ cho isolate — mà chặn thêm vài chục syscall ở tầng
-#                              container (keyctl, kexec_load, open_by_handle_at, …).
-#     bỏ NET_ADMIN           → 21/23 ĐỎ: "SIOCSIFFLAGS on 'lo' failed" — isolate phải bật card
-#                              lo trong network namespace riêng của box. Quyền này là CẦN.
-#   apparmor=unconfined bỏ vì máy ảo OrbStack không có AppArmor (docker info: chỉ seccomp).
-#   Sửa bộ cờ ở đây thì sửa CẢ scripts/kiem-sandbox.sh — test một sandbox dựng khác cách với
-#   bản chạy thật là không chứng minh gì.
-# --restart unless-stopped: thiếu nó thì container Exited (255) sau lần khởi động lại máy
-# 2026-09-24 23:58 và nằm đó — hạ tầng lên, worker thì không. `--xoa` vẫn dừng hẳn được.
 docker run -d --name "$TEN" \
     --restart unless-stopped \
     --user root \
@@ -257,11 +139,6 @@ docker run -d --name "$TEN" \
     -e OJ_WORKER_SLOTS="$SLOTS" \
     -e OJ_HOST_REFERENCE_CPU_MS="$ref_cpu" \
     "$ANH" -c "$KHOI_DONG" >/dev/null
-# `docker run -d` chạy xong chỉ nghĩa là container ĐƯỢC TẠO. Nó không nói gì về việc
-# container còn sống một giây sau đó. Bản trước in "✓ container đã chạy" ngay tại đây, nên
-# một JVM chết lúc bind properties vẫn được báo XANH — rồi bảy ca kiểm bên dưới đồng loạt
-# đỏ vì cùng một lý do, và không dòng nào nói ra lý do ấy. Chờ đến khi JVM báo Started,
-# hoặc đến khi nó chết; chết thì in nhật ký rồi DỪNG, đừng kiểm tiếp.
 len_jvm=0
 printf '  đợi JVM lên'
 for _ in $(seq 40); do
@@ -274,7 +151,6 @@ for _ in $(seq 40); do
         loi "container thoát với mã $ma trước khi JVM lên.
      Không kiểm gì thêm: mọi ca kiểm bên dưới sẽ hỏng vì đúng một lý do này."
     fi
-    # KHÔNG grep -q: với pipefail nó làm pipeline "hỏng" dù đã khớp (SIGPIPE, mã 141) — đo 2026-09-11.
     if docker logs "$TEN" 2>&1 | grep "Started OjWorkerApplication" >/dev/null; then len_jvm=1; break; fi
     printf '.'
     sleep 1
@@ -288,7 +164,6 @@ else
     luu_y "là vì JVM chưa kịp lên, KHÔNG phải vì sai quyền. Đọc: docker logs $TEN"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo
 echo "── Kiểm bên trong container ──"
 sleep 3
@@ -297,18 +172,10 @@ kiem() {
 }
 kiem "cgroup v2 (unified hierarchy)" '[ "$(stat -fc %T /sys/fs/cgroup)" = cgroup2fs ]'
 kiem "isolate chạy được"             '/usr/local/bin/isolate --version'
-# ★ Ca kiểm trên KHÔNG đủ, và đã có lần báo xanh trên một cài đặt hỏng: `--version` không
-# đọc file config, nên nó vẫn chạy khi đường dẫn config nhúng trong binary trỏ sai chỗ
-# (xem chú thích PREFIX/DESTDIR trong infra/isolate/Dockerfile). Ca dưới đây dựng một box
-# THẬT rồi dọn — nó buộc isolate phải đọc được config VÀ mượn được cgroup. Box 90 nằm ngoài
-# dải judge slot (0..slots-1) nên không giẫm lên bài đang chấm.
 kiem "isolate dựng được box CÓ giới hạn RAM" '/usr/local/bin/isolate --cg -b 90 --init >/dev/null 2>&1 && [ -f /sys/fs/cgroup/boxes/box-90/memory.max ]; r=$?; /usr/local/bin/isolate --cg -b 90 --cleanup >/dev/null 2>&1; exit $r'
 kiem "isolate là setuid root"        '[ -u /usr/local/bin/isolate ]'
 kiem "/etc/subuid có dòng isolate"   'grep -q "^isolate:" /etc/subuid'
 kiem "cgroup boxes có controller memory+pids" 'grep -q memory /sys/fs/cgroup/boxes/cgroup.subtree_control && grep -q pids /sys/fs/cgroup/boxes/cgroup.subtree_control'
-# Không dùng pgrep/ps: `debian:bookworm-slim` KHÔNG có procps (đã đo). Một ca
-# kiểm gọi lệnh không tồn tại sẽ báo hỏng oan, và báo hỏng oan còn tệ hơn không
-# kiểm — nó dạy người đọc bỏ qua dòng cảnh báo.
 kiem "JVM chạy dưới ojworker (uid 1500)" \
     'for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = java ] \
         && grep -qE "^Uid:[[:space:]]+1500" $p/status && exit 0; done; exit 1'
@@ -348,3 +215,5 @@ cat <<'TIEP'
   Nhật ký worker:  docker logs -f oj-worker
   Dừng:            ./scripts/trien-khai-mac.sh --xoa
 TIEP
+
+

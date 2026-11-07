@@ -16,24 +16,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ Lỗi nghiệp vụ của một job phải tới được người bấm nút — FR-PROB-03.
- *
- * <h2>Lỗi có thật mà file này canh</h2>
- * {@code JobRunner} bắt riêng {@link JobsException} rồi gom <b>mọi</b> {@code RuntimeException}
- * còn lại vào một câu duy nhất: <i>"Công việc dừng vì một lỗi không lường trước. Xem log với
- * traceId …"</i>. Chú thích ngay cạnh nhánh ấy nói {@code publicMessage()} của
- * {@code DomainException} là an toàn để hiện — nhưng không nhánh nào hiện nó.
- *
- * <p>Hệ quả đo được trên máy chủ thật: {@code ZipTestdataValidator} ném một câu chỉ đúng chỗ
- * sai — <i>"Gói chứa một mục không hợp lệ: '1.in'. Chỉ chấp nhận problem.yaml và
- * tests/&lt;tên&gt;.in|.out."</i> — và người ra đề nhận lại một traceId. Họ không có quyền đọc
- * log. Một thông báo viết sẵn cho họ bị đổi lấy một mã số chỉ người vận hành tra được.
- *
- * <h2>Ba nhánh, và ca thứ ba giữ cho hai ca đầu không đi quá xa</h2>
- * Sửa quá tay là để {@code getMessage()} của một exception bất kỳ lọt ra — bảng {@code jobs}
- * thì ADMIN đọc được, và một stack trace ở đó là bất biến #9 bị chạm.
- */
 class JobRunnerLoiNghiepVuTest {
 
     private static final Instant LUC = Instant.parse("2026-09-04T07:00:00Z");
@@ -45,7 +27,6 @@ class JobRunnerLoiNghiepVuTest {
                 AppPropertiesGia.macDinh(), Clock.fixed(LUC, ZoneOffset.UTC));
     }
 
-    /** {@code nhip()} đẩy việc sang một executor riêng, nên phải chờ nó chạy xong. */
     private void chayXong(JobRunner runner) throws Exception {
         runner.nhip();
         for (int i = 0; i < 200 && jobs.ketThucCuoi == null; i++) {
@@ -53,8 +34,6 @@ class JobRunnerLoiNghiepVuTest {
         }
         assertThat(jobs.ketThucCuoi).as("job không kết thúc trong 2 giây").isNotNull();
     }
-
-    // =========================================================================
 
     @Test
     @DisplayName("★ lỗi nghiệp vụ giữ nguyên câu đã viết cho người dùng")
@@ -102,8 +81,6 @@ class JobRunnerLoiNghiepVuTest {
         assertThat(jobs.ketThucCuoi.thongDiep()).contains("đã kết thúc");
     }
 
-    // =========================================================================
-
     private static JobHandler nem(RuntimeException loi) {
         return new JobHandler() {
             @Override
@@ -128,7 +105,6 @@ class JobRunnerLoiNghiepVuTest {
 
         @Override
         public Optional<Job> claim(String leaseOwner, Instant leaseUntil) {
-            // Đúng MỘT job: nhịp kế tiếp phải rỗng, nếu không test chạy vô hạn.
             if (daGiao.compareAndSet(false, true)) {
                 return Optional.of(new Job(1L, JobType.TESTDATA_IMPORT, JobStatus.RUNNING,
                         Map.of("problemId", 1L), Map.of(), null, 0,

@@ -6,36 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
-/**
- * Mọi ngưỡng, giới hạn, timeout của hệ thống — một chỗ duy nhất.
- *
- * <p>{@code CLAUDE.md} mục 7: <i>"Không có số ma thuật rải trong code."</i> Nếu bạn sắp gõ một
- * con số vào giữa một use-case, nó thuộc về đây.
- *
- * <h2>Phân biệt với bảng {@code system_settings}</h2>
- * <ul>
- *   <li><b>File này</b> — ngưỡng cố định, đổi thì deploy lại. Ví dụ: lease reaper, kích thước trang.</li>
- *   <li><b>{@code system_settings}</b> — công tắc ADMIN phải bật/tắt được <i>lúc 2 giờ sáng
- *       giữa contest mà không deploy lại</i>: {@code submissions.accepting} (FR-ADM-06),
- *       {@code ai_review.enabled} (FR-AI-09), {@code rejudge.enabled}.</li>
- * </ul>
- *
- * <h2>⚠️ Bảy con số dưới đây đổi là PHẢI HỎI NGƯỜI</h2>
- * {@code CLAUDE.md} mục 5.4: số judge slot · lease reaper 120s · rate limit 10s ·
- * quota AI 5/ngày · ZIP 200MB · source 64KB. Chúng nằm trong schema DB, trong
- * {@code oj-contract}, hoặc trong cả hai — đổi một phía là lệch phía kia.
- *
- * <p>Để chuyện lệch đó không xảy ra âm thầm, các compact constructor dưới đây <b>đối chiếu
- * ngược với hằng số trong {@code oj-contract} và crash lúc boot nếu không khớp</b>. Cùng tinh
- * thần với {@code EnvVarStartupCheck}: thà không khởi động được còn hơn chạy sai.
- *
- * <h2>Hai nhóm lớn nhất nằm ở file riêng</h2>
- * {@link AuthProperties} (Bước 4.5) và {@link ContestProperties} (M5) mỗi cái mang bốn con số
- * thuộc diện "đổi là phải hỏi người", nên phần javadoc giải thích <i>vì sao</i> chúng cố định
- * dài hơn phần khai báo. Để cả trong file này thì nó vượt trần 300 dòng của
- * {@code CLAUDE.md} mục 7, và quan trọng hơn: hai nhóm ấy được đọc riêng, bởi người đang sửa
- * đúng một trong hai.
- */
 @ConfigurationProperties(prefix = "oj")
 public record AppProperties(
         Submission submission,
@@ -50,19 +20,6 @@ public record AppProperties(
         ApiRateLimit apiRateLimit,
         Ai ai) {
 
-    /**
-     * Job nền — Quy tắc 5 của {@code frplan.md}, khung ở {@code platform.jobs}.
-     *
-     * <h2>Vì sao {@code lease} phải LỚN HƠN {@code pollInterval} rất nhiều</h2>
-     * Ngược với quan hệ giữa {@code oj.judge.lease} và {@code reaper-interval}, và lý do cũng
-     * ngược: ở đó reaper phải chạy dày hơn lease để bài kẹt được nhặt nhanh. Ở đây, một job
-     * <b>đang chạy thật</b> chỉ gia hạn lease mỗi lần handler gọi {@code tienDo()} — và giữa
-     * hai lần ấy có thể là hàng chục giây làm việc nặng. Lease ngắn nghĩa là job bị tưởng là
-     * chết rồi bị chạy song song với chính nó.
-     *
-     * @param lease        job im lặng quá lâu thì bị coi là bỏ rơi và đưa về {@code PAUSED}
-     * @param pollInterval nhịp {@code JobRunner} hỏi database xem có việc không
-     */
     public record Jobs(Duration lease, Duration pollInterval) {
 
         public Jobs {
@@ -79,17 +36,6 @@ public record AppProperties(
         }
     }
 
-    /**
-     * Luồng realtime chi tiết bài nộp — Bước 3.9, FR-SUB-05.
-     *
-     * @param timeout   trần thời gian sống của một kết nối SSE. <b>Phải nhỏ hơn trần của
-     *                  Cloudflare Tunnel</b>: nếu tunnel cắt trước thì client thấy một kết
-     *                  nối chết mà không có sự kiện kết thúc nào, còn nếu ta chủ động đóng
-     *                  thì client biết đường mở lại. Chủ động luôn tốt hơn bị động
-     * @param heartbeat nhịp gửi comment giữ kết nối. Proxy và tunnel đóng kết nối im lặng
-     *                  quá lâu, và "im lặng" là trạng thái BÌNH THƯỜNG của trang này —
-     *                  một bài chấm 30 giây thì không có gì để nói suốt 30 giây đó
-     */
     public record Sse(Duration timeout, Duration heartbeat) {
 
         public Sse {
@@ -104,14 +50,11 @@ public record AppProperties(
         }
     }
 
-    /** Nộp bài — FR-SUB-01, FR-SUB-08. */
     public record Submission(
             int maxSourceBytes,
             Duration rateLimit) {
 
         public Submission {
-            // Cùng một con số sống ở ba nơi: CHECK trong DB, hằng trong oj-contract, và đây.
-            // Lệch nhau nghĩa là API nhận một bài mà worker sẽ từ chối — hoặc ngược lại.
             if (maxSourceBytes != JudgeJobDto.MAX_SOURCE_BYTES) {
                 throw new IllegalStateException(
                         "oj.submission.max-source-bytes = " + maxSourceBytes
@@ -126,13 +69,6 @@ public record AppProperties(
         }
     }
 
-    /**
-     * Chấm bài — hàng đợi, reaper, IE retry. Nhóm {@code rejudge} ở {@link RejudgeProperties}.
-     *
-     * @param maxReaps số lần reaper được thả một bài hết lease về hàng đợi; lần hết lease kế
-     *                 tiếp thì ghi {@code IE} (FR-SUB-03, V16, ADR 019). Phải &ge; 1: bằng 0
-     *                 là bỏ cuộc ngay lần hết lease đầu — một lần worker restart là một IE oan
-     */
     public record Judge(
             Duration lease,
             Duration reaperInterval,
@@ -182,19 +118,11 @@ public record AppProperties(
             }
         }
 
-        /** Giây, để ghép thẳng vào tham số {@code :leaseSeconds} của truy vấn claim. */
         public int leaseSeconds() {
             return (int) lease.toSeconds();
         }
     }
 
-    /**
-     * Phân trang — bất biến #8.
-     *
-     * <p>Client xin 1000 thì trả {@code maxSize}, <b>không trả lỗi</b>
-     * ({@code oj-api/CLAUDE.md} mục 3). Từ chối một tham số quá lớn chỉ làm client phải
-     * đoán, còn cắt xuống trần thì ai cũng hiểu.
-     */
     public record Page(int defaultSize, int maxSize) {
 
         public Page {
@@ -211,12 +139,6 @@ public record AppProperties(
         }
     }
 
-    /**
-     * Hai endpoint {@code /internal/judge/*}.
-     *
-     * <p>Secret đọc từ env và <b>crash lúc boot nếu thiếu</b> — không có giá trị mặc định,
-     * cố ý. Một secret mặc định là một secret công khai.
-     */
     public record Internal(String sharedSecret) {
 
         public Internal {
@@ -232,25 +154,6 @@ public record AppProperties(
         }
     }
 
-    /**
-     * AI Code Reviewer — tuần 14-15. Khai báo từ M1 vì quota 5/ngày là con số đã chốt
-     * ({@code CLAUDE.md} mục 5.4) và nó nên nằm cạnh các con số còn lại ngay từ đầu.
-     *
-     * <p>Công tắc bật/tắt <b>không</b> ở đây — nó là {@code ai_review.enabled} trong
-     * {@code system_settings}, vì ADMIN phải tắt được tức thì mà không deploy (FR-AI-09).
-     */
-    /**
-     * ★ Trần chung cho mọi endpoint {@code /api/v1/} — nfrplan 4.2, oj-api/CLAUDE.md mục 8.
-     *
-     * <p>{@code perUser} là con số đã công bố: 100 lượt/phút/người đã đăng nhập.
-     *
-     * <p>{@code perIp} chỉ đếm lượt <b>ẩn danh</b>, và rộng hơn một bậc vì cả một phòng thi, một
-     * trường, một nhà mạng di động đi ra internet bằng CHUNG một IP. Đặt nó bằng perUser là để
-     * người thứ hai trong phòng chặn người thứ nhất.
-     *
-     * <p>Đặt 0 = TẮT hẳn xô đó, kể cả lượt đếm. Chỉ dùng cho stack đo tải: k6 bắn hàng chục nghìn
-     * lượt ẩn danh mỗi phút từ một IP, và một trần thật ở đó biến phép đo P1 thành phép đo 429.
-     */
     public record ApiRateLimit(int perUser, int perIp, Duration window) {
 
         public ApiRateLimit {

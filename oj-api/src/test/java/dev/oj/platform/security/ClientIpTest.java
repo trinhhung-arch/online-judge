@@ -6,10 +6,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * {@link ClientIp#khoaGioiHan} — khoá dùng để đếm (rà soát 2026-09-24, F2) — và phép kiểm
- * "chỉ nhận IP dạng số" của {@code hopLe}.
- */
 class ClientIpTest {
 
     @Test
@@ -38,10 +34,6 @@ class ClientIpTest {
         assertThat(ClientIp.khoaGioiHan((String) null)).isEqualTo(ClientIp.KHONG_RO);
     }
 
-    /**
-     * ★ Bản cũ lọc theo KÝ TỰ (số, chấm, hai chấm, chữ hex) — {@code bad.cafe} qua được, bị
-     * {@code getByName} TRA DNS (đo 211ms, ra một IPv4 công khai) và được nhận là "IP".
-     */
     @Test
     @DisplayName("★ tên miền chỉ gồm chữ hex (bad.cafe) KHÔNG được nhận là IP — không tra DNS")
     void ten_mien_chu_hex_khong_phai_ip() {
@@ -61,5 +53,27 @@ class ClientIpTest {
         req.addHeader("CF-Connecting-IP", "2001:db8:5:6:1:2:3:4");
 
         assertThat(ClientIp.khoaGioiHan(req)).isEqualTo("2001:db8:5:6:0:0:0:0/64");
+    }
+
+    @Test
+    @DisplayName("★ KHÔNG qua tunnel mà mang CF-Connecting-IP / X-Forwarded-For giả → bỏ qua, đếm theo địa chỉ thật")
+    void ngoai_tunnel_khong_tin_header() {
+        var req = new MockHttpServletRequest();
+        req.setRemoteAddr("198.51.100.20");
+        req.addHeader("CF-Connecting-IP", "203.0.113.99");
+        req.addHeader("X-Forwarded-For", "203.0.113.98");
+
+        assertThat(ClientIp.cua(req)).isEqualTo("198.51.100.20");
+        assertThat(ClientIp.khoaGioiHan(req)).isEqualTo("198.51.100.20");
+    }
+
+    @Test
+    @DisplayName("qua tunnel, không có CF-Connecting-IP, X-Forwarded-For nhiều chặng → lấy chặng CUỐI, không lấy chặng client tự khai")
+    void xff_nhieu_chang_lay_chang_cuoi() {
+        var req = new MockHttpServletRequest();
+        req.setRemoteAddr("127.0.0.1");
+        req.addHeader("X-Forwarded-For", "203.0.113.98, 198.51.100.7");
+
+        assertThat(ClientIp.cua(req)).isEqualTo("198.51.100.7");
     }
 }

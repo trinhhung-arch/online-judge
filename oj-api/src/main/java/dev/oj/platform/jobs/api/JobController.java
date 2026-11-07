@@ -13,19 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-
-/**
- * Theo dõi job nền — Quy tắc 5 của {@code frplan.md}.
- *
- * <h2>Vì sao polling REST chứ không phải SSE</h2>
- * {@code oj-api/CLAUDE.md} mục 4 nói rõ: <b>chỉ hai trang có SSE</b> — chi tiết bài nộp và
- * bảng xếp hạng contest — và <i>"không thêm chỗ thứ ba mà không hỏi"</i>. Một job nạp
- * testdata chạy vài phút với tiến độ đổi vài giây một lần; polling 2 giây là đủ, và nó không
- * tiêu một kết nối thường trực nào trong ngân sách 1000 kết nối SSE.
- *
- * <p>Đây cũng là một quyết định về sự đơn giản: fallback REST là bắt buộc với SSE, nên chọn
- * SSE ở đây là viết hai đường cho một trang mà một đường đã đủ.
- */
 @RestController
 @RequestMapping("/api/v1/jobs")
 public class JobController {
@@ -46,10 +33,6 @@ public class JobController {
         return JobResponse.tu(getJob.thucHien(jobId));
     }
 
-    /**
-     * Bất biến #8 — danh sách nào cũng có {@code LIMIT}. Xin 1000 thì trả {@code max-size},
-     * không trả lỗi ({@code oj-api/CLAUDE.md} mục 3).
-     */
     @GetMapping
     public CursorPage<JobResponse> cuaToi(@RequestParam(required = false) String cursor,
                                           @RequestParam(required = false) Integer size) {

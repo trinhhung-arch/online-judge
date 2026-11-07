@@ -7,13 +7,6 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/**
- * ★ Mắt xích từng thiếu: worker lấy testdata bằng đường nào.
- *
- * <p>Không có lớp này thì hiện thực {@code TestdataSource} duy nhất đọc một thư mục cục bộ mà
- * không gì đổ dữ liệu vào — mọi bài nộp trả {@code IE} ngay khi testdata được nạp qua API.
- * Xem javadoc của {@link ApiTestdataSource}.
- */
 class ApiTestdataSourceTest {
 
     private static final String SHA = "a".repeat(64);
@@ -27,16 +20,6 @@ class ApiTestdataSourceTest {
         assertThat(nguon.fetch(SHA)).isEqualTo(noiDung);
     }
 
-    /**
-     * ★ Hỏng phải thành {@link TestdataUnavailableException}, không phải một
-     * {@code JudgeApiException} lọt lên trên.
-     *
-     * <p>Khác biệt không phải hình thức: {@code JudgeLoop} bắt {@code JudgeApiException} và
-     * hiểu là <i>"API đang xuống"</i> — nó ngủ rồi thử xin việc lại, và <b>lượt chấm hiện tại
-     * biến mất mà API không được báo gì</b>, phải chờ hết lease 120 giây. Còn
-     * {@code TestdataUnavailableException} đi tới {@code JobExecutor} và thành {@code IE},
-     * nên API cho chấm lại ngay (FR-SUB-12).
-     */
     @Test
     @DisplayName("★ API hỏng → TestdataUnavailableException, để JobExecutor trả IE")
     void hong_thi_thanh_testdata_unavailable() {
@@ -46,11 +29,6 @@ class ApiTestdataSourceTest {
                 .isThrownBy(() -> nguon.fetch(SHA));
     }
 
-    /**
-     * ★ Bất biến #1 và #9: thông báo lỗi không được mang nội dung testcase, và không được
-     * mang cả hash đầy đủ — một hash đầy đủ trong log là một khoá tải về, và log thì đi xa
-     * hơn người ta tưởng.
-     */
     @Test
     @DisplayName("★ thông báo lỗi không chứa nội dung, và chỉ chứa 8 ký tự đầu của hash")
     void thong_bao_loi_khong_ro_ri() {
@@ -63,8 +41,6 @@ class ApiTestdataSourceTest {
                     assertThat(e.getMessage()).contains(SHA.substring(0, 8));
                 });
     }
-
-    // -------------------------------------------------------------------------
 
     private static JudgeApiClient clientTraVe(byte[] noiDung) {
         return new JudgeApiClient(dev.oj.worker.WorkerFixtures.properties(

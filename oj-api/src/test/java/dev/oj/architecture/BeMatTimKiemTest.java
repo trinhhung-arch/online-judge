@@ -21,41 +21,12 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * ★ robots.txt và sitemap.xml phải cho Google đọc được trang công khai — và chỉ trang công khai.
- *
- * <h2>Lỗi mà file này sinh ra để bắt — đo thật 2026-09-11</h2>
- * Ngày đầu có tên miền, {@code robots.txt} vẫn là bản chép từ DMOJ với {@code Disallow: /api/}.
- * DMOJ dựng trang ở server nên dòng ấy không làm họ mất gì. Ở đây {@code index.html},
- * {@code problem.html}, {@code contests.html} là vỏ rỗng, nội dung nạp qua {@code /api/v1/...}
- * — nên chính dòng ấy chặn nội dung của những trang mà file tự ghi là "cho index". Tệ hơn trang
- * trắng: {@code problem.js} gom tải đề và tải ngôn ngữ vào một {@code Promise.all}, nên chặn
- * {@code /languages} là Googlebot thấy câu "Không tải được đề bài."
- *
- * <p>Không có gì báo lỗi. Người thật dùng trang bình thường; trang chỉ không bao giờ lên Google.
- *
- * <h2>Hai chiều, giữ cả hai</h2>
- * Mở đủ cho trang công khai, chặn đủ cho bề mặt riêng tư. Chiều thứ hai KHÔNG phải bảo mật —
- * robots.txt không chặn ai, quyền thật nằm ở use-case. Nó chỉ để Google khỏi đưa trang riêng tư
- * lên kết quả tìm kiếm.
- *
- * <h2>Giới hạn phải biết</h2>
- * {@link #API_LUC_TAI} là bảng khai tay. Test đỏ khi {@code duong-dan.js} đổi tên một đường trong
- * bảng, nhưng KHÔNG tự thấy một trang vừa thêm lời gọi mới lúc tải. Thêm lời gọi thì sửa ba chỗ:
- * trang, dòng {@code Allow} trong robots.txt, và bảng này.
- *
- * <h2>Ngữ nghĩa so khớp</h2>
- * Như Google (RFC 9309): luật khớp DÀI NHẤT thắng, hoà thì {@code Allow} thắng, {@code *} là chuỗi
- * bất kỳ kể cả dấu {@code /}, {@code $} ở cuối là phải hết URL. Bộ so khớp sai thì mọi ca ở đây vô
- * nghĩa, nên nó có ca kiểm riêng.
- */
 class BeMatTimKiemTest {
 
     private static final Path GOC = Path.of("src/main/resources/static");
 
     private static final String NS_SITEMAP = "http://www.sitemaps.org/schemas/sitemap/0.9";
 
-    /** Một lời gọi mà trang cho index cần lúc tải, kèm chuỗi khai báo nó trong {@code duong-dan.js}. */
     private record LoiGoi(String trang, String khaiBao, String urlMau) {
     }
 
@@ -70,7 +41,6 @@ class BeMatTimKiemTest {
             new LoiGoi("trang-thai.html", "'/api/v1/status'", "/api/v1/status"),
             new LoiGoi("login.html", "'/api/v1/auth/captcha'", "/api/v1/auth/captcha"));
 
-    /** Bề mặt riêng tư. Hai nhóm giữa cố ý CHUNG TIỀN TỐ với đường đã mở — chỗ dễ mở lố nhất. */
     private static final List<String> PHAI_CHAN = List.of(
             "/internal/judge/claim", "/internal/judge/testdata/ab12",
             "/api/v1/me", "/api/v1/me/2fa", "/api/v1/jobs",
@@ -82,7 +52,6 @@ class BeMatTimKiemTest {
             "/bai-nop.html", "/submission.html?id=1", "/ho-so.html", "/quan-tri.html",
             "/ra-de.html", "/nhat-ky.html", "/contest.html?slug=x");
 
-    /** Cho index nhưng không vào được sitemap: cần tham số, Google tới qua liên kết trên trang chủ. */
     private static final Set<String> CAN_THAM_SO = Set.of("problem.html");
 
     @Test
@@ -205,7 +174,6 @@ class BeMatTimKiemTest {
         return ketQua;
     }
 
-    /** Nhóm {@code User-agent: *} của một robots.txt, cộng mọi dòng Sitemap. */
     private record Robots(List<Luat> luat, List<String> sitemaps) {
 
         static Robots doc(Path tep) throws IOException {
@@ -227,7 +195,6 @@ class BeMatTimKiemTest {
                 String giaTri = d.substring(haiCham + 1).trim();
                 switch (khoa) {
                     case "user-agent" -> {
-                        // Nhiều dòng User-agent liền nhau là MỘT nhóm; dòng luật đầu tiên đóng nhóm lại.
                         nhomSao = (dangGhepTenBot && nhomSao) || giaTri.equals("*");
                         dangGhepTenBot = true;
                     }
@@ -270,7 +237,6 @@ class BeMatTimKiemTest {
             return bieuThuc.matcher(url).find();
         }
 
-        /** Dài hơn là cụ thể hơn. Bằng nhau thì Allow thắng — Google chọn luật ít hạn chế hơn. */
         boolean uuTienHon(Luat khac) {
             return mau.length() > khac.mau.length()
                     || (mau.length() == khac.mau.length() && choPhep && !khac.choPhep);

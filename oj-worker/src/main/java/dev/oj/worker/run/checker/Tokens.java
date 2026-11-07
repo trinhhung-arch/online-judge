@@ -2,13 +2,6 @@ package dev.oj.worker.run.checker;
 
 import java.nio.charset.StandardCharsets;
 
-/**
- * Tách token trên mảng byte, không dựng {@code String} trung gian.
- *
- * <p>Token = một dãy byte không phải khoảng trắng. Khoảng trắng lấy đúng định nghĩa của
- * {@code isspace()} trong C — space, tab, CR, LF, form feed, vertical tab — vì đó là thứ
- * chương trình của thí sinh dùng để in.
- */
 final class Tokens {
 
     private final byte[] data;
@@ -20,7 +13,6 @@ final class Tokens {
         this.data = data;
     }
 
-    /** Nhảy tới token kế tiếp. {@code false} khi hết. */
     boolean next() {
         while (position < data.length && isSpace(data[position])) {
             position++;

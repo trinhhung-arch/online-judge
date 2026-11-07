@@ -16,13 +16,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Bốn repository của M6 trên <b>Postgres thật</b> — Bước 6.3, 6.5, 6.11, 6.12.
- *
- * <p>Testcontainers, không H2 ({@code CLAUDE.md} mục 6). Ba trong bốn câu ở đây dùng thứ H2
- * không có: {@code count(*) FILTER (WHERE ...)}, {@code ON CONFLICT DO NOTHING}, và so sánh
- * bộ đôi {@code (occurred_at, id) < (?, ?)}.
- */
 class VanHanhIT extends PostgresIT {
 
     @Autowired
@@ -56,15 +49,6 @@ class VanHanhIT extends PostgresIT {
             assertThat(trangThaiBai(id)).isEqualTo("QUEUED");
         }
 
-        /**
-         * ★ Ca này bảo vệ một thứ dễ mất: rejudge một đề ngay sau một đợt nộp dồn <b>không
-         * được huỷ lượt chấm đang chạy</b> của chính những bài đó.
-         *
-         * <p>Không có {@code ON CONFLICT DO NOTHING}, câu {@code INSERT} sẽ vỡ khoá chính và
-         * cả lô hỏng — hoặc tệ hơn, nếu ai đó "sửa" nó thành {@code DO UPDATE} thì
-         * {@code attempt} của một bài đang được chấm bị ghi đè, và kết quả worker sắp gửi về
-         * bị khoá lạc quan từ chối. Một lượt chấm mất trắng, không có lỗi nào được ghi.
-         */
         @Test
         @DisplayName("★ bài ĐANG trong hàng đợi thì bỏ qua, không đẩy lần hai")
         void bai_dang_trong_hang_doi_thi_bo_qua() {
@@ -100,10 +84,6 @@ class VanHanhIT extends PostgresIT {
             assertThat(rejudge.demBaiCuaDe(PROBLEM_ID)).isEqualTo(3);
         }
 
-        /**
-         * ★ Cái phanh của {@code RejudgeJob} chỉ đúng nếu câu này tách được hai mức ưu tiên.
-         * Xem javadoc {@code RejudgeJob} về việc job tự đạp phanh của chính mình.
-         */
         @Test
         @DisplayName("★ doNhip đếm rejudge riêng, và KHÔNG lấy thời gian chờ của dòng rejudge")
         void do_nhip_tach_theo_uu_tien() {
@@ -153,18 +133,6 @@ class VanHanhIT extends PostgresIT {
             assertThat(t.choLauNhat()).isNull();
         }
 
-        /**
-         * Máy chấm trong seed chưa từng gọi {@code benchmark}, nên {@code last_seen_at} là
-         * {@code NULL} và chúng <b>không</b> được tính là sống. Đó là hành vi đúng: một máy
-         * chưa bao giờ báo danh không phải một máy đang chạy.
-         *
-         * <p><b>Chạm đúng một dòng, không phải cả bảng.</b> Bản trước
-         * {@code UPDATE judge_hosts} không có {@code WHERE} rồi khẳng định kết quả là 1 — tức
-         * nó ngầm kiểm "seed có đúng một máy chấm", một sự thật chẳng liên quan gì tới FR này.
-         * Nên khi seed thêm dòng máy dev, ca này đỏ mà không có lỗi nào thật sự. Thứ cần
-         * chứng minh là {@code mayChamSong} đếm <i>máy vừa báo danh</i>, và điều đó chỉ thấy
-         * được khi có máy báo danh còn máy khác thì không.
-         */
         @Test
         @DisplayName("máy chấm chỉ tính là sống khi last_seen_at nằm trong cửa sổ")
         void may_cham_song() {
@@ -196,8 +164,6 @@ class VanHanhIT extends PostgresIT {
 
             congTac.dat(SystemSettings.NHAN_BAI_NOP, false, ADMIN_ID);
 
-            // Cache 2 giây, nhưng dat() xoá cache — nếu không thì một ADMIN bật bảo trì lúc
-            // 2 giờ sáng phải chờ, và một công tắc phải chờ là một công tắc không dùng được.
             assertThat(congTac.bat(SystemSettings.NHAN_BAI_NOP, true)).isFalse();
         }
 
@@ -225,7 +191,7 @@ class VanHanhIT extends PostgresIT {
                     null, 2);
             assertThat(trang1.items()).hasSize(2);
             assertThat(trang1.nextCursor()).isNotNull();
-            assertThat(trang1.items().get(0).entityId()).isEqualTo(4L);   // mới nhất trước
+            assertThat(trang1.items().get(0).entityId()).isEqualTo(4L);
 
             var trang2 = docNhatKy.tim(new AuditLogReader.Filter(null, "TEST_ACTION", null, null),
                     trang1.nextCursor(), 2);
@@ -233,11 +199,6 @@ class VanHanhIT extends PostgresIT {
                     .containsExactly(2L, 1L);
         }
 
-        /**
-         * ★ Năm dòng ghi trong cùng một mili giây là chuyện thường — một thao tác quản trị ghi
-         * ba dòng trong cùng một transaction đều mang {@code now()} giống hệt nhau. Con trỏ
-         * chỉ mang {@code id} sẽ bỏ sót dòng ở đúng tình huống đó.
-         */
         @Test
         @DisplayName("★ phân trang KHÔNG bỏ sót dòng khi nhiều bản ghi trùng mốc thời gian")
         void trung_moc_thoi_gian_khong_bo_sot() {
@@ -263,19 +224,6 @@ class VanHanhIT extends PostgresIT {
                     .containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L);
         }
 
-        /**
-         * ★ Ca hồi quy cho một lỗi thật, tìm ra bởi chính bộ test này chạy cùng các lớp khác.
-         *
-         * <p>Bản đầu của con trỏ mã hoá thời gian bằng {@code toEpochMilli()}, còn
-         * {@code timestamptz} có độ chính xác <b>micro</b> giây. Cắt xuống mili làm con trỏ
-         * lùi tới 999µs, và mệnh đề {@code (occurred_at, id) < (:at, :id)} loại luôn những
-         * dòng nằm trong cùng mili giây nhưng ở micro giây thấp hơn — tức là <b>trang hai
-         * thiếu dòng</b>.
-         *
-         * <p>Ca {@code trung_moc_thoi_gian_khong_bo_sot} ở trên KHÔNG bắt được nó: mười dòng ở
-         * đó trùng nhau tuyệt đối, nên cắt bao nhiêu cũng vô hại. Phải là <i>cùng mili, khác
-         * micro</i> — đúng thứ xảy ra khi một thao tác quản trị ghi vài dòng liên tiếp.
-         */
         @Test
         @DisplayName("★ cùng MILI giây nhưng khác MICRO giây thì cũng không bỏ sót")
         void cung_mili_khac_micro_khong_bo_sot() {
@@ -315,9 +263,6 @@ class VanHanhIT extends PostgresIT {
         }
     }
 
-    // -------------------------------------------------------------------------
-
-    /** Một bài nộp {@code DONE}, chưa nằm trong hàng đợi. */
     private long baiDaCham() {
         jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) VALUES "
                 + "(:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")

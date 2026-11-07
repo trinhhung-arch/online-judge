@@ -14,29 +14,6 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
-/**
- * AES-256-GCM. Chỉ JDK, không thư viện nào — cùng lựa chọn với {@code Jwt} và {@link
- * dev.oj.identity.domain.Totp}.
- *
- * <h2>★ GCM chứ không phải CBC, và lý do không phải là tốc độ</h2>
- * GCM là AEAD: nó vừa giấu nội dung vừa <b>phát hiện sửa đổi</b>. Với CBC, ai sửa được một
- * byte trong database sẽ đổi được bản rõ theo cách đoán trước được mà không ai biết. Với
- * GCM, mọi sửa đổi làm {@code doFinal} ném — và một bí mật TOTP bị sửa lặng lẽ nghĩa là
- * người quản trị không bao giờ đăng nhập lại được mà không ai hiểu vì sao.
- *
- * <h2>★ IV NGẪU NHIÊN MỖI LẦN, và với GCM đây là điều kiện sống còn</h2>
- * Dùng lại một cặp (khoá, IV) trong GCM không chỉ làm lộ quan hệ giữa hai bản rõ như CBC —
- * nó làm <b>lộ khoá xác thực</b>, tức là kẻ tấn công tự tạo được bản mã hợp lệ. 12 byte từ
- * {@link SecureRandom} mỗi lần gọi, và IV đi kèm bản mã vì nó không cần bí mật.
- *
- * <h2>Khoá lấy từ đâu</h2>
- * {@code SHA-256(OJ_TOTP_KEY)} — AES-256 cần đúng 32 byte, mà biến môi trường là chuỗi người
- * gõ. Băm cho ra đúng độ dài từ một chuỗi bất kỳ.
- *
- * <p><b>Khoá RIÊNG, không dùng chung với {@code OJ_JWT_SECRET}.</b> Một khoá một việc: xoay
- * khoá ký token là việc nên làm định kỳ, và nếu hai thứ dùng chung thì mỗi lần xoay sẽ làm
- * hỏng đăng ký 2FA của tất cả mọi người — biến một thao tác vệ sinh thành một sự cố.
- */
 @Component
 public class AesGcmSecretCipher implements SecretCipher {
 
@@ -82,8 +59,6 @@ public class AesGcmSecretCipher implements SecretCipher {
             byte[] ro = cipher.doFinal(tat, IV_BYTE, tat.length - IV_BYTE);
             return new String(ro, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
-            // KHÔNG kèm bản mã vào thông báo (bất biến #9). Nguyên nhân gần như luôn là
-            // OJ_TOTP_KEY đã đổi — và lúc ấy mọi đăng ký 2FA cũ đều không giải mã được.
             throw new IllegalStateException(
                     "Không giải mã được bí mật TOTP. OJ_TOTP_KEY có bị đổi không?", e);
         }

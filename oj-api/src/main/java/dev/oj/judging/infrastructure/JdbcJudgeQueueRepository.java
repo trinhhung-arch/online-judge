@@ -9,64 +9,15 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Hàng đợi bền. Truy vấn 1c · 2 · 3a · 3' · 4 · 12 của {@code docs/sql/duong_nong.sql}.
- *
- * <h2>Hai pool, như {@code JdbcSubmissionRepository} — vì cùng một lý do</h2>
- * <pre>
- *   POOL   PHƯƠNG THỨC                                      TRANSACTION CỦA
- *   app    enqueue                                          @Transactional (nộp bài)
- *   judge  claim · releaseWithOptimisticLock · reapExpired   @JudgeTransactional
- *          · exhaustedJobs · retryIe · queueDepth
- * </pre>
- *
- * <p>{@code enqueue} <b>phải</b> chạy trong chính transaction nộp bài. Đẩy nó sang pool
- * {@code judge} là tạo một hàng đợi trỏ tới một {@code submission} có thể không bao giờ được
- * commit — worker sẽ claim một bài không tồn tại.
- *
- * <p>⚠️ Ở M6, {@code RejudgeJob} cũng gọi {@code enqueue}, nhưng dưới
- * {@code @JudgeTransactional}. Lúc đó câu này sẽ chạy ngoài transaction ấy. Với rejudge thì
- * hệ quả nhẹ (một hàng thừa trong hàng đợi, verdict cũ vẫn nguyên) nhưng <b>vẫn phải xử lý</b>:
- * hoặc tách thành một phương thức riêng dùng {@code judgeJdbc}, hoặc cho {@code RejudgeJob}
- * chạy trên pool {@code app}. Ghi ở đây để Bước 6.3 không phải phát hiện lại.
- */
 @Repository
 public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
-    // ---- truy vấn 1c ----
     private static final String ENQUEUE = """
             INSERT INTO judge_queue (submission_id, priority, attempt)
             VALUES (:submissionId, :priority, 0)
             ON CONFLICT (submission_id) DO NOTHING
             """;
 
-    /**
-     * Truy vấn 2. <b>{@code FOR UPDATE SKIP LOCKED} là thứ làm cho N worker không bao giờ
-     * nhận cùng một bài</b>, mà không cần khoá phân tán nào. Bỏ nó đi thì các worker xếp hàng
-     * chờ nhau và throughput sập về một luồng; tách thành {@code SELECT} rồi {@code UPDATE}
-     * thì mở ra một cửa sổ để hai worker cùng thấy một dòng.
-     *
-     * <p>{@code attempt} tăng ở <b>đây và chỉ ở đây</b>. Chính điều đó vô hiệu hoá kết quả
-     * trả về muộn của một worker đã bị reaper thu hồi — không cần thêm cơ chế nào.
-     *
-     * <p>{@code claimed_by_host} phân giải bằng sub-select: worker gửi tên máy và không biết
-     * {@code judge_hosts.id} tồn tại (bất biến #3). Máy chưa đăng ký thì cột nhận NULL và
-     * worker vẫn chấm được ngay — đó là S2 ("worker mới join: 0 thao tác phía API").
-     *
-     * <p><b>{@code make_interval(secs => :leaseSeconds)}, không phải
-     * {@code (:leaseSeconds || ' seconds')::interval}.</b> Bản sau nhận thẳng số nguyên thay
-     * vì đi vòng qua chuỗi. Bản trước dựa vào việc Postgres tự phân giải
-     * {@code int4 || unknown} thành {@code anynonarray || text}, và với một tham số bind thì
-     * phép phân giải đó phụ thuộc kiểu mà driver gửi lên. {@code make_interval} không có chỗ
-     * nào để đoán. Đo trên Postgres 16 (2026-09-08): cả hai đều {@code PREPARE} được, nhưng
-     * {@code pg_prepared_statements.parameter_types} cho {@code text} ở bản cũ và
-     * {@code double precision} ở bản này — giá trị lease đi qua đường số học thay vì đường
-     * nối chuỗi.
-     *
-     * <p>{@code docs/sql/duong_nong.sql} <b>từng</b> viết dạng nối chuỗi; nó đã được sửa theo
-     * câu này ngày 2026-09-08, nên hai bên hiện khớp nhau. Nếu bạn thấy chúng lệch trở lại
-     * thì code là bản đúng — nó là bản đã chạy qua test.
-     */
     private static final String CLAIM = """
             WITH picked AS (
                 SELECT submission_id
@@ -86,14 +37,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING q.submission_id, q.attempt
             """;
 
-    /**
-     * Không có trong 12 truy vấn của {@code duong_nong.sql} — file đó dừng ở chỗ claim trả về
-     * {@code (submission_id, attempt)}, nhưng để dựng được một {@code JudgeJobDto} thì còn
-     * thiếu mã nguồn và thông số ngôn ngữ. Đây là câu bù vào chỗ trống đó.
-     *
-     * <p>Gộp cả hai thành một {@code JOIN} thay vì hai lượt đọc: pool {@code judge} chỉ có 6
-     * connection, và mỗi lượt round-trip thừa là một slot bị giữ lâu hơn cần thiết.
-     */
     private static final String CLAIM_PAYLOAD = """
             SELECT s.id AS submission_id, s.problem_id, s.testdata_version,
                    s.source_sha256, b.content AS source_content,
@@ -106,18 +49,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
              WHERE s.id = :submissionId
             """;
 
-    /**
-     * ★ Truy vấn 3a — <b>khoá lạc quan</b>, câu lệnh đầu tiên của transaction ghi verdict.
-     *
-     * <p>Mở rộng so với bản trong {@code duong_nong.sql}: thêm {@code USING submissions} để
-     * lấy luôn {@code language_id} và {@code testdata_version}. Hai cột đó là bắt buộc cho
-     * {@code INSERT judge_runs} ngay sau đây, mà bản gốc không có nguồn nào cung cấp — giữ
-     * nguyên chữ thì phải thêm một câu {@code SELECT} vào đúng transaction ngắn nhất và nóng
-     * nhất của hệ thống.
-     *
-     * <p>0 dòng nghĩa là kết quả trùng, hoặc kết quả của một attempt đã bị reaper thu hồi.
-     * Bỏ qua im lặng — đó là cơ chế, không phải lỗi.
-     */
     private static final String RELEASE_WITH_OPTIMISTIC_LOCK = """
             DELETE FROM judge_queue q
              USING submissions s
@@ -127,13 +58,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING q.submission_id, q.attempt, s.language_id, s.testdata_version
             """;
 
-    /**
-     * Truy vấn 3' — FR-SUB-12. Điều kiện {@code attempt} khiến câu này mang luôn tính chất của
-     * khoá lạc quan, nên nhánh IE rẽ trước {@link #releaseWithOptimisticLock} mà không mất an toàn.
-     *
-     * <p>{@code enqueued_at = now()} đẩy bài xuống cuối hàng đợi: một bài vừa gây IE không nên
-     * chen lên trước những bài đang chờ, nhất là khi nguyên nhân IE có thể lặp lại.
-     */
     private static final String RETRY_IE = """
             UPDATE judge_queue
                SET claimed_at      = NULL,
@@ -147,7 +71,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING submission_id
             """;
 
-    // ---- truy vấn 4. KHÔNG tăng attempt (lần claim kế tiếp mới tăng). V16: chỉ bài CÒN lượt ----
     private static final String REAP_EXPIRED = """
             UPDATE judge_queue
                SET claimed_at      = NULL,
@@ -160,7 +83,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING submission_id
             """;
 
-    // ---- truy vấn 4' (V16, ADR 019): hết lease mà hết lượt — chỉ đọc, bỏ cuộc từng bài ----
     private static final String EXHAUSTED = """
             SELECT submission_id, attempt, claimed_at
               FROM judge_queue
@@ -170,14 +92,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
              ORDER BY submission_id
             """;
 
-    /**
-     * Truy vấn 12 — đếm trên bảng vài trăm dòng, <b>không bao giờ {@code COUNT(*)} trên
-     * {@code submissions}</b> (bảng đó có hàng triệu dòng).
-     *
-     * <p>Trả về {@code min(enqueued_at)} thay vì {@code oldest_wait_ms} như bản trong tài
-     * liệu: {@code QueueStats} mang một {@link java.time.Instant}, và để tầng trên tự tính
-     * khoảng cách bằng {@code Clock} của ứng dụng thì nó test được mà không cần DB.
-     */
     private static final String QUEUE_DEPTH = """
             SELECT count(*) FILTER (WHERE claimed_at IS NULL)     AS waiting,
                    count(*) FILTER (WHERE claimed_at IS NOT NULL) AS claimed,
@@ -196,7 +110,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public void enqueue(long submissionId, int priority) {
-        // POOL app — cùng transaction với INSERT submissions. Xem cảnh báo ở javadoc lớp.
         appJdbc.sql(ENQUEUE)
                 .param("submissionId", submissionId)
                 .param("priority", priority)
@@ -205,14 +118,13 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public Optional<ClaimedJob> claim(String hostName, int leaseSeconds) {
-        // POOL judge — @JudgeTransactional. Hai câu, một transaction.
         Optional<long[]> picked = judgeJdbc.sql(CLAIM)
                 .param("hostName", hostName)
                 .param("leaseSeconds", leaseSeconds)
                 .query((rs, n) -> new long[]{rs.getLong("submission_id"), rs.getInt("attempt")})
                 .optional();
         if (picked.isEmpty()) {
-            return Optional.empty();     // hàng đợi rỗng -> 204
+            return Optional.empty();
         }
         long submissionId = picked.get()[0];
         int attempt = (int) picked.get()[1];
@@ -224,7 +136,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public Optional<ReleasedSubmission> releaseWithOptimisticLock(long submissionId, int attempt) {
-        // POOL judge — câu lệnh ĐẦU TIÊN của transaction ghi verdict.
         return judgeJdbc.sql(RELEASE_WITH_OPTIMISTIC_LOCK)
                 .param("submissionId", submissionId)
                 .param("attempt", attempt)
@@ -238,7 +149,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public List<Long> reapExpired(int maxReaps) {
-        // POOL judge — transaction của reaper, cùng transaction với markQueued().
         return judgeJdbc.sql(REAP_EXPIRED)
                 .param("maxReaps", maxReaps)
                 .query(Long.class)
@@ -247,7 +157,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public List<ExhaustedJob> exhaustedJobs(int maxReaps) {
-        // POOL judge — chỉ đọc, ngoài transaction: mỗi bài bỏ cuộc có transaction riêng.
         return judgeJdbc.sql(EXHAUSTED).param("maxReaps", maxReaps)
                 .query((rs, n) -> new ExhaustedJob(rs.getLong("submission_id"),
                         rs.getInt("attempt"), rs.getTimestamp("claimed_at").toInstant()))
@@ -256,7 +165,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public boolean retryIe(long submissionId, int attempt, int maxRetries) {
-        // POOL judge — rẽ TRƯỚC khoá lạc quan.
         return judgeJdbc.sql(RETRY_IE)
                 .param("submissionId", submissionId)
                 .param("attempt", attempt)
@@ -268,7 +176,6 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
 
     @Override
     public QueueStats queueDepth() {
-        // POOL judge — trang trạng thái công khai đọc cùng nguồn với đường verdict.
         return judgeJdbc.sql(QUEUE_DEPTH)
                 .query((rs, n) -> {
                     var oldest = rs.getTimestamp("oldest_enqueued_at");

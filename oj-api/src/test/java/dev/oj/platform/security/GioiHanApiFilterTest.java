@@ -17,10 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Bộ lọc này đứng trước MỌI endpoint công khai, nên hai hướng hỏng của nó đều tệ như nhau: chặn
- * nhầm là cả site 429, không chặn là trần không tồn tại. Mỗi test dưới đây giữ một hướng.
- */
 class GioiHanApiFilterTest {
 
     private final List<String> khoaDaDem = new ArrayList<>();
@@ -93,7 +89,7 @@ class GioiHanApiFilterTest {
     void an_danh_thi_dem_theo_ip() throws Exception {
         request.addHeader("CF-Connecting-IP", "203.0.113.9");
         luotTraVe = 500;
-        loc(1, 600).doFilter(request, response, chain);   // trần người = 1, nhưng khách đi theo xô IP = 600
+        loc(1, 600).doFilter(request, response, chain);
         assertThat(khoaDaDem).containsExactly("ip:203.0.113.9");
         assertThat(daQua).isTrue();
     }
@@ -116,12 +112,6 @@ class GioiHanApiFilterTest {
         assertThat(daQua).isTrue();
     }
 
-    /**
-     * Phạm vi giờ do servlet container quyết theo mẫu URL, nên thứ kiểm được ở tầng unit là
-     * <b>bản đăng ký</b>: đúng một mẫu, và đứng sau {@link JwtAuthFilter}. Hành vi thật trên
-     * đường dẫn lạ ({@code ;x}, {@code %61}) và việc {@code /internal/**} không bị đếm nằm ở
-     * {@code GioiHanApiHttpIT} — chỉ Tomcat thật mới chuẩn hoá đường dẫn.
-     */
     @Test
     @DisplayName("★ chỉ đăng ký cho /api/v1/* — /internal/** và file tĩnh nằm ngoài mẫu")
     void chi_dang_ky_cho_api_v1() {
