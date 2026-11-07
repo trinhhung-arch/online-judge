@@ -59,10 +59,15 @@ public class ReapStaleJobsUseCase {
     private int boCuoc() {
         int daGhi = 0;
         for (ExhaustedJob bai : queue.exhaustedJobs(config.maxReaps())) {
-            RecordJudgeResultUseCase.Outcome kq = verdicts.boCuoc(bai.submissionId(),
-                    bai.attempt(), config.maxReaps() + 1, bai.claimedAt());
-            if (kq == RecordJudgeResultUseCase.Outcome.RECORDED) {
-                daGhi++;
+            try {
+                RecordJudgeResultUseCase.Outcome kq = verdicts.boCuoc(bai.submissionId(),
+                        bai.attempt(), config.maxReaps() + 1, bai.claimedAt());
+                if (kq == RecordJudgeResultUseCase.Outcome.RECORDED) {
+                    daGhi++;
+                }
+            } catch (RuntimeException e) {
+                log.error("Bỏ cuộc submission {} attempt {} hỏng — các bài khác vẫn được xử lý, "
+                        + "bài này thử lại ở chu kỳ sau", bai.submissionId(), bai.attempt(), e);
             }
         }
         return daGhi;
