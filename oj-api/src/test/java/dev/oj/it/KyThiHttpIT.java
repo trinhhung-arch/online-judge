@@ -37,8 +37,13 @@ class KyThiHttpIT extends HttpIT {
     private final Instant bayGio = Instant.now();
 
     private long kyThi(Instant batDau, Instant ketThuc, Instant dongBang) {
+        return kyThi(batDau, ketThuc, dongBang, true);
+    }
+
+    private long kyThi(Instant batDau, Instant ketThuc, Instant dongBang, boolean batBuocDangKy) {
         long id = contests.tao(new ContestRepository.ContestMoi("http-" + System.nanoTime(),
-                "Thi thử", "ICPC", batDau, ketThuc, dongBang, 20, true, true, ADMIN_ID));
+                "Thi thử", "ICPC", batDau, ketThuc, dongBang, 20, batBuocDangKy, true,
+                ADMIN_ID));
         soanKyThi.themDe(id, PROBLEM_ID, "A", 100, ADMIN_ID, true);
         return id;
     }
@@ -69,6 +74,32 @@ class KyThiHttpIT extends HttpIT {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(jdbc.sql("SELECT count(*) FROM submissions").query(Integer.class).single())
                 .isZero();
+    }
+
+    @Test
+    @DisplayName("★ DK-06 · kỳ thi không bắt buộc đăng ký mà người dùng vẫn bấm đăng ký → 204, vô hại")
+    void dk06_dang_ky_khi_khong_bat_buoc() {
+        long id = kyThi(bayGio.plus(Duration.ofHours(1)), bayGio.plus(Duration.ofHours(4)), null,
+                false);
+
+        var res = goi(http.post().uri("/api/v1/contests/{id}/register", id)
+                .header("Authorization", bearerDev()));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(contests.daDangKy(id, USER_ID)).isTrue();
+    }
+
+    @Test
+    @DisplayName("★ KG-06 · kỳ thi không bắt buộc đăng ký, đang chạy: ai đăng nhập cũng xem được đề mà không cần đăng ký")
+    void kg06_khong_bat_buoc_thi_ai_dang_nhap_cung_xem_duoc() {
+        long id = kyThi(bayGio.minus(Duration.ofHours(1)), bayGio.plus(Duration.ofHours(2)), null,
+                false);
+
+        var res = goi(http.get().uri("/api/v1/problems/{code}", "A-PLUS-B")
+                .header("Authorization", bearerDev()));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(contests.daDangKy(id, USER_ID)).as("xem được dù chưa hề đăng ký").isFalse();
     }
 
     @Test

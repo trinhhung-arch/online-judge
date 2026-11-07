@@ -1,6 +1,7 @@
 package dev.oj.it;
 
 import dev.oj.contests.api.ContestResponses;
+import dev.oj.contests.application.FreezeStandingsScheduler;
 import dev.oj.contests.application.RebuildStandingsJob;
 import dev.oj.contests.application.StandingsDriftCheckJob;
 import dev.oj.contests.application.StandingsEventBus;
@@ -44,6 +45,7 @@ class BangXepHangKyThiIT extends PostgresIT {
     @Autowired StandingsEventBus bus;
     @Autowired StandingsDriftCheckJob drift;
     @Autowired RebuildStandingsJob rebuild;
+    @Autowired FreezeStandingsScheduler freeze;
     @Autowired AppProperties props;
 
     private final Instant bayGio = Instant.now();
@@ -201,6 +203,21 @@ class BangXepHangKyThiIT extends PostgresIT {
         assertThat(bang.cuaToi().tongDiem()).as("không lộ điểm mới của chính mình").isEqualTo(1);
         assertThat(bang.hangCuaToi()).isEqualTo(2);
         assertThat(standings.hang(id, USER_ID, false)).as("bảng thật đã khác").hasValue(1);
+    }
+
+    @Test
+    @DisplayName("★ DB-14 · kỳ thi không đặt freeze_at: tới phút cuối vẫn không đóng băng, không có bản chụp")
+    void db14_khong_dat_gio_dong_bang() {
+        long id = kyThi(bayGio.minus(Duration.ofHours(2)), bayGio.plus(Duration.ofMinutes(1)), null);
+        song(id, USER_ID, 2, 600, bayGio.minus(Duration.ofHours(1)));
+
+        freeze.nhip();
+
+        assertThat(jdbc.sql("SELECT count(*) FROM contest_standings_frozen WHERE contest_id = :c")
+                .param("c", id).query(Integer.class).single()).isZero();
+        var bang = getStandings.thucHien(id, DEV);
+        assertThat(bang.dongBang()).isFalse();
+        assertThat(bang.cuaToi().tongDiem()).isEqualTo(2);
     }
 
     @Test

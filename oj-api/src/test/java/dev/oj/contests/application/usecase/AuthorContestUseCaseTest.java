@@ -91,6 +91,34 @@ class AuthorContestUseCaseTest {
         assertThat(soan.loiGoi).isEmpty();
     }
 
+    @Test
+    @DisplayName("★ AT-10 · nhãn A · Z · AA · ZZ được; a · AAA · 1 · rỗng → 400 contest.nhan_khong_hop_le")
+    void at10_nhan_de() {
+        var chu = useCase(new CurrentUser(CHU, "setter", Role.SETTER));
+        for (String nhan : List.of("A", "Z", "AA", "ZZ")) {
+            chu.themDe(KY_CUA_CHU, 1L, nhan, 100);
+        }
+
+        for (String nhan : List.of("a", "AAA", "1", "")) {
+            assertThatThrownBy(() -> chu.themDe(KY_CUA_CHU, 1L, nhan, 100))
+                    .as("nhãn '%s'", nhan)
+                    .hasFieldOrPropertyWithValue("code", "contest.nhan_khong_hop_le");
+        }
+        assertThat(soan.loiGoi).as("chỉ 4 nhãn hợp lệ xuống tới SQL").hasSize(4);
+    }
+
+    @Test
+    @DisplayName("★ AT-11 · điểm của đề 0 → 400 contest.diem_khong_hop_le; 1 thì được")
+    void at11_diem_de() {
+        var chu = useCase(new CurrentUser(CHU, "setter", Role.SETTER));
+
+        assertThatThrownBy(() -> chu.themDe(KY_CUA_CHU, 1L, "A", 0))
+                .hasFieldOrPropertyWithValue("code", "contest.diem_khong_hop_le");
+        chu.themDe(KY_CUA_CHU, 1L, "A", 1);
+
+        assertThat(soan.loiGoi).hasSize(1);
+    }
+
     private static AuthorProblemUseCase.Command lenhDe() {
         return new AuthorProblemUseCase.Command("DE-MOI", "Đề mới", "x", 1000, 262_144,
                 dev.oj.contract.CheckerType.TOKEN, null,
