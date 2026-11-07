@@ -63,6 +63,18 @@ class DangKyVaCongBoTest {
     }
 
     @Test
+    @DisplayName("DK-04 · đăng ký kỳ thi không tồn tại → 404 contest.khong_tim_thay, không ghi gì")
+    void dk04_ky_thi_khong_ton_tai() {
+        assertThatThrownBy(() -> dangKyLuc(BAT_DAU.minus(Duration.ofDays(1))).thucHien(KY_THI + 1))
+                .isInstanceOf(ContestsException.class)
+                .hasFieldOrPropertyWithValue("kind", DomainException.Kind.NOT_FOUND)
+                .hasFieldOrPropertyWithValue("code", "contest.khong_tim_thay");
+
+        assertThat(kyThi.loiGoi).isEmpty();
+        assertThat(audit).isEmpty();
+    }
+
+    @Test
     @DisplayName("★ DB-09 · công bố lúc ends_at − 1s → 409 contest.chua_ket_thuc, không đổi gì")
     void db09_cong_bo_truoc_gio() {
         assertThatThrownBy(() -> congBoLuc(KET_THUC.minus(MOT_GIAY)).thucHien(KY_THI))
@@ -116,7 +128,8 @@ class DangKyVaCongBoTest {
         @Override public List<DeCuaContest> deCua(long contestId) { throw chuaCan(); }
         @Override public boolean daDangKy(long contestId, long userId) { throw chuaCan(); }
         @Override public List<Contest> danhSach(Long sauId, int gioiHan) { throw chuaCan(); }
-        @Override public List<Contest> canCapNhat(Instant t, Duration d) { throw chuaCan(); }
+        @Override public List<Contest> canCapNhat(Instant t) { throw chuaCan(); }
+        @Override public void chotBangXepHang(long c, Instant l) { throw chuaCan(); }
         @Override public List<Contest> canDongBang(Instant bayGio) { throw chuaCan(); }
     }
 

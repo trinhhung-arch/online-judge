@@ -49,6 +49,13 @@ public class JdbcJudgingQueries implements JudgingQueries {
              LIMIT :gioiHan
             """;
 
+    private static final String CON_BAI_CHO_CHAM = """
+            SELECT EXISTS (SELECT 1
+                             FROM judge_queue q
+                             JOIN submissions s ON s.id = q.submission_id
+                            WHERE s.contest_id = :contestId)
+            """;
+
     private static final RowMapper<ScoredSubmission> MAPPER = (rs, i) -> new ScoredSubmission(
             rs.getLong("id"),
             rs.getLong("user_id"),
@@ -83,6 +90,14 @@ public class JdbcJudgingQueries implements JudgingQueries {
                 .param("gioiHan", gioiHan)
                 .query(MAPPER)
                 .list();
+    }
+
+    @Override
+    public boolean conBaiChoChamTrongContest(long contestId) {
+        return Boolean.TRUE.equals(jdbc.sql(CON_BAI_CHO_CHAM)
+                .param("contestId", contestId)
+                .query(Boolean.class)
+                .single());
     }
 
     @Override

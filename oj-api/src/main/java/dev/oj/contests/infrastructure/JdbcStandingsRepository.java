@@ -64,32 +64,37 @@ public class JdbcStandingsRepository implements StandingsRepository {
             """;
 
     private static final String DA_CHUP = """
-            SELECT EXISTS (SELECT 1 FROM contest_standings_frozen WHERE contest_id = :contestId)
+            SELECT EXISTS (SELECT 1 FROM contests
+                            WHERE id = :contestId AND frozen_captured_at IS NOT NULL)
             """;
 
     private static final String CHUP_TONG = """
             INSERT INTO contest_standings_frozen
                 (contest_id, user_id, total_score, penalty_seconds, solved_count, last_scoring_at)
-            SELECT contest_id, user_id, total_score, penalty_seconds, solved_count, last_scoring_at
-              FROM contest_standings
-             WHERE contest_id = :contestId
+            VALUES (:contestId, :userId, :tongDiem, :penalty, :soBaiDat, :lanCuoi)
             ON CONFLICT (contest_id, user_id) DO NOTHING
             """;
 
     private static final String CHUP_THEO_DE = """
             INSERT INTO contest_problem_standings_frozen
                 (contest_id, user_id, problem_id, best_score, attempts_before_score,
-                 first_solved_at, pending_after_freeze)
-            SELECT ps.contest_id, ps.user_id, ps.problem_id, ps.best_score,
-                   ps.attempts_before_score, ps.first_solved_at,
-                   LEAST((SELECT count(*) FROM submissions s
-                           WHERE s.contest_id = ps.contest_id
-                             AND s.user_id = ps.user_id
-                             AND s.problem_id = ps.problem_id
-                             AND s.created_at >= :freezeAt), 32767)
-              FROM contest_problem_standings ps
-             WHERE ps.contest_id = :contestId
+                 first_solved_at)
+            VALUES (:contestId, :userId, :problemId, :bestScore, :attempts, :firstSolvedAt)
             ON CONFLICT (contest_id, user_id, problem_id) DO NOTHING
+            """;
+
+    private static final String DEM_BAI_SAU_DONG_BANG = """
+            UPDATE contest_problem_standings_frozen f
+               SET pending_after_freeze = LEAST((SELECT count(*) FROM submissions s
+                                                  WHERE s.contest_id = f.contest_id
+                                                    AND s.user_id = f.user_id
+                                                    AND s.problem_id = f.problem_id
+                                                    AND s.created_at >= :freezeAt), 32767)
+             WHERE f.contest_id = :contestId
+            """;
+
+    private static final String DANH_DAU_DA_CHUP = """
+            UPDATE contests SET frozen_captured_at = :luc WHERE id = :contestId
             """;
 
     private static final String XOA_TONG = """
@@ -201,12 +206,36 @@ public class JdbcStandingsRepository implements StandingsRepository {
     }
 
     @Override
-    public void chupDongBang(long contestId, Instant freezeAt) {
-        jdbc.sql(CHUP_TONG).param("contestId", contestId).update();
+    public void ghiTongKetDongBang(long contestId, long userId, TongKet tong, int penaltyGiay) {
+        jdbc.sql(CHUP_TONG)
+                .param("contestId", contestId)
+                .param("userId", userId)
+                .param("tongDiem", tong.tongDiem())
+                .param("penalty", penaltyGiay)
+                .param("soBaiDat", tong.soBaiDat())
+                .param("lanCuoi", luc(tong.lanGhiDiemCuoi()))
+                .update();
+    }
+
+    @Override
+    public void ghiKetQuaDeDongBang(long contestId, long userId, KetQuaDe kq) {
         jdbc.sql(CHUP_THEO_DE)
+                .param("contestId", contestId)
+                .param("userId", userId)
+                .param("problemId", kq.problemId())
+                .param("bestScore", kq.diemCaoNhat())
+                .param("attempts", kq.soLanSaiTruocKhiDat())
+                .param("firstSolvedAt", luc(kq.datLuc()))
+                .update();
+    }
+
+    @Override
+    public void chotBanChup(long contestId, Instant freezeAt, Instant luc) {
+        jdbc.sql(DEM_BAI_SAU_DONG_BANG)
                 .param("contestId", contestId)
                 .param("freezeAt", luc(freezeAt))
                 .update();
+        jdbc.sql(DANH_DAU_DA_CHUP).param("contestId", contestId).param("luc", luc(luc)).update();
     }
 
     @Override

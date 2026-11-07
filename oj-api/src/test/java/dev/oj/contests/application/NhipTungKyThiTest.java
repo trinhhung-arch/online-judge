@@ -58,8 +58,8 @@ class NhipTungKyThiTest {
         contests.danhSach = List.of(kyThi(1), kyThi(2));
         standings.nemKhiChup = 1L;
         KhoaGia khoa = new KhoaGia(null);
-        FreezeStandingsScheduler nhip =
-                new FreezeStandingsScheduler(contests, standings, khoa, CLOCK, new TxGia());
+        FreezeStandingsScheduler nhip = new FreezeStandingsScheduler(contests, standings, khoa,
+                new JudgingGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
 
         assertThatCode(nhip::nhip).doesNotThrowAnyException();
 
@@ -80,8 +80,51 @@ class NhipTungKyThiTest {
 
         assertThatCode(updater::nhip).doesNotThrowAnyException();
         assertThatCode(new FreezeStandingsScheduler(contests, standings, new KhoaGia(null),
-                CLOCK, new TxGia())::nhip)
+                new JudgingGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia())::nhip)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("★ BX-07 · quá ân hạn, không còn bài chờ chấm, nhịp không tính thêm bài nào → chốt bảng")
+    void qua_an_han_het_bai_cho_thi_chot() {
+        contests.danhSach = List.of(kyThiKetThucTruoc(1, Duration.ofMinutes(10)));
+
+        updater(new JudgingGia()).nhip();
+
+        assertThat(contests.daChot).containsExactly(1L);
+    }
+
+    @Test
+    @DisplayName("★ BX-07 · quá ân hạn mà còn bài chờ chấm → KHÔNG chốt, nhịp sau cập nhật tiếp")
+    void con_bai_cho_cham_thi_khong_chot() {
+        contests.danhSach = List.of(kyThiKetThucTruoc(1, Duration.ofMinutes(10)));
+        JudgingGia judging = new JudgingGia();
+        judging.conBaiCho = true;
+
+        updater(judging).nhip();
+
+        assertThat(contests.daChot).isEmpty();
+    }
+
+    @Test
+    @DisplayName("BX-07 · còn trong ân hạn thì chưa chốt, dù không còn bài nào chờ")
+    void trong_an_han_thi_chua_chot() {
+        contests.danhSach = List.of(kyThiKetThucTruoc(1, Duration.ofMinutes(1)));
+
+        updater(new JudgingGia()).nhip();
+
+        assertThat(contests.daChot).isEmpty();
+    }
+
+    private StandingsUpdater updater(JudgingGia judging) {
+        return new StandingsUpdater(contests, standings, new KhoaGia(null), judging,
+                new BusGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
+    }
+
+    private static Contest kyThiKetThucTruoc(long id, Duration truoc) {
+        return new Contest(id, "xong-" + id, "Xong " + id, ContestFormats.tuMa("ICPC"),
+                BAY_GIO.minus(Duration.ofHours(3)), BAY_GIO.minus(truoc), null, null,
+                20, true, true, 1L);
     }
 
     private static Contest kyThi(long id) {
@@ -110,10 +153,16 @@ class NhipTungKyThiTest {
     private static final class ContestGia implements ContestRepository {
         List<Contest> danhSach = List.of();
         boolean nem;
+        final List<Long> daChot = new ArrayList<>();
 
         @Override
-        public List<Contest> canCapNhat(Instant bayGio, Duration anHan) {
+        public List<Contest> canCapNhat(Instant bayGio) {
             return doc();
+        }
+
+        @Override
+        public void chotBangXepHang(long contestId, Instant luc) {
+            daChot.add(contestId);
         }
 
         @Override
@@ -147,11 +196,18 @@ class NhipTungKyThiTest {
         @Override public boolean daChupDongBang(long c) { return false; }
 
         @Override
-        public void chupDongBang(long c, Instant freezeAt) {
+        public void chotBanChup(long c, Instant freezeAt, Instant luc) {
             if (nemKhiChup != null && nemKhiChup == c) {
                 throw new IllegalStateException("dữ liệu lạ của contest " + c);
             }
             daChup.add(c);
+        }
+
+        @Override public void ghiTongKetDongBang(long c, long u, TongKet t, int p) {
+            throw chuaCan();
+        }
+        @Override public void ghiKetQuaDeDongBang(long c, long u, KetQuaDe k) {
+            throw chuaCan();
         }
 
         @Override public Map<Long, List<KetQuaDe>> ketQuaTheoNguoi(long c, Collection<Long> u) {
@@ -172,6 +228,8 @@ class NhipTungKyThiTest {
     }
 
     private static final class JudgingGia implements JudgingQueries {
+        boolean conBaiCho;
+
         @Override
         public List<ScoredSubmission> baiDaChamLienMach(long c, long sau, int gioiHan) {
             return List.of();
@@ -179,7 +237,12 @@ class NhipTungKyThiTest {
 
         @Override
         public List<ScoredSubmission> baiDaChamTrongContest(long c, long sau, int gioiHan) {
-            throw chuaCan();
+            return List.of();
+        }
+
+        @Override
+        public boolean conBaiChoChamTrongContest(long contestId) {
+            return conBaiCho;
         }
 
         @Override

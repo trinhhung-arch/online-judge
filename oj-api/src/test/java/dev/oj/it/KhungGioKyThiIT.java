@@ -4,9 +4,9 @@ import dev.oj.contests.application.StandingsUpdater;
 import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
 import dev.oj.contests.application.port.StandingsReader;
+import dev.oj.contests.application.usecase.AuthorContestUseCase;
 import dev.oj.contests.domain.Contest;
 import dev.oj.contests.infrastructure.JdbcContestWindowQuery;
-import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.error.DomainException;
 import dev.oj.platform.security.GiaLapDanhTinh;
 import dev.oj.platform.security.Role;
@@ -38,7 +38,7 @@ class KhungGioKyThiIT extends PostgresIT {
     @Autowired StandingsUpdater updater;
     @Autowired StandingsReader standings;
     @Autowired ImportTestdataUseCase importTestdata;
-    @Autowired AppProperties props;
+    @Autowired AuthorContestUseCase author;
 
     private long kyThi(Instant batDau, Instant ketThuc) {
         long id = contests.tao(new ContestRepository.ContestMoi("khung-" + System.nanoTime(),
@@ -99,12 +99,38 @@ class KhungGioKyThiIT extends PostgresIT {
                         ZoneOffset.UTC))
                 .update();
 
-        assertThat(contests.canCapNhat(Instant.now(), props.contest().standingsGrace()))
+        assertThat(contests.canCapNhat(Instant.now()))
                 .extracting(Contest::id).as("hết giờ một phút vẫn nằm trong ân hạn").contains(id);
         updater.nhip();
 
         assertThat(standings.top(id, 50, false)).singleElement()
                 .satisfies(d -> assertThat(d.soBaiDat()).isEqualTo(1));
+    }
+
+    @Test
+    @DisplayName("★ AT-14 / NB-06 · gắn đề vào kỳ thi chồng giờ với một kỳ thi khác đang có đề ấy → 400; kỳ thi nối đuôi (bắt đầu đúng lúc kia kết thúc) thì được")
+    void at14_khong_gan_mot_de_vao_hai_ky_thi_chong_gio() {
+        Instant moc = Instant.now().plus(Duration.ofDays(1));
+        long a = kyThiCuaSetter(moc, moc.plus(Duration.ofHours(3)));
+        soanKyThi.themDe(a, PROBLEM_ID, "A", 100, SETTER_ID, false);
+        long chong = kyThiCuaSetter(moc.plus(Duration.ofHours(1)), moc.plus(Duration.ofHours(4)));
+        long noiDuoi = kyThiCuaSetter(moc.plus(Duration.ofHours(3)), moc.plus(Duration.ofHours(5)));
+
+        try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+            assertThatThrownBy(() -> author.themDe(chong, PROBLEM_ID, "A", 100))
+                    .hasFieldOrPropertyWithValue("code", "contest.de_trung_khung_gio");
+            author.themDe(noiDuoi, PROBLEM_ID, "A", 100);
+            assertThat(phien).isNotNull();
+        }
+
+        assertThat(contests.deCua(chong)).isEmpty();
+        assertThat(contests.deCua(noiDuoi)).extracting(ContestRepository.DeCuaContest::problemId)
+                .containsExactly(PROBLEM_ID);
+    }
+
+    private long kyThiCuaSetter(Instant batDau, Instant ketThuc) {
+        return contests.tao(new ContestRepository.ContestMoi("chong-gio-" + System.nanoTime(),
+                "Thi thử", "ICPC", batDau, ketThuc, null, 20, true, true, SETTER_ID));
     }
 
     @Test

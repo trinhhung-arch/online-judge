@@ -23,7 +23,11 @@ public interface StandingsRepository {
 
     boolean daChupDongBang(long contestId);
 
-    void chupDongBang(long contestId, Instant freezeAt);
+    void ghiTongKetDongBang(long contestId, long userId, TongKet tong, int penaltyGiay);
+
+    void ghiKetQuaDeDongBang(long contestId, long userId, KetQuaDe ketQua);
+
+    void chotBanChup(long contestId, Instant freezeAt, Instant luc);
 
     Map<Long, DiemDaLuu> tongKetDaLuu(long contestId);
 

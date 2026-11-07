@@ -66,7 +66,8 @@ public class SubmitSolutionUseCase {
     }
 
     public SubmissionAccepted submit(Command command) {
-        long userId = currentUser.current().id();
+        CurrentUserProvider.CurrentUser nguoiGoi = currentUser.current();
+        long userId = nguoiGoi.id();
 
         if (!congTac.bat(SystemSettings.NHAN_BAI_NOP, true)) {
             throw JudgingException.dangBaoTri();
@@ -79,12 +80,17 @@ public class SubmitSolutionUseCase {
 
         rateLimiter.kiemTraVaGhiNhan(userId);
 
-        Long contestId = lichThi.contestDangChayChuaDe(problem.id()).stream().boxed()
-                .findFirst().orElse(null);
+        Long contestId = laNguoiRaDe(nguoiGoi, problem) ? null
+                : lichThi.contestDangChayChuaDe(problem.id()).stream().boxed()
+                        .findFirst().orElse(null);
 
         long submissionId = persist(userId, contestId, problem, language, blob);
         publishQuietly(submissionId);
         return new SubmissionAccepted(submissionId, SubmissionStatus.QUEUED);
+    }
+
+    private static boolean laNguoiRaDe(CurrentUserProvider.CurrentUser nguoiGoi, Problem problem) {
+        return nguoiGoi.isAdmin() || nguoiGoi.id() == problem.ownerId();
     }
 
     private long persist(long userId, Long contestId, Problem problem,

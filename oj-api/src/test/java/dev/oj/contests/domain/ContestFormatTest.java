@@ -23,7 +23,12 @@ class ContestFormatTest {
     }
 
     private static BaiDaCham bai(long id, boolean ac, int diem, int phutSauKhiBatDau) {
-        return new BaiDaCham(id, 7L, 42L, ac, diem, BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
+        return bai(id, ac ? "AC" : "WA", diem, phutSauKhiBatDau);
+    }
+
+    private static BaiDaCham bai(long id, String verdict, int diem, int phutSauKhiBatDau) {
+        return new BaiDaCham(id, 7L, 42L, verdict, diem,
+                BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
     }
 
     @Nested
@@ -62,6 +67,35 @@ class ContestFormatTest {
         }
 
         @Test
+        @DisplayName("★ TD-04 · trước AC là CE, IE, WA: chỉ WA tính là lần sai — CE và IE không bị phạt")
+        void ce_ie_khong_tinh_lan_sai() {
+            KetQuaDe kq = chay(bai(1, "CE", 0, 5), bai(2, "IE", 0, 9), bai(3, "WA", 0, 12),
+                    bai(4, "AC", 100, 37));
+
+            assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(1);
+            assertThat(format.penaltyGiay(List.of(kq), c)).isEqualTo(37 * 60 + 20 * 60);
+        }
+
+        @Test
+        @DisplayName("TD-04 · WA, TLE, MLE, RE đều tính là lần sai")
+        void bon_verdict_tinh_lan_sai() {
+            KetQuaDe kq = chay(bai(1, "WA", 0, 5), bai(2, "TLE", 0, 6), bai(3, "MLE", 0, 7),
+                    bai(4, "RE", 0, 8));
+
+            assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(4);
+        }
+
+        @Test
+        @DisplayName("★ TD-07 · penalty_minutes = 0: ba lần sai rồi AC chỉ còn thời gian tới lúc AC")
+        void khong_phut_phat() {
+            KetQuaDe kq = chay(bai(1, false, 0, 5), bai(2, false, 0, 9), bai(3, false, 0, 12),
+                    bai(4, true, 100, 37));
+
+            assertThat(kq.soLanSaiTruocKhiDat()).isEqualTo(3);
+            assertThat(format.penaltyGiay(List.of(kq), contest("ICPC", 0))).isEqualTo(37 * 60);
+        }
+
+        @Test
         @DisplayName("★ nộp lại SAU khi đã AC không đổi gì — kể cả khi bài sau sai")
         void nop_lai_sau_khi_ac_khong_bi_phat() {
             KetQuaDe sauAc = chay(bai(1, true, 100, 37));
@@ -91,9 +125,9 @@ class ContestFormatTest {
         @DisplayName("điểm ICPC là số đề đạt, không phải điểm từng phần")
         void diem_la_so_de_dat() {
             KetQuaDe deA = format.apDung(KetQuaDe.trong(1L),
-                    new BaiDaCham(1, 7, 1, true, 100, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(1, 7, 1, "AC", 100, BAT_DAU.plusSeconds(600)), c);
             KetQuaDe deB = format.apDung(KetQuaDe.trong(2L),
-                    new BaiDaCham(2, 7, 2, false, 60, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(2, 7, 2, "WA", 60, BAT_DAU.plusSeconds(600)), c);
 
             var tong = format.tongHop(List.of(deA, deB));
             assertThat(tong.tongDiem()).isEqualTo(1);
@@ -157,6 +191,19 @@ class ContestFormatTest {
             assertThat(kq.diemCaoNhat()).isEqualTo(90);
             assertThat(kq.baiDatId()).isEqualTo(2L);
             assertThat(kq.datLuc()).isEqualTo(BAT_DAU.plus(Duration.ofMinutes(40)));
+        }
+
+        @Test
+        @DisplayName("★ TD-05 · bài sau BẰNG điểm cao nhất: giữ mốc thời gian của lần đầu đạt điểm ấy")
+        void bang_diem_giu_moc_lan_dau() {
+            KetQuaDe kq = chay(bai(1, false, 70, 10), bai(2, false, 70, 50));
+
+            assertThat(kq.diemCaoNhat()).isEqualTo(70);
+            assertThat(kq.baiDatId()).isEqualTo(1L);
+            assertThat(kq.datLuc()).isEqualTo(BAT_DAU.plus(Duration.ofMinutes(10)));
+            assertThat(format.tongHop(List.of(kq)).lanGhiDiemCuoi())
+                    .as("mốc này là thứ phân hạng khi bằng điểm")
+                    .isEqualTo(BAT_DAU.plus(Duration.ofMinutes(10)));
         }
 
         @Test

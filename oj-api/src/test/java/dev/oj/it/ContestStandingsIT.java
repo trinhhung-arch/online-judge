@@ -73,11 +73,16 @@ class ContestStandingsIT extends PostgresIT {
         @DisplayName("★ bài id nhỏ hơn chấm xong sau vẫn vào bảng — watermark không nhảy qua")
         void watermark_khong_nhay_qua_bai_dang_cham() {
             long c = dangChay();
+            long thiSinhKhac = jdbc.sql("""
+                    INSERT INTO users (handle, email, display_name)
+                    VALUES ('thi-sinh-khac', 'thi-sinh-khac@oj.test', 'Thí sinh khác')
+                    RETURNING id
+                    """).query(Long.class).single();
             contests.dangKy(c, USER_ID, MOC);
-            contests.dangKy(c, SETTER_ID, MOC);
+            contests.dangKy(c, thiSinhKhac, MOC);
 
             long cham = nopChuaCham(USER_ID);
-            long nhanh = nopChuaCham(SETTER_ID);
+            long nhanh = nopChuaCham(thiSinhKhac);
             assertThat(cham).isLessThan(nhanh);
 
             chamXong(nhanh);

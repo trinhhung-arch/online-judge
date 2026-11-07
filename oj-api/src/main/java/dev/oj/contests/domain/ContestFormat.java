@@ -16,7 +16,11 @@ public interface ContestFormat {
     }
 
     record BaiDaCham(long submissionId, long userId, long problemId,
-                     boolean laAc, int score, Instant nopLuc) {
+                     String verdict, int score, Instant nopLuc) {
+
+        public boolean laAc() {
+            return "AC".equals(verdict);
+        }
     }
 
     record KetQuaDe(long problemId, int diemCaoNhat, int soLanSaiTruocKhiDat,

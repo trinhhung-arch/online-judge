@@ -114,7 +114,7 @@ public class StandingsDriftCheckJob implements JobHandler {
                         KetQuaDe.trong(bai.problemId()));
                 theoDe.put(bai.problemId(), format.apDung(truoc, new ContestFormat.BaiDaCham(
                         bai.submissionId(), bai.userId(), bai.problemId(),
-                        bai.laAc(), bai.score(), bai.nopLuc()), contest));
+                        bai.verdict(), bai.score(), bai.nopLuc()), contest));
                 sau = Math.max(sau, bai.submissionId());
             }
             daDoc += lo.size();

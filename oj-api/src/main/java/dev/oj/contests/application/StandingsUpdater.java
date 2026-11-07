@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -55,20 +56,32 @@ public class StandingsUpdater {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${oj.contest.standings-interval}")
     public void nhip() {
+        Instant bayGio = clock.instant();
         List<Contest> canCapNhat;
         try {
-            canCapNhat = contests.canCapNhat(clock.instant(), properties.contest().standingsGrace());
+            canCapNhat = contests.canCapNhat(bayGio);
         } catch (RuntimeException e) {
             log.error("Không đọc được danh sách kỳ thi cần cập nhật — thử lại ở nhịp sau", e);
             return;
         }
         for (Contest c : canCapNhat) {
             try {
-                capNhat(c);
+                capNhatRoiChotNeuXong(c, bayGio);
             } catch (RuntimeException e) {
                 log.error("Cập nhật bảng xếp hạng contest {} hỏng — các kỳ thi khác vẫn chạy "
                         + "tiếp, contest này thử lại ở nhịp sau", c.id(), e);
             }
+        }
+    }
+
+    private void capNhatRoiChotNeuXong(Contest contest, Instant bayGio) {
+        boolean quaAnHan = !bayGio.isBefore(
+                contest.endsAt().plus(properties.contest().standingsGrace()));
+        boolean conBaiCho = quaAnHan && judging.conBaiChoChamTrongContest(contest.id());
+        if (capNhat(contest) == 0 && quaAnHan && !conBaiCho) {
+            contests.chotBangXepHang(contest.id(), bayGio);
+            log.info("Đã chốt bảng xếp hạng contest {}: hết ân hạn, không còn bài chờ chấm",
+                    contest.id());
         }
     }
 
@@ -124,7 +137,7 @@ public class StandingsUpdater {
             KetQuaDe truoc = theoDe.getOrDefault(bai.problemId(), KetQuaDe.trong(bai.problemId()));
             KetQuaDe sau = format.apDung(truoc, new ContestFormat.BaiDaCham(
                     bai.submissionId(), bai.userId(), bai.problemId(),
-                    bai.laAc(), bai.score(), bai.nopLuc()), contest);
+                    bai.verdict(), bai.score(), bai.nopLuc()), contest);
             theoDe.put(bai.problemId(), sau);
 
             deBiCham.add(khoaDe(bai.userId(), bai.problemId()));
