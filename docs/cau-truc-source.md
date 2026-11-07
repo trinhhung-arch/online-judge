@@ -514,7 +514,7 @@ giữ lời hứa degraded mode của `nfrplan.md` 7.2).
 | DTO response | `<Thứ>Response` | `SubmissionDetailResponse` |
 | Migration | `V<n>__mo_ta_khong_dau.sql` | `V13__xac_minh_email.sql` |
 | Test | `<Class>Test` · integration `<Class>IT` | `SubmitSolutionUseCaseTest` |
-| Nhánh | `a/<viec>` hoặc `b/<viec>`, sống ≤ 3 ngày | `b/isolate-cgroup` |
+| Nhánh | `<loai>/<viec>` — loại: `feature` · `bugfix` · `hotfix` · `refactor` · `docs` · `test` · `chore`; chữ thường, nối bằng gạch ngang, có mã FR/task thì đặt đầu (`feature/FR-AUTH-11-quen-mat-khau`), sống ≤ 3 ngày | `feature/isolate-cgroup` |
 
 > **Hậu tố `UseCase` không phải chuyện thẩm mỹ.** LUẬT 8 của ArchUnit (bật ở M4, Bước 4.6)
 > khớp theo `haveSimpleNameEndingWith("UseCase")` để ép **mọi** use-case — kể cả use-case chỉ

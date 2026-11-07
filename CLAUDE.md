@@ -161,7 +161,7 @@ Không có test tương ứng thì thay đổi chưa xong, dù code có đúng.
 - **Config:** mọi ngưỡng, giới hạn, timeout đều là thuộc tính có tên trong `application.yml`. Không có số ma thuật rải trong code.
 - **Kích thước:** file ≤ 300 dòng, method ≤ 50 dòng. Vượt thì tách, đừng xin ngoại lệ.
 - **Đổi tên file:** luôn `git mv`. Không đổi trong IDE — macOS và Windows không phân biệt hoa thường, Linux thì có, và file sẽ "biến mất" của người kia.
-- **Nhánh:** `a/<viec>` hoặc `b/<viec>`. Sống ≤ 3 ngày.
+- **Nhánh:** `<loai>/<viec>` — loại: `feature` · `bugfix` · `hotfix` · `refactor` · `docs` · `test` · `chore`; chữ thường, nối bằng gạch ngang, có mã FR/task thì đặt đầu (`feature/FR-AUTH-11-quen-mat-khau`). Sống ≤ 3 ngày. Có PR merge là xoá nhánh.
 - **API:** mọi endpoint công khai dưới `/api/v1/`.
 
 ---
