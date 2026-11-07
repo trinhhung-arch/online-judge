@@ -7,6 +7,7 @@ import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.contests.application.usecase.ListContestsUseCase;
 import dev.oj.contests.application.usecase.RegisterForContestUseCase;
 import dev.oj.contests.application.usecase.RevealStandingsUseCase;
+import dev.oj.contests.application.usecase.StartStandingsRebuildUseCase;
 import dev.oj.platform.web.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,18 +34,21 @@ public class ContestController {
     private final RegisterForContestUseCase register;
     private final AuthorContestUseCase author;
     private final RevealStandingsUseCase reveal;
+    private final StartStandingsRebuildUseCase dungLai;
     private final java.time.Clock clock;
 
     public ContestController(GetContestUseCase getContest, ListContestsUseCase listContests,
                              GetStandingsUseCase getStandings,
                              RegisterForContestUseCase register, AuthorContestUseCase author,
-                             RevealStandingsUseCase reveal, java.time.Clock clock) {
+                             RevealStandingsUseCase reveal, StartStandingsRebuildUseCase dungLai,
+                             java.time.Clock clock) {
         this.getContest = getContest;
         this.listContests = listContests;
         this.getStandings = getStandings;
         this.register = register;
         this.author = author;
         this.reveal = reveal;
+        this.dungLai = dungLai;
         this.clock = clock;
     }
 
@@ -106,6 +110,12 @@ public class ContestController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void congBo(@PathVariable long contestId) {
         reveal.thucHien(contestId);
+    }
+
+    @PostMapping("/{contestId}/standings/rebuild")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public Map<String, Object> dungLaiBang(@PathVariable long contestId) {
+        return Map.of("jobId", dungLai.batDau(contestId));
     }
 
     public record TaoContestRequest(String slug, String title, String format,

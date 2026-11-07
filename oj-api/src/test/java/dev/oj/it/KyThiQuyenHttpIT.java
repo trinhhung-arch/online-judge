@@ -2,6 +2,7 @@ package dev.oj.it;
 
 import dev.oj.contests.application.port.ContestAuthoringRepository;
 import dev.oj.contests.application.port.ContestRepository;
+import dev.oj.contests.application.port.StandingsReader;
 import dev.oj.platform.security.Role;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -19,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class KyThiQuyenHttpIT extends HttpIT {
 
     private static final String NGUON = "a".repeat(64);
+    private static final String DUNG_LAI = "/api/v1/contests/{id}/standings/rebuild";
+    private static final Duration CHO_JOB = Duration.ofSeconds(20);
 
     private static final Set<String> TRUONG_CHI_TIET_BAI_NOP = Set.of("submissionId", "problemId",
             "languageId", "status", "verdict", "explanation", "score", "maxScore", "timeMs",
@@ -27,6 +31,7 @@ class KyThiQuyenHttpIT extends HttpIT {
 
     @Autowired ContestRepository contests;
     @Autowired ContestAuthoringRepository soanKyThi;
+    @Autowired StandingsReader standings;
 
     private final Instant bayGio = Instant.now();
 
@@ -56,6 +61,10 @@ class KyThiQuyenHttpIT extends HttpIT {
     }
 
     private long saiOTest(long contestId, long userId, int test) {
+        return nop(contestId, userId, "WA", 0, test);
+    }
+
+    private long nop(long contestId, long userId, String verdict, int diem, Integer testSai) {
         jdbc.sql("""
                 INSERT INTO source_blobs (sha256, content, byte_size)
                 VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
@@ -65,11 +74,33 @@ class KyThiQuyenHttpIT extends HttpIT {
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
                                          source_sha256, source_bytes, testdata_version, status,
                                          attempt, verdict, score, max_score, failed_test_ordinal,
-                                         judged_at)
-                VALUES (:u, :p, :c, 1, :sha, 12, 1, 'DONE', 1, 'WA', 0, 100, :test, now())
+                                         created_at, judged_at)
+                SELECT :u, :p, c.id, 1, :sha, 12, 1, 'DONE', 1, :verdict, :diem, 100, :testSai,
+                       c.starts_at + interval '30 minutes', now()
+                  FROM contests c WHERE c.id = :c
                 RETURNING id
                 """).param("u", userId).param("p", PROBLEM_ID).param("c", contestId)
-                .param("sha", NGUON).param("test", test).query(Long.class).single();
+                .param("sha", NGUON).param("verdict", verdict).param("diem", diem)
+                .param("testSai", testSai).query(Long.class).single();
+    }
+
+    private int soJobDungLai() {
+        return jdbc.sql("SELECT count(*) FROM jobs WHERE type = 'LEADERBOARD_REBUILD'")
+                .query(Integer.class).single();
+    }
+
+    private String choJobKetThuc(long jobId, String token) throws InterruptedException {
+        long han = System.nanoTime() + CHO_JOB.toNanos();
+        String trangThai = null;
+        while (System.nanoTime() < han) {
+            trangThai = (String) goi(http.get().uri("/api/v1/jobs/{id}", jobId)
+                    .header("Authorization", token)).getBody().get("status");
+            if (Set.of("DONE", "FAILED", "CANCELLED").contains(trangThai)) {
+                return trangThai;
+            }
+            Thread.sleep(200);
+        }
+        return trangThai;
     }
 
     private ResponseEntity<Map<String, Object>> xemBai(long submissionId, String token) {
@@ -184,6 +215,52 @@ class KyThiQuyenHttpIT extends HttpIT {
         assertThat(chiSoThuTu.keySet())
                 .as("thêm trường mới vào chi tiết bài nộp thì phải xét lại ca này")
                 .isSubsetOf(TRUONG_CHI_TIET_BAI_NOP);
+    }
+
+    @Test
+    @DisplayName("★ DS-05 · USER và chủ kỳ thi chạy dựng lại → 403, không có job nào; ADMIN → 202, job chạy xong và dựng lại đúng bảng")
+    void ds05_chi_admin_chay_duoc_dung_lai() throws InterruptedException {
+        long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)));
+        jdbc.sql("UPDATE contests SET standings_settled_at = now() WHERE id = :id")
+                .param("id", id).update();
+        nop(id, USER_ID, "AC", 100, null);
+
+        for (String token : List.of(bearerDev(), bearer(SETTER_ID, "setter", Role.SETTER))) {
+            var res = goi(http.post().uri(DUNG_LAI, id).header("Authorization", token));
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(res.getBody()).containsEntry("code", "auth.thieu_quyen");
+        }
+        assertThat(soJobDungLai()).isZero();
+
+        String admin = bearer(ADMIN_ID, "admin", Role.ADMIN);
+        var res = goi(http.post().uri(DUNG_LAI, id).header("Authorization", admin));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        long jobId = ((Number) res.getBody().get("jobId")).longValue();
+        assertThat(choJobKetThuc(jobId, admin)).isEqualTo("DONE");
+        assertThat(standings.top(id, 50, false)).as("bảng được dựng lại từ bài nộp, không có sẵn")
+                .singleElement().satisfies(d -> {
+                    assertThat(d.userId()).isEqualTo(USER_ID);
+                    assertThat(d.soBaiDat()).isEqualTo(1);
+                });
+    }
+
+    @Test
+    @DisplayName("★ DS-05 · đang có job dựng lại còn sống cho kỳ thi này (bấm hai lần, hay máy khác đang chạy) → 409 job.dang_chay, không tạo job thứ hai")
+    void ds05_dang_co_job_song_thi_409() {
+        long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)));
+        jdbc.sql("""
+                INSERT INTO jobs (type, status, params, lease_owner, lease_until, created_by)
+                VALUES ('LEADERBOARD_REBUILD', 'RUNNING', jsonb_build_object('contestId', :c),
+                        'may-khac', now() + interval '10 minutes', :admin)
+                """).param("c", id).param("admin", ADMIN_ID).update();
+
+        var res = goi(http.post().uri(DUNG_LAI, id)
+                .header("Authorization", bearer(ADMIN_ID, "admin", Role.ADMIN)));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(res.getBody()).containsEntry("code", "job.dang_chay");
+        assertThat(soJobDungLai()).isEqualTo(1);
     }
 
     private void datMucPhanHoi(String muc) {
