@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class ChupDongBangNguyenKhoiIT extends PostgresIT {
 
@@ -95,7 +96,12 @@ class ChupDongBangNguyenKhoiIT extends PostgresIT {
         assertThat(standings.cuaNguoi(id, USER_ID, true))
                 .hasValueSatisfying(d -> assertThat(d.soBaiDat()).isEqualTo(1));
         assertThat(standings.cuaNguoi(id, nopSau, true))
-                .as("kết quả của bài nộp sau freeze_at không được lọt vào bản chụp").isEmpty();
+                .as("kết quả của bài nộp sau freeze_at không được lọt vào bản chụp — chỉ hiện là đang chờ")
+                .hasValueSatisfying(d -> {
+                    assertThat(d.soBaiDat()).isZero();
+                    assertThat(d.tongDiem()).isZero();
+                    assertThat(d.soBaiChoSauFreeze()).isEqualTo(1);
+                });
     }
 
     @Test
@@ -115,6 +121,30 @@ class ChupDongBangNguyenKhoiIT extends PostgresIT {
         assertThat(daChupLuc(id)).as("không chụp lại").isEqualTo(lanChupDau);
         assertThat(soDong("contest_standings_frozen", id)).isZero();
         assertThat(standings.top(id, 50, false)).as("bảng thật vẫn có bài").hasSize(1);
+    }
+
+    @Test
+    @DisplayName("★ DB-07 · đang đóng băng: cột Chờ đếm lúc đọc số bài nộp sau freeze_at, và hiện cả người chỉ nộp sau giờ đóng băng")
+    void db07_dem_bai_cho_luc_doc() {
+        Instant f = bayGio.minus(Duration.ofMinutes(10));
+        long id = kyThiChuaDongBang();
+        long chiNopSau = jdbc.sql("""
+                INSERT INTO users (handle, email, display_name)
+                VALUES ('chi-nop-sau', 'chi-nop-sau@oj.test', 'Chỉ nộp sau') RETURNING id
+                """).query(Long.class).single();
+        nop(id, USER_ID, f.minus(Duration.ofMinutes(5)));
+        dongBangLuc(id, f);
+        dongBang.nhip();
+
+        nop(id, USER_ID, f.plusSeconds(60));
+        nop(id, USER_ID, f.plusSeconds(120));
+        nop(id, chiNopSau, f.plusSeconds(30));
+        updater.capNhat(contests.timTheoId(id).orElseThrow());
+
+        assertThat(standings.top(id, 50, true))
+                .extracting(StandingsReader.Dong::userId, StandingsReader.Dong::soBaiDat,
+                        StandingsReader.Dong::soBaiChoSauFreeze)
+                .containsExactly(tuple(USER_ID, 1, 2), tuple(chiNopSau, 0, 1));
     }
 
     private long kyThiChuaDongBang() {

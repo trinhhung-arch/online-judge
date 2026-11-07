@@ -83,16 +83,6 @@ public class JdbcStandingsRepository implements StandingsRepository {
             ON CONFLICT (contest_id, user_id, problem_id) DO NOTHING
             """;
 
-    private static final String DEM_BAI_SAU_DONG_BANG = """
-            UPDATE contest_problem_standings_frozen f
-               SET pending_after_freeze = LEAST((SELECT count(*) FROM submissions s
-                                                  WHERE s.contest_id = f.contest_id
-                                                    AND s.user_id = f.user_id
-                                                    AND s.problem_id = f.problem_id
-                                                    AND s.created_at >= :freezeAt), 32767)
-             WHERE f.contest_id = :contestId
-            """;
-
     private static final String DANH_DAU_DA_CHUP = """
             UPDATE contests SET frozen_captured_at = :luc WHERE id = :contestId
             """;
@@ -230,11 +220,7 @@ public class JdbcStandingsRepository implements StandingsRepository {
     }
 
     @Override
-    public void chotBanChup(long contestId, Instant freezeAt, Instant luc) {
-        jdbc.sql(DEM_BAI_SAU_DONG_BANG)
-                .param("contestId", contestId)
-                .param("freezeAt", luc(freezeAt))
-                .update();
+    public void chotBanChup(long contestId, Instant luc) {
         jdbc.sql(DANH_DAU_DA_CHUP).param("contestId", contestId).param("luc", luc(luc)).update();
     }
 

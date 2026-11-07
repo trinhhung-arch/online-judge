@@ -97,6 +97,7 @@ public class StandingsDriftCheckJob implements JobHandler {
     private Map<Long, DiemDaLuu> tinhLaiTuDau(Contest contest, JobContext ctx) {
         Map<Long, Map<Long, KetQuaDe>> theoNguoi = new LinkedHashMap<>();
         ContestFormat format = contest.format();
+        Map<Long, Integer> diemCuaDe = BaiChamKyThi.diemCuaDe(contests, contest.id());
         long sau = 0;
         int daDoc = 0;
 
@@ -112,9 +113,8 @@ public class StandingsDriftCheckJob implements JobHandler {
                         bai.userId(), k -> new LinkedHashMap<>());
                 KetQuaDe truoc = theoDe.getOrDefault(bai.problemId(),
                         KetQuaDe.trong(bai.problemId()));
-                theoDe.put(bai.problemId(), format.apDung(truoc, new ContestFormat.BaiDaCham(
-                        bai.submissionId(), bai.userId(), bai.problemId(),
-                        bai.verdict(), bai.score(), bai.nopLuc()), contest));
+                theoDe.put(bai.problemId(), format.apDung(truoc,
+                        BaiChamKyThi.tu(bai, diemCuaDe), contest));
                 sau = Math.max(sau, bai.submissionId());
             }
             daDoc += lo.size();

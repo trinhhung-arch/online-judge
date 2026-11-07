@@ -92,6 +92,7 @@ document.getElementById('form-tao').addEventListener('submit', async (ev) => {
                 startsAt: sangUtc(form.startsAt.value),
                 endsAt: sangUtc(form.endsAt.value),
                 freezeAt: sangUtc(form.freezeAt.value),
+                revealAfterEnd: form.revealAfterEnd.checked,
             },
         });
         location.href = `/contest.html?slug=${encodeURIComponent(form.slug.value.trim())}`;

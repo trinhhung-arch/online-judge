@@ -16,7 +16,7 @@ public interface ContestFormat {
     }
 
     record BaiDaCham(long submissionId, long userId, long problemId,
-                     String verdict, int score, Instant nopLuc) {
+                     String verdict, int score, int maxScore, int diemDe, Instant nopLuc) {
 
         public boolean laAc() {
             return "AC".equals(verdict);

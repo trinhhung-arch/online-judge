@@ -27,7 +27,7 @@ class ContestFormatTest {
     }
 
     private static BaiDaCham bai(long id, String verdict, int diem, int phutSauKhiBatDau) {
-        return new BaiDaCham(id, 7L, 42L, verdict, diem,
+        return new BaiDaCham(id, 7L, 42L, verdict, diem, 100, 100,
                 BAT_DAU.plus(Duration.ofMinutes(phutSauKhiBatDau)));
     }
 
@@ -86,6 +86,28 @@ class ContestFormatTest {
         }
 
         @Test
+        @DisplayName("★ TD-03 · thời gian tới lúc AC làm tròn XUỐNG phút: AC ở giây 59 không phạt, giây 61 phạt 1 phút")
+        void lam_tron_xuong_phut() {
+            assertThat(format.penaltyGiay(List.of(acLuc(42L, 59)), c)).isZero();
+            assertThat(format.penaltyGiay(List.of(acLuc(42L, 61)), c)).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("TD-03 · làm tròn theo TỪNG bài: giải lúc 0:59 và 1:59 (1 phút) đứng trên 1:01 và 1:01 (2 phút)")
+        void lam_tron_theo_tung_bai() {
+            int a = format.penaltyGiay(List.of(acLuc(1L, 59), acLuc(2L, 119)), c);
+            int b = format.penaltyGiay(List.of(acLuc(1L, 61), acLuc(2L, 61)), c);
+
+            assertThat(a).isEqualTo(60);
+            assertThat(b).isEqualTo(120);
+        }
+
+        private KetQuaDe acLuc(long problemId, int giay) {
+            return format.apDung(KetQuaDe.trong(problemId), new BaiDaCham(problemId, 7L,
+                    problemId, "AC", 100, 100, 100, BAT_DAU.plusSeconds(giay)), c);
+        }
+
+        @Test
         @DisplayName("★ TD-07 · penalty_minutes = 0: ba lần sai rồi AC chỉ còn thời gian tới lúc AC")
         void khong_phut_phat() {
             KetQuaDe kq = chay(bai(1, false, 0, 5), bai(2, false, 0, 9), bai(3, false, 0, 12),
@@ -125,9 +147,9 @@ class ContestFormatTest {
         @DisplayName("điểm ICPC là số đề đạt, không phải điểm từng phần")
         void diem_la_so_de_dat() {
             KetQuaDe deA = format.apDung(KetQuaDe.trong(1L),
-                    new BaiDaCham(1, 7, 1, "AC", 100, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(1, 7, 1, "AC", 100, 100, 100, BAT_DAU.plusSeconds(600)), c);
             KetQuaDe deB = format.apDung(KetQuaDe.trong(2L),
-                    new BaiDaCham(2, 7, 2, "WA", 60, BAT_DAU.plusSeconds(600)), c);
+                    new BaiDaCham(2, 7, 2, "WA", 60, 100, 100, BAT_DAU.plusSeconds(600)), c);
 
             var tong = format.tongHop(List.of(deA, deB));
             assertThat(tong.tongDiem()).isEqualTo(1);
@@ -191,6 +213,31 @@ class ContestFormatTest {
             assertThat(kq.diemCaoNhat()).isEqualTo(90);
             assertThat(kq.baiDatId()).isEqualTo(2L);
             assertThat(kq.datLuc()).isEqualTo(BAT_DAU.plus(Duration.ofMinutes(40)));
+        }
+
+        @Test
+        @DisplayName("★ TD-06 · quy đổi theo points của đề: 50/100 ở đề 200 điểm thành 100; đề thang 50 làm đủ thành 100")
+        void quy_doi_theo_points() {
+            assertThat(chay(baiThang(50, 100, 200)).diemCaoNhat()).isEqualTo(100);
+            assertThat(chay(baiThang(50, 50, 100)).diemCaoNhat()).isEqualTo(100);
+        }
+
+        @Test
+        @DisplayName("TD-06 · quy đổi làm tròn XUỐNG: 1/3 ở đề 100 điểm được 33")
+        void quy_doi_lam_tron_xuong() {
+            assertThat(chay(baiThang(1, 3, 100)).diemCaoNhat()).isEqualTo(33);
+        }
+
+        @Test
+        @DisplayName("TD-06 · không biết thang hay points của đề thì giữ điểm thô")
+        void khong_ro_thang_thi_giu_diem_tho() {
+            assertThat(chay(baiThang(70, 0, 200)).diemCaoNhat()).isEqualTo(70);
+            assertThat(chay(baiThang(70, 100, 0)).diemCaoNhat()).isEqualTo(70);
+        }
+
+        private BaiDaCham baiThang(int diem, int thang, int points) {
+            return new BaiDaCham(1, 7L, 42L, "WA", diem, thang, points,
+                    BAT_DAU.plus(Duration.ofMinutes(10)));
         }
 
         @Test

@@ -15,7 +15,7 @@ public interface JudgingQueries {
     boolean conBaiChoChamTrongContest(long contestId);
 
     record ScoredSubmission(long submissionId, long userId, long problemId,
-                            String verdict, int score, Instant nopLuc) {
+                            String verdict, int score, int maxScore, Instant nopLuc) {
 
         public boolean laAc() {
             return "AC".equals(verdict);

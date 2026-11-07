@@ -41,6 +41,14 @@ export function gan(contestId, { o }) {
         return tr;
     }
 
+    function dongNgat() {
+        const tr = chu('tr');
+        const o = chu('td', '…');
+        o.colSpan = 6;
+        tr.append(o);
+        return tr;
+    }
+
     function ve(b) {
         khuDongBang.hidden = !b.dongBang;
         if (b.dongBang) {
@@ -52,10 +60,16 @@ export function gan(contestId, { o }) {
         }
 
         const cac = [...b.top];
-        if (b.cuaToi && !cac.some((d) => d.userId === b.cuaToi.userId)) {
+        const coTrongTop = (d) => cac.some((t) => t.userId === d.userId);
+        const quanh = (b.quanhToi ?? []).filter((d) => !coTrongTop(d));
+        if (quanh.length) {
+            const hangCuoiTop = cac.length ? cac[cac.length - 1].hang : 0;
+            if (quanh[0].hang > hangCuoiTop + 1) cac.push(null);
+            cac.push(...quanh);
+        } else if (b.cuaToi && !coTrongTop(b.cuaToi)) {
             cac.push(b.cuaToi);
         }
-        than.replaceChildren(...cac.map(veDong));
+        than.replaceChildren(...cac.map((d) => (d ? veDong(d) : dongNgat())));
 
         if (!cac.length) {
             const tr = chu('tr');
