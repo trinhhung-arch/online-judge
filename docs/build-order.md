@@ -671,7 +671,7 @@ hoán đổi vùng (A làm một task của B) · Cloudflare Tunnel + domain, ng
 9. dán khối báo cáo CLAUDE.md mục 9 vào mô tả PR
 ```
 
-**Nhánh:** `a/<viec>` hoặc `b/<viec>`, sống ≤ 3 ngày. **Đổi tên file luôn dùng `git mv`.**
+**Nhánh:** `<loai>/<viec>` — loại: `feature` · `bugfix` · `hotfix` · `refactor` · `docs` · `test` · `chore`; chữ thường, nối bằng gạch ngang, có mã FR/task thì đặt đầu (`feature/FR-AUTH-11-quen-mat-khau`), sống ≤ 3 ngày. **Đổi tên file luôn dùng `git mv`.**
 
 ---
 
