@@ -13,7 +13,8 @@ import java.util.List;
 public class JdbcJudgingQueries implements JudgingQueries {
 
     private static final String TRONG_CONTEST = """
-            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score, created_at
+            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score,
+                   COALESCE(max_score, 0) AS max_score, created_at
               FROM submissions
              WHERE contest_id = :contestId
                AND status = 'DONE'
@@ -24,14 +25,15 @@ public class JdbcJudgingQueries implements JudgingQueries {
 
     private static final String TRONG_CONTEST_LIEN_MACH = """
             WITH lo AS (
-                SELECT id, user_id, problem_id, verdict, score, created_at, status
+                SELECT id, user_id, problem_id, verdict, score, max_score, created_at, status
                   FROM submissions
                  WHERE contest_id = :contestId
                    AND id > :sau
                  ORDER BY id
                  LIMIT :gioiHan
             )
-            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score, created_at
+            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score,
+                   COALESCE(max_score, 0) AS max_score, created_at
               FROM lo
              WHERE status = 'DONE'
                AND id < ALL (SELECT id FROM lo WHERE status <> 'DONE')
@@ -39,7 +41,8 @@ public class JdbcJudgingQueries implements JudgingQueries {
             """;
 
     private static final String CUA_DE = """
-            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score, created_at
+            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score,
+                   COALESCE(max_score, 0) AS max_score, created_at
               FROM submissions
              WHERE problem_id = :problemId
                AND contest_id = :contestId
@@ -62,6 +65,7 @@ public class JdbcJudgingQueries implements JudgingQueries {
             rs.getLong("problem_id"),
             rs.getString("verdict"),
             rs.getInt("score"),
+            rs.getInt("max_score"),
             rs.getObject("created_at", OffsetDateTime.class).toInstant());
 
     private final JdbcClient jdbc;

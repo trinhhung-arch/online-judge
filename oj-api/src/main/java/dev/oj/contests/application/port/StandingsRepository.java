@@ -27,7 +27,7 @@ public interface StandingsRepository {
 
     void ghiKetQuaDeDongBang(long contestId, long userId, KetQuaDe ketQua);
 
-    void chotBanChup(long contestId, Instant freezeAt, Instant luc);
+    void chotBanChup(long contestId, Instant luc);
 
     Map<Long, DiemDaLuu> tongKetDaLuu(long contestId);
 

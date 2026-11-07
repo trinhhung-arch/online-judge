@@ -14,14 +14,22 @@ public final class IoiFormat implements ContestFormat {
 
     @Override
     public KetQuaDe apDung(KetQuaDe hienTai, BaiDaCham bai, Contest contest) {
-        boolean totHon = bai.score() > hienTai.diemCaoNhat();
+        int diem = diemQuyDoi(bai);
+        boolean totHon = diem > hienTai.diemCaoNhat();
         return new KetQuaDe(
                 hienTai.problemId(),
-                Math.max(hienTai.diemCaoNhat(), bai.score()),
+                Math.max(hienTai.diemCaoNhat(), diem),
                 0,
                 totHon ? bai.nopLuc() : hienTai.datLuc(),
                 totHon ? bai.submissionId() : hienTai.baiDatId(),
                 Math.max(hienTai.baiCuoiDaTinh(), bai.submissionId()));
+    }
+
+    static int diemQuyDoi(BaiDaCham bai) {
+        if (bai.maxScore() <= 0 || bai.diemDe() <= 0) {
+            return bai.score();
+        }
+        return (int) ((long) bai.score() * bai.diemDe() / bai.maxScore());
     }
 
     @Override

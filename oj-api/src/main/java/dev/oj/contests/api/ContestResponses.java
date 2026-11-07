@@ -53,14 +53,16 @@ public final class ContestResponses {
     }
 
     public record BangXepHang(long contestId, String format, boolean dongBang,
-                              List<Dong> top, Dong cuaToi, Integer hangCuaToi) {
+                              List<Dong> top, Dong cuaToi, Integer hangCuaToi,
+                              List<Dong> quanhToi) {
 
         public static BangXepHang tu(GetStandingsUseCase.BangXepHang b) {
             return new BangXepHang(
                     b.contest().id(), b.contest().format().code(), b.dongBang(),
                     xepHang(b.top()),
                     b.cuaToi() == null ? null : Dong.tu(b.cuaToi(), b.hangCuaToi()),
-                    b.hangCuaToi());
+                    b.hangCuaToi(),
+                    b.quanhToi().stream().map(d -> Dong.tu(d.dong(), d.hang())).toList());
         }
 
         private static List<Dong> xepHang(List<StandingsReader.Dong> cac) {

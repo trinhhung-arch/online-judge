@@ -8,6 +8,7 @@ import dev.oj.contests.domain.ContestFormat;
 import dev.oj.contests.domain.ContestFormat.KetQuaDe;
 import dev.oj.judging.application.published.JudgingQueries;
 import dev.oj.judging.application.published.JudgingQueries.ScoredSubmission;
+import dev.oj.platform.audit.AuditLog;
 import dev.oj.platform.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,13 +35,14 @@ public class StandingsUpdater {
     private final StandingsLock khoa;
     private final JudgingQueries judging;
     private final StandingsEventBus publisher;
+    private final AuditLog auditLog;
     private final AppProperties properties;
     private final java.time.Clock clock;
     private final TransactionTemplate tx;
 
     public StandingsUpdater(ContestRepository contests, StandingsRepository standings,
                             StandingsLock khoa, JudgingQueries judging,
-                            StandingsEventBus publisher,
+                            StandingsEventBus publisher, AuditLog auditLog,
                             AppProperties properties, java.time.Clock clock,
                             @Qualifier("appTransactionManager") PlatformTransactionManager txManager) {
         this.contests = contests;
@@ -48,6 +50,7 @@ public class StandingsUpdater {
         this.khoa = khoa;
         this.judging = judging;
         this.publisher = publisher;
+        this.auditLog = auditLog;
         this.properties = properties;
         this.clock = clock;
         this.tx = new TransactionTemplate(txManager);
@@ -79,10 +82,21 @@ public class StandingsUpdater {
                 contest.endsAt().plus(properties.contest().standingsGrace()));
         boolean conBaiCho = quaAnHan && judging.conBaiChoChamTrongContest(contest.id());
         if (capNhat(contest) == 0 && quaAnHan && !conBaiCho) {
+            congBoNeuTuDong(contest, bayGio);
             contests.chotBangXepHang(contest.id(), bayGio);
             log.info("Đã chốt bảng xếp hạng contest {}: hết ân hạn, không còn bài chờ chấm",
                     contest.id());
         }
+    }
+
+    private void congBoNeuTuDong(Contest contest, Instant bayGio) {
+        if (!contest.revealAfterEnd() || contest.freezeAt() == null || contest.daCongBo()) {
+            return;
+        }
+        contests.congBo(contest.id(), bayGio);
+        publisher.bangDaDoi(contest.id());
+        auditLog.ghi("CONTEST_STANDINGS_REVEALED", "contest", contest.id(),
+                Map.of("slug", contest.slug(), "tuDong", true));
     }
 
     public int capNhat(Contest contest) {
@@ -128,6 +142,7 @@ public class StandingsUpdater {
         });
 
         ContestFormat format = contest.format();
+        Map<Long, Integer> diemCuaDe = BaiChamKyThi.diemCuaDe(contests, contest.id());
         Map<Long, Long> baiCuoiCuaNguoi = new LinkedHashMap<>();
         Set<Long> deBiCham = new LinkedHashSet<>();
 
@@ -135,9 +150,7 @@ public class StandingsUpdater {
             Map<Long, KetQuaDe> theoDe = theoNguoi.computeIfAbsent(
                     bai.userId(), k -> new LinkedHashMap<>());
             KetQuaDe truoc = theoDe.getOrDefault(bai.problemId(), KetQuaDe.trong(bai.problemId()));
-            KetQuaDe sau = format.apDung(truoc, new ContestFormat.BaiDaCham(
-                    bai.submissionId(), bai.userId(), bai.problemId(),
-                    bai.verdict(), bai.score(), bai.nopLuc()), contest);
+            KetQuaDe sau = format.apDung(truoc, BaiChamKyThi.tu(bai, diemCuaDe), contest);
             theoDe.put(bai.problemId(), sau);
 
             deBiCham.add(khoaDe(bai.userId(), bai.problemId()));

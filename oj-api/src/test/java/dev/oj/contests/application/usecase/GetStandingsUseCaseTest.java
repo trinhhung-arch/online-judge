@@ -172,6 +172,12 @@ class GetStandingsUseCaseTest {
         public Optional<Integer> hang(long contestId, long userId, boolean dongBang) {
             return Optional.of(42);
         }
+
+        @Override
+        public List<DongCoHang> quanhNguoi(long contestId, long userId, int k, boolean dongBang) {
+            return List.of(new DongCoHang(new Dong(userId - 1, "binh", "Bình", 120, 0, 1, BAY_GIO, 0), 41),
+                    new DongCoHang(cuaNguoi(contestId, userId, dongBang).orElseThrow(), 42));
+        }
     }
 
     private static UnsupportedOperationException chuaCan() {

@@ -9,9 +9,16 @@ public record ContestProperties(
         int topSize,
         Duration driftCheckInterval,
         Duration driftCheckWindow,
-        int penaltyMinutesMax) {
+        int penaltyMinutesMax,
+        int neighborhoodSize) {
 
 public ContestProperties {
+        if (neighborhoodSize < 0 || neighborhoodSize > 10) {
+            throw new IllegalStateException(
+                    "oj.contest.neighborhood-size = " + neighborhoodSize
+                            + " phải trong khoảng 0..10 — đây là số dòng mỗi phía quanh người xem, "
+                            + "không phải cách để tải cả bảng");
+        }
         if (penaltyMinutesMax < 0 || penaltyMinutesMax > Short.MAX_VALUE) {
             throw new IllegalStateException(
                     "oj.contest.penalty-minutes-max = " + penaltyMinutesMax

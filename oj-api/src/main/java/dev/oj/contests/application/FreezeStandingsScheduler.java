@@ -76,7 +76,7 @@ public class FreezeStandingsScheduler {
                 return false;
             }
             ghiBanChup(contest);
-            standings.chotBanChup(contest.id(), contest.freezeAt(), clock.instant());
+            standings.chotBanChup(contest.id(), clock.instant());
             return true;
         });
         if (Boolean.TRUE.equals(vuaChup)) {
@@ -97,6 +97,7 @@ public class FreezeStandingsScheduler {
 
     private Map<Long, Map<Long, KetQuaDe>> tinhTuBaiNopTruocDongBang(Contest contest) {
         Map<Long, Map<Long, KetQuaDe>> theoNguoi = new LinkedHashMap<>();
+        Map<Long, Integer> diemCuaDe = BaiChamKyThi.diemCuaDe(contests, contest.id());
         int coLo = properties.contest().standingsBatchSize();
         long sau = 0;
         List<ScoredSubmission> lo;
@@ -111,9 +112,7 @@ public class FreezeStandingsScheduler {
                 KetQuaDe truoc = theoDe.getOrDefault(bai.problemId(),
                         KetQuaDe.trong(bai.problemId()));
                 theoDe.put(bai.problemId(), contest.format().apDung(truoc,
-                        new ContestFormat.BaiDaCham(bai.submissionId(), bai.userId(),
-                                bai.problemId(), bai.verdict(), bai.score(), bai.nopLuc()),
-                        contest));
+                        BaiChamKyThi.tu(bai, diemCuaDe), contest));
             }
         }
         return theoNguoi;

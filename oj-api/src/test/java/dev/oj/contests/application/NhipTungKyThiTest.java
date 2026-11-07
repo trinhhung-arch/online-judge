@@ -43,7 +43,8 @@ class NhipTungKyThiTest {
         contests.danhSach = List.of(kyThi(1), kyThi(2));
         KhoaGia khoa = new KhoaGia(1L);
         StandingsUpdater updater = new StandingsUpdater(contests, standings, khoa,
-                new JudgingGia(), new BusGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
+                new JudgingGia(), new BusGia(), (h, l, id, ct) -> { }, AppPropertiesGia.macDinh(),
+                CLOCK, new TxGia());
 
         assertThatCode(updater::nhip).doesNotThrowAnyException();
 
@@ -76,7 +77,8 @@ class NhipTungKyThiTest {
     void doc_danh_sach_hong_thi_nuot() {
         contests.nem = true;
         StandingsUpdater updater = new StandingsUpdater(contests, standings, new KhoaGia(null),
-                new JudgingGia(), new BusGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
+                new JudgingGia(), new BusGia(), (h, l, id, ct) -> { }, AppPropertiesGia.macDinh(),
+                CLOCK, new TxGia());
 
         assertThatCode(updater::nhip).doesNotThrowAnyException();
         assertThatCode(new FreezeStandingsScheduler(contests, standings, new KhoaGia(null),
@@ -91,7 +93,7 @@ class NhipTungKyThiTest {
 
         updater(new JudgingGia()).nhip();
 
-        assertThat(contests.daChot).containsExactly(1L);
+        assertThat(contests.loiGoi).containsExactly("chot 1");
     }
 
     @Test
@@ -103,7 +105,7 @@ class NhipTungKyThiTest {
 
         updater(judging).nhip();
 
-        assertThat(contests.daChot).isEmpty();
+        assertThat(contests.loiGoi).isEmpty();
     }
 
     @Test
@@ -113,12 +115,43 @@ class NhipTungKyThiTest {
 
         updater(new JudgingGia()).nhip();
 
-        assertThat(contests.daChot).isEmpty();
+        assertThat(contests.loiGoi).isEmpty();
     }
+
+    @Test
+    @DisplayName("★ DB-13 · chốt bảng kỳ thi có đóng băng và bật revealAfterEnd → tự công bố TRƯỚC khi chốt, có audit")
+    void chot_bang_thi_tu_cong_bo() {
+        contests.danhSach = List.of(kyThiDongBangXong(1, true));
+
+        updater(new JudgingGia()).nhip();
+
+        assertThat(contests.loiGoi).containsExactly("congBo 1", "chot 1");
+        assertThat(audit).containsExactly("CONTEST_STANDINGS_REVEALED");
+    }
+
+    @Test
+    @DisplayName("DB-13 · revealAfterEnd = false → chỉ chốt, bảng chờ ADMIN công bố")
+    void tat_tu_cong_bo_thi_chi_chot() {
+        contests.danhSach = List.of(kyThiDongBangXong(1, false));
+
+        updater(new JudgingGia()).nhip();
+
+        assertThat(contests.loiGoi).containsExactly("chot 1");
+        assertThat(audit).isEmpty();
+    }
+
+    private static Contest kyThiDongBangXong(long id, boolean tuCongBo) {
+        return new Contest(id, "xong-" + id, "Xong " + id, ContestFormats.tuMa("ICPC"),
+                BAY_GIO.minus(Duration.ofHours(3)), BAY_GIO.minus(Duration.ofMinutes(10)),
+                BAY_GIO.minus(Duration.ofHours(1)), null, 20, true, tuCongBo, 1L);
+    }
+
+    private final List<String> audit = new ArrayList<>();
 
     private StandingsUpdater updater(JudgingGia judging) {
         return new StandingsUpdater(contests, standings, new KhoaGia(null), judging,
-                new BusGia(), AppPropertiesGia.macDinh(), CLOCK, new TxGia());
+                new BusGia(), (h, l, id, ct) -> audit.add(h), AppPropertiesGia.macDinh(), CLOCK,
+                new TxGia());
     }
 
     private static Contest kyThiKetThucTruoc(long id, Duration truoc) {
@@ -153,7 +186,7 @@ class NhipTungKyThiTest {
     private static final class ContestGia implements ContestRepository {
         List<Contest> danhSach = List.of();
         boolean nem;
-        final List<Long> daChot = new ArrayList<>();
+        final List<String> loiGoi = new ArrayList<>();
 
         @Override
         public List<Contest> canCapNhat(Instant bayGio) {
@@ -162,7 +195,7 @@ class NhipTungKyThiTest {
 
         @Override
         public void chotBangXepHang(long contestId, Instant luc) {
-            daChot.add(contestId);
+            loiGoi.add("chot " + contestId);
         }
 
         @Override
@@ -180,11 +213,11 @@ class NhipTungKyThiTest {
         @Override public Optional<Contest> timTheoId(long c) { throw chuaCan(); }
         @Override public Optional<Contest> timTheoSlug(String s) { throw chuaCan(); }
         @Override public long tao(ContestMoi c) { throw chuaCan(); }
-        @Override public List<DeCuaContest> deCua(long c) { throw chuaCan(); }
+        @Override public List<DeCuaContest> deCua(long c) { return List.of(); }
         @Override public boolean daDangKy(long c, long u) { throw chuaCan(); }
         @Override public void dangKy(long c, long u, Instant l) { throw chuaCan(); }
         @Override public List<Contest> danhSach(Long s, int g) { throw chuaCan(); }
-        @Override public void congBo(long c, Instant l) { throw chuaCan(); }
+        @Override public void congBo(long c, Instant l) { loiGoi.add("congBo " + c); }
     }
 
     private static final class StandingsGia implements StandingsRepository {
@@ -196,7 +229,7 @@ class NhipTungKyThiTest {
         @Override public boolean daChupDongBang(long c) { return false; }
 
         @Override
-        public void chotBanChup(long c, Instant freezeAt, Instant luc) {
+        public void chotBanChup(long c, Instant luc) {
             if (nemKhiChup != null && nemKhiChup == c) {
                 throw new IllegalStateException("dữ liệu lạ của contest " + c);
             }

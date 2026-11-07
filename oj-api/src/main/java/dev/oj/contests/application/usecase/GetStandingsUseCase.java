@@ -51,11 +51,18 @@ public class GetStandingsUseCase {
 
         StandingsReader.Dong cuaToi = null;
         Integer hangCuaToi = null;
+        List<StandingsReader.DongCoHang> quanhToi = List.of();
         if (nguoiGoi != null) {
-            cuaToi = standings.cuaNguoi(contestId, nguoiGoi.id(), dongBang).orElse(null);
-            hangCuaToi = standings.hang(contestId, nguoiGoi.id(), dongBang).orElse(null);
+            quanhToi = standings.quanhNguoi(contestId, nguoiGoi.id(),
+                    properties.contest().neighborhoodSize(), dongBang);
+            for (StandingsReader.DongCoHang d : quanhToi) {
+                if (d.dong().userId() == nguoiGoi.id()) {
+                    cuaToi = d.dong();
+                    hangCuaToi = d.hang();
+                }
+            }
         }
-        return new BangXepHang(contest, dongBang, top, cuaToi, hangCuaToi);
+        return new BangXepHang(contest, dongBang, top, cuaToi, hangCuaToi, quanhToi);
     }
 
     public CurrentUser nguoiGoiHienTai() {
@@ -68,7 +75,8 @@ public class GetStandingsUseCase {
 
     public record BangXepHang(Contest contest, boolean dongBang,
                               List<StandingsReader.Dong> top,
-                              StandingsReader.Dong cuaToi, Integer hangCuaToi) {
+                              StandingsReader.Dong cuaToi, Integer hangCuaToi,
+                              List<StandingsReader.DongCoHang> quanhToi) {
 
         public Optional<StandingsReader.Dong> dongCuaToi() {
             return Optional.ofNullable(cuaToi);

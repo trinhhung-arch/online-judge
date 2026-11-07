@@ -30,3 +30,5 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [020](020-ce-ie-khong-tinh-lan-sai-icpc.md) | ICPC: chỉ WA, TLE, MLE, RE tính là lần sai — CE và IE không bị phạt | v1.1 |
 | [021](021-bang-xep-hang-chot-khi-het-bai-cho.md) | Bảng xếp hạng chốt khi hết bài chờ chấm, không dừng cứng sau 5 phút | v1.1 |
 | [022](022-ban-chup-dong-bang-tinh-tu-bai-nop-truoc-freeze.md) | Bản chụp đóng băng tính lại từ bài nộp trước `freeze_at` | v1.1 |
+| [023](023-icpc-phat-theo-phut-ioi-quy-doi-theo-points.md) | ICPC phạt theo phút làm tròn xuống; IOI quy đổi điểm theo `points` của đề | v1.1 |
+| [024](024-cache-bang-xep-hang-ghi-theo-phien-ban.md) | Cache bảng xếp hạng chỉ được ghi khi bảng chưa đổi kể từ lúc đọc | v1.1 |

@@ -57,7 +57,7 @@ public final class IcpcFormat implements ContestFormat {
             if (!de.daDat()) {
                 continue;
             }
-            tong += contest.keTuLucBatDau(de.datLuc()).toSeconds();
+            tong += contest.keTuLucBatDau(de.datLuc()).toMinutes() * 60L;
             tong += (long) de.soLanSaiTruocKhiDat() * contest.penaltyMinutes() * 60L;
         }
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0, tong));

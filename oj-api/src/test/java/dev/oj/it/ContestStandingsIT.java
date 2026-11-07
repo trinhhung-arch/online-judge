@@ -223,10 +223,13 @@ class ContestStandingsIT extends PostgresIT {
         }
 
         @Test
-        @DisplayName("★ đóng băng KHÔNG tự hết khi hết giờ — chờ người công bố")
+        @DisplayName("★ tắt tự công bố (revealAfterEnd = false): đóng băng KHÔNG tự hết khi hết giờ — chờ người công bố")
         void dong_bang_khong_tu_het() {
-            long id = dungContest(MOC.minus(Duration.ofHours(4)),
-                    MOC.minus(Duration.ofHours(1)), MOC.minus(Duration.ofHours(2)));
+            long id = contests.tao(new ContestRepository.ContestMoi(
+                    "thi-thu-" + System.nanoTime(), "Thi thử", "ICPC",
+                    MOC.minus(Duration.ofHours(4)), MOC.minus(Duration.ofHours(1)),
+                    MOC.minus(Duration.ofHours(2)), 20, true, false, ADMIN_ID));
+            updater.nhip();
 
             assertThat(doc(id).dangDongBang(Instant.now())).isTrue();
         }

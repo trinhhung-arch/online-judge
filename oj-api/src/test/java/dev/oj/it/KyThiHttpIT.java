@@ -49,8 +49,10 @@ class KyThiHttpIT extends HttpIT {
     }
 
     private void nopAc(long contestId) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
@@ -105,8 +107,10 @@ class KyThiHttpIT extends HttpIT {
     @Test
     @DisplayName("★ DB-11 · USER và SETTER gọi công bố bảng → 403, bảng vẫn đóng băng")
     void db11_sai_vai_tro_khong_cong_bo_duoc() {
-        long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)),
-                bayGio.minus(Duration.ofHours(2)));
+        long id = contests.tao(new ContestRepository.ContestMoi("http-" + System.nanoTime(),
+                "Thi thử", "ICPC", bayGio.minus(Duration.ofHours(3)),
+                bayGio.minus(Duration.ofHours(1)), bayGio.minus(Duration.ofHours(2)), 20, true,
+                false, ADMIN_ID));
 
         for (String token : List.of(bearerDev(), bearer(SETTER_ID, "setter", Role.SETTER))) {
             assertThat(goi(http.post().uri("/api/v1/contests/{id}/reveal", id)

@@ -8,6 +8,8 @@ import dev.oj.contests.application.port.StandingsReader;
 import dev.oj.contests.application.usecase.GetStandingsUseCase;
 import dev.oj.contests.application.usecase.RevealStandingsUseCase;
 import dev.oj.contests.domain.Contest;
+import dev.oj.contests.infrastructure.JdbcStandingsReader;
+import dev.oj.contests.infrastructure.RedisStandingsCache;
 import dev.oj.contract.ClaimRequestDto;
 import dev.oj.judging.application.usecase.ClaimJudgeJobUseCase;
 import dev.oj.judging.application.usecase.ReapStaleJobsUseCase;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -49,6 +52,7 @@ class BangXepHangVanHanhIT extends PostgresIT {
     @Autowired ClaimJudgeJobUseCase claimJudgeJob;
     @Autowired ReapStaleJobsUseCase reapStaleJobs;
     @Autowired AppProperties props;
+    @Autowired ObjectMapper json;
 
     private final Instant bayGio = Instant.now();
 
@@ -166,8 +170,10 @@ class BangXepHangVanHanhIT extends PostgresIT {
     }
 
     private String taoNguon() {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         return NGUON;
     }
@@ -215,6 +221,34 @@ class BangXepHangVanHanhIT extends PostgresIT {
         standings.top(id, 50, false);
         assertThat(redis.hasKey(khoaThat)).isTrue();
         assertThat(redis.hasKey(khoaChup)).isTrue();
+    }
+
+    @Test
+    @DisplayName("★ TT-06 · bảng đổi đúng lúc một lượt đọc đang lấy bảng cũ từ Postgres → bảng cũ KHÔNG được ghi vào cache")
+    void tt06_khong_ghi_bang_cu_vao_cache() {
+        long id = kyThi(bayGio.minus(Duration.ofHours(1)), bayGio.plus(Duration.ofHours(2)), null);
+        String khoa = "oj:standings:" + id + ":live";
+        var dongCu = new StandingsReader.Dong(USER_ID, "dev", "Dev", 1, 60, 1, bayGio, 0);
+        var docTrungLucBangDoi = new JdbcStandingsReader(jdbc) {
+            @Override
+            public List<StandingsReader.Dong> top(long contestId, int n, boolean dongBang) {
+                bus.bangDaDoi(contestId);
+                return List.of(dongCu);
+            }
+        };
+        var docBinhThuong = new JdbcStandingsReader(jdbc) {
+            @Override
+            public List<StandingsReader.Dong> top(long contestId, int n, boolean dongBang) {
+                return List.of(dongCu);
+            }
+        };
+
+        assertThat(new RedisStandingsCache(docTrungLucBangDoi, redis, json).top(id, 50, false))
+                .containsExactly(dongCu);
+        assertThat(redis.hasKey(khoa)).as("bảng đọc trước lô mới nằm lại trong cache").isFalse();
+
+        new RedisStandingsCache(docBinhThuong, redis, json).top(id, 50, false);
+        assertThat(redis.hasKey(khoa)).as("không có gì chen vào thì vẫn ghi cache như cũ").isTrue();
     }
 
     @Test

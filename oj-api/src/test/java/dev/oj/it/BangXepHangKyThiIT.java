@@ -51,8 +51,12 @@ class BangXepHangKyThiIT extends PostgresIT {
     private final Instant bayGio = Instant.now();
 
     private long kyThi(Instant batDau, Instant ketThuc, Instant dongBang) {
+        return kyThi(batDau, ketThuc, dongBang, true);
+    }
+
+    private long kyThi(Instant batDau, Instant ketThuc, Instant dongBang, boolean tuCongBo) {
         long id = contests.tao(new ContestRepository.ContestMoi("bxh-" + System.nanoTime(),
-                "Thi thử", "ICPC", batDau, ketThuc, dongBang, 20, true, true, ADMIN_ID));
+                "Thi thử", "ICPC", batDau, ketThuc, dongBang, 20, true, tuCongBo, ADMIN_ID));
         soanKyThi.themDe(id, PROBLEM_ID, "A", 100, ADMIN_ID, true);
         return id;
     }
@@ -69,8 +73,10 @@ class BangXepHangKyThiIT extends PostgresIT {
     }
 
     private void nop(long contestId, String verdict, int soBai) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
@@ -174,8 +180,10 @@ class BangXepHangKyThiIT extends PostgresIT {
         assertThat(standings.top(id, 50, false)).singleElement()
                 .satisfies(d -> assertThat(d.soBaiDat()).isEqualTo(1));
 
-        jdbc.sql("UPDATE submissions SET verdict = 'WA', score = 0, attempt = 2 "
-                + "WHERE contest_id = :c").param("c", id).update();
+        jdbc.sql("""
+                UPDATE submissions SET verdict = 'WA', score = 0, attempt = 2
+                 WHERE contest_id = :c
+                """).param("c", id).update();
         assertThat(updater.capNhat(doc(id))).as("watermark đã qua bài này").isZero();
 
         var ctx = new JobContextGia(Map.of("contestId", id), ADMIN_ID);
@@ -227,7 +235,7 @@ class BangXepHangKyThiIT extends PostgresIT {
     @DisplayName("★ DB-12 · sau khi công bố: người thường thấy bảng thật, cache bị xoá, có sự kiện, có audit")
     void db12_sau_khi_cong_bo() throws Exception {
         long id = kyThi(bayGio.minus(Duration.ofHours(3)), bayGio.minus(Duration.ofHours(1)),
-                bayGio.minus(Duration.ofHours(2)));
+                bayGio.minus(Duration.ofHours(2)), false);
         Instant t = bayGio.minus(Duration.ofMinutes(150));
         chup(id, USER_ID, 1, 600, t);
         song(id, USER_ID, 3, 1200, t);

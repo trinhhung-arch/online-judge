@@ -31,6 +31,7 @@ public class RedisStandingsEventBus implements StandingsEventBus {
     @Override
     public void bangDaDoi(long contestId) {
         try {
+            redis.opsForValue().increment(StandingsKeys.phienBan(contestId));
             redis.delete(StandingsKeys.zset(contestId, false));
             redis.delete(StandingsKeys.zset(contestId, true));
             redis.convertAndSend(kenh(contestId), String.valueOf(contestId));
