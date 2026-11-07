@@ -55,13 +55,20 @@ public class StandingsUpdater {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${oj.contest.standings-interval}")
     public void nhip() {
+        List<Contest> canCapNhat;
         try {
-            for (Contest c : contests.canCapNhat(clock.instant(),
-                    properties.contest().standingsGrace())) {
-                capNhat(c);
-            }
+            canCapNhat = contests.canCapNhat(clock.instant(), properties.contest().standingsGrace());
         } catch (RuntimeException e) {
-            log.error("Nhịp StandingsUpdater hỏng — nuốt để bộ lập lịch không huỷ tác vụ", e);
+            log.error("Không đọc được danh sách kỳ thi cần cập nhật — thử lại ở nhịp sau", e);
+            return;
+        }
+        for (Contest c : canCapNhat) {
+            try {
+                capNhat(c);
+            } catch (RuntimeException e) {
+                log.error("Cập nhật bảng xếp hạng contest {} hỏng — các kỳ thi khác vẫn chạy "
+                        + "tiếp, contest này thử lại ở nhịp sau", c.id(), e);
+            }
         }
     }
 

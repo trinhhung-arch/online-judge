@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -36,18 +37,25 @@ public class StandingsDriftCheckScheduler {
 
     @Scheduled(fixedDelayString = "${oj.contest.drift-check-interval}")
     public void nhip() {
+        List<Long> canSoat;
         try {
             Instant bayGio = clock.instant();
             var cauHinh = properties.contest();
-
-            for (long contestId : standings.canSoatLech(
+            canSoat = standings.canSoatLech(
                     bayGio,
                     bayGio.minus(cauHinh.driftCheckWindow()),
-                    bayGio.minus(cauHinh.driftCheckInterval()))) {
-                taoViec(contestId);
-            }
+                    bayGio.minus(cauHinh.driftCheckInterval()));
         } catch (RuntimeException e) {
-            log.error("Nhịp soát lệch hỏng — nuốt để bộ lập lịch không huỷ tác vụ", e);
+            log.error("Không đọc được danh sách kỳ thi cần soát lệch — thử lại ở nhịp sau", e);
+            return;
+        }
+        for (long contestId : canSoat) {
+            try {
+                taoViec(contestId);
+            } catch (RuntimeException e) {
+                log.error("Tạo việc soát lệch cho contest {} hỏng — các kỳ thi khác vẫn được "
+                        + "soát, contest này thử lại ở nhịp sau", contestId, e);
+            }
         }
     }
 

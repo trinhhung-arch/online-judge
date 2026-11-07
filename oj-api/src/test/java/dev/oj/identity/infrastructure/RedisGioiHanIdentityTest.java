@@ -12,7 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.data.redis.core.types.Expiration;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -39,7 +39,8 @@ class RedisGioiHanIdentityTest {
 
     private final class RedisGia extends StringRedisTemplate {
 
-        final List<Long> hanDaDatMs = new ArrayList<>();
+        final List<Long> demTraVe = new ArrayList<>();
+        final List<String> loiGoiScript = new ArrayList<>();
         long ttlConLaiGiay;
         RuntimeException chet;
 
@@ -52,10 +53,12 @@ class RedisGioiHanIdentityTest {
         }
 
         @Override
-        public Boolean expire(String key, Expiration expiration) {
-            assertThat(key).isEqualTo(KHOA_DANG_KY);
-            hanDaDatMs.add(expiration.getExpirationTimeInMilliseconds());
-            return true;
+        public <T> T execute(RedisScript<T> script, List<String> keys, Object... args) {
+            if (chet != null) {
+                throw chet;
+            }
+            loiGoiScript.add(keys + " " + List.of(args));
+            return script.getResultType().cast(demTraVe.removeFirst());
         }
 
         @Override
@@ -82,22 +85,23 @@ class RedisGioiHanIdentityTest {
     }
 
     @Test
-    @DisplayName("đăng ký: lượt ĐẦU của cửa sổ đặt hạn 1 giờ cho khoá — quên bước này là khoá sống mãi")
-    void dang_ky_luot_dau_dat_han() {
+    @DisplayName("đăng ký: mỗi lượt là MỘT script nguyên tử (đếm + đặt hạn), đúng khoá, cửa sổ 1 giờ tính bằng ms")
+    void dang_ky_mot_script_nguyen_tu() {
         var redis = new RedisGia();
-        when(ops.increment(KHOA_DANG_KY)).thenReturn(1L);
+        redis.demTraVe.add(1L);
 
         new RedisRegistrationRateLimiter(redis, props).kiemVaGhiNhan(IP);
 
-        assertThat(redis.hanDaDatMs).containsExactly(Duration.ofHours(1).toMillis());
+        assertThat(redis.loiGoiScript)
+                .containsExactly("[" + KHOA_DANG_KY + "] [" + Duration.ofHours(1).toMillis() + "]");
     }
 
     @Test
-    @DisplayName("đăng ký: lượt 10 qua, không đặt lại hạn; lượt 11 bị chặn với đúng thời gian còn lại của khoá")
+    @DisplayName("đăng ký: lượt 10 qua; lượt 11 bị chặn với đúng thời gian còn lại của khoá")
     void dang_ky_luot_10_qua_luot_11_bi_chan() {
         var redis = new RedisGia();
         redis.ttlConLaiGiay = 1_234;
-        when(ops.increment(KHOA_DANG_KY)).thenReturn(10L, 11L);
+        redis.demTraVe.addAll(List.of(10L, 11L));
         var hangRao = new RedisRegistrationRateLimiter(redis, props);
 
         assertThatCode(() -> hangRao.kiemVaGhiNhan(IP)).doesNotThrowAnyException();
@@ -105,7 +109,6 @@ class RedisGioiHanIdentityTest {
                 .isInstanceOf(IdentityException.class)
                 .hasFieldOrPropertyWithValue("code", "identity.dang_ky_qua_nhieu")
                 .hasFieldOrPropertyWithValue("retryAfter", Duration.ofSeconds(1_234));
-        assertThat(redis.hanDaDatMs).as("chỉ lượt đầu của cửa sổ mới đặt hạn").isEmpty();
     }
 
     @Test
