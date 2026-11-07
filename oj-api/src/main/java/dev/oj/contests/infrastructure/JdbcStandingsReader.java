@@ -16,15 +16,17 @@ import java.util.Optional;
 @Repository
 public class JdbcStandingsReader implements StandingsReader {
 
-    private static final String BANG_THAT = """
-            WITH bang AS (
-                SELECT user_id, total_score, penalty_seconds, solved_count, last_scoring_at,
-                       CAST(NULL AS timestamptz) AS freeze_at
-                  FROM contest_standings
-                 WHERE contest_id = :contestId)
+    private static final String TOP = """
+            SELECT s.user_id, u.handle, u.display_name, s.total_score, s.penalty_seconds,
+                   s.solved_count, s.last_scoring_at, 0 AS cho_sau_freeze
+              FROM contest_standings s
+              JOIN users u ON u.id = s.user_id
+             WHERE s.contest_id = :contestId
+             ORDER BY s.total_score DESC, s.penalty_seconds ASC, s.last_scoring_at ASC NULLS LAST
+             LIMIT :n
             """;
 
-    private static final String BANG_DONG_BANG = """
+    private static final String TOP_DONG_BANG = """
             WITH bang AS (
                 SELECT n.user_id,
                        COALESCE(f.total_score, 0) AS total_score,
@@ -39,66 +41,137 @@ public class JdbcStandingsReader implements StandingsReader {
                   CROSS JOIN (SELECT freeze_at FROM contests WHERE id = :contestId) k
                   LEFT JOIN contest_standings_frozen f
                          ON f.contest_id = :contestId AND f.user_id = n.user_id)
-            """;
-
-    private static final String CHON = """
             SELECT b.user_id, u.handle, u.display_name, b.total_score, b.penalty_seconds,
                    b.solved_count, b.last_scoring_at,
-                   CASE WHEN b.freeze_at IS NULL THEN 0
-                        ELSE (SELECT count(*) FROM submissions s
-                               WHERE s.user_id = b.user_id AND s.contest_id = :contestId
-                                 AND s.created_at >= b.freeze_at) END AS cho_sau_freeze
-            """;
-
-    private static final String THU_TU = """
-            b.total_score DESC, b.penalty_seconds ASC, b.last_scoring_at ASC NULLS LAST
-            """;
-
-    private static final String TOP_TRONG_BANG = CHON + """
+                   (SELECT count(*) FROM submissions s
+                     WHERE s.user_id = b.user_id AND s.contest_id = :contestId
+                       AND s.created_at >= b.freeze_at) AS cho_sau_freeze
               FROM bang b
               JOIN users u ON u.id = b.user_id
-             ORDER BY""" + " " + THU_TU + " LIMIT :n";
+             ORDER BY b.total_score DESC, b.penalty_seconds ASC, b.last_scoring_at ASC NULLS LAST
+             LIMIT :n
+            """;
 
-    private static final String CUA_NGUOI_TRONG_BANG = CHON + """
+    private static final String CUA_NGUOI = """
+            SELECT s.user_id, u.handle, u.display_name, s.total_score, s.penalty_seconds,
+                   s.solved_count, s.last_scoring_at, 0 AS cho_sau_freeze
+              FROM contest_standings s
+              JOIN users u ON u.id = s.user_id
+             WHERE s.contest_id = :contestId AND s.user_id = :userId
+            """;
+
+    private static final String CUA_NGUOI_DONG_BANG = """
+            WITH bang AS (
+                SELECT n.user_id,
+                       COALESCE(f.total_score, 0) AS total_score,
+                       COALESCE(f.penalty_seconds, 0) AS penalty_seconds,
+                       COALESCE(f.solved_count, 0) AS solved_count,
+                       f.last_scoring_at,
+                       k.freeze_at
+                  FROM (SELECT user_id FROM contest_standings WHERE contest_id = :contestId
+                        UNION
+                        SELECT user_id FROM contest_standings_frozen
+                         WHERE contest_id = :contestId) n
+                  CROSS JOIN (SELECT freeze_at FROM contests WHERE id = :contestId) k
+                  LEFT JOIN contest_standings_frozen f
+                         ON f.contest_id = :contestId AND f.user_id = n.user_id)
+            SELECT b.user_id, u.handle, u.display_name, b.total_score, b.penalty_seconds,
+                   b.solved_count, b.last_scoring_at,
+                   (SELECT count(*) FROM submissions s
+                     WHERE s.user_id = b.user_id AND s.contest_id = :contestId
+                       AND s.created_at >= b.freeze_at) AS cho_sau_freeze
               FROM bang b
               JOIN users u ON u.id = b.user_id
              WHERE b.user_id = :userId
             """;
 
-    private static final String HANG_TRONG_BANG = """
+    private static final String HANG = """
             SELECT t.hang FROM (
-                SELECT b.user_id, rank() OVER (ORDER BY""" + " " + THU_TU + """
-                       ) AS hang
-                  FROM bang b) t
+                SELECT user_id,
+                       rank() OVER (ORDER BY total_score DESC, penalty_seconds ASC,
+                                             last_scoring_at ASC NULLS LAST) AS hang
+                  FROM contest_standings
+                 WHERE contest_id = :contestId) t
              WHERE t.user_id = :userId
             """;
 
-    private static final String QUANH_TRONG_BANG = """
-            , xep AS (
-                SELECT b.*,
-                       rank() OVER (ORDER BY""" + " " + THU_TU + """
-                       ) AS hang,
-                       row_number() OVER (ORDER BY""" + " " + THU_TU + """
-                                          , b.user_id) AS vi_tri
-                  FROM bang b),
-              toi AS (SELECT vi_tri FROM xep WHERE user_id = :userId)
-            """ + CHON + """
-                   , b.hang
-              FROM xep b
-              JOIN users u ON u.id = b.user_id
-             CROSS JOIN toi
-             WHERE b.vi_tri BETWEEN toi.vi_tri - :k AND toi.vi_tri + :k
-             ORDER BY b.vi_tri
+    private static final String HANG_DONG_BANG = """
+            WITH bang AS (
+                SELECT n.user_id,
+                       COALESCE(f.total_score, 0) AS total_score,
+                       COALESCE(f.penalty_seconds, 0) AS penalty_seconds,
+                       f.last_scoring_at
+                  FROM (SELECT user_id FROM contest_standings WHERE contest_id = :contestId
+                        UNION
+                        SELECT user_id FROM contest_standings_frozen
+                         WHERE contest_id = :contestId) n
+                  LEFT JOIN contest_standings_frozen f
+                         ON f.contest_id = :contestId AND f.user_id = n.user_id)
+            SELECT t.hang FROM (
+                SELECT user_id,
+                       rank() OVER (ORDER BY total_score DESC, penalty_seconds ASC,
+                                             last_scoring_at ASC NULLS LAST) AS hang
+                  FROM bang) t
+             WHERE t.user_id = :userId
             """;
 
-    private static final String TOP = BANG_THAT + TOP_TRONG_BANG;
-    private static final String TOP_DONG_BANG = BANG_DONG_BANG + TOP_TRONG_BANG;
-    private static final String CUA_NGUOI = BANG_THAT + CUA_NGUOI_TRONG_BANG;
-    private static final String CUA_NGUOI_DONG_BANG = BANG_DONG_BANG + CUA_NGUOI_TRONG_BANG;
-    private static final String HANG = BANG_THAT + HANG_TRONG_BANG;
-    private static final String HANG_DONG_BANG = BANG_DONG_BANG + HANG_TRONG_BANG;
-    private static final String QUANH = BANG_THAT + QUANH_TRONG_BANG;
-    private static final String QUANH_DONG_BANG = BANG_DONG_BANG + QUANH_TRONG_BANG;
+    private static final String QUANH = """
+            WITH xep AS (
+                SELECT s.user_id, s.total_score, s.penalty_seconds, s.solved_count,
+                       s.last_scoring_at,
+                       rank() OVER (ORDER BY s.total_score DESC, s.penalty_seconds ASC,
+                                             s.last_scoring_at ASC NULLS LAST) AS hang,
+                       row_number() OVER (ORDER BY s.total_score DESC, s.penalty_seconds ASC,
+                                                   s.last_scoring_at ASC NULLS LAST,
+                                                   s.user_id) AS vi_tri
+                  FROM contest_standings s
+                 WHERE s.contest_id = :contestId),
+                 toi AS (SELECT vi_tri FROM xep WHERE user_id = :userId)
+            SELECT x.user_id, u.handle, u.display_name, x.total_score, x.penalty_seconds,
+                   x.solved_count, x.last_scoring_at, 0 AS cho_sau_freeze, x.hang
+              FROM xep x
+              JOIN users u ON u.id = x.user_id
+             CROSS JOIN toi
+             WHERE x.vi_tri BETWEEN toi.vi_tri - :k AND toi.vi_tri + :k
+             ORDER BY x.vi_tri
+            """;
+
+    private static final String QUANH_DONG_BANG = """
+            WITH bang AS (
+                SELECT n.user_id,
+                       COALESCE(f.total_score, 0) AS total_score,
+                       COALESCE(f.penalty_seconds, 0) AS penalty_seconds,
+                       COALESCE(f.solved_count, 0) AS solved_count,
+                       f.last_scoring_at,
+                       k.freeze_at
+                  FROM (SELECT user_id FROM contest_standings WHERE contest_id = :contestId
+                        UNION
+                        SELECT user_id FROM contest_standings_frozen
+                         WHERE contest_id = :contestId) n
+                  CROSS JOIN (SELECT freeze_at FROM contests WHERE id = :contestId) k
+                  LEFT JOIN contest_standings_frozen f
+                         ON f.contest_id = :contestId AND f.user_id = n.user_id),
+                 xep AS (
+                SELECT b.*,
+                       rank() OVER (ORDER BY b.total_score DESC, b.penalty_seconds ASC,
+                                             b.last_scoring_at ASC NULLS LAST) AS hang,
+                       row_number() OVER (ORDER BY b.total_score DESC, b.penalty_seconds ASC,
+                                                   b.last_scoring_at ASC NULLS LAST,
+                                                   b.user_id) AS vi_tri
+                  FROM bang b),
+                 toi AS (SELECT vi_tri FROM xep WHERE user_id = :userId)
+            SELECT x.user_id, u.handle, u.display_name, x.total_score, x.penalty_seconds,
+                   x.solved_count, x.last_scoring_at,
+                   (SELECT count(*) FROM submissions s
+                     WHERE s.user_id = x.user_id AND s.contest_id = :contestId
+                       AND s.created_at >= x.freeze_at) AS cho_sau_freeze,
+                   x.hang
+              FROM xep x
+              JOIN users u ON u.id = x.user_id
+             CROSS JOIN toi
+             WHERE x.vi_tri BETWEEN toi.vi_tri - :k AND toi.vi_tri + :k
+             ORDER BY x.vi_tri
+            """;
 
     private final JdbcClient jdbc;
 

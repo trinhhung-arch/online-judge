@@ -170,8 +170,10 @@ class BangXepHangVanHanhIT extends PostgresIT {
     }
 
     private String taoNguon() {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         return NGUON;
     }

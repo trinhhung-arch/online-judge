@@ -49,8 +49,10 @@ class KyThiHttpIT extends HttpIT {
     }
 
     private void nopAc(long contestId) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,

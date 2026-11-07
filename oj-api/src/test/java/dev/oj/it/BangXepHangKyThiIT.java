@@ -73,8 +73,10 @@ class BangXepHangKyThiIT extends PostgresIT {
     }
 
     private void nop(long contestId, String verdict, int soBai) {
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
@@ -178,8 +180,10 @@ class BangXepHangKyThiIT extends PostgresIT {
         assertThat(standings.top(id, 50, false)).singleElement()
                 .satisfies(d -> assertThat(d.soBaiDat()).isEqualTo(1));
 
-        jdbc.sql("UPDATE submissions SET verdict = 'WA', score = 0, attempt = 2 "
-                + "WHERE contest_id = :c").param("c", id).update();
+        jdbc.sql("""
+                UPDATE submissions SET verdict = 'WA', score = 0, attempt = 2
+                 WHERE contest_id = :c
+                """).param("c", id).update();
         assertThat(updater.capNhat(doc(id))).as("watermark đã qua bài này").isZero();
 
         var ctx = new JobContextGia(Map.of("contestId", id), ADMIN_ID);

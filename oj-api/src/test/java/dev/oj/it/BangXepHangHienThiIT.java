@@ -87,8 +87,10 @@ class BangXepHangHienThiIT extends PostgresIT {
     @DisplayName("★ TD-06 · IOI: bài 50/100 ở đề gắn 200 điểm lên bảng thành 100; đối soát tính lại cũng ra 100")
     void td06_ioi_quy_doi_theo_points() {
         long id = kyThiDaChot("IOI", 200);
-        jdbc.sql("INSERT INTO source_blobs (sha256, content, byte_size) "
-                + "VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING")
+        jdbc.sql("""
+                INSERT INTO source_blobs (sha256, content, byte_size)
+                VALUES (:sha, 'int main(){}', 12) ON CONFLICT DO NOTHING
+                """)
                 .param("sha", NGUON).update();
         jdbc.sql("""
                 INSERT INTO submissions (user_id, problem_id, contest_id, language_id,
