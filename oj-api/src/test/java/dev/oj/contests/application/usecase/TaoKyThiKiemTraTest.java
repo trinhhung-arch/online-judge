@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,6 +30,11 @@ class TaoKyThiKiemTraTest {
     private static AuthorContestUseCase.Lenh voiPhutPhat(int phut) {
         return new AuthorContestUseCase.Lenh("thi-thu", "Thi thử", "ICPC", BAT_DAU, KET_THUC,
                 null, phut, true, true);
+    }
+
+    private static AuthorContestUseCase.Lenh voiTheThuc(String theThuc) {
+        return new AuthorContestUseCase.Lenh("thi-thu", "Thi thử", theThuc, BAT_DAU, KET_THUC,
+                null, 20, true, true);
     }
 
     private static AuthorContestUseCase.Lenh voiSlug(String slug) {
@@ -75,6 +81,16 @@ class TaoKyThiKiemTraTest {
         loi(voiTieuDe("   "), "contest.tieu_de_khong_hop_le");
         hopLe(voiTieuDe("t".repeat(200)));
         loi(voiTieuDe("t".repeat(201)), "contest.tieu_de_khong_hop_le");
+    }
+
+    @Test
+    @DisplayName("★ AT-05 · thể thức ICPC và IOI được; CF, chữ thường icpc, rỗng và null → 400 contest.the_thuc_khong_hop_le")
+    void at05_the_thuc() {
+        hopLe(voiTheThuc("ICPC"));
+        hopLe(voiTheThuc("IOI"));
+        for (String sai : Arrays.asList("CF", "icpc", "", null)) {
+            loi(voiTheThuc(sai), "contest.the_thuc_khong_hop_le");
+        }
     }
 
     @Test

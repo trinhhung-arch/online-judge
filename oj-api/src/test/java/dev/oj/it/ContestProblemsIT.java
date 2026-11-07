@@ -187,6 +187,33 @@ class ContestProblemsIT extends PostgresIT {
     }
 
     @Test
+    @DisplayName("★ AT-12 · kỳ thi đã bắt đầu: thêm đề, đổi nhãn và gỡ đề → 400 contest.da_bat_dau, danh sách đề không đổi")
+    void at12_da_bat_dau_thi_khong_them_khong_go() {
+        long ky = contests.tao(new ContestRepository.ContestMoi(
+                "da-bat-dau-" + System.nanoTime(), "Thi thử", "ICPC",
+                MOC.minus(Duration.ofHours(1)), MOC.plus(Duration.ofHours(2)), null,
+                20, true, true, SETTER_ID));
+        soanKyThi.themDe(ky, PROBLEM_ID, "A", 100, ADMIN_ID, true);
+        long deKhac = deMoi("sau-gio-" + System.nanoTime());
+
+        try (var phien = GiaLapDanhTinh.dongVai(SETTER_ID, "setter", Role.SETTER)) {
+            assertThat(phien).isNotNull();
+            assertThatThrownBy(() -> author.themDe(ky, deKhac, "B", 100))
+                    .hasFieldOrPropertyWithValue("code", "contest.da_bat_dau");
+            assertThatThrownBy(() -> author.themDe(ky, PROBLEM_ID, "Z", 500))
+                    .hasFieldOrPropertyWithValue("code", "contest.da_bat_dau");
+            assertThatThrownBy(() -> author.goDeKhoiKyThi(ky, PROBLEM_ID))
+                    .hasFieldOrPropertyWithValue("code", "contest.da_bat_dau");
+        }
+
+        assertThat(contests.deCua(ky)).singleElement().satisfies(d -> {
+            assertThat(d.problemId()).isEqualTo(PROBLEM_ID);
+            assertThat(d.label()).isEqualTo("A");
+            assertThat(d.points()).isEqualTo(100);
+        });
+    }
+
+    @Test
     @DisplayName("thêm lại cùng một đề là CẬP NHẬT nhãn và điểm, không phải lỗi")
     void them_lai_cung_de_la_cap_nhat() {
         long ky = kyThiChuaMo();
