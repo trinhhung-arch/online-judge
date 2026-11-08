@@ -84,6 +84,37 @@ class BangXepHangHienThiIT extends PostgresIT {
     }
 
     @Test
+    @DisplayName("★ BX-09 · người xem ở hạng 120/130: top đúng 50 dòng và không có mình; dòng, hạng và vùng quanh mình vẫn đủ")
+    void bx09_nguoi_xem_ngoai_top_50() {
+        long id = kyThiDaChot("ICPC", 100);
+        jdbc.sql("""
+                WITH so AS (
+                    SELECT g, format('hang-%s', g) AS handle FROM generate_series(1, 129) AS g
+                ), moi AS (
+                    INSERT INTO users (handle, email, display_name)
+                    SELECT handle, format('%s@oj.test', handle), handle FROM so
+                    RETURNING id, handle
+                )
+                INSERT INTO contest_standings (contest_id, user_id, total_score, solved_count)
+                SELECT :c, moi.id, 2 * (130 - so.g), 1 FROM moi JOIN so USING (handle)
+                """).param("c", id).update();
+        jdbc.sql("""
+                INSERT INTO contest_standings (contest_id, user_id, total_score, solved_count)
+                VALUES (:c, :u, 21, 1)
+                """).param("c", id).param("u", USER_ID).update();
+
+        var bang = getStandings.thucHien(id, new CurrentUser(USER_ID, "dev", Role.USER));
+
+        assertThat(bang.top()).hasSize(50).extracting(StandingsReader.Dong::userId)
+                .doesNotContain(USER_ID);
+        assertThat(bang.hangCuaToi()).isEqualTo(120);
+        assertThat(bang.cuaToi().userId()).isEqualTo(USER_ID);
+        assertThat(bang.quanhToi()).extracting(StandingsReader.DongCoHang::hang)
+                .containsExactly(118, 119, 120, 121, 122);
+        assertThat(bang.quanhToi().get(2).dong().userId()).isEqualTo(USER_ID);
+    }
+
+    @Test
     @DisplayName("★ TD-06 · IOI: bài 50/100 ở đề gắn 200 điểm lên bảng thành 100; đối soát tính lại cũng ra 100")
     void td06_ioi_quy_doi_theo_points() {
         long id = kyThiDaChot("IOI", 200);

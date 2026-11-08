@@ -86,8 +86,8 @@ public class StandingsDriftCheckJob implements JobHandler {
 
         if (soDongLech > 0) {
             log.error("★ DRIFT: bảng xếp hạng contest {} lệch {}/{} dòng. "
-                            + "Chạy RebuildStandingsJob để dựng lại.",
-                    contestId, soDongLech, soDongKiem);
+                            + "Dựng lại: POST /api/v1/contests/{}/standings/rebuild (ADMIN).",
+                    contestId, soDongLech, soDongKiem, contestId);
         }
         ctx.ghiSuKien(soDongLech > 0 ? "ERROR" : "INFO",
                 "Đối soát xong: " + soDongLech + "/" + soDongKiem + " dòng lệch");

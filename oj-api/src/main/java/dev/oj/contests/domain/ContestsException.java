@@ -38,6 +38,6 @@ public class ContestsException extends DomainException {
     public static ContestsException chuaKetThuc() {
         return new ContestsException(Kind.CONFLICT, "contest.chua_ket_thuc",
                 "Kỳ thi chưa kết thúc.",
-                "Yêu cầu công bố bảng xếp hạng khi contest còn đang chạy");
+                "Yêu cầu công bố hoặc dựng lại bảng xếp hạng khi contest chưa kết thúc");
     }
 }

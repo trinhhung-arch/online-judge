@@ -190,7 +190,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-CON-05 | Đóng băng bảng xếp hạng N phút cuối; ADMIN vẫn xem được bản đầy đủ. Bản đóng băng chỉ gồm bài nộp trước `freeze_at`, chụp đúng một lần kể cả khi bảng đang trống (ADR 022). Cột "Chờ" đếm lúc đọc số bài nộp sau `freeze_at`; người chỉ nộp sau giờ đóng băng vẫn hiện với 0 điểm | — | Must |
 | FR-CON-06 | `ICPCFormat`: penalty time tính theo phút, làm tròn xuống từng đề — chỉ `WA`/`TLE`/`MLE`/`RE` tính là lần sai, `CE` và `IE` không bị phạt · `IOIFormat`: điểm subtask, lấy lần cao nhất, quy đổi theo `points` của đề: ⌊score × points / max_score⌋ (ADR 023) | — | Must |
 | FR-CON-07 | Sau khi contest kết thúc: mở đề ra ngoài, **mở lại AI review**, công bố bảng xếp hạng đầy đủ — tự động lúc bảng chốt nếu bật `revealAfterEnd` (mặc định), tắt thì chờ ADMIN công bố | AI (công bằng) | Must |
-| FR-CON-08 | ADMIN chạy job **rebuild bảng xếp hạng từ Postgres** — job nền có tiến độ | Quy tắc 5, A (Redis chết) | Must |
+| FR-CON-08 | ADMIN chạy job **rebuild bảng xếp hạng từ Postgres** — job nền có tiến độ: `POST /api/v1/contests/{id}/standings/rebuild` → 202 kèm `jobId`, theo dõi ở `GET /api/v1/jobs/{jobId}`. Chỉ chạy được sau giờ kết thúc (409 `contest.chua_ket_thuc`), mỗi kỳ thi một job đang sống (409 `job.dang_chay`) | Quy tắc 5, A (Redis chết) | Must |
 | FR-CON-09 | Job đối soát dữ liệu denormalize + metric `drift` + alert | R | Must |
 | FR-CON-10 | Virtual participation | — | **Should** — ứng viên đầu tiên bị cắt nếu thiếu thời gian. ❌ **đã cắt thật**: M5 chốt ở FR-CON-01→09 |
 
