@@ -32,6 +32,9 @@ class JudgingSqlInvariantsTest {
 
         assertThat(release).startsWith("DELETE FROM judge_queue");
         assertThat(release).contains("q.attempt = :attempt");
+        assertThat(release)
+                .as("KQ-04: reaper không tăng attempt, nên chỉ lượt còn giữ lease mới được ghi")
+                .contains("q.claimed_at IS NOT NULL");
         assertThat(release).contains("RETURNING");
         assertThat(release).contains("s.language_id").contains("s.testdata_version");
     }
@@ -59,6 +62,7 @@ class JudgingSqlInvariantsTest {
         assertThat(sql("JdbcJudgeQueueRepository.RETRY_IE"))
                 .contains("ie_retry_count < :maxIeRetries")
                 .contains("attempt = :attempt")
+                .contains("claimed_at IS NOT NULL")
                 .contains("ie_retry_count = ie_retry_count + 1");
     }
 

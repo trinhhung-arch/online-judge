@@ -45,6 +45,15 @@ public class JudgingException extends DomainException {
                 "submission id=" + id + " không tồn tại, hoặc người gọi không được phép thấy");
     }
 
+    public static JudgingException trangThaiKhongKhop(long submissionId, int attempt) {
+        return new JudgingException(
+                Kind.CONFLICT,
+                "submission.trang_thai_khong_khop",
+                "Bài nộp không còn ở lượt chấm này. Kết quả bị bỏ, bài sẽ được chấm lại.",
+                "markDone cập nhật 0 dòng cho submission " + submissionId + " attempt " + attempt
+                        + " dù khoá lạc quan vừa thắng — rollback để bài không rời hàng đợi");
+    }
+
     public static JudgingException languageNotAvailable(String code) {
         return new JudgingException(
                 Kind.INVALID,

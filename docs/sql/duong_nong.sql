@@ -44,8 +44,9 @@ ON CONFLICT (submission_id) DO NOTHING;
 -- 2. WORKER CLAIM — POST /internal/judge/claim.
 --    FOR UPDATE SKIP LOCKED: N worker chạy song song, không worker nào chờ nhau
 --    và không job nào bị giao hai lần trong cùng thời điểm.
---    `attempt` tăng ở ĐÂY. Đó là điều làm cho kết quả của một worker đã bị reaper
---    thu hồi tự động bị từ chối ở bước 3 — không cần cơ chế nào khác.
+--    `attempt` tăng ở ĐÂY — nhưng chỉ khi có người nhận lại bài. Từ lúc reaper thả
+--    bài tới lúc đó, dòng hàng đợi vẫn mang `attempt` của lượt đã chết, nên bước 3
+--    còn phải đòi `claimed_at IS NOT NULL` (ADR 025, ca KQ-04).
 --
 --    Code: JdbcJudgeQueueRepository.CLAIM
 --
@@ -97,12 +98,14 @@ UPDATE submissions
 --    này CHẮC CHẮN sẽ có lúc trả 0 dòng — đó là lúc nó làm đúng việc của nó.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 3a. Khoá lạc quan: xoá hàng khỏi hàng đợi đúng attempt đang giữ.
---     0 dòng  -> kết quả trùng hoặc kết quả của attempt đã bị thu hồi -> BỎ QUA
---                toàn bộ transaction, không ghi gì, không báo lỗi.
+-- 3a. Khoá lạc quan: xoá hàng khỏi hàng đợi đúng attempt đang giữ lease.
+--     0 dòng  -> kết quả trùng hoặc kết quả của attempt đã bị thu hồi (kể cả khi
+--                reaper vừa thả mà chưa ai nhận lại) -> BỎ QUA toàn bộ
+--                transaction, không ghi gì, không báo lỗi.
 DELETE FROM judge_queue
  WHERE submission_id = :submissionId
    AND attempt       = :attempt
+   AND claimed_at    IS NOT NULL
 RETURNING submission_id;
 
 -- 3b. Lịch sử chấm — không bao giờ ghi đè verdict cũ (rejudge tạo attempt mới)
@@ -143,13 +146,15 @@ UPDATE judge_queue
        enqueued_at     = now()
  WHERE submission_id = :submissionId
    AND attempt       = :attempt
+   AND claimed_at    IS NOT NULL
    AND ie_retry_count < :maxIeRetries          -- 2
 RETURNING submission_id, ie_retry_count;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. REAPER — job nền, chạy mỗi 15 giây (nfrplan 5.1: một cơ chế, năm loại sự cố).
---    Không tăng attempt ở đây: lần claim kế tiếp sẽ tăng, và chính điều đó vô
---    hiệu hoá kết quả trả về muộn của worker đã chết.
+--    Không tăng attempt ở đây: lần claim kế tiếp sẽ tăng. Kết quả trả về muộn của
+--    lượt đã chết bị chặn ở 3a bằng `claimed_at IS NOT NULL`, kể cả trước khi có
+--    người nhận lại (ADR 025).
 --    V16: chỉ thả bài CÒN lượt. reap_count nullable (CLAUDE.md §7) nên COALESCE.
 -- ─────────────────────────────────────────────────────────────────────────────
 UPDATE judge_queue

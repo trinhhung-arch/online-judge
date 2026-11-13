@@ -54,6 +54,7 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
              USING submissions s
              WHERE q.submission_id = :submissionId
                AND q.attempt       = :attempt
+               AND q.claimed_at    IS NOT NULL
                AND s.id            = q.submission_id
             RETURNING q.submission_id, q.attempt, s.language_id, s.testdata_version
             """;
@@ -67,6 +68,7 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
                    enqueued_at     = now()
              WHERE submission_id  = :submissionId
                AND attempt        = :attempt
+               AND claimed_at     IS NOT NULL
                AND ie_retry_count < :maxIeRetries
             RETURNING submission_id
             """;
