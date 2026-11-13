@@ -131,6 +131,17 @@ class IsolateJudgeRunnerIT {
     }
 
     @Test
+    @DisplayName("★ XK-06 · RE do SIGSEGV: tín hiệu đi về API trong isolateStatus để giải thích được")
+    void runtimeErrorMangTinHieu() {
+        JudgeResultDto result = judge("int main(){volatile int *p = 0; *p = 1; return 0;}");
+
+        assertThat(result.verdict()).isEqualTo(Verdict.RE);
+        assertThat(result.isolateStatus())
+                .as("VerdictExplainer đọc 'signal=11' để nói 'SIGSEGV — truy cập ngoài phạm vi'")
+                .contains("signal=11");
+    }
+
+    @Test
     @DisplayName("CE — lỗi cú pháp, và log compiler KHÔNG lộ đường dẫn trong box")
     void compileError() {
         JudgeResultDto result = judge("int main(){ khong_ton_tai(); }");
