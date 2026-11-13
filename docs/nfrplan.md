@@ -278,7 +278,7 @@ Tuần 12: chạy worker đồng thời trên **Mac host + WSL của người A 
 
 | Kịch bản | Kỳ vọng | Mốc | Test tự động |
 |---|---|---|---|
-| Kill API giữa lúc submit | Đã commit thì còn; chưa commit thì user thấy lỗi rõ ràng và nộp lại được | M1 | ✅ `KillApiDuringSubmitIT` |
+| Kill API giữa lúc submit | Đã commit thì còn; chưa commit thì user thấy lỗi rõ ràng và nộp lại được **sau tối đa 10 giây** — lượt rate limit được tính trước khi ghi, và đó là cái giá đã chấp nhận (chốt 2026-11-11) | M1 | ✅ `KillApiDuringSubmitIT` |
 | Kill worker giữa lúc chấm | Sau 120s bài về `QUEUED` và được chấm lại | M1 | ✅ `KillWorkerMidJudgeIT` |
 | Chạy 2 worker, nộp 20 bài | Không bài nào bị chấm 2 lần | M1 | ✅ `TwoWorkersNoDoubleJudgeIT` |
 | **Kill RabbitMQ** | API vẫn nhận bài (ghi DB thành công), reaper nhặt lại khi queue sống lại | M6 | ✅ `PublishFailsButReaperRecoversIT` |
@@ -343,11 +343,11 @@ Với 2 người và 13 tuần, mục tiêu là **"dùng được mà không c�
 | Verdict | Bắt buộc hiển thị |
 |---|---|
 | CE | Toàn bộ log compiler, có highlight dòng lỗi |
-| WA | Theo `feedback_level` của đề (FR-PROB-07): `NONE` chỉ hiện verdict · `TEST_INDEX` hiện "sai ở test 7/50" · `SAMPLE_DETAIL` hiện input/expected/actual **chỉ với testcase `sample`**. **Nội dung testcase ẩn không bao giờ rời khỏi worker** — `frplan.md` mục 3.1 |
+| WA | Theo `feedback_level` của đề (FR-PROB-07): `NONE` chỉ hiện verdict · `TEST_INDEX` hiện "sai ở test 7/50" · `SAMPLE_DETAIL` hiện input/expected/actual **chỉ với testcase `sample`** (v1.0 chưa làm — mức này đang hiển thị y như `TEST_INDEX`, xem `frplan.md` FR-PROB-07). **Nội dung testcase ẩn không bao giờ rời khỏi worker** — `frplan.md` mục 3.1 |
 | TLE | Thời gian đã chạy / giới hạn, ví dụ `2.03s / 2.00s` |
 | MLE | Bộ nhớ đã dùng / giới hạn |
 | RE | Signal gì (SIGSEGV / SIGFPE / SIGABRT) + giải thích bằng tiếng người: "SIGSEGV — thường do truy cập mảng ngoài phạm vi" |
-| IE | "Lỗi hệ thống, bài của bạn sẽ được chấm lại tự động" + mã sự cố để báo admin |
+| IE | "Lỗi hệ thống, không phải lỗi bài của bạn — hệ thống đã tự chấm lại mà vẫn hỏng, hãy nộp lại" + mã sự cố để báo admin. Người nộp chỉ thấy IE khi hai lượt tự chấm lại (FR-SUB-12) đã chạy xong, nên câu không được hứa thêm lượt nào |
 
 ### 6.3 — Việc cụ thể
 

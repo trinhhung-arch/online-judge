@@ -50,6 +50,8 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 
 **Ô quan trọng nhất:** tác giả bài nộp **không** được xem nội dung testcase ẩn — kể cả testcase mà chính bài của họ vừa fail. Nếu một yêu cầu bảo bạn hiện nó ra, đọc `frplan.md` mục 3.1 rồi dừng lại và hỏi.
 
+**v1.0 chặt hơn bảng:** một bài nộp chỉ tác giả và ADMIN đọc được (`FIND_FOR_REQUESTER`). Các ô ✅ của SETTER về bài nộp vào đề của mình, và ô "theo cấu hình đề" của USER, chưa được làm — xem ghi chú dưới ma trận Quy tắc 3 của `frplan.md`.
+
 **Chống IDOR:** điều kiện lọc theo chủ sở hữu phải nằm **trong câu query của repository**, không phải một câu `if` ở service sau khi đã load. Query sai chỗ là lỗ hổng ngay cả khi `if` viết đúng.
 
 ---

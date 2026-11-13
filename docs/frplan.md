@@ -71,6 +71,8 @@ Cứu **S3** (`submissions` 1M+ dòng không degrade) và **P1** (API p95 < 200m
 | `audit_log` | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 > ⚠️ Ô quan trọng nhất bảng này: **tác giả bài nộp KHÔNG được xem nội dung testcase ẩn** — kể cả testcase mà chính bài của họ vừa fail. Lý do ở mục 3.1.
+>
+> **v1.0 chặt hơn bảng này** (chốt 2026-11-11): một bài nộp chỉ tác giả và ADMIN đọc được. Các ô ✅ của SETTER ở dòng "số thứ tự test bị fail", "log compiler", "source người khác — ngoài contest", và ô "tuỳ cấu hình đề" của USER, **chưa có** — không có endpoint liệt kê bài nộp theo đề, cũng không có endpoint đọc source. Mở chúng là một FR mới, phải chặn trong giờ thi.
 
 ### Quy tắc 4 — Mọi FR ghi dữ liệu phải khai báo hệ quả khi bị lặp lại
 
@@ -155,10 +157,10 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-PROB-04 | Đánh dấu từng testcase là **sample** (công khai) hoặc **hidden** | SEC3 | Must |
 | FR-PROB-05 | Chọn checker: `exact` · `token` · `float epsilon` | — | Must |
 | FR-PROB-06 | Chia subtask/batch, điểm theo nhóm, phụ thuộc giữa nhóm | — | Should |
-| FR-PROB-07 | **Đặt `feedback_level` cho đề**: `NONE` / `TEST_INDEX` / `SAMPLE_DETAIL` — xem mâu thuẫn #1 | **SEC3** | **Must** |
+| FR-PROB-07 | **Đặt `feedback_level` cho đề**: `NONE` / `TEST_INDEX` / `SAMPLE_DETAIL` — xem mâu thuẫn #1. Với `NONE`, luồng SSE của bài nộp chỉ báo "đang chấm", không kèm số test đã chạy — con số ấy dừng đúng ở test sai. **v1.0:** `SAMPLE_DETAIL` chưa có phần input/expected/actual, nên đang hiển thị y như `TEST_INDEX`; làm đủ cần mang output thật về qua `oj-contract` | **SEC3** | **Must** |
 | FR-PROB-08 | Xuất bản / gỡ đề. Đề chưa xuất bản chỉ tác giả và ADMIN thấy | SEC (Quy tắc 3) | Must |
 | FR-PROB-09 | Danh sách đề: lọc theo tag / độ khó / đã giải, **phân trang 50/trang** | P1, S3 | Must |
-| FR-PROB-10 | **Sửa testdata khi đã có bài nộp** → hệ thống cảnh báo, bắt buộc tạo job rejudge, ghi `audit_log` | R (toàn vẹn), Quy tắc 5 | Must |
+| FR-PROB-10 | **Sửa testdata khi đã có bài nộp** → hệ thống cảnh báo, bắt buộc tạo job rejudge, ghi `audit_log`. Bài được chấm lại bằng **phiên bản testdata hiện tại** của đề; `judge_runs` giữ phiên bản của từng lượt để đối chiếu | R (toàn vẹn), Quy tắc 5 | Must |
 | FR-PROB-11 | **Cấm sửa đề đang nằm trong contest đang diễn ra** | Tính công bằng | Must |
 | FR-PROB-12 | Tải về testdata — chỉ SETTER của đề đó và ADMIN | SEC3 | Should |
 
@@ -170,7 +172,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-SUB-02 | **Hệ thống trả `submissionId` + trạng thái `QUEUED` trong ≤300ms. Verdict đến sau.** | **P2, R1, S1** | **Must** |
 | FR-SUB-03 | Vòng trạng thái `QUEUED → JUDGING → DONE`. Bài kẹt ở `JUDGING` quá 120s tự về `QUEUED` — tối đa 2 lần; kẹt lần thứ 3 thì nhận `IE` thay vì quay vòng mãi (V16, ADR 019) | R1, R3 | Must |
 | FR-SUB-04 | Bảy verdict: `AC` `WA` `TLE` `MLE` `RE` `CE` `IE` | — | Must |
-| FR-SUB-05 | Theo dõi tiến độ realtime qua SSE, **có fallback REST polling khi mất kết nối** | U, A (tunnel ngắt) | Must |
+| FR-SUB-05 | Theo dõi tiến độ realtime qua SSE, **có fallback REST polling khi mất kết nối**. Tiến độ của một lượt đã bị thu hồi không được hiện sau khi lượt mới đã báo; đề `NONE` không hiện số test (FR-PROB-07) | U, A (tunnel ngắt) | Must |
 | FR-SUB-06 | Trang chi tiết bài nộp hiển thị **đủ lý do cho cả 7 verdict** (bảng 6.2 nfrplan) | U3 | Must |
 | FR-SUB-07 | Lịch sử bài nộp của mình: **cursor-based, ≤50/trang**, lọc theo đề/verdict/ngôn ngữ | P1, S3 | Must |
 | FR-SUB-08 | **Rate limit 1 bài/10s/user** — là quy tắc nghiệp vụ, hiển thị đếm ngược trên UI | SEC2, P4 | Must |
@@ -257,7 +259,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 |---|---|---|
 | `NONE` | Chỉ verdict (`WA`), không nói test nào | Contest thể thức ICPC |
 | `TEST_INDEX` | "Sai ở test 7/50" — **chỉ số thứ tự, không có nội dung** | Mặc định cho luyện tập |
-| `SAMPLE_DETAIL` | Đầy đủ input/expected/actual **nhưng chỉ với testcase đã đánh dấu sample** | Bài dành cho người mới |
+| `SAMPLE_DETAIL` | Đầy đủ input/expected/actual **nhưng chỉ với testcase đã đánh dấu sample** (v1.0 chưa làm, xem FR-PROB-07) | Bài dành cho người mới |
 
 > Quy tắc tuyệt đối: **nội dung testcase ẩn không bao giờ rời khỏi worker.** Không qua API, không qua log, không qua thông báo lỗi, không qua prompt LLM.
 >
