@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> details = null;
         HttpHeaders headers = new HttpHeaders();
         if (e.kind() == DomainException.Kind.RATE_LIMITED && e.retryAfter() != null) {
-            long seconds = Math.max(1, e.retryAfter().toSeconds());
+            long seconds = Math.max(1, (e.retryAfter().toMillis() + 999) / 1000);
             headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(seconds));
             details = Map.of("retryAfterSeconds", seconds);
         }
