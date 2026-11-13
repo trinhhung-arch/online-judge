@@ -3,10 +3,14 @@ package dev.oj.judging.application.usecase;
 import dev.oj.judging.application.port.SubmissionEventBus;
 import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEvent;
 import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEventListener;
+import dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission;
 import dev.oj.judging.domain.Submission;
 import dev.oj.judging.domain.SubmissionStatus;
 import dev.oj.platform.security.RequiresRole;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @RequiresRole
 @Service
@@ -21,18 +25,36 @@ public class WatchSubmissionUseCase {
     }
 
     public Watch start(long submissionId, SubmissionEventListener listener) {
-        Submission authorized = getSubmission.byId(submissionId);
-        if (authorized.status() == SubmissionStatus.DONE) {
-            return new Watch(eventOf(authorized), null);
+        VisibleSubmission authorized = getSubmission.detailById(submissionId);
+        if (authorized.submission().status() == SubmissionStatus.DONE) {
+            return new Watch(eventOf(authorized.submission()), null);
         }
 
-        AutoCloseable subscription = bus.subscribe(submissionId, listener);
+        AutoCloseable subscription = bus.subscribe(submissionId, loc(listener,
+                authorized.submission().attempt(), authorized.revealsTestProgress()));
         try {
             return new Watch(eventOf(getSubmission.byId(submissionId)), subscription);
         } catch (RuntimeException e) {
             closeQuietly(subscription);
             throw e;
         }
+    }
+
+    private static SubmissionEventListener loc(SubmissionEventListener ra, int attemptDaThay,
+                                               boolean hienTienDoTest) {
+        AtomicInteger attemptMoiNhat = new AtomicInteger(attemptDaThay);
+        AtomicBoolean daBaoDangCham = new AtomicBoolean();
+        return event -> {
+            if (event.attempt() < attemptMoiNhat.accumulateAndGet(event.attempt(), Math::max)) {
+                return;
+            }
+            if (hienTienDoTest || event.isTerminal()) {
+                ra.onEvent(event);
+            } else if (!daBaoDangCham.getAndSet(true)) {
+                ra.onEvent(new SubmissionEvent(event.submissionId(), event.attempt(),
+                        event.status(), null, null, null, event.at()));
+            }
+        };
     }
 
     private static SubmissionEvent eventOf(Submission submission) {

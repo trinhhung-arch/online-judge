@@ -144,6 +144,16 @@ class BaiNopHttpIT extends HttpIT {
                 .containsExactly(b7, b6, b5, b4, b3, b2, b1);
     }
 
+    @Test
+    @DisplayName("XK-10 · SETTER của đề KHÔNG xem được bài người khác nộp vào đề của mình — chốt chặt hơn ma trận ở v1.0")
+    void setter_khong_xem_bai_nop_vao_de_cua_minh() {
+        long cuaDev = idBai(goi(nop(bearerDev())));
+        var res = xem(cuaDev, bearer(SETTER_ID, "setter", Role.SETTER));
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(res.getBody()).containsEntry("code", "submission.not_found");
+    }
+
     private record Trang(List<Long> ids, String nextCursor) {
     }
 

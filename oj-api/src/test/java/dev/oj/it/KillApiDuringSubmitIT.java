@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 
 class KillApiDuringSubmitIT extends PostgresIT {
@@ -34,6 +35,22 @@ class KillApiDuringSubmitIT extends PostgresIT {
         assertThat(countSubmissions()).isZero();
         assertThat(countBlobs()).isZero();
         assertThat(countQueue()).isZero();
+    }
+
+    @Test
+    @DisplayName("NH-17 · hỏng giữa transaction thì lượt 10 giây đã bị tính: nộp lại ngay nhận 429 — đã chấp nhận, nfrplan 5.2")
+    void hong_giua_transaction_thi_luot_da_tinh() {
+        doThrow(new IllegalStateException("mất kết nối DB giữa chừng"))
+                .when(queue).enqueue(anyLong(), anyInt());
+        assertThatThrownBy(() -> submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")))
+                .isInstanceOf(IllegalStateException.class);
+        doCallRealMethod().when(queue).enqueue(anyLong(), anyInt());
+
+        assertThatThrownBy(() -> submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")))
+                .hasFieldOrPropertyWithValue("code", "submission.rate_limited");
+        assertThat(countSubmissions()).isZero();
     }
 
     @Test

@@ -33,6 +33,8 @@ function veTrangThai(e) {
 
     if (e.status === 'JUDGING' && e.totalTests) {
         oTienDo.textContent = `Đã chạy ${e.testsDone}/${e.totalTests} test.`;
+    } else if (e.status === 'JUDGING') {
+        oTienDo.textContent = 'Đang chấm.';
     } else if (!xong(e.status)) {
         oTienDo.textContent = 'Chưa có tiến độ — bài đang chờ một máy chấm rảnh.';
     } else {

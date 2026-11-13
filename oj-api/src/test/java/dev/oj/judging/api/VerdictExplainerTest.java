@@ -96,6 +96,10 @@ class VerdictExplainerTest {
         String text = VerdictExplainer.explain(Verdict.IE,
                 new Facts(null, null, null, null, null, null, "XX message:box hỏng"));
         assertThat(text).contains("không phải lỗi bài của bạn", "IE-");
+        assertThat(text)
+                .as("XK-07 · người nộp chỉ thấy IE khi đã hết lượt tự chấm lại — không hứa thêm lượt nào")
+                .contains("đã tự chấm lại")
+                .doesNotContain("sẽ tự chấm lại");
     }
 
     @Test

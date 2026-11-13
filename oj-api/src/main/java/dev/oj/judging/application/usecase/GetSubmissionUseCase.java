@@ -43,7 +43,8 @@ public class GetSubmissionUseCase {
                 detail.compileLog(),
                 detail.isolateStatus(),
                 detail.timeLimitMs(),
-                detail.memoryLimitKb());
+                detail.memoryLimitKb(),
+                policy.level().revealsFailedTestOrdinal());
     }
 
     public record VisibleSubmission(
@@ -52,7 +53,8 @@ public class GetSubmissionUseCase {
             String compileLog,
             String isolateStatus,
             int timeLimitMs,
-            int memoryLimitKb) {
+            int memoryLimitKb,
+            boolean revealsTestProgress) {
     }
 
 }

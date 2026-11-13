@@ -95,7 +95,7 @@ class SubmissionResponseTest {
     private static dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission
             visible(SubmissionStatus status, JudgeOutcome outcome) {
         return new dev.oj.judging.application.usecase.GetSubmissionUseCase.VisibleSubmission(
-                submission(status, outcome), null, null, null, 2000, 262_144);
+                submission(status, outcome), null, null, null, 2000, 262_144, true);
     }
 
     private static Submission submission(SubmissionStatus status, JudgeOutcome outcome) {

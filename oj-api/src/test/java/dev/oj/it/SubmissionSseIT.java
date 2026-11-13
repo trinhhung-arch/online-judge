@@ -132,6 +132,30 @@ class SubmissionSseIT extends PostgresIT {
     }
 
     @Test
+    @DisplayName("★ TD-05 · đề NONE: luồng không mang con số tiến độ nào — không đoán được bài sai ở test 23")
+    void de_none_luong_khong_lo_so_test() throws Exception {
+        jdbc.sql("UPDATE problems SET feedback_level = 'NONE' WHERE id = :id")
+                .param("id", PROBLEM_ID).update();
+        long id = submit();
+        try (Stream stream = open(id)) {
+            stream.awaitLineContaining("QUEUED");
+            int attempt = claim(id);
+            recordProgress.record(new JudgeProgressDto(id, attempt, 1, 20, 50,
+                    List.of(new JudgeProgressDto.TestOutcome(20, Verdict.AC, 12, 2048))));
+            recordProgress.record(new JudgeProgressDto(id, attempt, 21, 23, 50,
+                    List.of(new JudgeProgressDto.TestOutcome(23, Verdict.WA, 12, 2048))));
+            recordResult.record(new JudgeResultDto(id, attempt, Verdict.WA, 0, 100, 23, 23, 12,
+                    2048, null, null, "mac-m1max-host", new BigDecimal("1.000"), Instant.now(),
+                    List.of()));
+            stream.awaitLineContaining("DONE");
+
+            assertThat(stream.everything())
+                    .contains("JUDGING")
+                    .doesNotContain("\"totalTests\":50", "\"testsDone\":20", "\"testsDone\":23");
+        }
+    }
+
+    @Test
     @DisplayName("★ TD-03 · mở luồng của bài CÓ THẬT nhưng của người khác → 404 cùng mã với bài không tồn tại")
     void luong_bai_cua_nguoi_khac_la_404() throws Exception {
         long id = submit();

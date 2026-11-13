@@ -45,7 +45,12 @@ public class JdbcRejudgeRepository implements RejudgeRepository {
             """;
 
     private static final String VE_QUEUED = """
-            UPDATE submissions SET status = 'QUEUED' WHERE id IN (:ids)
+            UPDATE submissions s
+               SET status           = 'QUEUED',
+                   testdata_version = p.current_testdata_version
+              FROM problems p
+             WHERE p.id = s.problem_id
+               AND s.id IN (:ids)
             """;
 
     private final JdbcClient jdbc;

@@ -105,8 +105,8 @@ public final class VerdictExplainer {
 
     private static String internalError(Facts facts) {
         String code = incidentCode(facts.isolateStatus());
-        return "Sự cố máy chấm, không phải lỗi bài của bạn. Hệ thống sẽ tự chấm lại (tối đa "
-                + "2 lần). Nếu vẫn lặp lại, báo ban tổ chức kèm mã sự cố: " + code + ".";
+        return "Sự cố máy chấm, không phải lỗi bài của bạn. Hệ thống đã tự chấm lại mà vẫn gặp "
+                + "sự cố. Hãy nộp lại, hoặc báo ban tổ chức kèm mã sự cố: " + code + ".";
     }
 
     private static Integer signalOf(String isolateStatus) {
