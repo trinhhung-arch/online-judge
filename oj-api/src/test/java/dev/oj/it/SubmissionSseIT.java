@@ -8,11 +8,13 @@ import dev.oj.judging.application.usecase.ClaimJudgeJobUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeProgressUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
+import dev.oj.platform.security.Role;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.testcontainers.DockerClientFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -126,6 +128,49 @@ class SubmissionSseIT extends PostgresIT {
             assertThat(res.body())
                     .describedAs("ca '%s' — thân rỗng thì frontend không phân biệt được lỗi gì", ca[0])
                     .contains("\"code\"");
+        }
+    }
+
+    @Test
+    @DisplayName("★ TD-03 · mở luồng của bài CÓ THẬT nhưng của người khác → 404 cùng mã với bài không tồn tại")
+    void luong_bai_cua_nguoi_khac_la_404() throws Exception {
+        long id = submit();
+        var client = HttpClient.newHttpClient();
+
+        var res = client.send(HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/v1/submissions/" + id + "/stream"))
+                .header("Accept", "text/event-stream")
+                .header("Authorization", bearer(SETTER_ID, "setter", Role.SETTER))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(res.statusCode()).as("403 sẽ xác nhận bài này tồn tại").isEqualTo(404);
+        assertThat(res.body()).contains("\"submission.not_found\"");
+    }
+
+    @Test
+    @DisplayName("★ SC-01 · Redis chết khi đang mở trang bài nộp: ghi verdict không hỏng, REST vẫn trả đúng")
+    void redis_chet_khi_dang_xem_bai() throws Exception {
+        long id = submit();
+        try (Stream stream = open(id)) {
+            stream.awaitLineContaining("QUEUED");
+            int attempt = claim(id);
+
+            DockerClientFactory.instance().client().pauseContainerCmd(REDIS.getContainerId()).exec();
+            try {
+                assertThat(recordResult.record(accepted(id, attempt)))
+                        .as("Redis chỉ là đường đẩy sự kiện — nó chết không được làm mất verdict")
+                        .isEqualTo(RecordJudgeResultUseCase.Outcome.RECORDED);
+            } finally {
+                DockerClientFactory.instance().client().unpauseContainerCmd(REDIS.getContainerId()).exec();
+            }
+
+            var res = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(
+                            "http://localhost:" + port + "/api/v1/submissions/" + id))
+                    .header("Authorization", bearerDev()).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(res.statusCode()).isEqualTo(200);
+            assertThat(res.body()).as("đường polling REST mà trang lùi về khi SSE im lặng")
+                    .contains("\"status\":\"DONE\"", "\"verdict\":\"AC\"");
         }
     }
 
