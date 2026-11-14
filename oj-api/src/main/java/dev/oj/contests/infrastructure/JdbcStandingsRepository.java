@@ -95,6 +95,18 @@ public class JdbcStandingsRepository implements StandingsRepository {
             DELETE FROM contest_problem_standings WHERE contest_id = :contestId
             """;
 
+    private static final String XOA_CUA_NGUOI = """
+            WITH theo_de AS (DELETE FROM contest_problem_standings
+                              WHERE contest_id = :contestId AND user_id = :userId)
+            DELETE FROM contest_standings WHERE contest_id = :contestId AND user_id = :userId
+            """;
+
+    private static final String XOA_DONG_BANG_CUA_NGUOI = """
+            WITH theo_de AS (DELETE FROM contest_problem_standings_frozen
+                              WHERE contest_id = :contestId AND user_id = :userId)
+            DELETE FROM contest_standings_frozen WHERE contest_id = :contestId AND user_id = :userId
+            """;
+
     private static final String TONG_KET_DA_LUU = """
             SELECT user_id, total_score, penalty_seconds, solved_count
               FROM contest_standings
@@ -187,6 +199,17 @@ public class JdbcStandingsRepository implements StandingsRepository {
     public void xoaBangXepHang(long contestId) {
         jdbc.sql(XOA_THEO_DE).param("contestId", contestId).update();
         jdbc.sql(XOA_TONG).param("contestId", contestId).update();
+    }
+
+    @Override
+    public void xoaCuaNguoi(long contestId, long userId) {
+        jdbc.sql(XOA_CUA_NGUOI).param("contestId", contestId).param("userId", userId).update();
+    }
+
+    @Override
+    public void xoaDongBangCuaNguoi(long contestId, long userId) {
+        jdbc.sql(XOA_DONG_BANG_CUA_NGUOI).param("contestId", contestId).param("userId", userId)
+                .update();
     }
 
     @Override

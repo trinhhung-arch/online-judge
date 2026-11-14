@@ -18,7 +18,7 @@ const dsMaDe = document.getElementById('ds-ma-de');
 const soanDeRieng = document.getElementById('soan-de-rieng');
 
 const NHAN_TRANG_THAI = {
-    SAP_DIEN_RA: 'Sắp diễn ra',
+    SAP_DIEN_RA: 'Chưa bắt đầu',
     DANG_CHAY: 'Đang diễn ra',
     DA_KET_THUC: 'Đã kết thúc',
 };
@@ -98,7 +98,7 @@ function veDanhSachDe() {
     viSaoTrong.hidden = false;
     viSaoTrong.className = 'thong-bao';
     viSaoTrong.textContent = kyThi.trangThai === 'SAP_DIEN_RA'
-        ? 'Đề bài được mở đúng giờ bắt đầu. Ngay cả số lượng đề cũng chưa được công bố.'
+        ? `Kỳ thi chưa bắt đầu. Đề bài mở lúc ${gio(kyThi.startsAt)}.`
         : 'Kỳ thi này chưa có đề nào.';
 }
 

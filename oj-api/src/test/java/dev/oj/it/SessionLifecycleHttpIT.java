@@ -3,6 +3,8 @@ package dev.oj.it;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import dev.oj.platform.config.AppProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,8 @@ import java.util.concurrent.Future;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SessionLifecycleHttpIT extends HttpIT {
+
+    @Autowired AppProperties properties;
 
     @Nested
     @DisplayName("★ FR-AUTH-02/04 · xoay vòng phiên và thu hồi")
@@ -157,6 +161,51 @@ class SessionLifecycleHttpIT extends HttpIT {
                     .containsExactly("dev");
             assertThat(jdbc.sql("SELECT count(*) FROM login_attempts WHERE NOT succeeded")
                     .query(Integer.class).single()).isEqualTo(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("★ A9 · vô hiệu hoá tài khoản giữa chừng — khoảng hở đã chấp nhận (FR-AUTH-07)")
+    class VoHieuHoaGiuaChung {
+
+        @Test
+        @DisplayName("★ refresh bị thu hồi ngay; access token còn dùng được tới khi hết hạn, và hạn đó không quá access-ttl")
+        void khoang_ho_co_tran() {
+            Map<String, Object> phien = login("dev", MAT_KHAU_DEV).getBody();
+            String access = (String) phien.get("accessToken");
+
+            var voHieu = goi(http.post().uri("/api/v1/admin/users/{id}/active", USER_ID)
+                    .header("Authorization", "Bearer " + tokenCua("admin"))
+                    .body(Map.of("hoatDong", false)));
+            assertThat(voHieu.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+            HttpStatusCode lamMoi = http.post().uri("/api/v1/auth/refresh")
+                    .body(Map.of("refreshToken", phien.get("refreshToken")))
+                    .exchange((req, r) -> r.getStatusCode(), false);
+            assertThat(lamMoi).as("không xin được access token mới")
+                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(login("dev", MAT_KHAU_DEV).getStatusCode())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+
+            assertThat(goi(http.post().uri("/api/v1/submissions")
+                    .header("Authorization", "Bearer " + access)
+                    .body(Map.of("problemId", PROBLEM_ID, "languageCode", "cpp20",
+                            "source", "// EXPECT: AC\nint main(){}"))).getStatusCode())
+                    .as("khoảng hở đã chấp nhận: JWT không trạng thái, không tra DB mỗi request")
+                    .isEqualTo(HttpStatus.ACCEPTED);
+
+            long conLaiGiay = hetHanLuc(access) - java.time.Instant.now().getEpochSecond();
+            assertThat(conLaiGiay).as("khoảng hở có trần đúng bằng access-ttl")
+                    .isPositive()
+                    .isLessThanOrEqualTo(properties.auth().accessTtl().toSeconds());
+        }
+
+        private long hetHanLuc(String jwt) {
+            String payload = new String(java.util.Base64.getUrlDecoder()
+                    .decode(jwt.split("\\.")[1]), java.nio.charset.StandardCharsets.UTF_8);
+            var m = java.util.regex.Pattern.compile("\"exp\"\\s*:\\s*(\\d+)").matcher(payload);
+            assertThat(m.find()).as("JWT không có exp: %s", payload).isTrue();
+            return Long.parseLong(m.group(1));
         }
     }
 }

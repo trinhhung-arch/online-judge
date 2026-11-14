@@ -13,7 +13,7 @@ public interface JudgeQueueRepository {
 
     Optional<ReleasedSubmission> releaseWithOptimisticLock(long submissionId, int attempt);
 
-    List<Long> reapExpired(int maxReaps);
+    List<ReapedJob> reapExpired(int maxReaps);
 
     List<ExhaustedJob> exhaustedJobs(int maxReaps);
 
@@ -56,6 +56,9 @@ public interface JudgeQueueRepository {
     }
 
     record ExhaustedJob(long submissionId, int attempt, Instant claimedAt) {
+    }
+
+    record ReapedJob(long submissionId, int attempt) {
     }
 
     record QueueStats(int waiting, int claimed, Instant oldestEnqueuedAt) {

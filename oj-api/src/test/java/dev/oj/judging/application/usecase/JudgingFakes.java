@@ -110,7 +110,7 @@ class JudgingFakes {
         ReleasedSubmission released = new ReleasedSubmission(101L, 1, 3, 5);
         boolean lockWins = true;
         boolean ieRetryAccepted;
-        List<Long> expired = List.of();
+        List<ReapedJob> expired = List.of();
         List<ExhaustedJob> exhausted = List.of();
         Integer maxReapsSeen;
         Long releaseThrowsFor;
@@ -139,7 +139,7 @@ class JudgingFakes {
         }
 
         @Override
-        public List<Long> reapExpired(int maxReaps) {
+        public List<ReapedJob> reapExpired(int maxReaps) {
             calls.add("queue.reapExpired");
             maxReapsSeen = maxReaps;
             return expired;

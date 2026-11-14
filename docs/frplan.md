@@ -111,7 +111,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-AUTH-04 | Đổi mật khẩu (yêu cầu mật khẩu cũ), thu hồi mọi refresh token | SEC2 | Must |
 | FR-AUTH-05 | Xem và sửa hồ sơ: tên hiển thị, ngôn ngữ ưa dùng | — | Must |
 | FR-AUTH-06 | Ba vai trò USER / SETTER / ADMIN. **Kiểm quyền ở tầng use-case** | SEC2, M-ArchUnit | Must |
-| FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên. Ẩn danh hoá: bảng xếp hạng giữ dòng và hạng, không trả `handle` (mục 3.5) | R1, audit | Must |
+| FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên. Phiên làm mới bị thu hồi ngay, nhưng access token đang cầm vẫn dùng được tới khi hết hạn — **tối đa `oj.auth.access-ttl` (15 phút), chấp nhận** (2026-11-14): JWT không trạng thái, không tra DB mỗi request. Ẩn danh hoá: bảng xếp hạng giữ dòng và hạng, không trả `handle` (mục 3.5) | R1, audit | Must |
 | FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP (IPv6 đếm theo dải /64, từ 2026-09-24), khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
 | FR-AUTH-09 | **Xác minh email** — mã 6 chữ số, hạn 30 phút, 5 lần thử. **Mức mềm: chưa xác minh KHÔNG chặn đăng nhập/nộp bài/dự thi** | A (SMTP không nằm trên đường nào quan trọng) | **Done (v1.1)** — V13, ADR 016 |
 | FR-AUTH-09b | Quên mật khẩu qua email | — | **Won't** — giờ đã có kênh đã xác minh để dựa vào, nhưng nó là một cửa chiếm tài khoản nếu làm ẩu. Việc riêng, đặc tả riêng |
@@ -174,7 +174,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-SUB-06 | Trang chi tiết bài nộp hiển thị **đủ lý do cho cả 7 verdict** (bảng 6.2 nfrplan) | U3 | Must |
 | FR-SUB-07 | Lịch sử bài nộp của mình: **cursor-based, ≤50/trang**, lọc theo đề/verdict/ngôn ngữ | P1, S3 | Must |
 | FR-SUB-08 | **Rate limit 1 bài/10s/user** — là quy tắc nghiệp vụ, hiển thị đếm ngược trên UI | SEC2, P4 | Must |
-| FR-SUB-09 | **Không ai được xoá bài nộp.** ADMIN chỉ ẩn được, có ghi `audit_log` | R1, audit | Must |
+| FR-SUB-09 | **Không ai được xoá bài nộp.** ADMIN chỉ ẩn được, có ghi `audit_log`. Bài bị ẩn **không được tính điểm** trên bảng xếp hạng; ẩn hay hiện lại một bài trong kỳ thi thì dòng của người đó (bảng thật và bản chụp đóng băng) được tính lại ngay (ADR 027) | R1, audit | Must |
 | FR-SUB-10 | Giữ nháp code trong trình duyệt, khôi phục khi mở lại | U | Should |
 | FR-SUB-11 | Hiển thị thời gian chạy **làm tròn 10ms**, kèm chú thích máy chấm chuẩn | P7, C (ARM/x86) | Must |
 | FR-SUB-12 | Bài `IE` được tự động chấm lại tối đa 2 lần trước khi báo lỗi cho người dùng | R3 | Must |
@@ -185,8 +185,8 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 |---|---|---|---|
 | FR-CON-01 | Tạo contest: tên, thời gian bắt đầu/kết thúc, thể thức (`ICPC`/`IOI`), danh sách đề. Phút phạt từ 0 tới `oj.contest.penalty-minutes-max` (1440). Một đề không được nằm trong hai kỳ thi chồng khung giờ (`contest.de_trung_khung_gio`) | M4-nfr (thêm thể thức = 1 file) | Must |
 | FR-CON-02 | Đăng ký tham gia trước giờ bắt đầu | — | Must |
-| FR-CON-03 | **Đề của contest chỉ truy cập được trong khung giờ** — kiểm ở tầng use-case, không phải ẩn nút | SEC (Quy tắc 3) | Must |
-| FR-CON-04 | Bảng xếp hạng cập nhật **≤2s** sau verdict mới. Hiển thị **top 50 + vùng quanh mình** (2 dòng mỗi phía, `oj.contest.neighborhood-size`; hạng của mình lấy từ cùng câu), không tải toàn bộ. Sau giờ kết thúc vẫn cập nhật tới khi hết bài chờ chấm (ADR 021). Bài của người ra đề và ADMIN nộp trong giờ thi là bài luyện tập, không lên bảng | **P8, P1** | Must |
+| FR-CON-03 | **Đề của contest chỉ truy cập được trong khung giờ** — kiểm ở tầng use-case, không phải ẩn nút. Trước giờ bắt đầu, trang kỳ thi ghi "Kỳ thi chưa bắt đầu" kèm giờ mở đề | SEC (Quy tắc 3) | Must |
+| FR-CON-04 | Bảng xếp hạng cập nhật **≤2s** sau verdict mới. Chỉ người có ít nhất một bài đã chấm mới có dòng — đăng ký mà không nộp thì không có điểm, không có dòng. Hiển thị **top 50 + vùng quanh mình** (2 dòng mỗi phía, `oj.contest.neighborhood-size`; hạng của mình lấy từ cùng câu), không tải toàn bộ. Sau giờ kết thúc vẫn cập nhật tới khi hết bài chờ chấm (ADR 021). Bài của người ra đề và ADMIN nộp trong giờ thi là bài luyện tập, không lên bảng | **P8, P1** | Must |
 | FR-CON-05 | Đóng băng bảng xếp hạng N phút cuối; ADMIN vẫn xem được bản đầy đủ. Bản đóng băng chỉ gồm bài nộp trước `freeze_at`, chụp đúng một lần kể cả khi bảng đang trống (ADR 022). Cột "Chờ" đếm lúc đọc số bài nộp sau `freeze_at`; người chỉ nộp sau giờ đóng băng vẫn hiện với 0 điểm | — | Must |
 | FR-CON-06 | `ICPCFormat`: penalty time tính theo phút, làm tròn xuống từng đề — chỉ `WA`/`TLE`/`MLE`/`RE` tính là lần sai, `CE` và `IE` không bị phạt · `IOIFormat`: điểm subtask, lấy lần cao nhất, quy đổi theo `points` của đề: ⌊score × points / max_score⌋ (ADR 023) | — | Must |
 | FR-CON-07 | Sau khi contest kết thúc: mở đề ra ngoài, **mở lại AI review**, công bố bảng xếp hạng đầy đủ — tự động lúc bảng chốt nếu bật `revealAfterEnd` (mặc định), tắt thì chờ ADMIN công bố | AI (công bằng) | Must |

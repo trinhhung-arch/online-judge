@@ -35,7 +35,13 @@ cần chấm lại. Đo trên Postgres 16 (2026-11-14): 0,37 ms mỗi lần gia 
   thời gian thực (2 × CPU). Chưa có chốt lúc lưu đề; bài như vậy vẫn đi đường `IE` của ADR 019.
 - Mỗi lần gia hạn ghi index `ix_judge_queue_lease` (không HOT). Chỉ trên `judge_queue`; bảng nóng
   `submissions` không bị đụng. Autovacuum giữ bảng ổn định ở khoảng 1 MB sau 44 nghìn lần ghi.
-- Sau khi reaper thu hồi, trang bài nộp vẫn hiện con số tiến độ cuối cho tới lô đầu của lượt
-  mới: reaper chưa phát sự kiện `QUEUED`.
+- Bảng xếp hạng kỳ thi tính theo lô liền mạch, nên giờ nó chờ một bài chấm lâu **đúng bằng thời
+  gian chấm thật** của bài đó, thay vì tối đa khoảng ba lease rồi nhận `IE`. Chỉ chậm hơn trước khi
+  một bài chạy quá khoảng 6–7 phút (ví dụ 300 test × 4 s); kết quả cuối không sai vì bảng chỉ chốt
+  khi hết bài chờ. Chưa có trần cho tổng thời gian chấm một bài — đó là một con số mới, cần người
+  quyết. Ca test M7 (`BangXepHangBoSungIT`) giữ hành vi này.
+- Sau khi reaper thu hồi, hoặc bài `IE` được tự chấm lại, API phát sự kiện `QUEUED` cho trình
+  duyệt. Từ lúc worker chết tới lúc reaper thu hồi (tối đa một lease), trang vẫn hiện con số tiến
+  độ cuối: không ai biết worker đã chết.
 - Worker đã mất lease (API sập quá 120 s) vẫn chạy nốt bài và chiếm slot; kết quả bị ADR 025 loại.
 - WARN "vượt lease" của `JudgeLoop` bị gỡ: chấm lâu hơn lease không còn là dấu hiệu sự cố.

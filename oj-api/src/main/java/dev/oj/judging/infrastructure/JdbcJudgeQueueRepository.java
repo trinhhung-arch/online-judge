@@ -90,7 +90,7 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
              WHERE claimed_at IS NOT NULL
                AND lease_until  < now()
                AND COALESCE(reap_count, 0) < :maxReaps
-            RETURNING submission_id
+            RETURNING submission_id, attempt
             """;
 
     private static final String EXHAUSTED = """
@@ -158,10 +158,10 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
     }
 
     @Override
-    public List<Long> reapExpired(int maxReaps) {
+    public List<ReapedJob> reapExpired(int maxReaps) {
         return judgeJdbc.sql(REAP_EXPIRED)
                 .param("maxReaps", maxReaps)
-                .query(Long.class)
+                .query((rs, n) -> new ReapedJob(rs.getLong("submission_id"), rs.getInt("attempt")))
                 .list();
     }
 

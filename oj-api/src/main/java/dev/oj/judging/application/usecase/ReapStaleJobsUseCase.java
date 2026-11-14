@@ -2,6 +2,9 @@ package dev.oj.judging.application.usecase;
 
 import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.JudgeQueueRepository.ExhaustedJob;
+import dev.oj.judging.application.port.JudgeQueueRepository.ReapedJob;
+import dev.oj.judging.application.port.SubmissionEventBus;
+import dev.oj.judging.application.port.SubmissionEventBus.SubmissionEvent;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.security.InternalAccess;
@@ -25,15 +28,18 @@ public class ReapStaleJobsUseCase {
     private final RecordJudgeResultUseCase verdicts;
     private final AppProperties.Judge config;
     private final TransactionTemplate judgeTx;
+    private final SubmissionEventBus events;
 
     public ReapStaleJobsUseCase(JudgeQueueRepository queue, SubmissionRepository submissions,
                                 RecordJudgeResultUseCase verdicts, AppProperties properties,
+                                SubmissionEventBus events,
                                 @Qualifier("judgeTransactionManager") PlatformTransactionManager tx) {
         this.queue = queue;
         this.submissions = submissions;
         this.verdicts = verdicts;
         this.config = properties.judge();
         this.judgeTx = new TransactionTemplate(tx);
+        this.events = events;
     }
 
     public int reap() {
@@ -41,18 +47,19 @@ public class ReapStaleJobsUseCase {
     }
 
     private int thaLai() {
-        List<Long> reclaimed = judgeTx.execute(status -> {
-            List<Long> ids = queue.reapExpired(config.maxReaps());
-            if (!ids.isEmpty()) {
-                submissions.markQueued(ids);
+        List<ReapedJob> reclaimed = judgeTx.execute(status -> {
+            List<ReapedJob> bai = queue.reapExpired(config.maxReaps());
+            if (!bai.isEmpty()) {
+                submissions.markQueued(bai.stream().map(ReapedJob::submissionId).toList());
             }
-            return ids;
+            return bai;
         });
         if (reclaimed == null || reclaimed.isEmpty()) {
             return 0;
         }
         log.warn("Reaper thu hồi {} bài quá hạn lease, đã đưa về QUEUED: {}",
-                reclaimed.size(), reclaimed);
+                reclaimed.size(), reclaimed.stream().map(ReapedJob::submissionId).toList());
+        reclaimed.forEach(b -> events.publish(SubmissionEvent.queued(b.submissionId(), b.attempt())));
         return reclaimed.size();
     }
 

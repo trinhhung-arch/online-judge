@@ -22,17 +22,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SubmissionSseIT extends PostgresIT {
-
-    private static final Duration WAIT = Duration.ofSeconds(20);
 
     @LocalServerPort int port;
 
@@ -46,7 +42,7 @@ class SubmissionSseIT extends PostgresIT {
     @DisplayName("★ verdict đi từ /internal/judge/result qua Redis tới trình duyệt")
     void verdict_toi_duoc_trinh_duyet_qua_redis() throws Exception {
         long id = submit();
-        try (Stream stream = open(id)) {
+        try (LuongSse stream = open(id)) {
             stream.awaitLineContaining("QUEUED");
 
             int attempt = claim(id);
@@ -65,7 +61,7 @@ class SubmissionSseIT extends PostgresIT {
     @DisplayName("★ SEC3 — không byte nào trên luồng nói test nào sai")
     void luong_khong_mang_chi_tiet_test() throws Exception {
         long id = submit();
-        try (Stream stream = open(id)) {
+        try (LuongSse stream = open(id)) {
             stream.awaitLineContaining("QUEUED");
             int attempt = claim(id);
 
@@ -86,7 +82,7 @@ class SubmissionSseIT extends PostgresIT {
         long id = submit();
         recordResult.record(accepted(id, claim(id)));
 
-        try (Stream stream = open(id)) {
+        try (LuongSse stream = open(id)) {
             assertThat(stream.awaitLineContaining("DONE")).contains("\"terminal\":true");
             stream.awaitClosed();
         }
@@ -96,7 +92,7 @@ class SubmissionSseIT extends PostgresIT {
     @DisplayName("★ B11 · tiến độ của lượt đã bị thu hồi không tới trình duyệt — trước và sau khi có lượt mới")
     void tien_do_cua_luot_cu_khong_toi_trinh_duyet() throws Exception {
         long id = submit();
-        try (Stream stream = open(id)) {
+        try (LuongSse stream = open(id)) {
             stream.awaitLineContaining("QUEUED");
             int cu = claim(id);
             recordProgress.record(tienDo(id, cu, 21));
@@ -119,6 +115,33 @@ class SubmissionSseIT extends PostgresIT {
                     .doesNotContain("\"testsDone\":41", "\"testsDone\":61");
         }
     }
+
+    @Test
+    @DisplayName("★ bài quay về hàng đợi (reaper thu hồi, IE được chấm lại) thì trình duyệt nhận QUEUED ngay, không đứng ở con số tiến độ cũ")
+    void quay_ve_hang_doi_thi_trinh_duyet_nhan_queued() throws Exception {
+        long id = submit();
+        try (LuongSse stream = open(id)) {
+            stream.awaitSoDong(QUEUED, 1);
+            int dau = claim(id);
+            recordProgress.record(tienDo(id, dau, 21));
+            stream.awaitLineContaining("\"testsDone\":21");
+
+            jdbc.sql("""
+                    UPDATE judge_queue SET lease_until = now() - interval '1 second'
+                     WHERE submission_id = :id
+                    """).param("id", id).update();
+            assertThat(reapStaleJobs.reap()).isEqualTo(1);
+            assertThat(stream.awaitSoDong(QUEUED, 2)).contains("\"attempt\":" + dau);
+
+            int hai = claim(id);
+            recordResult.record(new JudgeResultDto(id, hai, Verdict.IE, 0, 100, null, 0, null,
+                    null, null, "sandbox hỏng", "mac-m1max-host", new BigDecimal("1.000"),
+                    Instant.now(), List.of()));
+            assertThat(stream.awaitSoDong(QUEUED, 3)).contains("\"attempt\":" + hai);
+        }
+    }
+
+    private static final String QUEUED = "\"status\":\"QUEUED\"";
 
     private static JudgeProgressDto tienDo(long id, int attempt, int toOrdinal) {
         return new JudgeProgressDto(id, attempt, toOrdinal, toOrdinal, 100,
@@ -196,80 +219,9 @@ class SubmissionSseIT extends PostgresIT {
         return m.group();
     }
 
-    private Stream open(long submissionId) throws Exception {
-        return new Stream(URI.create(
+    private LuongSse open(long submissionId) throws Exception {
+        return new LuongSse(URI.create(
                 "http://localhost:" + port + "/api/v1/submissions/" + submissionId + "/stream"),
                 bearerDev());
-    }
-
-    private static final class Stream implements AutoCloseable {
-
-        private final HttpClient client = HttpClient.newHttpClient();
-        private final List<String> lines = new CopyOnWriteArrayList<>();
-        private final Thread reader;
-        private volatile boolean closed;
-
-        Stream(URI uri, String bearer) throws IOException, InterruptedException {
-            HttpResponse<java.util.stream.Stream<String>> response = client.send(
-                    HttpRequest.newBuilder(uri).header("Authorization", bearer).GET().build(),
-                    HttpResponse.BodyHandlers.ofLines());
-            assertThat(response.statusCode()).isEqualTo(200);
-            assertThat(response.headers().firstValue("Cache-Control"))
-                    .as("luồng SSE commit response sớm — KhongLuuDemApiFilter phải đặt header trước chain")
-                    .hasValue("no-store");
-
-            reader = Thread.ofPlatform().daemon().start(() -> {
-                try (var body = response.body()) {
-                    body.forEach(lines::add);
-                } finally {
-                    closed = true;
-                }
-            });
-        }
-
-        String awaitLineContaining(String needle) {
-            long deadline = System.nanoTime() + WAIT.toNanos();
-            while (System.nanoTime() < deadline) {
-                for (String line : lines) {
-                    if (line.contains(needle)) {
-                        return line;
-                    }
-                }
-                sleep();
-            }
-            throw new AssertionError(
-                    "Không thấy sự kiện chứa '" + needle + "' sau " + WAIT + ".\nĐã nhận:\n"
-                            + String.join("\n", lines));
-        }
-
-        void awaitClosed() {
-            long deadline = System.nanoTime() + WAIT.toNanos();
-            while (System.nanoTime() < deadline && !closed) {
-                sleep();
-            }
-            assertThat(closed)
-                    .as("bài đã DONE mà luồng vẫn mở là giữ một kết nối 5 phút cho một sự kiện "
-                            + "sẽ không bao giờ tới")
-                    .isTrue();
-        }
-
-        String everything() {
-            return String.join("\n", lines);
-        }
-
-        private static void sleep() {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError(e);
-            }
-        }
-
-        @Override
-        public void close() {
-            reader.interrupt();
-            client.close();
-        }
     }
 }

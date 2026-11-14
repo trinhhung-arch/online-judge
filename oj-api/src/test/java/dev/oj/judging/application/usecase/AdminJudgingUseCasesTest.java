@@ -38,6 +38,7 @@ class AdminJudgingUseCasesTest {
     private JudgingFakes.CongTacGia congTac;
     private JobsGia jobs;
     private IdentityFreeAuditLog nhatKy;
+    private final java.util.List<Long> daBao = new java.util.ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -145,6 +146,40 @@ class AdminJudgingUseCasesTest {
             assertThat(nhatKy.hanhDong)
                     .containsExactly("SUBMISSION_HIDDEN", "SUBMISSION_UNHIDDEN");
         }
+
+        @Test
+        @DisplayName("★ M1 · ẩn và hiện lại đều báo cho bên nghe — bảng xếp hạng phải tính lại cả hai chiều")
+        void an_va_hien_lai_deu_bao() {
+            HideSubmissionUseCase uc = anUseCase();
+            uc.dat(11L, true);
+            uc.dat(11L, false);
+
+            assertThat(daBao).containsExactly(11L, 11L);
+        }
+
+        @Test
+        @DisplayName("ẩn không thành (bài không có / đã ẩn) thì không báo ai")
+        void an_hong_thi_khong_bao() {
+            HideSubmissionUseCase uc = anUseCase();
+            uc.dat(11L, true);
+
+            assertThatExceptionOfType(JudgingException.class).isThrownBy(() -> uc.dat(11L, true));
+
+            assertThat(daBao).containsExactly(11L);
+        }
+
+        @Test
+        @DisplayName("★ bên nghe ném lỗi thì bài VẪN được ẩn và vẫn có audit — đối soát sẽ bắt bảng lệch")
+        void ben_nghe_hong_khong_lam_hong_viec_an() {
+            HideSubmissionUseCase uc = new HideSubmissionUseCase(nguoiGoi(), fakes.submissions,
+                    nhatKy, Clock.systemUTC(), java.util.List.of(id -> {
+                        throw new IllegalStateException("giả lập: bảng xếp hạng hỏng");
+                    }));
+
+            uc.dat(11L, true);
+
+            assertThat(nhatKy.hanhDong).containsExactly("SUBMISSION_HIDDEN");
+        }
     }
 
     private StartRejudgeUseCase useCase() {
@@ -157,7 +192,8 @@ class AdminJudgingUseCasesTest {
 
     private HideSubmissionUseCase anUseCase() {
         return new HideSubmissionUseCase(nguoiGoi(), fakes.submissions, nhatKy,
-                Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), java.time.ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), java.time.ZoneOffset.UTC),
+                java.util.List.of(daBao::add));
     }
 
     private CurrentUserProvider nguoiGoi() {

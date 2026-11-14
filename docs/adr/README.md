@@ -34,3 +34,4 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [024](024-cache-bang-xep-hang-ghi-theo-phien-ban.md) | Cache bảng xếp hạng chỉ được ghi khi bảng chưa đổi kể từ lúc đọc | v1.1 |
 | [025](025-khoa-lac-quan-chi-nhan-luot-con-giu-lease.md) | Khoá lạc quan chỉ nhận kết quả của lượt còn giữ lease | v1.1 |
 | [026](026-gia-han-lease-theo-tien-do.md) | Lease được gia hạn theo tiến độ: reaper bắt worker im lặng, không bắt bài chấm lâu | v1.1 |
+| [027](027-bai-bi-an-khong-tinh-diem.md) | Bài bị ẩn không tính điểm; ẩn hay hiện lại thì tính lại dòng của đúng người đó | v1.1 |

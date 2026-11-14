@@ -21,6 +21,10 @@ public interface StandingsRepository {
 
     void xoaBangXepHang(long contestId);
 
+    void xoaCuaNguoi(long contestId, long userId);
+
+    void xoaDongBangCuaNguoi(long contestId, long userId);
+
     boolean daChupDongBang(long contestId);
 
     void ghiTongKetDongBang(long contestId, long userId, TongKet tong, int penaltyGiay);
