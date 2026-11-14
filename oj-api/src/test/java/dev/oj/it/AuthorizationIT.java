@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 class AuthorizationIT extends PostgresIT {
 
@@ -212,6 +213,36 @@ class AuthorizationIT extends PostgresIT {
                     PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
 
             assertThat(getSubmission.detailById(cuaToi)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("★ A8 · nộp vào đề CHƯA xuất bản → 404 y hệt đề không tồn tại, không tạo bài nộp")
+        void de_chua_xuat_ban_khong_nop_duoc() {
+            long deNhap = jdbc.sql("""
+                    INSERT INTO problems (code, title, statement_md, statement_hash, time_limit_ms,
+                                          memory_limit_kb, output_limit_kb, checker_type,
+                                          scoring_mode, feedback_level, status, owner_id,
+                                          current_testdata_version)
+                    VALUES ('DE-NHAP', 'Đề nháp', 'x', :hash, 1000, 262144, 65536, 'token',
+                            'ALL_OR_NOTHING', 'TEST_INDEX', 'DRAFT', :owner, 1)
+                    RETURNING id
+                    """).param("hash", "c".repeat(64)).param("owner", SETTER_ID)
+                    .query(Long.class).single();
+
+            var loiDeNhap = catchThrowableOfType(DomainException.class, () -> nop(deNhap));
+            var loiKhongTonTai = catchThrowableOfType(DomainException.class, () -> nop(999_999L));
+
+            assertThat(loiDeNhap)
+                    .describedAs("khác lỗi của đề không tồn tại là dò được mã đề sắp ra")
+                    .hasFieldOrPropertyWithValue("kind", DomainException.Kind.NOT_FOUND)
+                    .hasFieldOrPropertyWithValue("code", loiKhongTonTai.code());
+            assertThat(jdbc.sql("SELECT count(*) FROM submissions").query(Integer.class).single())
+                    .isZero();
+        }
+
+        private void nop(long problemId) {
+            submitSolution.submit(new SubmitSolutionUseCase.Command(
+                    problemId, "cpp20", "// EXPECT: AC\nint main(){}"));
         }
     }
 }

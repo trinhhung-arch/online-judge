@@ -84,6 +84,51 @@ class SubmissionRateLimitIT extends HttpIT {
         limiter.kiemTraVaGhiNhan(ADMIN_ID);
     }
 
+    @Test
+    @DisplayName("★ A14 · Redis: khoá sống đúng một cửa sổ, hết hạn thì nộp lại được")
+    void het_cua_so_thi_nop_lai_duoc_qua_redis() throws InterruptedException {
+        String token = "Bearer " + tokenCua("dev");
+        assertThat(goi(http.post().uri("/api/v1/submissions")
+                .header("Authorization", token).body(BAI)).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        String khoa = ResetGiuaCacTest.KHOA_RATE_LIMIT + USER_ID;
+        long cuaSoMs = properties.submission().rateLimit().toMillis();
+        assertThat(redis.getExpire(khoa, java.util.concurrent.TimeUnit.MILLISECONDS))
+                .describedAs("TTL dài hơn cửa sổ là chặn người dùng lâu hơn quy tắc công bố")
+                .isBetween(cuaSoMs - 2_000, cuaSoMs);
+
+        redis.expire(khoa, java.time.Duration.ofMillis(1));
+        for (int i = 0; i < 100 && Boolean.TRUE.equals(redis.hasKey(khoa)); i++) {
+            Thread.sleep(10);
+        }
+
+        assertThat(goi(http.post().uri("/api/v1/submissions")
+                .header("Authorization", token).body(BAI)).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("★ A14 · Postgres dự phòng: thiếu 1ms là còn chặn, đủ cửa sổ là cho qua")
+    void het_cua_so_thi_nop_lai_duoc_qua_postgres() {
+        assertThat(goi(http.post().uri("/api/v1/submissions")
+                .header("Authorization", "Bearer " + tokenCua("dev")).body(BAI))
+                .getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        java.time.Instant nopLuc = submissions.lastSubmittedAt(USER_ID).orElseThrow();
+        java.time.Duration cuaSo = properties.submission().rateLimit();
+
+        assertThatThrownBy(() -> limiterLuc(nopLuc.plus(cuaSo).minusMillis(1))
+                .kiemTraVaGhiNhan(USER_ID))
+                .hasFieldOrPropertyWithValue("kind", DomainException.Kind.RATE_LIMITED);
+
+        limiterLuc(nopLuc.plus(cuaSo)).kiemTraVaGhiNhan(USER_ID);
+    }
+
+    private RedisSubmissionRateLimiter limiterLuc(java.time.Instant bayGio) {
+        return new RedisSubmissionRateLimiter(dungRedisChet(), submissions, properties,
+                Clock.fixed(bayGio, java.time.ZoneOffset.UTC));
+    }
+
     private static StringRedisTemplate dungRedisChet() {
         return new StringRedisTemplate() {
             @Override

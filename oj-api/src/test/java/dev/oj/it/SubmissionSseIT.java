@@ -9,6 +9,7 @@ import dev.oj.judging.application.usecase.ReapStaleJobsUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeProgressUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
+import dev.oj.platform.security.Role;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -162,6 +163,37 @@ class SubmissionSseIT extends PostgresIT {
                     .describedAs("ca '%s' — thân rỗng thì frontend không phân biệt được lỗi gì", ca[0])
                     .contains("\"code\"");
         }
+    }
+
+    @Test
+    @DisplayName("★ D5 · mở luồng của bài người khác → 404 y hệt bài không tồn tại, không lộ trạng thái")
+    void luong_cua_bai_nguoi_khac_la_404() throws Exception {
+        long cuaDev = submit();
+        String nguoiKhac = bearer(SETTER_ID, "setter", Role.SETTER);
+
+        var cuaNguoiKhac = moThang(cuaDev, nguoiKhac);
+        var khongTonTai = moThang(999_999, nguoiKhac);
+
+        assertThat(cuaNguoiKhac.statusCode()).isEqualTo(404);
+        assertThat(cuaNguoiKhac.body())
+                .describedAs("khác 404 của bài không tồn tại là dò được ai đã nộp bài id này")
+                .contains(maLoi(khongTonTai.body()))
+                .doesNotContain("QUEUED", "JUDGING", "verdict");
+    }
+
+    private HttpResponse<String> moThang(long submissionId, String authorization)
+            throws IOException, InterruptedException {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + port + "/api/v1/submissions/" + submissionId + "/stream"))
+                .header("Accept", "text/event-stream")
+                .header("Authorization", authorization)
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String maLoi(String than) {
+        var m = java.util.regex.Pattern.compile("\"code\"\\s*:\\s*\"[^\"]+\"").matcher(than);
+        assertThat(m.find()).as("thân lỗi không có mã: %s", than).isTrue();
+        return m.group();
     }
 
     private Stream open(long submissionId) throws Exception {
