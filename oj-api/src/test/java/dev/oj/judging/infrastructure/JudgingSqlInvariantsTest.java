@@ -67,6 +67,19 @@ class JudgingSqlInvariantsTest {
     }
 
     @Test
+    @DisplayName("★ ADR 026: gia hạn lease khoá theo attempt + lượt còn giữ lease, và không đụng attempt")
+    void gia_han_lease_chi_cho_luot_con_giu_lease() {
+        String renew = sql("JdbcJudgeQueueRepository.RENEW_LEASE");
+
+        assertThat(renew).startsWith("UPDATE judge_queue SET lease_until = now() +");
+        assertThat(renew)
+                .as("thiếu một trong hai là worker đã mất lease giữ sống được lượt chấm của máy khác")
+                .contains("attempt = :attempt")
+                .contains("claimed_at IS NOT NULL");
+        assertThat(renew).doesNotContain("attempt +", "claimed_at =");
+    }
+
+    @Test
     @DisplayName("★ bất biến #8: không OFFSET, không SELECT *, và không COUNT trên submissions")
     void khong_co_cau_nao_quet_bang_nong() {
         SQL.forEach((name, sql) -> {

@@ -94,6 +94,8 @@ Trước khi viết bất kỳ endpoint đọc dữ liệu nào, xác định ô
 - Xác thực bằng shared secret đọc từ env, không phải JWT người dùng.
 - Đây là phần đóng băng của `oj-contract`. **Đổi chữ ký là phải hỏi người** — cả hai phía phải đổi trong cùng một PR.
 - `claim` phải idempotent theo `attempt`. `result` phải có optimistic lock.
+- `progress` gia hạn lease 120s cho đúng lượt còn giữ lease (`RENEW_LEASE`, ADR 026); lượt đã
+  mất lease thì bỏ qua im lặng và **không** phát sự kiện SSE.
 
 ---
 

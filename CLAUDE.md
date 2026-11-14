@@ -205,7 +205,7 @@ Nếu ô **"Bất biến bị chạm"** khác "không", giải thích ngay bên 
 | **checker** | Bộ so sánh output: `exact`, `token`, `float epsilon` |
 | **subtask** | Nhóm testcase có điểm riêng |
 | **box** | Một sandbox `isolate` đang chạy. Mỗi judge slot một box |
-| **reaper** | Job nền đưa submission kẹt ở `JUDGING` quá 120s về `QUEUED` |
+| **reaper** | Job nền đưa submission ở `JUDGING` mà worker im lặng quá 120s về `QUEUED`. Mỗi lô tiến độ gia hạn 120s (ADR 026) |
 | **host_factor** | Hệ số hiệu chuẩn tốc độ máy chấm. Nhân vào giới hạn thời gian |
 | **feedback_level** | Mức phản hồi của một đề: `NONE` / `TEST_INDEX` / `SAMPLE_DETAIL` |
 | **judge slot** | Một luồng chấm song song. Số slot cố định theo cấu hình host |

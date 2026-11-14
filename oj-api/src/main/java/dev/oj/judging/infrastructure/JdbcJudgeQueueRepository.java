@@ -73,6 +73,14 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
             RETURNING submission_id
             """;
 
+    private static final String RENEW_LEASE = """
+            UPDATE judge_queue
+               SET lease_until = now() + make_interval(secs => :leaseSeconds)
+             WHERE submission_id = :submissionId
+               AND attempt       = :attempt
+               AND claimed_at    IS NOT NULL
+            """;
+
     private static final String REAP_EXPIRED = """
             UPDATE judge_queue
                SET claimed_at      = NULL,
@@ -174,6 +182,15 @@ public class JdbcJudgeQueueRepository implements JudgeQueueRepository {
                 .query(Long.class)
                 .optional()
                 .isPresent();
+    }
+
+    @Override
+    public boolean renewLease(long submissionId, int attempt, int leaseSeconds) {
+        return judgeJdbc.sql(RENEW_LEASE)
+                .param("submissionId", submissionId)
+                .param("attempt", attempt)
+                .param("leaseSeconds", leaseSeconds)
+                .update() == 1;
     }
 
     @Override

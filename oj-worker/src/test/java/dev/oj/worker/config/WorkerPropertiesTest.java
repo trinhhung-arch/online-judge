@@ -35,6 +35,23 @@ class WorkerPropertiesTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    @DisplayName("★ ADR 026 · progress-interval không ngắn hơn lease → từ chối khởi động")
+    void progress_interval_phai_ngan_hon_lease() {
+        WorkerProperties goc = WorkerFixtures.properties(Path.of("/var/tmp/oj-worker"));
+
+        for (java.time.Duration khoang : new java.time.Duration[]{
+                goc.lease(), goc.lease().plusSeconds(1), java.time.Duration.ZERO, null}) {
+            assertThatThrownBy(() -> new WorkerProperties(goc.hostName(), goc.arch(), goc.slots(),
+                    goc.lease(), khoang, goc.idlePoll(), goc.shutdownGrace(),
+                    goc.requestTimeout(), goc.resultRetryMin(), goc.resultRetryMax(),
+                    goc.apiBaseUrl(), goc.internalSecret(), goc.hostFactor(), goc.sandbox()))
+                    .as(String.valueOf(khoang))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("progress-interval");
+        }
+    }
+
     private static Sandbox sandbox(boolean enabled, String cacheDir) {
         Sandbox s = WorkerFixtures.sandbox(Path.of("/var/tmp/oj-worker"));
         return new Sandbox(enabled, s.isolateBinary(), s.boxRoot(), s.firstBoxId(),

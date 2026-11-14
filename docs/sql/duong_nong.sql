@@ -151,6 +151,19 @@ UPDATE judge_queue
 RETURNING submission_id, ie_retry_count;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3''. GIA HẠN LEASE — POST /internal/judge/progress (ADR 026). Một câu, autocommit.
+--     1 dòng: lượt còn giữ lease, được thêm 120s và sự kiện tiến độ được phát.
+--     0 dòng: lượt đã bị thu hồi hoặc đã có lượt mới — bỏ qua im lặng, không phát gì.
+--     Cùng điều kiện với 3a, nên worker đã mất lease không giữ sống được lượt của máy khác.
+--     Code: JdbcJudgeQueueRepository.RENEW_LEASE
+-- ─────────────────────────────────────────────────────────────────────────────
+UPDATE judge_queue
+   SET lease_until = now() + make_interval(secs => :leaseSeconds)   -- 120
+ WHERE submission_id = :submissionId
+   AND attempt       = :attempt
+   AND claimed_at    IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. REAPER — job nền, chạy mỗi 15 giây (nfrplan 5.1: một cơ chế, năm loại sự cố).
 --    Không tăng attempt ở đây: lần claim kế tiếp sẽ tăng. Kết quả trả về muộn của
 --    lượt đã chết bị chặn ở 3a bằng `claimed_at IS NOT NULL`, kể cả trước khi có

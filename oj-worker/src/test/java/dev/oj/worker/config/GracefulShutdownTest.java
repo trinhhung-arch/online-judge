@@ -73,7 +73,7 @@ class GracefulShutdownTest {
                 s.watchdogSlack(), s.programPath(), s.compile(), s.run(), s.cache(),
                 s.benchmark());
         return new WorkerProperties(goc.hostName(), goc.arch(), goc.slots(), goc.lease(),
-                goc.idlePoll(), anHan, goc.requestTimeout(), goc.resultRetryMin(),
+                goc.progressInterval(), goc.idlePoll(), anHan, goc.requestTimeout(), goc.resultRetryMin(),
                 goc.resultRetryMax(), goc.apiBaseUrl(), goc.internalSecret(), goc.hostFactor(),
                 tat);
     }

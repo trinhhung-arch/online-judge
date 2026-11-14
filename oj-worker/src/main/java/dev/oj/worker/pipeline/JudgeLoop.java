@@ -103,17 +103,7 @@ public class JudgeLoop implements SmartLifecycle {
                     properties.hostName(), properties.hostFactor(), startedAt,
                     e.getClass().getSimpleName());
         }
-        warnIfOverLease(job, startedAt);
         results.submit(result);
-    }
-
-    private void warnIfOverLease(JudgeJobDto job, Instant startedAt) {
-        Duration elapsed = Duration.between(startedAt, Instant.now());
-        if (elapsed.compareTo(properties.lease()) > 0) {
-            log.warn("submission {} attempt {} chấm mất {} — vượt lease {}. Kết quả sẽ bị từ "
-                            + "chối và bài đã được giao lại cho worker khác.",
-                    job.submissionId(), job.attempt(), elapsed, properties.lease());
-        }
     }
 
     @Override

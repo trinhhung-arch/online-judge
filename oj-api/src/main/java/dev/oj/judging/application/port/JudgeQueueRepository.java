@@ -19,6 +19,8 @@ public interface JudgeQueueRepository {
 
     boolean retryIe(long submissionId, int attempt, int maxRetries);
 
+    boolean renewLease(long submissionId, int attempt, int leaseSeconds);
+
     QueueStats queueDepth();
 
     record ClaimedJob(

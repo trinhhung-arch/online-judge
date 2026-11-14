@@ -22,6 +22,7 @@ oj:
     arch: ${OJ_WORKER_ARCH:arm64}
     slots: ${OJ_WORKER_SLOTS:6}
     lease: 120s
+    progress-interval: 30s
     idle-poll: 500ms
     shutdown-grace: 30s
     request-timeout: 5s
