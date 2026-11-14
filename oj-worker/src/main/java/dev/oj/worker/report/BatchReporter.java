@@ -5,8 +5,13 @@ import dev.oj.contract.JudgeProgressDto;
 import dev.oj.contract.JudgeProgressDto.TestOutcome;
 import dev.oj.contract.Verdict;
 import dev.oj.worker.client.JudgeApiClient;
+import dev.oj.worker.config.WorkerProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,9 +19,18 @@ import java.util.List;
 public class BatchReporter {
 
     private final JudgeApiClient api;
+    private final Duration interval;
+    private final InstantSource clock;
 
-    public BatchReporter(JudgeApiClient api) {
+    @Autowired
+    public BatchReporter(JudgeApiClient api, WorkerProperties properties) {
+        this(api, properties.progressInterval(), InstantSource.system());
+    }
+
+    BatchReporter(JudgeApiClient api, Duration interval, InstantSource clock) {
         this.api = api;
+        this.interval = interval;
+        this.clock = clock;
     }
 
     public Session open(JudgeJobDto job) {
@@ -28,6 +42,7 @@ public class BatchReporter {
         private final JudgeJobDto job;
         private final List<TestOutcome> pending = new ArrayList<>(JudgeProgressDto.BATCH_SIZE);
         private int firstOrdinal;
+        private Instant lastFlush = clock.instant();
 
         private Session(JudgeJobDto job) {
             this.job = job;
@@ -38,9 +53,13 @@ public class BatchReporter {
                 firstOrdinal = ordinal;
             }
             pending.add(new TestOutcome(ordinal, verdict, (int) cpuTimeMs, (int) memoryKb));
-            if (pending.size() >= JudgeProgressDto.BATCH_SIZE) {
+            if (pending.size() >= JudgeProgressDto.BATCH_SIZE || dueByTime()) {
                 flush();
             }
+        }
+
+        private boolean dueByTime() {
+            return Duration.between(lastFlush, clock.instant()).compareTo(interval) >= 0;
         }
 
         @Override
@@ -58,6 +77,7 @@ public class BatchReporter {
                     firstOrdinal, lastOrdinal, job.testcases().size(),
                     List.copyOf(pending)));
             pending.clear();
+            lastFlush = clock.instant();
         }
     }
 }

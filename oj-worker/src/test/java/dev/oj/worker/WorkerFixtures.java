@@ -41,7 +41,7 @@ public final class WorkerFixtures {
 
     public static WorkerProperties properties(Path cacheDir, Duration retryMin, Duration retryMax) {
         return new WorkerProperties("may-test", "arm64", 6,
-                Duration.ofSeconds(120), Duration.ofMillis(10),
+                Duration.ofSeconds(120), Duration.ofSeconds(30), Duration.ofMillis(10),
                 Duration.ofMillis(200),
                 Duration.ofSeconds(5), retryMin, retryMax,
                 "http://localhost:8080", "x".repeat(32), new BigDecimal("1.000"),

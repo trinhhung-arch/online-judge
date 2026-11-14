@@ -32,3 +32,5 @@ Quy tắc: ADR **không sửa, chỉ thay thế**. Đổi ý thì viết file m�
 | [022](022-ban-chup-dong-bang-tinh-tu-bai-nop-truoc-freeze.md) | Bản chụp đóng băng tính lại từ bài nộp trước `freeze_at` | v1.1 |
 | [023](023-icpc-phat-theo-phut-ioi-quy-doi-theo-points.md) | ICPC phạt theo phút làm tròn xuống; IOI quy đổi điểm theo `points` của đề | v1.1 |
 | [024](024-cache-bang-xep-hang-ghi-theo-phien-ban.md) | Cache bảng xếp hạng chỉ được ghi khi bảng chưa đổi kể từ lúc đọc | v1.1 |
+| [025](025-khoa-lac-quan-chi-nhan-luot-con-giu-lease.md) | Khoá lạc quan chỉ nhận kết quả của lượt còn giữ lease | v1.1 |
+| [026](026-gia-han-lease-theo-tien-do.md) | Lease được gia hạn theo tiến độ: reaper bắt worker im lặng, không bắt bài chấm lâu | v1.1 |

@@ -110,6 +110,44 @@ class KillWorkerMidJudgeIT extends PostgresIT {
     }
 
     @Test
+    @DisplayName("★ KQ-04 · kết quả tới SAU khi reaper thả bài, TRƯỚC khi có người nhận lại → bị bỏ qua, bài không rời hàng đợi")
+    void ket_qua_toi_giua_luc_tha_va_luc_nhan_lai() {
+        long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
+        assertThat(claimJudgeJob.claim(REQUEST).orElseThrow().attempt()).isEqualTo(1);
+        expireLease(id);
+        assertThat(reapStaleJobs.reap()).isEqualTo(1);
+
+        assertThat(recordJudgeResult.record(result(id, 1, Verdict.AC))).isEqualTo(Outcome.IGNORED);
+        assertThat(status(id)).isEqualTo("QUEUED");
+        assertThat(queueDepth()).as("bài vẫn chờ người nhận lại").isEqualTo(1);
+        assertThat(countJudgeRuns(id)).isZero();
+
+        JudgeJobDto lai = claimJudgeJob.claim(REQUEST).orElseThrow();
+        assertThat(lai.submissionId()).isEqualTo(id);
+        assertThat(lai.attempt()).isEqualTo(2);
+        assertThat(recordJudgeResult.record(result(id, 2, Verdict.AC))).isEqualTo(Outcome.RECORDED);
+        assertThat(status(id)).isEqualTo("DONE");
+        assertThat(verdict(id)).isEqualTo("AC");
+        assertThat(queueDepth()).isZero();
+    }
+
+    @Test
+    @DisplayName("KQ-14 · IE tới sau khi bài đã bị thả về → bị bỏ qua, không tiêu lượt tự chấm lại")
+    void ie_toi_sau_khi_tha_khong_tieu_luot() {
+        long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
+        claimJudgeJob.claim(REQUEST).orElseThrow();
+        expireLease(id);
+        assertThat(reapStaleJobs.reap()).isEqualTo(1);
+
+        assertThat(recordJudgeResult.record(result(id, 1, Verdict.IE))).isEqualTo(Outcome.IGNORED);
+        assertThat(ieRetryCount(id)).isZero();
+        assertThat(status(id)).isEqualTo("QUEUED");
+        assertThat(queueDepth()).isEqualTo(1);
+    }
+
+    @Test
     void traceId_duoc_ghi_lai_cung_ban_ghi_cham() {
         long id = submitSolution.submit(new SubmitSolutionUseCase.Command(
                 PROBLEM_ID, "cpp20", "// EXPECT: AC\nint main(){}")).submissionId();
@@ -168,5 +206,10 @@ class KillWorkerMidJudgeIT extends PostgresIT {
 
     private int queueDepth() {
         return jdbc.sql("SELECT count(*)::int FROM judge_queue").query(Integer.class).single();
+    }
+
+    private int ieRetryCount(long id) {
+        return jdbc.sql("SELECT ie_retry_count FROM judge_queue WHERE submission_id = :id")
+                .param("id", id).query(Integer.class).single();
     }
 }

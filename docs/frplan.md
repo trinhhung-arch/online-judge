@@ -111,7 +111,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-AUTH-04 | Đổi mật khẩu (yêu cầu mật khẩu cũ), thu hồi mọi refresh token | SEC2 | Must |
 | FR-AUTH-05 | Xem và sửa hồ sơ: tên hiển thị, ngôn ngữ ưa dùng | — | Must |
 | FR-AUTH-06 | Ba vai trò USER / SETTER / ADMIN. **Kiểm quyền ở tầng use-case** | SEC2, M-ArchUnit | Must |
-| FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên | R1, audit | Must |
+| FR-AUTH-07 | ADMIN vô hiệu hoá tài khoản — **không xoá cứng**, dữ liệu bài nộp giữ nguyên. Ẩn danh hoá: bảng xếp hạng giữ dòng và hạng, không trả `handle` (mục 3.5) | R1, audit | Must |
 | FR-AUTH-08 | Giới hạn 5 lần đăng nhập **sai**/phút/IP (IPv6 đếm theo dải /64, từ 2026-09-24), khoá tạm 15 phút. Thêm: **≤ 4 phép băm BCrypt song song** (vượt thì 429, không xếp hàng) và **2 giây giữa hai lượt đăng nhập THÀNH CÔNG của cùng một tài khoản** | SEC2, P1/P2 (chống làm nghẽn CPU) | Must |
 | FR-AUTH-09 | **Xác minh email** — mã 6 chữ số, hạn 30 phút, 5 lần thử. **Mức mềm: chưa xác minh KHÔNG chặn đăng nhập/nộp bài/dự thi** | A (SMTP không nằm trên đường nào quan trọng) | **Done (v1.1)** — V13, ADR 016 |
 | FR-AUTH-09b | Quên mật khẩu qua email | — | **Won't** — giờ đã có kênh đã xác minh để dựa vào, nhưng nó là một cửa chiếm tài khoản nếu làm ẩu. Việc riêng, đặc tả riêng |
@@ -168,7 +168,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 |---|---|---|---|
 | FR-SUB-01 | Nộp bài: chọn ngôn ngữ, dán hoặc upload source **≤ 64KB** | AI2 (giới hạn prompt), SEC | Must |
 | FR-SUB-02 | **Hệ thống trả `submissionId` + trạng thái `QUEUED` trong ≤300ms. Verdict đến sau.** | **P2, R1, S1** | **Must** |
-| FR-SUB-03 | Vòng trạng thái `QUEUED → JUDGING → DONE`. Bài kẹt ở `JUDGING` quá 120s tự về `QUEUED` — tối đa 2 lần; kẹt lần thứ 3 thì nhận `IE` thay vì quay vòng mãi (V16, ADR 019) | R1, R3 | Must |
+| FR-SUB-03 | Vòng trạng thái `QUEUED → JUDGING → DONE`. Bài ở `JUDGING` mà worker **im lặng quá 120s** tự về `QUEUED` — tối đa 2 lần; lần thứ 3 thì nhận `IE` thay vì quay vòng mãi (V16, ADR 019). Mỗi lô tiến độ gia hạn 120s, nên bài chấm lâu mà worker còn sống không bị thu hồi (ADR 026) | R1, R3 | Must |
 | FR-SUB-04 | Bảy verdict: `AC` `WA` `TLE` `MLE` `RE` `CE` `IE` | — | Must |
 | FR-SUB-05 | Theo dõi tiến độ realtime qua SSE, **có fallback REST polling khi mất kết nối** | U, A (tunnel ngắt) | Must |
 | FR-SUB-06 | Trang chi tiết bài nộp hiển thị **đủ lý do cho cả 7 verdict** (bảng 6.2 nfrplan) | U3 | Must |
@@ -300,7 +300,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 
 **NFR bị phá:** R1, `audit_log` append-only, và tính đúng đắn của mọi bảng xếp hạng lịch sử — xoá cứng một người từng đứng hạng 3 làm sai vĩnh viễn bảng xếp hạng contest đó.
 
-**— FR-AUTH-07:** **ẩn danh hoá, không xoá.** Tên hiển thị → `[đã xoá #1234]`, email và mật khẩu bị xoá thật, bài nộp và thứ hạng giữ nguyên. Ghi vào `audit_log`.
+**— FR-AUTH-07:** **ẩn danh hoá, không xoá.** Tên hiển thị → `[đã xoá #1234]`, email và mật khẩu bị xoá thật, bài nộp và thứ hạng giữ nguyên. Ghi vào `audit_log`. Bảng xếp hạng giữ dòng nhưng **không trả `handle`** của người đã ẩn danh hoá (2026-11-14) — `handle` vẫn nằm trong `users`, và cache bảng có thể còn giữ tên cũ tối đa 60 giây.
 ### 3.6 — Hiển thị thời gian chạy chính xác ↔ P7 (độ lệch <5%) và C (ARM vs x86)
 
 **FR bản năng:** *"Hiển thị thời gian chạy của bài nộp, ví dụ 0.023s."*

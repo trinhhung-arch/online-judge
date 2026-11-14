@@ -41,7 +41,8 @@ class IsolateJudgeRunnerIT {
     static void wire() {
         WorkerProperties properties = new WorkerProperties(
                 "may-test", "amd64", 2,
-                java.time.Duration.ofSeconds(120), java.time.Duration.ofMillis(10),
+                java.time.Duration.ofSeconds(120), java.time.Duration.ofSeconds(30),
+                java.time.Duration.ofMillis(10),
                 java.time.Duration.ofMillis(200),
                 java.time.Duration.ofSeconds(5), java.time.Duration.ofMillis(5),
                 java.time.Duration.ofMillis(50), "http://localhost:8080", "x".repeat(32),
@@ -64,7 +65,8 @@ class IsolateJudgeRunnerIT {
                         new dev.oj.worker.report.BatchReporter(
                                 new dev.oj.worker.client.JudgeApiClient(
                                         properties,
-                                        org.springframework.web.client.RestClient.builder()))),
+                                        org.springframework.web.client.RestClient.builder()),
+                                properties)),
                 properties, benchmark);
     }
 

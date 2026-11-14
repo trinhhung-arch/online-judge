@@ -13,6 +13,7 @@ public record WorkerProperties(
         String arch,
         int slots,
         Duration lease,
+        Duration progressInterval,
         Duration idlePoll,
         Duration shutdownGrace,
         Duration requestTimeout,
@@ -51,6 +52,14 @@ public record WorkerProperties(
         }
         if (idlePoll == null || idlePoll.isZero() || idlePoll.isNegative()) {
             throw new IllegalStateException("oj.worker.idle-poll phải dương");
+        }
+        if (progressInterval == null || progressInterval.isZero() || progressInterval.isNegative()
+                || lease == null || progressInterval.compareTo(lease) >= 0) {
+            throw new IllegalStateException(
+                    "oj.worker.progress-interval phải dương và ngắn hơn oj.worker.lease: "
+                            + progressInterval + " so với " + lease + ". Mỗi lô tiến độ gia hạn "
+                            + "lease phía API (ADR 026) — gửi thưa hơn lease là bài đang chấm "
+                            + "bị reaper thu hồi");
         }
         if (sandbox == null) {
             throw new IllegalStateException("oj.worker.sandbox bắt buộc — không có mặc định "

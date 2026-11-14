@@ -23,6 +23,7 @@ class FakeSubmissionRepository implements SubmissionRepository {
         NewSubmission inserted;
         Submission found;
         JudgeOutcome doneOutcome;
+        boolean markDoneKhop = true;
         Collection<Long> requeued;
         Integer judgingAttempt;
         Long requesterId;
@@ -83,6 +84,9 @@ class FakeSubmissionRepository implements SubmissionRepository {
         @Override
         public boolean markDone(long submissionId, int attempt, JudgeOutcome outcome, Instant at) {
             calls.add("submissions.markDone");
+            if (!markDoneKhop) {
+                return false;
+            }
             doneOutcome = outcome;
             return true;
         }

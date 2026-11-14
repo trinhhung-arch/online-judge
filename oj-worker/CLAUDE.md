@@ -49,8 +49,9 @@ testdata được nạp qua API. Không test nào bắt được, vì mọi test
 thư mục ấy trước khi chạy.
 
 Hai đường dưới **không nằm trên đường `nộp bài → verdict`**: `benchmark` gọi 15 phút một lần
-từ luồng lịch, `progress` là thông tin phụ. Chúng không tiêu một phần nào của ngân sách 2 giây,
-và một lỗi ở đó **không được phép** làm hỏng một lượt chấm.
+từ luồng lịch, `progress` là tiến độ kiêm **tín hiệu sống**: mỗi lô gia hạn lease 120s phía API
+(ADR 026). Chúng không tiêu một phần nào của ngân sách 2 giây, và một lỗi ở đó **không được
+phép** làm hỏng một lượt chấm — lỡ một lô chỉ là lỡ một lần gia hạn, lô sau bù lại.
 
 Không JDBC, không JPA, không Redis, không MinIO client gọi thẳng vào hạ tầng của API. Nếu một nhiệm vụ có vẻ cần worker đọc DB — **dừng lại và hỏi**, vì hầu như luôn có nghĩa là dữ liệu đó phải nằm trong `oj-contract`.
 
@@ -68,7 +69,7 @@ nhận job → tải testdata theo sha256 (cache cục bộ) → biên dịch tr
 **Quy tắc trong vòng đời này:**
 
 - **Early exit:** test đầu tiên không phải AC thì dừng, trừ khi đề có subtask cần chấm đủ. Cắt ~50% thời gian trung bình.
-- **Gửi theo lô 20 test**, không gửi từng test một. Từng test một là lỗi mà DMOJ đã mắc rồi phải thêm rate limit để cứu.
+- **Gửi theo lô 20 test**, hoặc sớm hơn khi đã quá `oj.worker.progress-interval` (30s) kể từ lô trước — để đề ít test hay test chạy lâu vẫn gia hạn được lease (ADR 026). Không gửi từng test một. Từng test một là lỗi mà DMOJ đã mắc rồi phải thêm rate limit để cứu.
 - **Cache testdata theo `sha256`** nội dung, không theo id đề. Đề sửa testdata thì hash đổi, cache tự động miss — không cần cơ chế invalidate.
 - **Cache binary đã biên dịch** theo `sha256(source + lang + flags)`. Trong contest tỉ lệ trúng rất cao vì người ta nộp lại nhiều.
 - **Box dir trên tmpfs.** Host có 64GB RAM, đừng ghi lên đĩa.

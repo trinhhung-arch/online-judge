@@ -8,6 +8,7 @@ import dev.oj.judging.application.port.SubmissionEventBus;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.judging.domain.JudgeOutcome;
 import dev.oj.judging.domain.JudgeRun;
+import dev.oj.judging.domain.JudgingException;
 import dev.oj.platform.config.AppProperties;
 import dev.oj.platform.config.AfterCommit;
 import dev.oj.judging.application.port.JudgeJobPublisher;
@@ -110,7 +111,9 @@ public class RecordJudgeResultUseCase {
         }
         judgeRuns.insertSubtaskResults(
                 released.submissionId(), released.attempt(), result.subtasks());
-        submissions.markDone(released.submissionId(), released.attempt(), outcome, now);
+        if (!submissions.markDone(released.submissionId(), released.attempt(), outcome, now)) {
+            throw JudgingException.trangThaiKhongKhop(released.submissionId(), released.attempt());
+        }
 
         AfterCommit.run(() -> events.publish(SubmissionEventBus.SubmissionEvent.done(
                 released.submissionId(), released.attempt(), outcome.verdict().name())));

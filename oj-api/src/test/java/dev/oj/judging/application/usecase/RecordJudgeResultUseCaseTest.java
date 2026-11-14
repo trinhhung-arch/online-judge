@@ -2,6 +2,7 @@ package dev.oj.judging.application.usecase;
 
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.contract.Verdict;
+import dev.oj.platform.error.DomainException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RecordJudgeResultUseCaseTest {
 
@@ -95,6 +97,18 @@ class RecordJudgeResultUseCaseTest {
                 "queue.releaseWithOptimisticLock",
                 "judgeRuns.insertIfAbsent",
                 "submissions.markDone");
+    }
+
+    @Test
+    @DisplayName("★ KQ-04 · markDone cập nhật 0 dòng thì ném lỗi để rollback, không im lặng xoá bài khỏi hàng đợi")
+    void markDone_khong_khop_thi_rollback() {
+        fakes.submissions.markDoneKhop = false;
+
+        assertThatThrownBy(() -> useCase.record(result(Verdict.AC, 1)))
+                .hasFieldOrPropertyWithValue("kind", DomainException.Kind.CONFLICT)
+                .hasFieldOrPropertyWithValue("code", "submission.trang_thai_khong_khop");
+        assertThat(events.published)
+                .as("không có sự kiện DONE cho một verdict không được ghi").isEmpty();
     }
 
     @Test

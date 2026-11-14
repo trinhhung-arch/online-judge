@@ -32,6 +32,9 @@ class JudgingSqlInvariantsTest {
 
         assertThat(release).startsWith("DELETE FROM judge_queue");
         assertThat(release).contains("q.attempt = :attempt");
+        assertThat(release)
+                .as("KQ-04: reaper không tăng attempt, nên chỉ lượt còn giữ lease mới được ghi")
+                .contains("q.claimed_at IS NOT NULL");
         assertThat(release).contains("RETURNING");
         assertThat(release).contains("s.language_id").contains("s.testdata_version");
     }
@@ -59,7 +62,21 @@ class JudgingSqlInvariantsTest {
         assertThat(sql("JdbcJudgeQueueRepository.RETRY_IE"))
                 .contains("ie_retry_count < :maxIeRetries")
                 .contains("attempt = :attempt")
+                .contains("claimed_at IS NOT NULL")
                 .contains("ie_retry_count = ie_retry_count + 1");
+    }
+
+    @Test
+    @DisplayName("★ ADR 026: gia hạn lease khoá theo attempt + lượt còn giữ lease, và không đụng attempt")
+    void gia_han_lease_chi_cho_luot_con_giu_lease() {
+        String renew = sql("JdbcJudgeQueueRepository.RENEW_LEASE");
+
+        assertThat(renew).startsWith("UPDATE judge_queue SET lease_until = now() +");
+        assertThat(renew)
+                .as("thiếu một trong hai là worker đã mất lease giữ sống được lượt chấm của máy khác")
+                .contains("attempt = :attempt")
+                .contains("claimed_at IS NOT NULL");
+        assertThat(renew).doesNotContain("attempt +", "claimed_at =");
     }
 
     @Test

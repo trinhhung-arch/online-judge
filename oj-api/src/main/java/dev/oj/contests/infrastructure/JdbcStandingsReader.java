@@ -17,7 +17,9 @@ import java.util.Optional;
 public class JdbcStandingsReader implements StandingsReader {
 
     private static final String TOP = """
-            SELECT s.user_id, u.handle, u.display_name, s.total_score, s.penalty_seconds,
+            SELECT s.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, s.total_score, s.penalty_seconds,
                    s.solved_count, s.last_scoring_at, 0 AS cho_sau_freeze
               FROM contest_standings s
               JOIN users u ON u.id = s.user_id
@@ -41,7 +43,9 @@ public class JdbcStandingsReader implements StandingsReader {
                   CROSS JOIN (SELECT freeze_at FROM contests WHERE id = :contestId) k
                   LEFT JOIN contest_standings_frozen f
                          ON f.contest_id = :contestId AND f.user_id = n.user_id)
-            SELECT b.user_id, u.handle, u.display_name, b.total_score, b.penalty_seconds,
+            SELECT b.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, b.total_score, b.penalty_seconds,
                    b.solved_count, b.last_scoring_at,
                    (SELECT count(*) FROM submissions s
                      WHERE s.user_id = b.user_id AND s.contest_id = :contestId
@@ -53,7 +57,9 @@ public class JdbcStandingsReader implements StandingsReader {
             """;
 
     private static final String CUA_NGUOI = """
-            SELECT s.user_id, u.handle, u.display_name, s.total_score, s.penalty_seconds,
+            SELECT s.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, s.total_score, s.penalty_seconds,
                    s.solved_count, s.last_scoring_at, 0 AS cho_sau_freeze
               FROM contest_standings s
               JOIN users u ON u.id = s.user_id
@@ -75,7 +81,9 @@ public class JdbcStandingsReader implements StandingsReader {
                   CROSS JOIN (SELECT freeze_at FROM contests WHERE id = :contestId) k
                   LEFT JOIN contest_standings_frozen f
                          ON f.contest_id = :contestId AND f.user_id = n.user_id)
-            SELECT b.user_id, u.handle, u.display_name, b.total_score, b.penalty_seconds,
+            SELECT b.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, b.total_score, b.penalty_seconds,
                    b.solved_count, b.last_scoring_at,
                    (SELECT count(*) FROM submissions s
                      WHERE s.user_id = b.user_id AND s.contest_id = :contestId
@@ -127,7 +135,9 @@ public class JdbcStandingsReader implements StandingsReader {
                   FROM contest_standings s
                  WHERE s.contest_id = :contestId),
                  toi AS (SELECT vi_tri FROM xep WHERE user_id = :userId)
-            SELECT x.user_id, u.handle, u.display_name, x.total_score, x.penalty_seconds,
+            SELECT x.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, x.total_score, x.penalty_seconds,
                    x.solved_count, x.last_scoring_at, 0 AS cho_sau_freeze, x.hang
               FROM xep x
               JOIN users u ON u.id = x.user_id
@@ -160,7 +170,9 @@ public class JdbcStandingsReader implements StandingsReader {
                                                    b.user_id) AS vi_tri
                   FROM bang b),
                  toi AS (SELECT vi_tri FROM xep WHERE user_id = :userId)
-            SELECT x.user_id, u.handle, u.display_name, x.total_score, x.penalty_seconds,
+            SELECT x.user_id,
+                   CASE WHEN u.status = 'ANONYMIZED' THEN NULL ELSE u.handle END AS handle,
+                   u.display_name, x.total_score, x.penalty_seconds,
                    x.solved_count, x.last_scoring_at,
                    (SELECT count(*) FROM submissions s
                      WHERE s.user_id = x.user_id AND s.contest_id = :contestId

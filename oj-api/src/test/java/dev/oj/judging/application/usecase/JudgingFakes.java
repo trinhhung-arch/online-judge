@@ -114,6 +114,8 @@ class JudgingFakes {
         List<ExhaustedJob> exhausted = List.of();
         Integer maxReapsSeen;
         Long releaseThrowsFor;
+        boolean leaseHeld = true;
+        Integer leaseSecondsSeen;
 
         @Override
         public void enqueue(long submissionId, int priority) {
@@ -153,6 +155,13 @@ class JudgingFakes {
         public boolean retryIe(long submissionId, int attempt, int maxRetries) {
             calls.add("queue.retryIe");
             return ieRetryAccepted;
+        }
+
+        @Override
+        public boolean renewLease(long submissionId, int attempt, int leaseSeconds) {
+            calls.add("queue.renewLease");
+            leaseSecondsSeen = leaseSeconds;
+            return leaseHeld;
         }
 
         @Override
