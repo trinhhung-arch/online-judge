@@ -81,7 +81,7 @@ export const DS = {
 };
 
 export const TRANG_THAI_KY_THI = {
-    SAP_DIEN_RA:  ['Sắp diễn ra', 'cho'],
+    SAP_DIEN_RA:  ['Chưa bắt đầu', 'cho'],
     DANG_CHAY:    ['Đang diễn ra', 'AC'],
     DA_KET_THUC:  ['Đã kết thúc', ''],
 };

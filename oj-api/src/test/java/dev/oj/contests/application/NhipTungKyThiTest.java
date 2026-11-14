@@ -251,6 +251,8 @@ class NhipTungKyThiTest {
             throw chuaCan();
         }
         @Override public void xoaBangXepHang(long c) { throw chuaCan(); }
+        @Override public void xoaCuaNguoi(long c, long u) { throw chuaCan(); }
+        @Override public void xoaDongBangCuaNguoi(long c, long u) { throw chuaCan(); }
         @Override public Map<Long, DiemDaLuu> tongKetDaLuu(long c) { throw chuaCan(); }
         @Override public void ghiDrift(long c, int k, int l, Map<String, Object> ct) {
             throw chuaCan();
@@ -280,6 +282,16 @@ class NhipTungKyThiTest {
 
         @Override
         public List<ScoredSubmission> baiDaChamCuaDe(long c, long p, long sau, int gioiHan) {
+            throw chuaCan();
+        }
+
+        @Override
+        public List<ScoredSubmission> baiDaChamCuaNguoi(long c, long u, long sau, int gioiHan) {
+            throw chuaCan();
+        }
+
+        @Override
+        public java.util.Optional<BaiTrongKyThi> kyThiCuaBai(long submissionId) {
             throw chuaCan();
         }
     }

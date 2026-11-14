@@ -140,6 +140,8 @@ class StandingsDriftCheckSchedulerTest {
             throw chuaCan();
         }
         @Override public void xoaBangXepHang(long c) { throw chuaCan(); }
+        @Override public void xoaCuaNguoi(long c, long u) { throw chuaCan(); }
+        @Override public void xoaDongBangCuaNguoi(long c, long u) { throw chuaCan(); }
         @Override public boolean daChupDongBang(long c) { throw chuaCan(); }
         @Override public void ghiTongKetDongBang(long c, long u, TongKet t, int p) {
             throw chuaCan();

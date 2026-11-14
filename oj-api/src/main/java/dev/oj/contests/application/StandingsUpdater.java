@@ -106,7 +106,7 @@ public class StandingsUpdater {
             List<ScoredSubmission> lo = judging.baiDaChamLienMach(
                     contest.id(), watermark, properties.contest().standingsBatchSize());
             if (!lo.isEmpty()) {
-                ghiLo(contest, lo, nguoiBiCham(lo));
+                ghiLo(contest, lo, nguoiBiCham(lo), 0);
             }
             return lo.size();
         });
@@ -116,6 +116,62 @@ public class StandingsUpdater {
             publisher.bangDaDoi(contest.id());
         }
         return daTinh;
+    }
+
+    public void tinhLaiNguoi(long contestId, long userId) {
+        Contest contest = contests.timTheoId(contestId).orElse(null);
+        if (contest == null) {
+            return;
+        }
+        tx.executeWithoutResult(status -> {
+            khoa.khoaKyThi(contestId);
+            long watermark = standings.watermark(contestId);
+            List<ScoredSubmission> cacBai = moiBaiCuaNguoi(contestId, userId);
+            standings.xoaCuaNguoi(contestId, userId);
+            List<ScoredSubmission> daTinh = cacBai.stream()
+                    .filter(b -> b.submissionId() <= watermark).toList();
+            if (!daTinh.isEmpty()) {
+                ghiLo(contest, daTinh, Set.of(userId), watermark);
+            }
+            if (contest.freezeAt() != null && standings.daChupDongBang(contestId)) {
+                chupLaiNguoi(contest, userId, cacBai);
+            }
+        });
+        publisher.bangDaDoi(contestId);
+    }
+
+    private List<ScoredSubmission> moiBaiCuaNguoi(long contestId, long userId) {
+        List<ScoredSubmission> tatCa = new ArrayList<>();
+        int coLo = properties.contest().standingsBatchSize();
+        long sau = 0;
+        List<ScoredSubmission> lo;
+        while (!(lo = judging.baiDaChamCuaNguoi(contestId, userId, sau, coLo)).isEmpty()) {
+            tatCa.addAll(lo);
+            sau = lo.get(lo.size() - 1).submissionId();
+        }
+        return tatCa;
+    }
+
+    private void chupLaiNguoi(Contest contest, long userId, List<ScoredSubmission> cacBai) {
+        standings.xoaDongBangCuaNguoi(contest.id(), userId);
+        ContestFormat format = contest.format();
+        Map<Long, Integer> diemCuaDe = BaiChamKyThi.diemCuaDe(contests, contest.id());
+        Map<Long, KetQuaDe> theoDe = new LinkedHashMap<>();
+        for (ScoredSubmission bai : cacBai) {
+            if (bai.nopLuc().isBefore(contest.freezeAt())) {
+                KetQuaDe truoc = theoDe.getOrDefault(bai.problemId(),
+                        KetQuaDe.trong(bai.problemId()));
+                theoDe.put(bai.problemId(),
+                        format.apDung(truoc, BaiChamKyThi.tu(bai, diemCuaDe), contest));
+            }
+        }
+        if (theoDe.isEmpty()) {
+            return;
+        }
+        var cacDe = new ArrayList<>(theoDe.values());
+        standings.ghiTongKetDongBang(contest.id(), userId, format.tongHop(cacDe),
+                format.penaltyGiay(cacDe, contest));
+        cacDe.forEach(kq -> standings.ghiKetQuaDeDongBang(contest.id(), userId, kq));
     }
 
     public void xoaTrang(long contestId) {
@@ -133,7 +189,8 @@ public class StandingsUpdater {
         return nguoi;
     }
 
-    private void ghiLo(Contest contest, List<ScoredSubmission> lo, Set<Long> nguoiBiCham) {
+    private void ghiLo(Contest contest, List<ScoredSubmission> lo, Set<Long> nguoiBiCham,
+                       long sanWatermark) {
         Map<Long, Map<Long, KetQuaDe>> theoNguoi = new LinkedHashMap<>();
         standings.ketQuaTheoNguoi(contest.id(), nguoiBiCham).forEach((userId, danhSach) -> {
             Map<Long, KetQuaDe> theoDe = new LinkedHashMap<>();
@@ -154,7 +211,8 @@ public class StandingsUpdater {
             theoDe.put(bai.problemId(), sau);
 
             deBiCham.add(khoaDe(bai.userId(), bai.problemId()));
-            baiCuoiCuaNguoi.merge(bai.userId(), bai.submissionId(), Math::max);
+            baiCuoiCuaNguoi.merge(bai.userId(), Math.max(bai.submissionId(), sanWatermark),
+                    Math::max);
         }
 
         for (Map.Entry<Long, Long> e : baiCuoiCuaNguoi.entrySet()) {

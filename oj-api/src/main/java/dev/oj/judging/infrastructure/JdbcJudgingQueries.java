@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public class JdbcJudgingQueries implements JudgingQueries {
@@ -18,6 +19,7 @@ public class JdbcJudgingQueries implements JudgingQueries {
               FROM submissions
              WHERE contest_id = :contestId
                AND status = 'DONE'
+               AND hidden_at IS NULL
                AND id > :sau
              ORDER BY id
              LIMIT :gioiHan
@@ -28,6 +30,7 @@ public class JdbcJudgingQueries implements JudgingQueries {
                 SELECT id, user_id, problem_id, verdict, score, max_score, created_at, status
                   FROM submissions
                  WHERE contest_id = :contestId
+                   AND hidden_at IS NULL
                    AND id > :sau
                  ORDER BY id
                  LIMIT :gioiHan
@@ -47,9 +50,28 @@ public class JdbcJudgingQueries implements JudgingQueries {
              WHERE problem_id = :problemId
                AND contest_id = :contestId
                AND status = 'DONE'
+               AND hidden_at IS NULL
                AND id > :sau
              ORDER BY id
              LIMIT :gioiHan
+            """;
+
+    private static final String CUA_NGUOI = """
+            SELECT id, user_id, problem_id, verdict, COALESCE(score, 0) AS score,
+                   COALESCE(max_score, 0) AS max_score, created_at
+              FROM submissions
+             WHERE user_id = :userId
+               AND contest_id = :contestId
+               AND status = 'DONE'
+               AND hidden_at IS NULL
+               AND id > :sau
+             ORDER BY id
+             LIMIT :gioiHan
+            """;
+
+    private static final String KY_THI_CUA_BAI = """
+            SELECT contest_id, user_id FROM submissions
+             WHERE id = :submissionId AND contest_id IS NOT NULL
             """;
 
     private static final String CON_BAI_CHO_CHAM = """
@@ -102,6 +124,26 @@ public class JdbcJudgingQueries implements JudgingQueries {
                 .param("contestId", contestId)
                 .query(Boolean.class)
                 .single());
+    }
+
+    @Override
+    public List<ScoredSubmission> baiDaChamCuaNguoi(long contestId, long userId,
+                                                    long sauSubmissionId, int gioiHan) {
+        return jdbc.sql(CUA_NGUOI)
+                .param("userId", userId)
+                .param("contestId", contestId)
+                .param("sau", sauSubmissionId)
+                .param("gioiHan", gioiHan)
+                .query(MAPPER)
+                .list();
+    }
+
+    @Override
+    public Optional<BaiTrongKyThi> kyThiCuaBai(long submissionId) {
+        return jdbc.sql(KY_THI_CUA_BAI)
+                .param("submissionId", submissionId)
+                .query((rs, i) -> new BaiTrongKyThi(rs.getLong("contest_id"), rs.getLong("user_id")))
+                .optional();
     }
 
     @Override
