@@ -67,12 +67,16 @@ public class JobExecutor {
         java.math.BigDecimal hostFactor = hostBenchmark.current();
         Checker checker = Checkers.of(job.checkerType(), job.checkerEpsilon());
 
+        var chanDoanTestSai = new java.util.concurrent.atomic.AtomicReference<String>();
         try (BatchReporter.Session progress = batchReporter.open(job)) {
             SubtaskScorer.TestExecutor executor = testcase -> {
                 TestRunner.TestOutcome outcome = testRunner.run(
                         box, job, compiled.artifact(), testcase, hostFactor, checker);
                 progress.add(testcase.ordinal(), outcome.verdict(),
                         outcome.cpuTimeMs(), outcome.memoryKb());
+                if (!outcome.accepted()) {
+                    chanDoanTestSai.compareAndSet(null, outcome.diagnostic());
+                }
                 return outcome;
             };
 
@@ -87,7 +91,7 @@ public class JobExecutor {
             return new JudgeResultDto(job.submissionId(), job.attempt(), scored.verdict(),
                     scored.score(), job.maxScore(), scored.failedOrdinal(), scored.testsRun(),
                     (int) scored.maxCpuTimeMs(), (int) scored.maxMemoryKb(),
-                    compiled.compileLog(), null,
+                    compiled.compileLog(), chanDoanTestSai.get(),
                     properties.hostName(), hostFactor, startedAt, scored.subtasks());
         }
     }

@@ -84,6 +84,30 @@ public record WorkerProperties(
             if (compile == null || run == null || cache == null || benchmark == null) {
                 throw new IllegalStateException("thiếu nhóm compile/run/cache/benchmark");
             }
+            if (enabled && cache.dir() != null) {
+                kiemCacheNgoaiBox(cache.dir(), boxRoot, compile.pchDir());
+            }
+        }
+
+        private static final List<String> THU_MUC_ISOLATE_GAN_VAO_BOX =
+                List.of("/bin", "/dev", "/lib", "/lib64", "/usr", "/proc");
+
+        private static void kiemCacheNgoaiBox(Path cacheDir, Path boxRoot, Path pchDir) {
+            Path cache = cacheDir.toAbsolutePath().normalize();
+            List<Path> cam = new java.util.ArrayList<>();
+            THU_MUC_ISOLATE_GAN_VAO_BOX.forEach(d -> cam.add(Path.of(d)));
+            cam.add(boxRoot);
+            if (pchDir != null) {
+                cam.add(pchDir);
+            }
+            for (Path goc : cam) {
+                if (cache.startsWith(goc.toAbsolutePath().normalize())) {
+                    throw new IllegalStateException("oj.worker.sandbox.cache.dir = " + cacheDir
+                            + " nằm dưới " + goc + ", một thư mục isolate gắn vào box. Cache "
+                            + "chứa input và đáp án của mọi đề — đặt nó ở đó là mọi bài nộp "
+                            + "đọc được đáp án. Dùng một thư mục như /var/tmp/oj-worker");
+                }
+            }
         }
 
         public record Compile(int processes, int openFiles, DataSize maxFileSize,
