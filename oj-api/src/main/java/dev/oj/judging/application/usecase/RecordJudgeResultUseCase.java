@@ -64,7 +64,10 @@ public class RecordJudgeResultUseCase {
                 && queue.retryIe(id, attempt, config.maxIeRetries())) {
             log.warn("IE cho submission {} attempt {} trên máy {} — đã đưa lại vào hàng đợi",
                     id, attempt, result.hostName());
-            AfterCommit.run(() -> goCuaImLang(id));
+            AfterCommit.run(() -> {
+                goCuaImLang(id);
+                events.publish(SubmissionEventBus.SubmissionEvent.queued(id, attempt));
+            });
             return Outcome.IE_RETRY_SCHEDULED;
         }
 

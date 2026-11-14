@@ -144,6 +144,12 @@ class RecordJudgeResultUseCaseTest {
 
         assertThat(outcome).isEqualTo(RecordJudgeResultUseCase.Outcome.IE_RETRY_SCHEDULED);
         assertThat(fakes.calls).containsExactly("queue.retryIe", "events.publishEnqueued");
+        assertThat(events.published).as("trình duyệt phải biết bài quay về hàng đợi")
+                .singleElement().satisfies(e -> {
+                    assertThat(e.status()).isEqualTo("QUEUED");
+                    assertThat(e.attempt()).isEqualTo(1);
+                    assertThat(e.verdict()).isNull();
+                });
     }
 
     @Test
@@ -155,6 +161,8 @@ class RecordJudgeResultUseCaseTest {
 
         assertThat(outcome).isEqualTo(RecordJudgeResultUseCase.Outcome.IE_RETRY_SCHEDULED);
         assertThat(fakes.calls).contains("queue.retryIe");
+        assertThat(events.published).extracting(e -> e.status())
+                .as("chuông hỏng không được nuốt luôn sự kiện cho trình duyệt").containsExactly("QUEUED");
     }
 
     @Test

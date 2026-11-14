@@ -1,6 +1,7 @@
 package dev.oj.judging.application.usecase;
 
 import dev.oj.contract.Verdict;
+import dev.oj.judging.application.port.JudgeQueueRepository;
 import dev.oj.judging.application.port.JudgeQueueRepository.ExhaustedJob;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,12 +25,13 @@ class ReapStaleJobsUseCaseTest {
                 fakes.judgeRuns, fakes.submissions, JudgingFakes.properties(), JudgingFakes.CLOCK,
                 events, fakes.publisher);
         useCase = new ReapStaleJobsUseCase(fakes.queue, fakes.submissions, verdicts,
-                JudgingFakes.properties(), fakes.txManager);
+                JudgingFakes.properties(), events, fakes.txManager);
     }
 
     @Test
     void lease_het_han_thi_ve_QUEUED_va_attempt_khong_tang() {
-        fakes.queue.expired = List.of(101L, 102L);
+        fakes.queue.expired = List.of(new JudgeQueueRepository.ReapedJob(101L, 1),
+                new JudgeQueueRepository.ReapedJob(102L, 3));
 
         int reaped = useCase.reap();
 
@@ -41,8 +43,28 @@ class ReapStaleJobsUseCaseTest {
     }
 
     @Test
+    @DisplayName("★ thu hồi xong thì báo trình duyệt QUEUED cho từng bài, mang attempt vừa bị thu hồi")
+    void thu_hoi_xong_thi_bao_queued() {
+        fakes.queue.expired = List.of(new JudgeQueueRepository.ReapedJob(101L, 1),
+                new JudgeQueueRepository.ReapedJob(102L, 3));
+
+        useCase.reap();
+
+        assertThat(events.published).extracting(e -> e.submissionId() + ":" + e.attempt()
+                + ":" + e.status()).containsExactly("101:1:QUEUED", "102:3:QUEUED");
+    }
+
+    @Test
+    @DisplayName("không thu hồi gì thì không báo gì")
+    void khong_thu_hoi_thi_khong_bao() {
+        useCase.reap();
+
+        assertThat(events.published).isEmpty();
+    }
+
+    @Test
     void con_luot_thi_khong_ghi_verdict() {
-        fakes.queue.expired = List.of(101L);
+        fakes.queue.expired = List.of(new JudgeQueueRepository.ReapedJob(101L, 1));
 
         useCase.reap();
 

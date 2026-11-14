@@ -43,9 +43,10 @@ class JudgingSqlInvariantsTest {
     @DisplayName("★ reaper KHÔNG đụng tới attempt — lần claim kế tiếp mới tăng")
     void reaper_khong_tang_attempt() {
         assertThat(sql("JdbcJudgeQueueRepository.REAP_EXPIRED"))
-                .doesNotContain("attempt")
+                .as("RETURNING đọc attempt để báo trình duyệt; SET không được đụng tới nó")
+                .doesNotContain("attempt =", "attempt +", "attempt+")
                 .contains("lease_until < now()")
-                .contains("RETURNING");
+                .contains("RETURNING submission_id, attempt");
     }
 
     @Test

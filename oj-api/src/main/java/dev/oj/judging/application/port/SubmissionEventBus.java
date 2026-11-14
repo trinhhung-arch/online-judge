@@ -28,6 +28,11 @@ public interface SubmissionEventBus {
                     testsDone, totalTests, Instant.now());
         }
 
+        public static SubmissionEvent queued(long submissionId, int attempt) {
+            return new SubmissionEvent(submissionId, attempt, "QUEUED", null,
+                    null, null, Instant.now());
+        }
+
         public static SubmissionEvent done(long submissionId, int attempt, String verdict) {
             return new SubmissionEvent(submissionId, attempt, "DONE", verdict,
                     null, null, Instant.now());
