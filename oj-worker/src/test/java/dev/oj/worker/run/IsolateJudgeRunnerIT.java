@@ -200,6 +200,60 @@ class IsolateJudgeRunnerIT {
                 .isLessThan(1_500);
     }
 
+    @Test
+    @DisplayName("★ CB-03 · chương trình ngủ: CPU gần 0 nhưng wall vượt 2 lần giới hạn → TLE")
+    void ngu() {
+        JudgeResultDto result = judge("#include <unistd.h>\nint main(){sleep(30);}");
+
+        assertThat(result.verdict())
+                .as("chỉ giới hạn CPU thì một bài ngủ giữ box mãi — wall = 2 × cpu chặn nó")
+                .isEqualTo(Verdict.TLE);
+    }
+
+    @Test
+    @DisplayName("★ CB-10 · lệnh biên dịch báo thành công mà không sinh prog → CE kèm câu giải thích")
+    void bienDichKhongSinhProg() {
+        JudgeResultDto result = judge("int main(){}", "cpp20",
+                "g++ -std=gnu++20 -fsyntax-only {src}", "{bin}", "Main.cpp");
+
+        assertThat(result.verdict()).isEqualTo(Verdict.CE);
+        assertThat(result.compileLog()).contains("không tạo ra prog");
+    }
+
+    @Test
+    @DisplayName("★ CB-11 · Python chạy thật trong isolate: đọc-ghi và một vòng lặp nặng CPU đều AC")
+    void python() {
+        String docGhi = "a, b = map(int, input().split())\nprint(a + b)\n";
+        String nangCpu = """
+                a, b = map(int, input().split())
+                s = 0
+                for i in range(2_000_000):
+                    s += i % 7
+                print(a + b if s >= 0 else 0)
+                """;
+
+        for (String source : List.of(docGhi, nangCpu)) {
+            assertThat(judge(source, "py311", null, "python3 {src}", "Main.py").verdict())
+                    .as(source).isEqualTo(Verdict.AC);
+        }
+    }
+
+    private JudgeResultDto judge(String source, String ngonNgu, String bienDich, String chay,
+                                 String tep) {
+        return runner.run(JudgeJobDto.builder()
+                .submission(101, 1)
+                .traceId("trace-it")
+                .language(ngonNgu, bienDich, chay)
+                .compileLimits(20_000, 524_288)
+                .runLimitsOnReferenceHost(1_000, 65_536, 65_536)
+                .source(tep, source, Sha256.hexOf(source))
+                .checker(CheckerType.TOKEN, null)
+                .scoring(ScoringMode.ALL_OR_NOTHING, 100)
+                .testdata(1, Sha256.hexOf("manifest"),
+                        List.of(new TestcaseMetaDto(1, false, inputSha, outputSha, null)))
+                .build());
+    }
+
     private JudgeResultDto judge(String source) {
         return judge(source, 1);
     }
