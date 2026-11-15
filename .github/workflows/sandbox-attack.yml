@@ -56,6 +56,13 @@ jobs:
           grep -q 'skipped="0"' "$report" || {
             echo "::error::Có ca bị skip. fail 1 case = fail build (nfrplan 4.5)"; exit 1; }
           echo "14/14 ca đã chạy, 0 skip."
+          bo_sung=oj-worker/target/failsafe-reports/TEST-dev.oj.worker.sandbox.SandboxAttackBoSungIT.xml
+          [ -f "$bo_sung" ] || { echo "::error::SandboxAttackBoSungIT không chạy."; exit 1; }
+          grep -q 'tests="8"' "$bo_sung" || {
+            echo "::error::SandboxAttackBoSungIT không chạy đủ 8 ca:"; head -3 "$bo_sung"; exit 1; }
+          grep -q 'skipped="0"' "$bo_sung" || {
+            echo "::error::SandboxAttackBoSungIT có ca bị skip."; exit 1; }
+          echo "8/8 ca bổ sung (biên dịch, Python) đã chạy, 0 skip."
 
       - name: Báo cáo
         if: always()
