@@ -3,7 +3,7 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
     <property name="OJ_PATTERN"
-              value="%d{HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %-40.40logger{39} : %msg%n"/>
+              value="%d{HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %-40.40logger{39} : %replace(%msg){'[\r\n]+', ' ⏎ '}%n"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

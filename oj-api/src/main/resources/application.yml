@@ -192,6 +192,8 @@ oj:
     penalty-minutes-max: 1440
     neighborhood-size: 2
 
+  request-body-max: 2MB
+
   api-rate-limit:
     per-user: ${OJ_API_RATE_LIMIT_USER:100}
     per-ip: ${OJ_API_RATE_LIMIT_IP:600}
