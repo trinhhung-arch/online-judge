@@ -7,9 +7,11 @@ Bổ sung cho [019](019-tran-so-lan-reaper-tha-lai.md) và
 **Bối cảnh.** Lease tính 120 s từ lúc `claim` và không bao giờ được gia hạn, nên reaper không
 phân biệt được worker chết với bài chấm lâu. Đề 100 test giới hạn 1 s: bài Python (hệ số 4,0)
 đúng mà dùng nửa giới hạn chạy 200 s — bị thu hồi ba lần rồi nhận `IE`, chiếm tới 3 slot, trong
-khi bài C++ cùng đề AC bình thường. Đó là mất công bằng giữa các ngôn ngữ. DB thật ngày
-2026-11-14 chỉ có 1 đề 3 test (lần chấm lâu nhất 1,2 s) nên chưa ai dính. Cùng gốc ấy còn một
-lỗi hiển thị: tiến độ của lượt đã bị thu hồi vẫn được đẩy ra trình duyệt (ca test B11).
+khi bài C++ cùng đề AC bình thường. Đó là mất công bằng giữa các ngôn ngữ. DB thật
+(`ojdb_prod`, đo 2026-11-15) có 11 đề, mỗi đề 8–15 test, 28 lần chấm, lần lâu nhất 1,5 s — chưa
+ai dính. Nhưng biên an toàn hẹp: `DUONG-DI-NGAN-NHAT` (15 test, 2 s) có trường hợp xấu nhất với
+Python là khoảng 120 s, đúng bằng lease. Cùng gốc ấy còn một lỗi hiển thị: tiến độ của lượt đã bị
+thu hồi vẫn được đẩy ra trình duyệt (ca test B11).
 
 **Quyết định.** Chủ dự án chốt 2026-11-14.
 - `POST /internal/judge/progress` gia hạn lease: `RENEW_LEASE` đặt `lease_until = now() + lease`
@@ -30,9 +32,13 @@ cần chấm lại. Đo trên Postgres 16 (2026-11-14): 0,37 ms mỗi lần gia 
 6 kết nối; nhu cầu thật dưới 10 lần/giây.
 
 **Hệ quả chấp nhận.**
-- Một **test đơn lẻ** chạy gần hết lease vẫn bị thu hồi, vì tín hiệu chỉ đi ở ranh giới giữa hai
-  test. Với cấu hình hiện tại: đề giới hạn trên khoảng 13 s và bài Python treo tới hết giới hạn
-  thời gian thực (2 × CPU). Chưa có chốt lúc lưu đề; bài như vậy vẫn đi đường `IE` của ADR 019.
+- Tín hiệu chỉ đi ở ranh giới giữa hai test, nhưng một **test đơn lẻ** không chạm được lease: giới
+  hạn CPU thực tế của mỗi test bị kẹp ở 30 s (`JudgeSpec.timeLimitOnReferenceHost`, và
+  `JudgeJobDto` chỉ nhận 100–30000 ms), nên thời gian thực tối đa khoảng 60 s (2 × CPU). Khoảng
+  lặng dài nhất giữa hai lô là gần 30 s chưa tới hạn gửi cộng một test 60 s, tức khoảng 90 s. Biên
+  này mỏng ở đề chạm mức kẹp (C++ giới hạn 30 s, Python từ 7,5 s) gặp bài treo tới hết thời gian
+  thực: tính từ lúc `claim` còn phải cộng biên dịch (tới 20 s) và tải testdata. Có đề như vậy thì
+  hạ `oj.worker.progress-interval`. Đề nặng nhất trên DB thật (2 s) có khoảng lặng tối đa ~46 s.
 - Mỗi lần gia hạn ghi index `ix_judge_queue_lease` (không HOT). Chỉ trên `judge_queue`; bảng nóng
   `submissions` không bị đụng. Autovacuum giữ bảng ổn định ở khoảng 1 MB sau 44 nghìn lần ghi.
 - Bảng xếp hạng kỳ thi tính theo lô liền mạch, nên giờ nó chờ một bài chấm lâu **đúng bằng thời
@@ -45,3 +51,9 @@ cần chấm lại. Đo trên Postgres 16 (2026-11-14): 0,37 ms mỗi lần gia 
   độ cuối: không ai biết worker đã chết.
 - Worker đã mất lease (API sập quá 120 s) vẫn chạy nốt bài và chiếm slot; kết quả bị ADR 025 loại.
 - WARN "vượt lease" của `JudgeLoop` bị gỡ: chấm lâu hơn lease không còn là dấu hiệu sự cố.
+
+**Đính chính 2026-11-15.** Bản đầu của ADR này (PR #53, #54) sai hai chỗ, đã sửa ở trên:
+- "DB thật chỉ có 1 đề 3 test, lần chấm lâu nhất 1,2 s" là số liệu của DB dev `ojdb`. DB thật là
+  `ojdb_prod`, cùng máy chủ Postgres. Kết luận "chưa ai dính" vẫn đúng; biên an toàn thì hẹp hơn.
+- "Một test đơn lẻ chạy gần hết lease vẫn bị thu hồi, ở đề giới hạn trên khoảng 13 s" không đúng:
+  phép tính ấy bỏ sót mức kẹp 30 s của giới hạn CPU mỗi test. Không cần chốt nào lúc lưu đề.
