@@ -4,6 +4,7 @@ import dev.oj.contract.ClaimRequestDto;
 import dev.oj.contract.JudgeResultDto;
 import dev.oj.contract.Verdict;
 import dev.oj.judging.application.usecase.ClaimJudgeJobUseCase;
+import dev.oj.judging.api.dto.SubmissionDetailResponse;
 import dev.oj.judging.application.usecase.GetSubmissionUseCase;
 import dev.oj.judging.application.usecase.RecordJudgeResultUseCase;
 import dev.oj.judging.application.usecase.SubmitSolutionUseCase;
@@ -60,6 +61,64 @@ class SubmissionFeedbackIT extends PostgresIT {
         assertThat(dev.oj.judging.api.dto.SubmissionDetailResponse.class.getRecordComponents())
                 .noneMatch(field -> field.getName().toLowerCase(java.util.Locale.ROOT)
                         .contains("isolate"));
+    }
+
+    @Test
+    @DisplayName("★ BM-3 · bài RE ở đề NONE: không nói tín hiệu nào; TEST_INDEX vẫn nói SIGSEGV — CÙNG một bài nộp")
+    void tin_hieu_re_theo_feedback_level() {
+        long id = cham(Verdict.RE, "SG exit=0 signal=11 cpu=3ms");
+
+        setFeedbackLevel("NONE");
+        String an = SubmissionDetailResponse.from(getSubmission.detailById(id)).explanation();
+        assertThat(an).as("tín hiệu là thứ chương trình tự chọn được — ở NONE nó là một kênh "
+                        + "nhắn nội dung test ẩn ra ngoài")
+                .doesNotContain("SIGSEGV", "tín hiệu", "signal", "11")
+                .contains("kết thúc bất thường");
+
+        setFeedbackLevel("TEST_INDEX");
+        assertThat(SubmissionDetailResponse.from(getSubmission.detailById(id)).explanation())
+                .contains("SIGSEGV");
+    }
+
+    @Test
+    @DisplayName("BM-3 · bài IE ở đề NONE vẫn có mã sự cố — chỉ tín hiệu của RE bị lọc, không phải mọi chẩn đoán")
+    void ma_su_co_ie_khong_bi_loc() {
+        long id = cham(Verdict.IE, "XX isolate: cgroup hỏng");
+        setFeedbackLevel("NONE");
+
+        assertThat(SubmissionDetailResponse.from(getSubmission.detailById(id)).explanation())
+                .containsPattern("IE-[0-9A-F]{8}")
+                .doesNotContain("IE-UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("★ BM-2 · bộ nhớ trong phản hồi đã làm tròn lên MB; số đo thô vẫn nằm nguyên trong DB")
+    void bo_nho_trong_phan_hoi_da_lam_tron() {
+        long id = cham(Verdict.AC, "OK");
+
+        var phanHoi = SubmissionDetailResponse.from(getSubmission.detailById(id));
+
+        assertThat(phanHoi.memoryKb()).isEqualTo(5_120);
+        assertThat(phanHoi.explanation()).contains("5 MB").doesNotContain("4097", "4.0 MB");
+        assertThat(jdbc.sql("SELECT memory_kb FROM submissions WHERE id = :id").param("id", id)
+                .query(Integer.class).single()).isEqualTo(4_097);
+    }
+
+    private long cham(Verdict verdict, String isolateStatus) {
+        var accepted = submitSolution.submit(new SubmitSolutionUseCase.Command(
+                PROBLEM_ID, "cpp20", "// EXPECT: " + verdict + "\nint main(){}"));
+        var job = claimJudgeJob.claim(ClaimRequestDto.single("mac-m1max-host", "arm64"))
+                .orElseThrow();
+        if (verdict == Verdict.IE) {
+            jdbc.sql("UPDATE judge_queue SET ie_retry_count = 99 WHERE submission_id = :id")
+                    .param("id", accepted.submissionId()).update();
+        }
+        boolean ac = verdict == Verdict.AC;
+        recordResult.record(new JudgeResultDto(
+                accepted.submissionId(), job.attempt(), verdict, ac ? 100 : 0, 100,
+                ac ? null : 3, 3, 20, 4_097, null, isolateStatus,
+                "mac-m1max-host", new BigDecimal("1.000"), Instant.now(), List.of()));
+        return accepted.submissionId();
     }
 
     private long judgeAsWrongAnswer() {

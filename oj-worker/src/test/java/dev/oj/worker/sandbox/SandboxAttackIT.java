@@ -242,7 +242,7 @@ class SandboxAttackIT {
                 .doesNotContain("OJ_INTERNAL", "SHARED_SECRET");
     }
 
-    private static long hostProcessCount() {
+    static long hostProcessCount() {
         return ProcessHandle.allProcesses().count();
     }
 }

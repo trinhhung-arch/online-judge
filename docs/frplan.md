@@ -155,7 +155,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-PROB-04 | Đánh dấu từng testcase là **sample** (công khai) hoặc **hidden** | SEC3 | Must |
 | FR-PROB-05 | Chọn checker: `exact` · `token` · `float epsilon` | — | Must |
 | FR-PROB-06 | Chia subtask/batch, điểm theo nhóm, phụ thuộc giữa nhóm | — | Should |
-| FR-PROB-07 | **Đặt `feedback_level` cho đề**: `NONE` / `TEST_INDEX` / `SAMPLE_DETAIL` — xem mâu thuẫn #1 | **SEC3** | **Must** |
+| FR-PROB-07 | **Đặt `feedback_level` cho đề**: `NONE` / `TEST_INDEX` / `SAMPLE_DETAIL` — xem mâu thuẫn #1. Ở `NONE`, bài `RE` cũng không nói tín hiệu nào (SIGSEGV, SIGFPE…) — tín hiệu là thứ chương trình tự chọn được (2026-11-15, BM-3) | **SEC3** | **Must** |
 | FR-PROB-08 | Xuất bản / gỡ đề. Đề chưa xuất bản chỉ tác giả và ADMIN thấy | SEC (Quy tắc 3) | Must |
 | FR-PROB-09 | Danh sách đề: lọc theo tag / độ khó / đã giải, **phân trang 50/trang** | P1, S3 | Must |
 | FR-PROB-10 | **Sửa testdata khi đã có bài nộp** → hệ thống cảnh báo, bắt buộc tạo job rejudge, ghi `audit_log` | R (toàn vẹn), Quy tắc 5 | Must |
@@ -176,7 +176,7 @@ Ký hiệu cột **Ràng buộc NFR**: mã chỉ số trong `nfrplan.md` Phần 
 | FR-SUB-08 | **Rate limit 1 bài/10s/user** — là quy tắc nghiệp vụ, hiển thị đếm ngược trên UI | SEC2, P4 | Must |
 | FR-SUB-09 | **Không ai được xoá bài nộp.** ADMIN chỉ ẩn được, có ghi `audit_log`. Bài bị ẩn **không được tính điểm** trên bảng xếp hạng; ẩn hay hiện lại một bài trong kỳ thi thì dòng của người đó (bảng thật và bản chụp đóng băng) được tính lại ngay (ADR 027) | R1, audit | Must |
 | FR-SUB-10 | Giữ nháp code trong trình duyệt, khôi phục khi mở lại | U | Should |
-| FR-SUB-11 | Hiển thị thời gian chạy **làm tròn 10ms**, kèm chú thích máy chấm chuẩn | P7, C (ARM/x86) | Must |
+| FR-SUB-11 | Hiển thị thời gian chạy **làm tròn 10ms**, kèm chú thích máy chấm chuẩn. Bộ nhớ **làm tròn lên tới MB** (không bao giờ thấp hơn số đo); số đo thô giữ trong DB (2026-11-15, BM-2) | P7, C (ARM/x86) | Must |
 | FR-SUB-12 | Bài `IE` được tự động chấm lại tối đa 2 lần trước khi báo lỗi cho người dùng | R3 | Must |
 
 ### 2.4 — FR-CON · Kỳ thi  *(M5, tuần 10–12 — Người A)*

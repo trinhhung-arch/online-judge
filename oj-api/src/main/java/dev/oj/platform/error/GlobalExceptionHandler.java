@@ -98,6 +98,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException e) {
+        for (Throwable c = e; c != null && c.getCause() != c; c = c.getCause()) {
+            if (c instanceof dev.oj.platform.web.GioiHanThanRequestFilter.ThanQuaLon quaLon) {
+                log.warn("[{}] 413 — thân request không khai độ dài, vượt {} byte",
+                        dev.oj.platform.web.GioiHanThanRequestFilter.MA_LOI, quaLon.tran());
+                return json(HttpStatus.CONTENT_TOO_LARGE,
+                        dev.oj.platform.web.GioiHanThanRequestFilter.loi(quaLon.tran()));
+            }
+        }
         log.warn("Không đọc được thân request: {}", MoTaLoiAnToan.cua(e));
         return json(HttpStatus.BAD_REQUEST, ApiError.of(
                 "request.malformed", "Nội dung gửi lên không đọc được.", TraceIdFilter.current()));

@@ -42,8 +42,10 @@ final class SandboxHarness implements AutoCloseable {
     }
 
     Attempt attack(String attackFile, int cpuLimitMs, int memoryKb) {
-        String source = readResource("/attacks/" + attackFile);
+        return attackSource(readResource("/attacks/" + attackFile), cpuLimitMs, memoryKb);
+    }
 
+    Attempt attackSource(String source, int cpuLimitMs, int memoryKb) {
         box.reset();
         box.write("Main.cpp", source);
         IsolateBox.Execution compile = box.execute(
@@ -70,6 +72,18 @@ final class SandboxHarness implements AutoCloseable {
                 stdinFile(), 1 << 20, 1 << 16, Duration.ofSeconds(30));
 
         return new Attempt(run.meta(), run.stdout().text(), run.stderr().text(), true, compileLog);
+    }
+
+    Attempt attackPython(String attackFile, int cpuLimitMs, int memoryKb) {
+        box.reset();
+        box.write("Main.py", readResource("/attacks-python/" + attackFile));
+        IsolateBox.Execution run = box.execute(
+                IsolateCommand.run(cfg, BOX_ID, box.metaFile(),
+                        cpuLimitMs, 2L * cpuLimitMs, memoryKb,
+                        CommandTemplate.expand("python3 {src}", "Main.py", memoryKb,
+                                cfg.programPath())),
+                stdinFile(), 1 << 20, 1 << 16, Duration.ofSeconds(30));
+        return new Attempt(run.meta(), run.stdout().text(), run.stderr().text(), true, "");
     }
 
     private Path stdinFile() {

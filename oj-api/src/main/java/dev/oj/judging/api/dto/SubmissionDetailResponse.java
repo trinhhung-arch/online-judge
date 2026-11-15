@@ -43,7 +43,7 @@ public record SubmissionDetailResponse(
                 daCham ? outcome.score() : null,
                 daCham ? outcome.maxScore() : null,
                 timeMs,
-                daCham ? outcome.memoryKb() : null,
+                daCham ? RuntimeFormatter.roundKb(outcome.memoryKb()) : null,
                 timeMs == null ? null : RuntimeFormatter.MEASUREMENT_NOTE,
                 visible.failedTestOrdinal(),
                 visible.compileLog(),

@@ -7,7 +7,7 @@ NEN_TANG=${NEN_TANG:-linux/arm64}
 SO_CA_MONG_DOI=${SO_CA_MONG_DOI:-14}
 
 GOC=$(cd "$(dirname "$0")/.." && pwd)
-IT=${IT:-SandboxAttackIT}
+IT=${IT:-SandboxAttackIT,SandboxAttackBoSungIT}
 
 khong_build=0
 for a in "$@"; do case "$a" in
