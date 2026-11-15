@@ -1,5 +1,6 @@
 package dev.oj.judging.application.usecase;
 
+import dev.oj.contract.Verdict;
 import dev.oj.judging.application.port.SubmissionRepository;
 import dev.oj.judging.domain.JudgingException;
 import dev.oj.judging.domain.Submission;
@@ -37,11 +38,15 @@ public class GetSubmissionUseCase {
                 ? null
                 : policy.failedTestOrdinal(detail.submission().outcome().failedTestOrdinal());
 
+        boolean anTinHieu = !policy.revealsRuntimeSignal()
+                && detail.submission().outcome() != null
+                && detail.submission().outcome().verdict() == Verdict.RE;
+
         return new VisibleSubmission(
                 detail.submission(),
                 failedTestOrdinal,
                 detail.compileLog(),
-                detail.isolateStatus(),
+                anTinHieu ? null : detail.isolateStatus(),
                 detail.timeLimitMs(),
                 detail.memoryLimitKb());
     }

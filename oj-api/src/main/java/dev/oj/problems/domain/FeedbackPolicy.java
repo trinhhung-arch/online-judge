@@ -16,6 +16,10 @@ public record FeedbackPolicy(FeedbackLevel level) {
         return level.revealsFailedTestOrdinal() ? actual : null;
     }
 
+    public boolean revealsRuntimeSignal() {
+        return level.revealsFailedTestOrdinal();
+    }
+
     public boolean revealsSampleDetail() {
         return level.revealsSampleDetail();
     }

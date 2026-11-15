@@ -86,9 +86,10 @@ public final class VerdictExplainer {
     private static String runtimeError(Facts facts) {
         Integer signal = signalOf(facts.isolateStatus());
         if (signal == null) {
-            return "Chương trình kết thúc bất thường (mã thoát khác 0). Nếu bạn có "
-                    + "'return 1' hay 'exit(1)' ở nhánh lỗi thì đó là nó — máy chấm coi mọi "
-                    + "mã thoát khác 0 là lỗi chạy.";
+            return "Chương trình kết thúc bất thường. Nếu bạn có 'return 1' hay 'exit(1)' ở "
+                    + "nhánh lỗi thì đó là nó — máy chấm coi mọi mã thoát khác 0 là lỗi chạy. "
+                    + "Nếu không, hãy kiểm truy cập mảng ngoài phạm vi, chia cho 0 và đệ quy "
+                    + "quá sâu.";
         }
         String cause = switch (signal) {
             case 4 -> "SIGILL — lệnh máy không hợp lệ, thường là hỏng con trỏ hàm";
