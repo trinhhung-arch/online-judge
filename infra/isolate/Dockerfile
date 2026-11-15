@@ -17,7 +17,7 @@ COPY oj-worker/pom.xml oj-worker/
 COPY oj-api/pom.xml oj-api/
 COPY oj-contract oj-contract
 COPY oj-worker oj-worker
-RUN mvn -B -q -pl oj-contract,oj-worker -am -DskipTests package
+RUN mvn -B -q -Daether.connector.http.retryHandler.count=6 -pl oj-contract,oj-worker -am -DskipTests package
 
 FROM eclipse-temurin:21-jre-jammy AS jre
 
